@@ -325,7 +325,7 @@ export function AutomatorClientPage() {
         const displayOrder = [
             "Notas Válidas", "Itens Válidos", "Itens Acima de 1200", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
             "Imobilizados",
-            "Emissão Própria", "Notas Canceladas",
+            "Devoluções de Clientes", "Notas Canceladas",
             ...Object.keys(processedData.sheets).filter(name => name.startsWith("Original - "))
         ];
 
@@ -340,6 +340,7 @@ export function AutomatorClientPage() {
             "Itens Válidos Saídas": "Itens Validos Saidas",
             "Imobilizados": "Imobilizados",
             "Itens Acima de 1200": "Itens > 1200",
+            "Devoluções de Clientes": "Devolucoes Clientes",
             "Original - NFE": "Entradas",
             "Original - Saídas": "Saidas Originais",
             "Original - CTE": "CTE",
@@ -381,11 +382,10 @@ export function AutomatorClientPage() {
 
         try {
             const periods = new Set<string>();
+            const allXmlsToScan = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
 
-            // 1. Process NFe/CTe XMLs
-            const nfeCteXmls = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
-            if (nfeCteXmls.length > 0) {
-                const { nfe, cte, saidas } = await processUploadedXmls(nfeCteXmls, () => {}); // Use dummy log fn
+            if (allXmlsToScan.length > 0) {
+                const { nfe, cte, saidas } = await processUploadedXmls(allXmlsToScan, () => {}); // Use dummy log fn
                 [...nfe, ...cte, ...saidas].forEach(doc => {
                     if (doc['Emissão'] && typeof doc['Emissão'] === 'string' && doc['Emissão'].length >= 7) {
                         periods.add(doc['Emissão'].substring(0, 7)); // YYYY-MM
@@ -461,37 +461,30 @@ export function AutomatorClientPage() {
                 const log = (message: string) => localLogs.push(`[${new Date().toLocaleTimeString()}] ${message}`);
                 
                 let dataToProcess: Record<string, any[]> = {};
-
-                const allXmls = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
-                const hasXmls = allXmls.length > 0;
                 let eventCanceledKeys = new Set<string>();
 
-                if (hasXmls) {
-                    log(`Iniciando processamento de ${allXmls.length} XMLs.`);
-                    const { nfe, cte, saidas, itens, itensSaidas, canceledKeys } = await processUploadedXmls(allXmls, log);
-                    eventCanceledKeys = canceledKeys;
-                    
-                    dataToProcess["NFE"] = nfe;
-                    dataToProcess["Itens"] = itens;
-                    dataToProcess["CTE"] = cte;
-                    dataToProcess["Saídas"] = saidas;
-                    dataToProcess["Itens Saídas"] = itensSaidas;
-                    
-                    log(`Processamento XML concluído: ${nfe.length} NF-e Entradas, ${saidas.length} NF-e Saídas, ${cte.length} CT-es, ${canceledKeys.size} eventos de cancelamento.`);
-                }
+                // Process each XML category separately to respect user's choice
+                log("Processando ficheiros XML por categoria...");
+                const { nfe: nfeEntrada, itens: itensEntrada, canceledKeys: canceledEntrada } = await processUploadedXmls(xmlFiles.nfeEntrada, log, "entrada");
+                const { cte, canceledKeys: canceledCte } = await processUploadedXmls(xmlFiles.cte, log, "entrada");
+                const { saidas, itensSaidas, canceledKeys: canceledSaida } = await processUploadedXmls(xmlFiles.nfeSaida, log, "saida");
+
+                // Combine results
+                dataToProcess["NFE"] = nfeEntrada;
+                dataToProcess["Itens"] = itensEntrada;
+                dataToProcess["CTE"] = cte;
+                dataToProcess["Saídas"] = saidas;
+                dataToProcess["Itens Saídas"] = itensSaidas;
                 
-                // Prioriza os dados do XML, mas SEMPRE inclui os dados das planilhas de manifesto para filtragem.
-                for (const fileName in files) {
-                    const mappedName = fileMapping[fileName] || fileName;
-                    const isManifestoFile = [
-                        "NFE Operação Não Realizada", "NFE Operação Desconhecida", "CTE Desacordo de Serviço"
-                    ].includes(fileName);
-                    
-                    if (isManifestoFile || !dataToProcess[mappedName] || dataToProcess[mappedName].length === 0) {
-                        dataToProcess[mappedName] = files[fileName];
-                        log(`Usando dados da planilha carregada: '${fileName}'.`);
-                    } else {
-                         log(`Dados de XML para '${mappedName}' encontrados, ignorando a planilha carregada: '${fileName}'.`);
+                eventCanceledKeys = new Set([...canceledEntrada, ...canceledCte, ...canceledSaida]);
+
+                log(`Processamento XML concluído: ${nfeEntrada.length} NF-e Entradas, ${saidas.length} NF-e Saídas, ${cte.length} CT-es.`);
+                
+                // Merge with sheet data (manifesto files only)
+                for (const fileName of requiredFiles) {
+                    if (files[fileName]) {
+                        dataToProcess[fileName] = files[fileName];
+                        log(`Usando dados da planilha de manifesto carregada: '${fileName}'.`);
                     }
                 }
                 
@@ -518,30 +511,24 @@ export function AutomatorClientPage() {
                         });
                     };
                 
-                    const originalNfeCount = dataToProcess['NFE']?.length || 0;
-                    const originalCteCount = dataToProcess['CTE']?.length || 0;
-                    const originalSaidasCount = dataToProcess['Saídas']?.length || 0;
-
-                    const nfeFiltered = filterByPeriod(dataToProcess['NFE'] || []);
-                    const cteFiltered = filterByPeriod(dataToProcess['CTE'] || []);
-                    const saidasFiltered = filterByPeriod(dataToProcess['Saídas'] || []);
+                    Object.keys(dataToProcess).forEach(key => {
+                        if (['NFE', 'CTE', 'Saídas'].includes(key)) {
+                             const originalCount = dataToProcess[key].length;
+                             dataToProcess[key] = filterByPeriod(dataToProcess[key]);
+                             log(`- ${key}: ${dataToProcess[key].length}/${originalCount} registos mantidos após filtro.`);
+                        }
+                    });
+                     
+                    const chavesNfe = new Set(dataToProcess['NFE'].map(n => n['Chave Unica']));
+                    const chavesCte = new Set(dataToProcess['CTE'].map(n => n['Chave Unica']));
+                    const chavesSaidas = new Set(dataToProcess['Saídas'].map(n => n['Chave Unica']));
                     
-                    const chavesNfe = new Set(nfeFiltered.map(n => n['Chave Unica']));
-                    const chavesCte = new Set(cteFiltered.map(n => n['Chave Unica']));
-                    const chavesSaidas = new Set(saidasFiltered.map(n => n['Chave Unica']));
-
-                    dataToProcess['NFE'] = nfeFiltered;
-                    dataToProcess['CTE'] = cteFiltered;
-                    dataToProcess['Saídas'] = saidasFiltered;
-                    
-                    if(dataToProcess['Itens']) {
+                     if(dataToProcess['Itens']) {
                         dataToProcess['Itens'] = (dataToProcess['Itens'] || []).filter(item => chavesNfe.has(item['Chave Unica']) || chavesCte.has(item['Chave Unica']));
                     }
                      if(dataToProcess['Itens Saídas']) {
                         dataToProcess['Itens Saídas'] = (dataToProcess['Itens Saídas'] || []).filter(item => chavesSaidas.has(item['Chave Unica']));
                     }
-
-                    log(`Filtragem por período concluída: ${nfeFiltered.length}/${originalNfeCount} NF-e, ${cteFiltered.length}/${originalCteCount} CT-e, ${saidasFiltered.length}/${originalSaidasCount} Saídas.`);
                 }
 
                 // Now, process the combined and filtered data
@@ -997,3 +984,5 @@ export function AutomatorClientPage() {
         </div>
     );
 }
+
+    

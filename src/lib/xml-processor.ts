@@ -1,5 +1,6 @@
 // Types
 type LogFunction = (message: string) => void;
+type XmlDataType = "entrada" | "saida" | "cte" | "desconhecido";
 
 export interface XmlData {
     nfe: any[];
@@ -41,164 +42,89 @@ const cleanAndToStr = (value: any): string => {
     return String(value).replace(/\D/g, '');
 };
 
-const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | null => {
-    const nfeProcList = xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'nfeProc');
-    if (nfeProcList.length === 0 || !nfeProcList[0]) {
-        log("AVISO: Tag <nfeProc> não encontrada. O XML pode não ser um documento de NFe processado.");
-        return null;
+const parseNFe = (xmlDoc: XMLDocument, log: LogFunction, uploadType: XmlDataType): Partial<XmlData> => {
+    const nfeProc = xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'nfeProc')[0];
+    const nfe = nfeProc?.getElementsByTagNameNS(NFE_NAMESPACE, 'NFe')[0];
+    const infNFe = nfe?.getElementsByTagNameNS(NFE_NAMESPACE, 'infNFe')[0];
+    if (!infNFe) {
+        log("AVISO: Tag <infNFe> não encontrada. O XML pode não ser uma NFe válida.");
+        return {};
     }
-    const nfeProc = nfeProcList[0];
-    
-    const nfeList = nfeProc.getElementsByTagNameNS(NFE_NAMESPACE, 'NFe');
-    if (nfeList.length === 0 || !nfeList[0]) {
-        log("AVISO: Tag <NFe> não encontrada no nfeProc.");
-        return null;
-    }
-    const nfe = nfeList[0];
-    
-    const infNFeList = nfe.getElementsByTagNameNS(NFE_NAMESPACE, 'infNFe');
-    if (infNFeList.length === 0 || !infNFeList[0]) {
-        log("AVISO: Tag <infNFe> não encontrada na NFe.");
-        return null;
-    }
-    const infNFe = infNFeList[0];
 
     const ide = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'ide')[0];
     const emit = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'emit')[0];
     const dest = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'dest')[0];
     const total = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'total')[0];
-    const detList = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'det');
     const protNFe = nfeProc.getElementsByTagNameNS(NFE_NAMESPACE, 'protNFe')[0];
-    
     const infProt = protNFe?.getElementsByTagNameNS(NFE_NAMESPACE, 'infProt')[0];
 
     if (!ide || !emit || !dest || !total) {
-        log("AVISO: Estrutura do XML NFe incompleta. Faltam tags essenciais como ide, emit, dest, ou total.");
-        return null;
+        log("AVISO: Estrutura do XML NFe incompleta. Faltam tags essenciais.");
+        return {};
     }
 
     const chaveAcesso = getAttributeValue(infNFe, 'Id').replace('NFe', '');
-    const nNF = getTagValue(ide, 'nNF');
-    const dhEmiRaw = getTagValue(ide, 'dhEmi');
-    const dhEmi = dhEmiRaw ? dhEmiRaw.substring(0, 10) : null;
-
-
     const emitCNPJ = getTagValue(emit, 'CNPJ');
-    const emitNome = getTagValue(emit, 'xNome');
-    const emitIE = getTagValue(emit, 'IE'); // Extrair a Inscrição Estadual do Emitente
-    const destCNPJ = getTagValue(dest, 'CNPJ');
-    const destNome = getTagValue(dest, 'xNome');
-    const destIE = getTagValue(dest, 'IE');
-    const enderDest = dest.getElementsByTagNameNS(NFE_NAMESPACE, 'enderDest')[0];
-    const destUF = getTagValue(enderDest, 'UF');
-
-
-    const vNF = getTagValue(total, 'vNF');
     
-    let status = 'Autorizadas';
-    if(infProt) {
-        status = getTagValue(infProt, 'cStat') === '100' ? 'Autorizadas' : 'Canceladas';
-    }
+    // Se o upload foi para "saida", confia nessa classificação.
+    const isSaida = uploadType === 'saida';
 
-    const isSaida = cleanAndToStr(emitCNPJ) === GRANTEL_CNPJ;
-    const isDevolucaoCliente = cleanAndToStr(destCNPJ) === GRANTEL_CNPJ && !isSaida;
-
-    let notaFiscal: any = {
+    const notaFiscal: any = {
         'Chave de acesso': chaveAcesso,
-        'Número': nNF,
-        'Emissão': dhEmi,
-        'Total': parseFloat(vNF) || 0,
-        'Status': status,
-        'isDevolucaoCliente': isDevolucaoCliente, // Flag para identificar devolução de cliente
+        'Número': getTagValue(ide, 'nNF'),
+        'Emissão': getTagValue(ide, 'dhEmi').substring(0, 10),
+        'Total': parseFloat(getTagValue(total, 'vNF')) || 0,
+        'Status': infProt && getTagValue(infProt, 'cStat') === '100' ? 'Autorizadas' : 'Canceladas',
     };
-    
+
     if (isSaida) {
-        notaFiscal['Destinatário'] = destNome;
-        notaFiscal['CPF/CNPJ do Destinatário'] = destCNPJ;
+        notaFiscal['Destinatário'] = getTagValue(dest, 'xNome');
+        notaFiscal['CPF/CNPJ do Destinatário'] = getTagValue(dest, 'CNPJ');
     } else { // entrada ou devolução de cliente
-        notaFiscal['Fornecedor'] = emitNome;
+        notaFiscal['Fornecedor'] = getTagValue(emit, 'xNome');
         notaFiscal['CPF/CNPJ do Fornecedor'] = emitCNPJ;
-        notaFiscal['emitCNPJ'] = emitCNPJ;
-        notaFiscal['emitName'] = emitNome;
-        notaFiscal['emitIE'] = emitIE;
-        notaFiscal['destCNPJ'] = destCNPJ;
-        notaFiscal['destIE'] = destIE;
-        notaFiscal['destUF'] = destUF;
+        notaFiscal.emitCNPJ = emitCNPJ;
+        notaFiscal.emitName = getTagValue(emit, 'xNome');
+        notaFiscal.emitIE = getTagValue(emit, 'IE');
+        notaFiscal.destCNPJ = getTagValue(dest, 'CNPJ');
+        notaFiscal.destIE = getTagValue(dest, 'IE');
+        const enderDest = dest.getElementsByTagNameNS(NFE_NAMESPACE, 'enderDest')[0];
+        notaFiscal.destUF = getTagValue(enderDest, 'UF');
+        notaFiscal.isDevolucaoCliente = cleanAndToStr(notaFiscal.destCNPJ) === GRANTEL_CNPJ;
     }
     
-    const chaveUnica = cleanAndToStr(nNF) + (isSaida ? cleanAndToStr(destCNPJ) : cleanAndToStr(emitCNPJ));
+    const chaveUnica = cleanAndToStr(notaFiscal['Número']) + (isSaida ? cleanAndToStr(notaFiscal['CPF/CNPJ do Destinatário']) : cleanAndToStr(emitCNPJ));
     notaFiscal['Chave Unica'] = chaveUnica;
 
     const itens: any[] = [];
+    const detList = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'det');
     for (let i = 0; i < detList.length; i++) {
         const det = detList[i];
         if (!det) continue;
         const prod = det.getElementsByTagNameNS(NFE_NAMESPACE, 'prod')[0];
-        const imposto = det.getElementsByTagNameNS(NFE_NAMESPACE, 'imposto')[0];
         if (!prod) continue;
         
-        let item: any = {
+        itens.push({
             'Chave Unica': chaveUnica,
             'Item': getAttributeValue(det, 'nItem'),
             'Chave de acesso': chaveAcesso,
-            'Número da Nota': nNF,
+            'Número da Nota': notaFiscal['Número'],
             'CPF/CNPJ do Emitente': emitCNPJ,
-        };
-
-        // Extrai todos os campos de <prod>
-        for (const child of Array.from(prod.children)) {
-            const tagName = child.tagName;
-            const content = child.textContent;
-            if (tagName && content) {
-                item[`prod_${tagName}`] = content;
-            }
-        }
-        
-        // Renomeia os campos mais comuns para melhor legibilidade
-        item['Código'] = item.prod_cProd;
-        item['Descrição'] = item.prod_xProd;
-        item['NCM'] = item.prod_NCM;
-        item['CFOP'] = item.prod_CFOP;
-        item['Unidade'] = item.prod_uCom;
-        item['Quantidade'] = parseFloat(item.prod_qCom) || 0;
-        item['Valor Unitário'] = parseFloat(item.prod_vUnCom) || 0;
-        item['Valor Total'] = parseFloat(item.prod_vProd) || 0;
-
-        // Adiciona explicitamente o CFOP e NCM ao nível principal do item se não estiverem já lá
-        if (!item['CFOP']) item['CFOP'] = getTagValue(prod, 'CFOP');
-        if (!item['NCM']) item['NCM'] = getTagValue(prod, 'NCM');
-
-
-        // Extrai todos os campos de <imposto> e seus filhos
-        if (imposto) {
-            for (const taxGroup of Array.from(imposto.children)) {
-                const taxGroupName = taxGroup.tagName; // ex: ICMS, PIS, COFINS
-                 if (taxGroup.children.length > 1) { // Se for um grupo como ICMS00, PISAliq
-                    const taxIdentifier = taxGroup.children[0].parentElement?.tagName;
-                     for (const taxField of Array.from(taxGroup.children)) {
-                        const fieldName = taxField.tagName;
-                        const content = taxField.textContent;
-                        if (fieldName && content) {
-                             item[`${taxIdentifier}_${fieldName}`] = content;
-                        }
-                    }
-                } else {
-                     const fieldName = taxGroup.tagName;
-                     const content = taxGroup.textContent;
-                      if (fieldName && content) {
-                           item[fieldName] = content;
-                      }
-                }
-            }
-        }
-
-        itens.push(item);
+            'Código': getTagValue(prod, 'cProd'),
+            'Descrição': getTagValue(prod, 'xProd'),
+            'NCM': getTagValue(prod, 'NCM'),
+            'CFOP': getTagValue(prod, 'CFOP'),
+            'Unidade': getTagValue(prod, 'uCom'),
+            'Quantidade': parseFloat(getTagValue(prod, 'qCom')) || 0,
+            'Valor Unitário': parseFloat(getTagValue(prod, 'vUnCom')) || 0,
+            'Valor Total': parseFloat(getTagValue(prod, 'vProd')) || 0,
+        });
     }
     
     if (isSaida) {
-        return { nfe: [], itens: [], saidas: [notaFiscal], itensSaidas: itens, cte: [] };
-    } else { // 'entrada' ou 'devolucao de cliente'
-        return { nfe: [notaFiscal], itens: itens, saidas: [], itensSaidas: [], cte: [] };
+        return { saidas: [notaFiscal], itensSaidas: itens };
+    } else {
+        return { nfe: [notaFiscal], itens: itens };
     }
 };
 
@@ -257,7 +183,7 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'Chave Unica': cleanAndToStr(nCT) + cleanAndToStr(emitCNPJ),
     };
 
-    return { cte: [notaCte], nfe: [], itens: [], saidas: [], itensSaidas: [] };
+    return { cte: [notaCte] };
 };
 
 const parseCancelEvent = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | null => {
@@ -353,7 +279,7 @@ export const processNfseForPeriodDetection = async (files: File[]): Promise<stri
 // MAIN PROCESSING FUNCTION
 // =================================================================
 
-export const processUploadedXmls = async (files: File[], log: LogFunction): Promise<XmlData> => {
+export const processUploadedXmls = async (files: File[], log: LogFunction, uploadType: XmlDataType): Promise<XmlData> => {
     const combinedData: XmlData = {
         nfe: [], cte: [], itens: [], saidas: [], itensSaidas: [], canceledKeys: new Set()
     };
@@ -362,7 +288,7 @@ export const processUploadedXmls = async (files: File[], log: LogFunction): Prom
         return combinedData;
     }
 
-    log(`Processando ${files.length} arquivos XML.`);
+    log(`Processando ${files.length} ficheiros XML como '${uploadType}'.`);
     const parser = new DOMParser();
 
     for (const file of files) {
@@ -372,22 +298,20 @@ export const processUploadedXmls = async (files: File[], log: LogFunction): Prom
             
             const errorNode = xmlDoc.querySelector('parsererror');
             if (errorNode) {
-                log(`AVISO: Falha ao parsear o arquivo ${file.name}. Não é um XML válido.`);
+                log(`AVISO: Falha ao parsear o ficheiro ${file.name}. Não é um XML válido.`);
                 continue;
             }
 
             let parsedResult: Partial<XmlData> | null = null;
             
-            // Detect if it's NFe, CTe or a Cancellation Event and parse accordingly
-             if (xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'procEventoNFe').length > 0 || xmlDoc.getElementsByTagName('procEventoCTe').length > 0) {
+            if (xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'procEventoNFe').length > 0 || xmlDoc.getElementsByTagName('procEventoCTe').length > 0) {
                 parsedResult = parseCancelEvent(xmlDoc, log);
             } else if (xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'nfeProc').length > 0) {
-                parsedResult = parseNFe(xmlDoc, log);
-            } else if (xmlDoc.getElementsByTagName('cteProc').length > 0) { // Check without namespace for CTe
+                parsedResult = parseNFe(xmlDoc, log, uploadType);
+            } else if (xmlDoc.getElementsByTagName('cteProc').length > 0) {
                 parsedResult = parseCTe(xmlDoc, log);
             } else {
-                // It might be an NFS-e, but this function is only for NFe/CTe, so we just log a warning.
-                log(`AVISO: Arquivo ${file.name} não parece ser NFe, CTe ou Evento padrão. Será ignorado nesta função.`);
+                log(`AVISO: Ficheiro ${file.name} não parece ser NFe, CTe ou Evento padrão. Será ignorado.`);
             }
             
             if(parsedResult) {
@@ -402,9 +326,11 @@ export const processUploadedXmls = async (files: File[], log: LogFunction): Prom
             }
 
         } catch (error: any) {
-            log(`ERRO ao processar o arquivo ${file.name}: ${error.message}`);
+            log(`ERRO ao processar o ficheiro ${file.name}: ${error.message}`);
         }
     }
     
     return combinedData;
 };
+
+    
