@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --port 9002 --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -41,7 +41,7 @@
     "embla-carousel-react": "^8.6.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.475.0",
-    "next": "15.3.3",
+    "next": "^14.2.4",
     "next-themes": "^0.3.0",
     "patch-package": "^8.0.0",
     "react": "^18.3.1",
