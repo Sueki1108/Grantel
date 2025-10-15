@@ -46,7 +46,23 @@ interface ImobilizadoAnalysisProps {
 export function ImobilizadoAnalysis({ items: initialItems, competence, onPersistedDataChange, persistedData }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
+    // Corrigido: Estado para gerir os códigos de conta em edição na sessão atual.
     const [sessionAccountCodes, setSessionAccountCodes] = useState<Record<string, string>>({});
+
+     // Efeito para sincronizar o estado de edição com os dados persistidos quando a competência ou os dados mudam.
+    useEffect(() => {
+        if (!competence) return;
+        const initialCodes: Record<string, string> = {};
+        const dataForCompetence = persistedData[competence] || {};
+        initialItems.forEach(item => {
+            const persistedItem = dataForCompetence[item.uniqueItemId];
+            if (persistedItem && persistedItem.accountCode) {
+                initialCodes[item.uniqueItemId] = persistedItem.accountCode;
+            }
+        });
+        setSessionAccountCodes(initialCodes);
+    }, [competence, persistedData, initialItems]);
+
 
     const getDisplayData = useCallback((itemUniqueId: string): ClassificationStorage => {
         if (!competence) return { classification: 'unclassified', accountCode: '' };
@@ -54,19 +70,22 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         const dataForCompetence = persistedData[competence] || {};
         const specificItemData = dataForCompetence[itemUniqueId];
         
+        // Agora, o `sessionAccountCodes` é a fonte da verdade para o que está no input
         const sessionCode = sessionAccountCodes[itemUniqueId];
         
         if (specificItemData) {
+            // Prioriza o código da sessão (o que está a ser editado), se não, usa o que está guardado
             return {
                 classification: specificItemData.classification,
                 accountCode: sessionCode !== undefined ? sessionCode : specificItemData.accountCode
             };
         }
         
-        // Fallback: Check other competences for the same item
+        // Fallback: Se não há dados para este item nesta competência, verifica outras.
         for (const otherCompetence in persistedData) {
             if (otherCompetence !== competence && persistedData[otherCompetence]?.[itemUniqueId]) {
                 const fallbackData = persistedData[otherCompetence][itemUniqueId];
+                 // A classificação é herdada, mas o código de conta só é mostrado se não houver um código de sessão
                 return {
                      classification: fallbackData.classification,
                      accountCode: sessionCode !== undefined ? sessionCode : fallbackData.accountCode
@@ -74,6 +93,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             }
         }
         
+         // Se não há dados em nenhuma competência, usa o código da sessão ou vazio.
         return { classification: 'unclassified', accountCode: sessionCode || '' };
 
     }, [persistedData, competence, sessionAccountCodes]);
@@ -92,6 +112,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         });
     };
     
+    // Corrigido: Atualiza apenas o estado do item específico que está a ser alterado.
     const handleAccountCodeChange = (itemUniqueId: string, code: string) => {
         setSessionAccountCodes(prev => ({...prev, [itemUniqueId]: code}));
     };
@@ -105,6 +126,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             return;
         }
 
+        // Usa o valor do estado de sessão (`sessionAccountCodes`) para guardar.
         const newStorageValue: ClassificationStorage = {
             classification: displayData.classification,
             accountCode: sessionAccountCodes[itemUniqueId] ?? displayData.accountCode ?? ''
@@ -190,12 +212,13 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
                 header: 'Código do Ativo',
                 cell: ({ row }: any) => {
                     const item = row.original as ItemData;
-                    const displayData = getDisplayData(item.uniqueItemId);
+                    // O valor do input agora vem diretamente do estado da sessão `sessionAccountCodes`.
+                    const codeInSession = sessionAccountCodes[item.uniqueItemId] || '';
                     return (
                         <div className="flex items-center gap-2">
                             <Input
                                 placeholder="Ex: 1.2.3.01.0001"
-                                value={displayData.accountCode || ''}
+                                value={codeInSession}
                                 onChange={(e) => handleAccountCodeChange(item.uniqueItemId, e.target.value)}
                                 className="h-8"
                             />
