@@ -110,18 +110,18 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     let nfe = processedDfs["NFE"] || [];
     const cte = processedDfs["CTE"] || [];
     const itens = processedDfs["Itens"] || [];
-    let saidas = processedDfs["Saídas"] || [];
+    const saidas = processedDfs["Saídas"] || [];
     const itensSaidas = processedDfs["Itens Saídas"] || [];
     const naoRealizada = processedDfs["NFE Operação Não Realizada"] || [];
     const desconhecida = processedDfs["NFE Operação Desconhecida"] || [];
     const desacordo = processedDfs["CTE Desacordo de Serviço"] || [];
 
-    // Separa devoluções de clientes antes de qualquer outra coisa
+    // 1. Segregar Devoluções de Clientes do conjunto principal de NF-e
     const devolucoesDeClientes = nfe.filter(row => row.isDevolucaoCliente);
-    // Remove as devoluções da lista principal de NFE
     nfe = nfe.filter(row => !row.isDevolucaoCliente); 
     log(`- Segregadas ${devolucoesDeClientes.length} devoluções de clientes. ${nfe.length} NF-e de entrada restantes para processamento.`);
 
+    // 2. Coletar todas as chaves de exceção
     log("Coletando chaves de exceção (canceladas, manifesto, eventos)...");
     const chavesExcecao = new Set<string>(eventCanceledKeys);
     log(`- ${eventCanceledKeys.size} chaves de cancelamento por evento adicionadas.`);
@@ -150,8 +150,8 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 
     log(`- Total de ${chavesExcecao.size} chaves de exceção coletadas (canceladas, manifesto, eventos).`);
 
+    // 3. Filtrar documentos e itens válidos
     log("Filtrando notas e itens válidos...");
-    
     const isChaveValida = (row: any) => {
         if(!row) return false;
         const chaveAcesso = cleanAndToStr(row['Chave de acesso']);
@@ -168,14 +168,18 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     
     log(`- Total de ${notasValidas.length} NF-es válidas (entradas de terceiros).`);
     log(`- Total de ${ctesValidos.length} CT-es válidos.`);
+    log(`- Total de ${saidasValidas.length} Saídas válidas.`);
+    log(`- Total de ${devolucoesValidas.length} Devoluções de Clientes válidas.`);
     
     const chavesNotasValidas = new Set(notasValidas.map(row => cleanAndToStr(row["Chave Unica"])));
-    let itensValidos = itens.filter(item => {
-        const chaveUnica = cleanAndToStr(item["Chave Unica"]);
-        return chavesNotasValidas.has(chaveUnica);
-    });
-    log(`- ${itensValidos.length} itens válidos correspondentes.`);
+    let itensValidos = itens.filter(item => chavesNotasValidas.has(cleanAndToStr(item["Chave Unica"])));
+    log(`- ${itensValidos.length} itens válidos de entrada correspondentes.`);
 
+    const chavesSaidasValidas = new Set(saidasValidas.map(row => cleanAndToStr(row["Chave Unica"])));
+    const itensValidosSaidas = itensSaidas.filter(item => chavesSaidasValidas.has(cleanAndToStr(item["Chave Unica"])));
+    log(`- ${itensValidosSaidas.length} itens de saída válidos correspondentes.`);
+    
+    // 4. Identificar itens para análise de imobilizado a partir dos itens de entrada válidos
     log("Identificando todos os itens com valor acima de R$ 1200,00 e filtrando remessas...");
     const remessaCfopsPrefixes = ['59', '69'];
     const itensAcimaDe1200 = itensValidos.filter(item => {
@@ -197,13 +201,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     });
     log(`- ${imobilizados.length} itens designados para a aba de análise de Imobilizado.`);
 
-
-    log(`- ${saidasValidas.length} saídas válidas encontradas.`);
-
-    const chavesSaidasValidas = new Set(saidasValidas.map(row => cleanAndToStr(row["Chave Unica"])));
-    const itensValidosSaidas = itensSaidas.filter(item => chavesSaidasValidas.has(cleanAndToStr(item["Chave Unica"])));
-    log(`- ${itensValidosSaidas.length} itens de saída válidos correspondentes.`);
-
+    // 5. Agrupar resultados finais
     log("Agrupando resultados...");
     const notasCanceladas = [...nfe, ...cte, ...saidas, ...devolucoesDeClientes].filter(row => {
         if (!row) return false;
@@ -219,13 +217,8 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         "Fornecedor": row["Fornecedor"],
         "Emissão": String(row["Emissão"]).substring(0, 10),
         "Total": row['Total'] || 0,
-        // Campos para verificação de cadastro
-        "destCNPJ": row.destCNPJ,
-        "destIE": row.destIE,
-        "destUF": row.destUF,
-        "emitCNPJ": row.emitCNPJ,
-        "emitName": row.emitName,
-        "emitIE": row.emitIE,
+        "destCNPJ": row.destCNPJ, "destIE": row.destIE, "destUF": row.destUF,
+        "emitCNPJ": row.emitCNPJ, "emitName": row.emitName, "emitIE": row.emitIE,
     }));
 
     const chavesValidasCte = ctesValidos.map(row => ({
@@ -239,13 +232,12 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const chavesValidasSaida = saidasValidas.map(row => ({
         "Chave de acesso": cleanAndToStr(row["Chave de acesso"]),
         "Tipo": 'Saída',
-        "Fornecedor": row["Destinatário"], // Usando 'Fornecedor' como campo genérico para simplificar
+        "Fornecedor": row["Destinatário"], 
         "Emissão": String(row["Emissão"]).substring(0, 10),
         "Total": row['Total'] || 0,
     }));
 
     const chavesValidas = [...chavesValidasEntrada, ...chavesValidasCte, ...chavesValidasSaida];
-
     log(`- ${chavesValidas.length} chaves válidas para verificação SPED geradas.`);
     
     const finalResult: DataFrames = {
@@ -263,18 +255,8 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     };
     
     const addCfopDescriptionToRow = (row: any) => {
-        if (!row || typeof row !== 'object') {
+        if (!row || typeof row !== 'object' || !row['CFOP']) {
             return { ...row, 'Descricao CFOP': 'N/A' };
-        }
-        if (!row['CFOP']) {
-            // Find CFOP in related items if not present in the main row
-            const chaveUnica = cleanAndToStr(row['Chave Unica']);
-            const relatedItem = itens.find(item => cleanAndToStr(item['Chave Unica']) === chaveUnica && item['CFOP']);
-            if (relatedItem) {
-                row['CFOP'] = relatedItem['CFOP'];
-            } else {
-                return { ...row, 'Descricao CFOP': 'N/A' };
-            }
         }
         const cfopCode = parseInt(cleanAndToStr(row['CFOP']), 10);
         const fullDescription = cfopDescriptions[cfopCode] || 'Descrição não encontrada';

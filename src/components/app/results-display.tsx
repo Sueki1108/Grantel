@@ -20,12 +20,10 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
     ];
     
     useEffect(() => {
-        // We don't use sessionStorage anymore, just set to first valid tab
-        if (orderedSheetNames.length > 0) {
-            const firstValidSheet = orderedSheetNames.find(sheetName => results[sheetName] && results[sheetName].length > 0);
-            setActiveTab(firstValidSheet || '');
-        }
-    }, [results]); // Only depends on results now
+        // Set to first valid tab when results change
+        const firstValidSheet = orderedSheetNames.find(sheetName => results[sheetName] && results[sheetName].length > 0);
+        setActiveTab(firstValidSheet || '');
+    }, [results]);
 
     const handleTabChange = (value: string) => {
         setActiveTab(value);
