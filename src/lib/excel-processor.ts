@@ -134,15 +134,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         }
     });
 
-    const chavesEmissaoPropriaCliente = new Set<string>();
-     devolucoesDeClientes.forEach(devolucao => {
-        const cfopItem = itens.find(item => item['Chave Unica'] === devolucao['Chave Unica']);
-        const cfop = cfopItem ? cleanAndToStr(cfopItem["CFOP"]) : '';
-        // CFOPs de devolução de venda: 1201, 1202, 1411, 2201, 2202, 2411 etc.
-        if (cfop.startsWith('1') || cfop.startsWith('2')) {
-             chavesEmissaoPropriaCliente.add(cleanAndToStr(devolucao["Chave Unica"]));
-        }
-    });
+    const chavesEmissaoPropriaCliente = new Set<string>(devolucoesDeClientes.map(d => d['Chave Unica']));
     log(`- ${chavesEmissaoPropriaCliente.size} chaves únicas de devolução de cliente (emissão própria do cliente) identificadas.`);
 
     log("Coletando chaves de exceção (canceladas, manifesto, eventos)...");
@@ -235,7 +227,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         return isCancelled || chavesExcecao.has(cleanAndToStr(row["Chave de acesso"]));
     });
     // Renomeando para "Devoluções de Clientes" para maior clareza.
-    const devolucoesClientesAgrupadas = [...devolucoesDeClientes, ...nfeFiltrada.filter(row => chavesEmissaoPropriaCliente.has(cleanAndToStr(row["Chave Unica"])))];
+    const devolucoesClientesAgrupadas = devolucoesDeClientes;
     
     const chavesValidasEntrada = notasValidas.map(row => ({
         "Chave de acesso": cleanAndToStr(row["Chave de acesso"]),
