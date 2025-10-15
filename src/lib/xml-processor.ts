@@ -1,3 +1,5 @@
+"use client";
+
 // Types
 type LogFunction = (message: string) => void;
 type XmlDataType = "entrada" | "saida" | "cte" | "desconhecido";
@@ -16,7 +18,6 @@ export interface XmlData {
 // =================================================================
 
 const NFE_NAMESPACE = "http://www.portalfiscal.inf.br/nfe";
-const CTE_NAMESPACE = "http://www.portalfiscal.inf.br/cte"; // Namespace for CTe
 const GRANTEL_CNPJ = "81732042000119";
 
 const getTagValue = (element: Element | undefined, tagName: string, namespace: string = NFE_NAMESPACE): string => {
@@ -66,7 +67,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction, uploadType: XmlDataType
     const chaveAcesso = getAttributeValue(infNFe, 'Id').replace('NFe', '');
     const emitCNPJ = getTagValue(emit, 'CNPJ');
     
-    // Se o upload foi para "saida", confia nessa classificação.
+    // A classificação é baseada estritamente no local do upload.
     const isSaida = uploadType === 'saida';
 
     const notaFiscal: any = {
@@ -80,7 +81,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction, uploadType: XmlDataType
     if (isSaida) {
         notaFiscal['Destinatário'] = getTagValue(dest, 'xNome');
         notaFiscal['CPF/CNPJ do Destinatário'] = getTagValue(dest, 'CNPJ');
-    } else { // entrada ou devolução de cliente
+    } else { // entrada
         notaFiscal['Fornecedor'] = getTagValue(emit, 'xNome');
         notaFiscal['CPF/CNPJ do Fornecedor'] = emitCNPJ;
         notaFiscal.emitCNPJ = emitCNPJ;
@@ -90,7 +91,6 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction, uploadType: XmlDataType
         notaFiscal.destIE = getTagValue(dest, 'IE');
         const enderDest = dest.getElementsByTagNameNS(NFE_NAMESPACE, 'enderDest')[0];
         notaFiscal.destUF = getTagValue(enderDest, 'UF');
-        notaFiscal.isDevolucaoCliente = cleanAndToStr(notaFiscal.destCNPJ) === GRANTEL_CNPJ;
     }
     
     const chaveUnica = cleanAndToStr(notaFiscal['Número']) + (isSaida ? cleanAndToStr(notaFiscal['CPF/CNPJ do Destinatário']) : cleanAndToStr(emitCNPJ));
@@ -129,7 +129,6 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction, uploadType: XmlDataType
 };
 
 const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | null => {
-    // CTe XMLs sometimes have inconsistent namespace usage. We'll try to get tags by name directly.
     const cteProc = xmlDoc.getElementsByTagName('cteProc')[0];
     if (!cteProc) {
         log("AVISO: Tag <cteProc> não encontrada. O XML pode não ser um documento de CTe processado.");
@@ -157,11 +156,11 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     
     const chaveAcesso = getAttributeValue(infCte, 'Id').replace('CTe', '');
     const nCT = getCteTagValue(ide, 'nCT');
-    const serie = getCteTagValue(ide, 'serie'); // Extract the series
+    const serie = getCteTagValue(ide, 'serie');
     const dhEmiRaw = getCteTagValue(ide, 'dhEmi');
     const dhEmi = dhEmiRaw ? dhEmiRaw.substring(0, 10) : null;
     const emitCNPJ = getCteTagValue(emit, 'CNPJ');
-    const emitIE = getCteTagValue(emit, 'IE'); // Extrair IE do CTe também
+    const emitIE = getCteTagValue(emit, 'IE');
     const vTPrest = getCteTagValue(vPrest, 'vTPrest');
     
     const status = getCteTagValue(infProt, 'cStat') === '100' ? 'Autorizadas' : 'Canceladas';
@@ -169,11 +168,11 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const notaCte = {
         'Chave de acesso': chaveAcesso,
         'Número': nCT,
-        'Série': serie, // Add series to the extracted data
+        'Série': serie,
         'Emissão': dhEmi,
         'Fornecedor': getCteTagValue(emit, 'xNome'),
         'CPF/CNPJ do Fornecedor': emitCNPJ,
-        'emitIE': emitIE, // Adicionar a IE do emitente do CTe
+        'emitIE': emitIE,
         'Remetente': getCteTagValue(rem, 'xNome'),
         'CPF/CNPJ do Remetente': getCteTagValue(rem, 'CNPJ'),
         'Destinatário': getCteTagValue(dest, 'xNome'),
@@ -253,7 +252,6 @@ export const processNfseForPeriodDetection = async (files: File[]): Promise<stri
 
         const dateStr = findValue(root, ["data_nfse", "DataEmissao", "dhEmi"]);
         if (dateStr) {
-            // Handle different date formats, e.g., DD/MM/YYYY or YYYY-MM-DD
             let date: Date;
             if (dateStr.includes('/')) {
                 const parts = dateStr.split(' ')[0].split('/');
@@ -332,5 +330,3 @@ export const processUploadedXmls = async (files: File[], log: LogFunction, uploa
     
     return combinedData;
 };
-
-    

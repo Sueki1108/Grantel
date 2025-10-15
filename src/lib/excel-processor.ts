@@ -1,4 +1,3 @@
-
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import { KeyCheckResult } from '@/components/app/key-checker';
@@ -43,7 +42,6 @@ const cleanAndToStr = (value: any): string => {
 const addChaveUnica = (df: DataFrame): DataFrame => {
     if (!df || df.length === 0 || !df[0]) return df;
     
-    // As chaves podem ter nomes ligeiramente diferentes dependendo da fonte (XML vs. planilha)
     const findKey = (possibleNames: string[]) => Object.keys(df[0]).find(k => possibleNames.includes(k.toLowerCase()));
 
     const numeroKey = findKey(['número', 'numero']);
@@ -108,7 +106,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     });
     log("Preparação inicial concluída.");
 
-    let nfe = processedDfs["NFE"] || [];
+    const nfe = processedDfs["NFE"] || [];
     const cte = processedDfs["CTE"] || [];
     const itens = processedDfs["Itens"] || [];
     const saidas = processedDfs["Saídas"] || [];
@@ -117,12 +115,6 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const desconhecida = processedDfs["NFE Operação Desconhecida"] || [];
     const desacordo = processedDfs["CTE Desacordo de Serviço"] || [];
 
-    // 1. Segregar Devoluções de Clientes do conjunto principal de NF-e
-    const devolucoesDeClientes = nfe.filter(row => row.isDevolucaoCliente);
-    nfe = nfe.filter(row => !row.isDevolucaoCliente); 
-    log(`- Segregadas ${devolucoesDeClientes.length} devoluções de clientes. ${nfe.length} NF-e de entrada restantes para processamento.`);
-
-    // 2. Coletar todas as chaves de exceção
     log("Coletando chaves de exceção (canceladas, manifesto, eventos)...");
     const chavesExcecao = new Set<string>(eventCanceledKeys);
     log(`- ${eventCanceledKeys.size} chaves de cancelamento por evento adicionadas.`);
@@ -143,7 +135,6 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     addExceptions(nfe, "Chave de acesso", "Status");
     addExceptions(cte, "Chave de acesso", "Status");
     addExceptions(saidas, "Chave de acesso", "Status");
-    addExceptions(devolucoesDeClientes, "Chave de acesso", "Status");
     
     addExceptions(naoRealizada, "Chave de acesso");
     addExceptions(desconhecida, "Chave de acesso");
@@ -151,8 +142,8 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 
     log(`- Total de ${chavesExcecao.size} chaves de exceção coletadas (canceladas, manifesto, eventos).`);
 
-    // 3. Filtrar documentos e itens válidos
     log("Filtrando notas e itens válidos...");
+    
     const isChaveValida = (row: any) => {
         if(!row) return false;
         const chaveAcesso = cleanAndToStr(row['Chave de acesso']);
@@ -162,15 +153,13 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const nfeFiltrada = nfe.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
     const cteFiltrado = cte.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
     
-    let notasValidas = nfeFiltrada.filter(row => isChaveValida(row));
-    let ctesValidos = cteFiltrado.filter(row => isChaveValida(row));
-    let saidasValidas = saidas.filter(row => isChaveValida(row));
-    let devolucoesValidas = devolucoesDeClientes.filter(row => isChaveValida(row));
+    let notasValidas = nfeFiltrada.filter(isChaveValida);
+    let ctesValidos = cteFiltrado.filter(isChaveValida);
+    let saidasValidas = saidas.filter(isChaveValida);
     
-    log(`- Total de ${notasValidas.length} NF-es válidas (entradas de terceiros).`);
+    log(`- Total de ${notasValidas.length} NF-es válidas.`);
     log(`- Total de ${ctesValidos.length} CT-es válidos.`);
-    log(`- Total de ${saidasValidas.length} Saídas válidas.`);
-    log(`- Total de ${devolucoesValidas.length} Devoluções de Clientes válidas.`);
+    log(`- Total de ${saidasValidas.length} saídas válidas.`);
     
     const chavesNotasValidas = new Set(notasValidas.map(row => cleanAndToStr(row["Chave Unica"])));
     let itensValidos = itens.filter(item => chavesNotasValidas.has(cleanAndToStr(item["Chave Unica"])));
@@ -180,8 +169,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const itensValidosSaidas = itensSaidas.filter(item => chavesSaidasValidas.has(cleanAndToStr(item["Chave Unica"])));
     log(`- ${itensValidosSaidas.length} itens de saída válidos correspondentes.`);
     
-    // 4. Identificar itens para análise de imobilizado a partir dos itens de entrada válidos
-    log("Identificando todos os itens com valor acima de R$ 1200,00 e filtrando remessas...");
+    log("Identificando itens para análise de imobilizado...");
     const remessaCfopsPrefixes = ['59', '69'];
     const itensAcimaDe1200 = itensValidos.filter(item => {
         const cfop = cleanAndToStr(item["CFOP"]);
@@ -189,9 +177,8 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         const isRemessa = remessaCfopsPrefixes.some(prefix => cfop.startsWith(prefix));
         return valorTotal > 1200 && !isRemessa;
     });
-    log(`- ${itensAcimaDe1200.length} itens com valor total acima de 1200 (não remessa) encontrados.`);
+    log(`- ${itensAcimaDe1200.length} itens com valor total acima de R$ 1.200 (não remessa) encontrados para análise de imobilizado.`);
 
-    log("Designando itens de valor relevante para análise de Imobilizado...");
     const imobilizados = itensAcimaDe1200.map((item, index) => {
         const uniqueItemId = `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
         return { 
@@ -200,11 +187,9 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
             uniqueItemId: uniqueItemId // ID para persistência
         };
     });
-    log(`- ${imobilizados.length} itens designados para a aba de análise de Imobilizado.`);
 
-    // 5. Agrupar resultados finais
     log("Agrupando resultados...");
-    const notasCanceladas = [...nfe, ...cte, ...saidas, ...devolucoesDeClientes].filter(row => {
+    const notasCanceladas = [...nfe, ...cte, ...saidas].filter(row => {
         if (!row) return false;
         const chaveAcesso = cleanAndToStr(row['Chave de acesso']);
         const statusVal = row["Status"];
@@ -250,7 +235,6 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         "Saídas": saidasValidas, 
         "Itens Válidos Saídas": itensValidosSaidas,
         "Imobilizados": imobilizados,
-        "Devoluções de Clientes": devolucoesValidas,
         "Notas Canceladas": notasCanceladas,
         ...originalDfs 
     };
@@ -278,14 +262,13 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const finalSheetSet: DataFrames = {};
     const displayOrder = [
         "Notas Válidas", "CTEs Válidos", "Itens Válidos", "Itens Acima de 1200", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
-        "Imobilizados",
-        "Devoluções de Clientes", "Notas Canceladas", ...Object.keys(originalDfs)
+        "Imobilizados", "Notas Canceladas", ...Object.keys(originalDfs)
     ];
 
     displayOrder.forEach(name => {
         let sheetData = finalResult[name];
         if (sheetData && sheetData.length > 0) {
-            if (["Itens Válidos", "Devoluções de Clientes", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados", "Itens Acima de 1200"].includes(name)) {
+            if (["Itens Válidos", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados", "Itens Acima de 1200"].includes(name)) {
                  sheetData = sheetData.map(addCfopDescriptionToRow);
             }
             finalSheetSet[name] = sheetData;
