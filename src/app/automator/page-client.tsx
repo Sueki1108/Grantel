@@ -29,7 +29,7 @@ import { KeyCheckResult } from "@/components/app/key-checker";
 import { SettingsDialog } from "@/components/app/settings-dialog";
 import { cn } from "@/lib/utils";
 import { ImobilizadoAnalysis, type AllClassifications, type ClassificationStorage } from "@/components/app/imobilizado-analysis";
-import { HistoryAnalysis } from "@/components/app/history-analysis";
+import { HistoryAnalysis, type SessionMetadata } from "@/components/app/history-analysis";
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -416,6 +416,13 @@ export function AutomatorClientPage() {
         setProcessing(true);
         
         setTimeout(async () => {
+            const currentCompetence = Object.keys(selectedPeriods).filter(p => selectedPeriods[p]).sort().join('_');
+            if (!currentCompetence) {
+                toast({ variant: 'destructive', title: 'Nenhuma competência selecionada' });
+                setProcessing(false);
+                return;
+            }
+
             try {
                 const localLogs: string[] = [];
                 const log = (message: string) => localLogs.push(`[${new Date().toLocaleTimeString()}] ${message}`);
@@ -511,7 +518,42 @@ export function AutomatorClientPage() {
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
                 setProcessedData(resultData);
-                toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas." });
+
+                // <<<<< START: SAVE SESSION METADATA >>>>>
+                const sessionMetadata: SessionMetadata = {
+                    competence: currentCompetence,
+                    processedAt: new Date().toISOString(),
+                    fileNames: {
+                        nfeEntrada: xmlFiles.nfeEntrada.map(f => f.name),
+                        cte: xmlFiles.cte.map(f => f.name),
+                        nfeSaida: xmlFiles.nfeSaida.map(f => f.name),
+                        nfse: xmlFiles.nfse.map(f => f.name),
+                        manifesto: Object.keys(fileStatus),
+                        sienge: siengeFile ? siengeFile.name : null,
+                        sped: spedFiles.map(f => f.name),
+                    },
+                    lastSaidaNumber: lastSaidaNumber,
+                    disregardedNfseNotes: Array.from(disregardedNfseNotes),
+                    saidasStatus: saidasStatus,
+                };
+                
+                try {
+                    const existingSessionsRaw = localStorage.getItem(SESSIONS_STORAGE_KEY);
+                    const existingSessions: SessionMetadata[] = existingSessionsRaw ? JSON.parse(existingSessionsRaw) : [];
+                    
+                    const newSessions = existingSessions.filter(s => s.competence !== currentCompetence);
+                    newSessions.push(sessionMetadata);
+
+                    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(newSessions));
+                    log(`Sessão de análise para a competência ${currentCompetence} foi guardada no histórico.`);
+
+                } catch (e) {
+                    console.error("Failed to save session to localStorage", e);
+                    log(`ERRO: Falha ao guardar a sessão no histórico: ${e}`);
+                }
+                // <<<<< END: SAVE SESSION METADATA >>>>>
+
+                toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. A sessão foi guardada no histórico." });
 
             } catch (err: any) {
                 const errorMessage = err.message || "Ocorreu um erro desconhecido durante o processamento.";
@@ -743,7 +785,7 @@ export function AutomatorClientPage() {
                                 <CardContent className="space-y-4">
                                     <div className="flex flex-col sm:flex-row gap-2 pt-4">
                                         <Button onClick={startPeriodSelection} disabled={isProcessButtonDisabled} className="w-full">
-                                            {isPreProcessing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Analisando períodos...</> : (processing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : "Validar Dados")}
+                                            {isPreProcessing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Analisando períodos...</> : (processing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : "Validar Dados e Guardar Sessão")}
                                         </Button>
                                         {isClearButtonVisible && (
                                             <Button onClick={handleClearAllData} variant="destructive" className="w-full sm:w-auto">
@@ -882,7 +924,7 @@ export function AutomatorClientPage() {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2"><Filter /> Selecionar Períodos</DialogTitle>
                         <DialogDescription>
-                            Selecione os meses de referência que deseja incluir no processamento.
+                            Selecione os meses de referência que deseja incluir no processamento. Isto definirá a competência da sessão guardada no histórico.
                         </DialogDescription>
                     </DialogHeader>
                     <ScrollArea className="h-72 w-full rounded-md border p-4">
@@ -921,7 +963,7 @@ export function AutomatorClientPage() {
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsPeriodModalOpen(false)}>Cancelar</Button>
                         <Button onClick={handleSubmit} disabled={Object.values(selectedPeriods).every(v => !v)}>
-                            Processar Períodos Selecionados
+                            Processar e Guardar
                         </Button>
                     </DialogFooter>
                 </DialogContent>

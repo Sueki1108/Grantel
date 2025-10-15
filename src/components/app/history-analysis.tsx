@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { History, Upload, Trash2 } from "lucide-react";
+import { History, Upload, Trash2, FileText, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -18,6 +18,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
 
 // Tipos
 export interface SessionMetadata {
@@ -82,6 +89,10 @@ export function HistoryAnalysis({ sessionsKey, onRestoreSession }: HistoryAnalys
             toast({ variant: 'destructive', title: "Erro ao limpar histórico" });
         }
     }
+    
+    const countFiles = (fileNames: SessionMetadata['fileNames']) => {
+        return fileNames.nfeEntrada.length + fileNames.cte.length + fileNames.nfeSaida.length + fileNames.nfse.length + fileNames.manifesto.length + (fileNames.sienge ? 1 : 0) + fileNames.sped.length;
+    }
 
     return (
         <Card>
@@ -92,7 +103,7 @@ export function HistoryAnalysis({ sessionsKey, onRestoreSession }: HistoryAnalys
                         <div>
                             <CardTitle className="font-headline text-2xl">Histórico de Análises</CardTitle>
                             <CardDescription>
-                                Visualize e recarregue sessões de trabalho anteriores. O sistema guarda as suas classificações, mas precisará que carregue os ficheiros originais novamente.
+                                Sessões de trabalho guardadas. Para restaurar uma sessão, clique em "Restaurar" e carregue novamente os ficheiros originais.
                             </CardDescription>
                         </div>
                     </div>
@@ -120,74 +131,88 @@ export function HistoryAnalysis({ sessionsKey, onRestoreSession }: HistoryAnalys
                 </div>
             </CardHeader>
             <CardContent>
-                {sessions.length > 0 ? (
-                    <div className="space-y-4">
-                        {sessions.map((session) => (
-                            <Card key={session.competence} className="bg-muted/50">
-                                <CardHeader>
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <CardTitle className="text-lg">
-                                                Competência: {session.competence.split('_').map(c => {
-                                                    try {
-                                                        return format(parseISO(`${c}-01`), "MMMM 'de' yyyy", { locale: ptBR });
-                                                    } catch {
-                                                        return c;
-                                                    }
-                                                }).join(' & ')}
-                                            </CardTitle>
-                                            <CardDescription>
-                                                Processado em: {format(new Date(session.processedAt), "dd/MM/yyyy 'às' HH:mm")}
-                                            </CardDescription>
+                 <TooltipProvider>
+                    {sessions.length > 0 ? (
+                        <div className="space-y-4">
+                            {sessions.map((session) => (
+                                <Card key={session.competence} className="bg-muted/50">
+                                    <CardHeader>
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <CardTitle className="text-lg">
+                                                    Competência: {session.competence.split('_').map(c => {
+                                                        try {
+                                                            return format(parseISO(`${c}-01`), "MMMM 'de' yyyy", { locale: ptBR });
+                                                        } catch {
+                                                            return c;
+                                                        }
+                                                    }).join(' e ')}
+                                                </CardTitle>
+                                                <CardDescription>
+                                                    Guardado em: {format(new Date(session.processedAt), "dd/MM/yyyy 'às' HH:mm")}
+                                                </CardDescription>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button onClick={() => onRestoreSession(session)} size="sm" disabled>
+                                                    <Upload className="mr-2 h-4 w-4" /> Restaurar (Em breve)
+                                                </Button>
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Remover esta sessão?</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                A análise para a competência {session.competence} será removida do seu histórico.
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => handleDeleteSession(session.competence)}>Remover</AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            </div>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <Button onClick={() => onRestoreSession(session)} size="sm">
-                                                <Upload className="mr-2 h-4 w-4" /> Restaurar
-                                            </Button>
-                                             <AlertDialog>
-                                                <AlertDialogTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                                    </Button>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent>
-                                                    <AlertDialogHeader>
-                                                        <AlertDialogTitle>Remover esta sessão?</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                            A análise para a competência {session.competence} será removida do seu histórico.
-                                                        </AlertDialogDescription>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={() => handleDeleteSession(session.competence)}>Remover</AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                             <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <div className="flex items-center gap-2">
+                                                        <Package className="h-5 w-5"/>
+                                                        <span>{countFiles(session.fileNames)} ficheiros</span>
+                                                    </div>
+                                                </TooltipTrigger>
+                                                <TooltipContent align="start" className="max-w-xs">
+                                                     <p className="font-bold mb-2">Ficheiros nesta análise:</p>
+                                                     <ul className="text-xs list-disc pl-4 space-y-1">
+                                                        {session.fileNames.nfeEntrada.length > 0 && <li>{session.fileNames.nfeEntrada.length} XMLs de NF-e Entrada</li>}
+                                                        {session.fileNames.cte.length > 0 && <li>{session.fileNames.cte.length} XMLs de CT-e</li>}
+                                                        {session.fileNames.nfeSaida.length > 0 && <li>{session.fileNames.nfeSaida.length} XMLs de NF-e Saída</li>}
+                                                        {session.fileNames.nfse.length > 0 && <li>{session.fileNames.nfse.length} XMLs de NFS-e</li>}
+                                                        {session.fileNames.manifesto.length > 0 && <li>{session.fileNames.manifesto.length} planilhas de manifesto</li>}
+                                                        {session.fileNames.sienge && <li>Planilha Sienge: {session.fileNames.sienge}</li>}
+                                                        {session.fileNames.sped.length > 0 && <li>{session.fileNames.sped.length} ficheiros SPED</li>}
+                                                    </ul>
+                                                </TooltipContent>
+                                            </Tooltip>
                                         </div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent>
-                                    <p className="text-sm font-medium mb-2">Ficheiros utilizados nesta análise:</p>
-                                    <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-1">
-                                        {session.fileNames.nfeEntrada.length > 0 && <li>{session.fileNames.nfeEntrada.length} XMLs de NF-e Entrada</li>}
-                                        {session.fileNames.cte.length > 0 && <li>{session.fileNames.cte.length} XMLs de CT-e</li>}
-                                        {session.fileNames.nfeSaida.length > 0 && <li>{session.fileNames.nfeSaida.length} XMLs de NF-e Saída</li>}
-                                        {session.fileNames.nfse.length > 0 && <li>{session.fileNames.nfse.length} XMLs de NFS-e</li>}
-                                        {session.fileNames.manifesto.map(f => <li key={f}>{f}</li>)}
-                                        {session.fileNames.sienge && <li>{session.fileNames.sienge}</li>}
-                                        {session.fileNames.sped.map(f => <li key={f}>{f}</li>)}
-                                    </ul>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-center text-muted-foreground py-12">
-                        <History className="mx-auto h-12 w-12 mb-4" />
-                        <h3 className="text-xl font-semibold">Nenhuma sessão guardada</h3>
-                        <p>Quando processar uma nova análise, os metadados serão guardados aqui.</p>
-                    </div>
-                )}
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center text-muted-foreground py-12">
+                            <History className="mx-auto h-12 w-12 mb-4" />
+                            <h3 className="text-xl font-semibold">Nenhuma sessão guardada</h3>
+                            <p>Após validar os dados, um resumo da sua sessão aparecerá aqui.</p>
+                        </div>
+                    )}
+                 </TooltipProvider>
             </CardContent>
         </Card>
     );
