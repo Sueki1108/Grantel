@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -29,7 +29,7 @@ import { KeyCheckResult } from "@/components/app/key-checker";
 import { SettingsDialog } from "@/components/app/settings-dialog";
 import { cn } from "@/lib/utils";
 import { ImobilizadoAnalysis, type AllClassifications, type ClassificationStorage } from "@/components/app/imobilizado-analysis";
-
+import { HistoryAnalysis } from "@/components/app/history-analysis";
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -46,6 +46,7 @@ const requiredFiles = [
 ];
 
 const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications_v2';
+const SESSIONS_STORAGE_KEY = 'analysisSessions_v1';
 
 
 export function AutomatorClientPage() {
@@ -63,6 +64,8 @@ export function AutomatorClientPage() {
     const [lastSaidaNumber, setLastSaidaNumber] = useState<number>(0);
     const [disregardedNfseNotes, setDisregardedNfseNotes] = useState<Set<string>>(new Set());
     const [imobilizadoClassifications, setImobilizadoClassifications] = useState<AllClassifications>({});
+    const [saidasStatus, setSaidasStatus] = useState<Record<number, 'emitida' | 'cancelada' | 'inutilizada'>>({});
+
 
     const { toast } = useToast();
 
@@ -81,10 +84,8 @@ export function AutomatorClientPage() {
     useEffect(() => {
         // Load imobilizado classifications from localStorage
         try {
-            const savedClassifications = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
-            if (savedClassifications) {
-                setImobilizadoClassifications(JSON.parse(savedClassifications));
-            }
+            const savedImobilizado = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
+            if (savedImobilizado) setImobilizadoClassifications(JSON.parse(savedImobilizado));
         } catch (e) {
             console.error("Failed to load imobilizado classifications from localStorage", e);
         }
@@ -265,6 +266,7 @@ export function AutomatorClientPage() {
         setLastSaidaNumber(0);
         setDisregardedNfseNotes(new Set());
         setSelectedPeriods({});
+        setSaidasStatus({});
         // Não limpamos imobilizadoClassifications aqui para manter a persistência
 
         const inputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]');
@@ -408,10 +410,7 @@ export function AutomatorClientPage() {
     const handleSubmit = () => {
         setError(null);
         setLogs([]);
-        setProcessedData(prev => ({
-             ...(prev || { sheets: {}, spedInfo: null, siengeSheetData: null, keyCheckResults: null }),
-             sheets: {} // Clear only sheets, keep other state
-        }));
+        setProcessedData(null);
         setIsPeriodModalOpen(false);
         
         setProcessing(true);
@@ -511,19 +510,13 @@ export function AutomatorClientPage() {
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
-                setProcessedData(prev => ({
-                    ...prev, // Keep existing state like saidasStatus, etc.
-                    ...resultData, // Overwrite with new results
-                }));
+                setProcessedData(resultData);
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas." });
 
             } catch (err: any) {
                 const errorMessage = err.message || "Ocorreu um erro desconhecido durante o processamento.";
                 setError(errorMessage);
-                setProcessedData(prev => ({ 
-                     ...(prev || { sheets: {}, spedInfo: null, siengeSheetData: null, keyCheckResults: null }),
-                    sheets: {} 
-                }));
+                setProcessedData(null);
                 setLogs(prev => [...prev, `[ERRO FATAL] ${errorMessage}`]);
                 toast({ variant: "destructive", title: "Erro no Processamento", description: errorMessage });
             } finally {
@@ -610,7 +603,10 @@ export function AutomatorClientPage() {
             <main className="container mx-auto p-4 md:p-8">
                 <div className={cn("mx-auto space-y-8", isWideMode ? "max-w-full" : "max-w-screen-2xl")}>
                     <Tabs defaultValue="nf-stock" className="w-full">
-                        <TabsList className="grid w-full grid-cols-1 md:grid-cols-5">
+                        <TabsList className="grid w-full grid-cols-1 md:grid-cols-6">
+                             <TabsTrigger value="history" className="flex items-center gap-2">
+                                <History className="h-5 w-5" /> Histórico
+                            </TabsTrigger>
                              <TabsTrigger value="nf-stock" className="flex items-center gap-2">
                                 1. Validação
                                 {(Object.keys(fileStatus).length > 0 || xmlFiles.nfeEntrada.length > 0 || xmlFiles.cte.length > 0 || xmlFiles.nfeSaida.length > 0) && (
@@ -634,6 +630,19 @@ export function AutomatorClientPage() {
                                 {processedData?.keyCheckResults && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                         </TabsList>
+
+                         {/* ======================= ABA 0: HISTÓRICO ======================= */}
+                        <TabsContent value="history" className="mt-6">
+                            <HistoryAnalysis
+                                sessionsKey={SESSIONS_STORAGE_KEY}
+                                onRestoreSession={(sessionData) => {
+                                    // Logic to restore the session will be implemented here.
+                                    // For now, it might involve setting state like `setSelectedPeriods`,
+                                    // and asking the user to re-upload files.
+                                    toast({ title: "Funcionalidade em desenvolvimento", description: "A restauração de sessão será implementada." });
+                                }}
+                            />
+                        </TabsContent>
 
                         {/* ======================= ABA 1: VALIDAÇÃO DE DOCUMENTOS ======================= */}
                         <TabsContent value="nf-stock" className="mt-6">
@@ -809,8 +818,8 @@ export function AutomatorClientPage() {
                              {processedData && processedData.sheets['Saídas'] ? (
                                 <SaidasAnalysis 
                                     saidasData={processedData.sheets['Saídas']}
-                                    initialStatus={processedData.saidasStatus || null}
-                                    onStatusChange={(newStatus) => setProcessedData(p => p ? ({ ...p, saidasStatus: newStatus }) : null)}
+                                    initialStatus={saidasStatus}
+                                    onStatusChange={setSaidasStatus}
                                     lastPeriodNumber={lastSaidaNumber}
                                     onLastPeriodNumberChange={handleLastSaidaNumberChange}
                                 />
