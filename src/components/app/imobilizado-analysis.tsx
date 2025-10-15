@@ -195,18 +195,20 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             header: 'Ações',
             cell: ({ row }: any) => {
                 const originalItem = row.original as ItemData;
-                
-                if (classification === 'unclassified') {
-                    return (
-                        <div className="flex gap-2 justify-center">
+                const currentClassification = persistedData[originalItem.uniqueItemId]?.classification || 'unclassified';
+
+                return (
+                    <div className="flex gap-2 justify-center">
+                        {currentClassification !== 'imobilizado' && (
                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'imobilizado')}><Factory className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Imobilizado</p></TooltipContent></Tooltip>
-                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'uso-consumo')}><Wrench className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Uso e Consumo</p></TooltipContent></Tooltip>
+                        )}
+                        {currentClassification !== 'uso-consumo' && (
+                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'uso-consumo')}><Wrench className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Uso e Consumo</p></TooltipContent></Tooltip>
+                        )}
+                        {currentClassification !== 'utilizado-em-obra' && (
                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'utilizado-em-obra')}><HardHat className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Utilizado em Obra</p></TooltipContent></Tooltip>
-                        </div>
-                    );
-                } else {
-                    return (
-                        <div className="flex justify-center">
+                        )}
+                        {currentClassification !== 'unclassified' && (
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleUnclassify(originalItem.uniqueItemId)}>
@@ -214,9 +216,9 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
                                     </Button>
                                 </TooltipTrigger><TooltipContent><p>Reverter para Não Classificado</p></TooltipContent>
                             </Tooltip>
-                        </div>
-                    );
-                }
+                        )}
+                    </div>
+                );
             }
         });
 
@@ -255,12 +257,15 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
                             </CardContent>
                         </TabsContent>
                         <TabsContent value="imobilizado" className="mt-6">
+                             <Button onClick={() => handleDownload(filteredItems.imobilizado, 'imobilizado')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
                             {renderTableFor(filteredItems.imobilizado, 'imobilizado')}
                         </TabsContent>
                         <TabsContent value="uso-consumo" className="mt-6">
+                            <Button onClick={() => handleDownload(filteredItems['uso-consumo'], 'uso-consumo')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
                              {renderTableFor(filteredItems['uso-consumo'], 'uso-consumo')}
                         </TabsContent>
                         <TabsContent value="utilizado-em-obra" className="mt-6">
+                            <Button onClick={() => handleDownload(filteredItems['utilizado-em-obra'], 'utilizado-em-obra')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
                              {renderTableFor(filteredItems['utilizado-em-obra'], 'utilizado-em-obra')}
                         </TabsContent>
                     </Tabs>
