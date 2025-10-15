@@ -385,7 +385,7 @@ export function AutomatorClientPage() {
             const allXmlsToScan = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
 
             if (allXmlsToScan.length > 0) {
-                const { nfe, cte, saidas } = await processUploadedXmls(allXmlsToScan, () => {}); // Use dummy log fn
+                const { nfe, cte, saidas } = await processUploadedXmls(allXmlsToScan, () => {}, "desconhecido");
                 [...nfe, ...cte, ...saidas].forEach(doc => {
                     if (doc['Emissão'] && typeof doc['Emissão'] === 'string' && doc['Emissão'].length >= 7) {
                         periods.add(doc['Emissão'].substring(0, 7)); // YYYY-MM
@@ -466,7 +466,7 @@ export function AutomatorClientPage() {
                 // Process each XML category separately to respect user's choice
                 log("Processando ficheiros XML por categoria...");
                 const { nfe: nfeEntrada, itens: itensEntrada, canceledKeys: canceledEntrada } = await processUploadedXmls(xmlFiles.nfeEntrada, log, "entrada");
-                const { cte, canceledKeys: canceledCte } = await processUploadedXmls(xmlFiles.cte, log, "entrada");
+                const { cte, canceledKeys: canceledCte } = await processUploadedXmls(xmlFiles.cte, log, "cte");
                 const { saidas, itensSaidas, canceledKeys: canceledSaida } = await processUploadedXmls(xmlFiles.nfeSaida, log, "saida");
 
                 // Combine results
@@ -678,7 +678,7 @@ export function AutomatorClientPage() {
                                 {processedData?.sheets['Imobilizados'] && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                             <TabsTrigger value="analyses" disabled={analysisTabDisabled} className="flex items-center gap-2">
-                                5. Análises Finais
+                                5. Análises Avançadas
                                 {processedData?.keyCheckResults && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                         </TabsList>
@@ -894,7 +894,7 @@ export function AutomatorClientPage() {
                             />
                         </TabsContent>
 
-                        {/* ======================= ABA 5: ANÁLISES FINAIS ======================= */}
+                        {/* ======================= ABA 5: ANÁLISES AVANÇADAS ======================= */}
                          <TabsContent value="analyses" className="mt-6">
                              {processedData ? (
                                 <AdditionalAnalyses 

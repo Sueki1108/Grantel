@@ -442,7 +442,7 @@ export function AdditionalAnalyses({
                         <div className='flex items-center gap-3'>
                              <FileSearch className="h-8 w-8 text-primary" />
                              <div>
-                                <CardTitle className="font-headline text-2xl">Análises e Relatórios Finais</CardTitle>
+                                <CardTitle className="font-headline text-2xl">Análises Avançadas</CardTitle>
                                 <CardDescription>Execute análises de conciliação, exporte relatórios e guarde a sessão no histórico.</CardDescription>
                             </div>
                         </div>
