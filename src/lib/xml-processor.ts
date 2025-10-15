@@ -100,8 +100,8 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         status = getTagValue(infProt, 'cStat') === '100' ? 'Autorizadas' : 'Canceladas';
     }
 
-
     const isSaida = cleanAndToStr(emitCNPJ) === GRANTEL_CNPJ;
+    const isDevolucaoCliente = cleanAndToStr(destCNPJ) === GRANTEL_CNPJ && !isSaida;
 
     let notaFiscal: any = {
         'Chave de acesso': chaveAcesso,
@@ -109,17 +109,18 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'Emissão': dhEmi,
         'Total': parseFloat(vNF) || 0,
         'Status': status,
+        'isDevolucaoCliente': isDevolucaoCliente, // Flag para identificar devolução de cliente
     };
     
     if (isSaida) {
         notaFiscal['Destinatário'] = destNome;
         notaFiscal['CPF/CNPJ do Destinatário'] = destCNPJ;
-    } else { // entrada
+    } else { // entrada ou devolução de cliente
         notaFiscal['Fornecedor'] = emitNome;
         notaFiscal['CPF/CNPJ do Fornecedor'] = emitCNPJ;
         notaFiscal['emitCNPJ'] = emitCNPJ;
         notaFiscal['emitName'] = emitNome;
-        notaFiscal['emitIE'] = emitIE; // Adicionar a IE do emitente aos dados da nota
+        notaFiscal['emitIE'] = emitIE;
         notaFiscal['destCNPJ'] = destCNPJ;
         notaFiscal['destIE'] = destIE;
         notaFiscal['destUF'] = destUF;
@@ -196,7 +197,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     
     if (isSaida) {
         return { nfe: [], itens: [], saidas: [notaFiscal], itensSaidas: itens, cte: [] };
-    } else { // 'entrada'
+    } else { // 'entrada' ou 'devolucao de cliente'
         return { nfe: [notaFiscal], itens: itens, saidas: [], itensSaidas: [], cte: [] };
     }
 };
