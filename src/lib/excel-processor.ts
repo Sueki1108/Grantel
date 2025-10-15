@@ -107,10 +107,10 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     });
     log("Preparação inicial concluída.");
 
-    const nfe = processedDfs["NFE"] || [];
+    let nfe = processedDfs["NFE"] || [];
     const cte = processedDfs["CTE"] || [];
     const itens = processedDfs["Itens"] || [];
-    const saidas = processedDfs["Saídas"] || [];
+    let saidas = processedDfs["Saídas"] || [];
     const itensSaidas = processedDfs["Itens Saídas"] || [];
     const naoRealizada = processedDfs["NFE Operação Não Realizada"] || [];
     const desconhecida = processedDfs["NFE Operação Desconhecida"] || [];
@@ -118,24 +118,9 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 
     // Separa devoluções de clientes antes de qualquer outra coisa
     const devolucoesDeClientes = nfe.filter(row => row.isDevolucaoCliente);
-    const nfeEntradasPuras = nfe.filter(row => !row.isDevolucaoCliente);
-    log(`- Identificadas ${devolucoesDeClientes.length} devoluções de clientes (serão segregadas).`);
-
-
-    log("Identificando devoluções a fornecedor (emissão própria)...");
-    const chavesDevolucaoFornecedor = new Set<string>();
-    itens.forEach(item => {
-        if (!item || !item["CFOP"]) return;
-        const cfop = cleanAndToStr(item["CFOP"]);
-        // Regra para devolução A FORNECEDOR (CFOPs de saída iniciados com 5 ou 6)
-        if (cfop.startsWith('5') || cfop.startsWith('6')) {
-            // Esta lógica está no lugar errado. Devolução a fornecedor é uma SAÍDA.
-            // A lógica de "emissão própria" deve ser em notas de ENTRADA com CFOP de devolução de VENDA.
-        }
-    });
-
-    const chavesEmissaoPropriaCliente = new Set<string>(devolucoesDeClientes.map(d => d['Chave Unica']));
-    log(`- ${chavesEmissaoPropriaCliente.size} chaves únicas de devolução de cliente (emissão própria do cliente) identificadas.`);
+    // Remove as devoluções da lista principal de NFE
+    nfe = nfe.filter(row => !row.isDevolucaoCliente); 
+    log(`- Segregadas ${devolucoesDeClientes.length} devoluções de clientes. ${nfe.length} NF-e de entrada restantes para processamento.`);
 
     log("Coletando chaves de exceção (canceladas, manifesto, eventos)...");
     const chavesExcecao = new Set<string>(eventCanceledKeys);
@@ -157,6 +142,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     addExceptions(nfe, "Chave de acesso", "Status");
     addExceptions(cte, "Chave de acesso", "Status");
     addExceptions(saidas, "Chave de acesso", "Status");
+    addExceptions(devolucoesDeClientes, "Chave de acesso", "Status");
     
     addExceptions(naoRealizada, "Chave de acesso");
     addExceptions(desconhecida, "Chave de acesso");
@@ -172,13 +158,13 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         return chaveAcesso && !chavesExcecao.has(chaveAcesso);
     }
     
-    const nfeFiltrada = nfeEntradasPuras.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
+    const nfeFiltrada = nfe.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
     const cteFiltrado = cte.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
     
-    // Devoluções de clientes (chavesEmissaoPropriaCliente) não devem estar em 'notasValidas'
-    let notasValidas = nfeFiltrada.filter(row => isChaveValida(row) && !chavesEmissaoPropriaCliente.has(cleanAndToStr(row["Chave Unica"])));
+    let notasValidas = nfeFiltrada.filter(row => isChaveValida(row));
     let ctesValidos = cteFiltrado.filter(row => isChaveValida(row));
     let saidasValidas = saidas.filter(row => isChaveValida(row));
+    let devolucoesValidas = devolucoesDeClientes.filter(row => isChaveValida(row));
     
     log(`- Total de ${notasValidas.length} NF-es válidas (entradas de terceiros).`);
     log(`- Total de ${ctesValidos.length} CT-es válidos.`);
@@ -186,8 +172,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const chavesNotasValidas = new Set(notasValidas.map(row => cleanAndToStr(row["Chave Unica"])));
     let itensValidos = itens.filter(item => {
         const chaveUnica = cleanAndToStr(item["Chave Unica"]);
-        // Itens de devolução de cliente não são incluídos em "Itens Válidos".
-        return chavesNotasValidas.has(chaveUnica) && !chavesEmissaoPropriaCliente.has(chaveUnica);
+        return chavesNotasValidas.has(chaveUnica);
     });
     log(`- ${itensValidos.length} itens válidos correspondentes.`);
 
@@ -220,14 +205,13 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     log(`- ${itensValidosSaidas.length} itens de saída válidos correspondentes.`);
 
     log("Agrupando resultados...");
-    const notasCanceladas = [...nfe, ...cte, ...saidas].filter(row => {
+    const notasCanceladas = [...nfe, ...cte, ...saidas, ...devolucoesDeClientes].filter(row => {
         if (!row) return false;
+        const chaveAcesso = cleanAndToStr(row['Chave de acesso']);
         const statusVal = row["Status"];
-        const isCancelled = typeof statusVal === 'string' && statusVal.toLowerCase().includes('cancelada');
-        return isCancelled || chavesExcecao.has(cleanAndToStr(row["Chave de acesso"]));
+        const isCancelledByStatus = typeof statusVal === 'string' && statusVal.toLowerCase().includes('cancelada');
+        return isCancelledByStatus || chavesExcecao.has(chaveAcesso);
     });
-    // Renomeando para "Devoluções de Clientes" para maior clareza.
-    const devolucoesClientesAgrupadas = devolucoesDeClientes;
     
     const chavesValidasEntrada = notasValidas.map(row => ({
         "Chave de acesso": cleanAndToStr(row["Chave de acesso"]),
@@ -270,9 +254,10 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         "Itens Válidos": itensValidos, 
         "Itens Acima de 1200": itensAcimaDe1200,
         "Chaves Válidas": chavesValidas,
-        "Saídas": saidasValidas, "Itens Válidos Saídas": itensValidosSaidas,
+        "Saídas": saidasValidas, 
+        "Itens Válidos Saídas": itensValidosSaidas,
         "Imobilizados": imobilizados,
-        "Devoluções de Clientes": devolucoesClientesAgrupadas,
+        "Devoluções de Clientes": devolucoesValidas,
         "Notas Canceladas": notasCanceladas,
         ...originalDfs 
     };
