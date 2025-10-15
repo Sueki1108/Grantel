@@ -1,7 +1,7 @@
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import { KeyCheckResult } from '@/components/app/key-checker';
-import { type ClassificationStorage } from '@/components/app/imobilizado-analysis';
+import { type AllClassifications } from '@/components/app/imobilizado-analysis';
 
 // Types
 type DataFrame = any[];
@@ -26,7 +26,7 @@ export interface ProcessedData {
     keyCheckResults: KeyCheckResult | null;
     saidasStatus?: Record<number, 'emitida' | 'cancelada' | 'inutilizada'>;
     lastSaidaNumber?: number;
-    imobilizadoStatus?: Record<string, ClassificationStorage>;
+    imobilizadoClassifications?: AllClassifications;
 }
 
 

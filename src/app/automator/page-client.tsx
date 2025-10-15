@@ -28,7 +28,7 @@ import { NfseAnalysis } from "@/components/app/nfse-analysis";
 import { KeyCheckResult } from "@/components/app/key-checker";
 import { SettingsDialog } from "@/components/app/settings-dialog";
 import { cn } from "@/lib/utils";
-import { ImobilizadoAnalysis, type ClassificationStorage } from "@/components/app/imobilizado-analysis";
+import { ImobilizadoAnalysis, type AllClassifications, type ClassificationStorage } from "@/components/app/imobilizado-analysis";
 
 
 
@@ -45,7 +45,7 @@ const requiredFiles = [
     'NFE Operação Não Realizada', 'NFE Operação Desconhecida', 'CTE Desacordo de Serviço'
 ];
 
-const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications';
+const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications_v2';
 
 
 export function AutomatorClientPage() {
@@ -62,7 +62,7 @@ export function AutomatorClientPage() {
     const [siengeFile, setSiengeFile] = useState<File | null>(null);
     const [lastSaidaNumber, setLastSaidaNumber] = useState<number>(0);
     const [disregardedNfseNotes, setDisregardedNfseNotes] = useState<Set<string>>(new Set());
-    const [imobilizadoClassifications, setImobilizadoClassifications] = useState<Record<string, ClassificationStorage>>({});
+    const [imobilizadoClassifications, setImobilizadoClassifications] = useState<AllClassifications>({});
 
     const { toast } = useToast();
 
@@ -94,12 +94,22 @@ export function AutomatorClientPage() {
         setIsWideMode(wideMode);
     }, []);
 
-    const handleImobilizadoDataChange = (key: string, data: ClassificationStorage) => {
-        const newClassifications = {
+    const handleImobilizadoDataChange = (itemUniqueId: string, data: ClassificationStorage) => {
+        if (!competence) {
+            toast({ variant: 'destructive', title: "Competência não definida", description: "Processe os arquivos e selecione um período primeiro." });
+            return;
+        }
+
+        const newClassifications: AllClassifications = {
             ...imobilizadoClassifications,
-            [key]: data,
+            [competence]: {
+                ...(imobilizadoClassifications[competence] || {}),
+                [itemUniqueId]: data,
+            },
         };
+        
         setImobilizadoClassifications(newClassifications);
+        
         try {
             localStorage.setItem(IMOBILIZADO_STORAGE_KEY, JSON.stringify(newClassifications));
         } catch (e) {

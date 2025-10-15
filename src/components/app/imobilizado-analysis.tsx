@@ -28,35 +28,58 @@ export interface ClassificationStorage {
     accountCode?: string;
 }
 
+// A estrutura geral que será guardada no localStorage
+export interface AllClassifications {
+    [competence: string]: {
+        [uniqueItemId: string]: ClassificationStorage;
+    };
+}
+
+
 interface ImobilizadoAnalysisProps {
     items: ItemData[];
-    competence: string | null; // ex: "2023-01"
+    competence: string | null; // ex: "2023-01_2023-02"
     onPersistedDataChange: (key: string, data: ClassificationStorage) => void;
-    persistedData: Record<string, ClassificationStorage>;
+    persistedData: AllClassifications;
 }
 
 export function ImobilizadoAnalysis({ items: initialItems, competence, onPersistedDataChange, persistedData }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
-    // O estado local agora apenas reflete os códigos de conta da sessão atual
     const [sessionAccountCodes, setSessionAccountCodes] = useState<Record<string, string>>({});
 
-    // Combina os dados persistidos com os da sessão para exibição
-     const getDisplayData = (itemUniqueId: string): ClassificationStorage => {
-        const persistent = persistedData[itemUniqueId];
-        const sessionCode = sessionAccountCodes[itemUniqueId];
-        const classification = persistent?.classification || 'unclassified';
+    const getDisplayData = useCallback((itemUniqueId: string): ClassificationStorage => {
+        if (!competence) return { classification: 'unclassified', accountCode: '' };
 
-        // A fonte da verdade para o código é: 1º o que está na sessão, 2º o que está persistido.
-        const accountCode = sessionCode !== undefined ? sessionCode : (persistent?.accountCode ?? '');
+        const dataForCompetence = persistedData[competence] || {};
+        const specificItemData = dataForCompetence[itemUniqueId];
         
-        return {
-            classification,
-            accountCode
-        };
-    };
+        const sessionCode = sessionAccountCodes[itemUniqueId];
+        
+        if (specificItemData) {
+            return {
+                classification: specificItemData.classification,
+                accountCode: sessionCode !== undefined ? sessionCode : specificItemData.accountCode
+            };
+        }
+        
+        // Fallback: Check other competences for the same item
+        for (const otherCompetence in persistedData) {
+            if (otherCompetence !== competence && persistedData[otherCompetence]?.[itemUniqueId]) {
+                const fallbackData = persistedData[otherCompetence][itemUniqueId];
+                return {
+                     classification: fallbackData.classification,
+                     accountCode: sessionCode !== undefined ? sessionCode : fallbackData.accountCode
+                };
+            }
+        }
+        
+        return { classification: 'unclassified', accountCode: sessionCode || '' };
+
+    }, [persistedData, competence, sessionAccountCodes]);
 
     const handleClassificationChange = (item: ItemData, newClassification: Classification) => {
+        if (!competence) return;
         const currentDisplayData = getDisplayData(item.uniqueItemId);
         
         onPersistedDataChange(item.uniqueItemId, {
@@ -70,32 +93,34 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
     };
     
     const handleAccountCodeChange = (itemUniqueId: string, code: string) => {
-        // Atualiza o código na sessão
         setSessionAccountCodes(prev => ({...prev, [itemUniqueId]: code}));
     };
 
     const handleSaveAccountCode = (itemUniqueId: string) => {
-        const classification = persistedData[itemUniqueId]?.classification || 'unclassified';
-        if(classification === 'unclassified') {
+        if (!competence) return;
+        
+        const displayData = getDisplayData(itemUniqueId);
+        if(displayData.classification === 'unclassified') {
             toast({variant: 'destructive', title: 'Item não classificado', description: 'Classifique o item antes de guardar um código de conta.'});
             return;
         }
 
         const newStorageValue: ClassificationStorage = {
-            classification: classification,
-            accountCode: sessionAccountCodes[itemUniqueId] ?? persistedData[itemUniqueId]?.accountCode ?? ''
+            classification: displayData.classification,
+            accountCode: sessionAccountCodes[itemUniqueId] ?? displayData.accountCode ?? ''
         };
 
         onPersistedDataChange(itemUniqueId, newStorageValue);
 
         toast({
             title: "Código do Ativo Guardado",
-            description: `O código foi associado permanentemente a este tipo de item.`
+            description: `O código foi associado a este item para a competência atual.`
         });
     };
     
-    const handleUnclassify = (itemUniqueId: string) => {
-        onPersistedDataChange(itemUniqueId, { classification: 'unclassified', accountCode: undefined });
+    const handleUnclassify = (item: ItemData) => {
+         if (!competence) return;
+        onPersistedDataChange(item.uniqueItemId, { classification: 'unclassified', accountCode: undefined });
          toast({
             title: "Classificação Removida",
         });
@@ -110,12 +135,12 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         };
 
         initialItems.forEach(item => {
-            const classification = persistedData[item.uniqueItemId]?.classification || 'unclassified';
-            categories[classification].push(item);
+            const displayData = getDisplayData(item.uniqueItemId);
+            categories[displayData.classification].push(item);
         });
 
         return categories;
-    }, [initialItems, persistedData]);
+    }, [initialItems, getDisplayData]);
     
     const handleDownload = (data: ItemData[], classification: Classification) => {
         if (data.length === 0) {
@@ -159,7 +184,6 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             }
         );
         
-        // Adicionar coluna para Código do Ativo se não for 'Não classificado'
         if (classification !== 'unclassified') {
             columns.push({
                 id: 'accountCode',
@@ -171,7 +195,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
                         <div className="flex items-center gap-2">
                             <Input
                                 placeholder="Ex: 1.2.3.01.0001"
-                                value={displayData.accountCode}
+                                value={displayData.accountCode || ''}
                                 onChange={(e) => handleAccountCodeChange(item.uniqueItemId, e.target.value)}
                                 className="h-8"
                             />
@@ -181,14 +205,13 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
                                         <Save className="h-4 w-4 text-primary" />
                                     </Button>
                                 </TooltipTrigger>
-                                <TooltipContent><p>Guardar código permanentemente</p></TooltipContent>
+                                <TooltipContent><p>Guardar código</p></TooltipContent>
                             </Tooltip>
                         </div>
                     );
                 }
             });
         }
-
 
         columns.push({
             id: 'actions',
@@ -199,7 +222,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
 
                 return (
                     <div className="flex gap-2 justify-center">
-                        {currentClassification !== 'imobilizado' && (
+                         {currentClassification !== 'imobilizado' && (
                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'imobilizado')}><Factory className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Imobilizado</p></TooltipContent></Tooltip>
                         )}
                         {currentClassification !== 'uso-consumo' && (
@@ -211,7 +234,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
                         {currentClassification !== 'unclassified' && (
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleUnclassify(originalItem.uniqueItemId)}>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleUnclassify(originalItem)}>
                                         <RotateCcw className="h-5 w-5 text-destructive" />
                                     </Button>
                                 </TooltipTrigger><TooltipContent><p>Reverter para Não Classificado</p></TooltipContent>
@@ -236,10 +259,21 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         );
     }
 
+    if (!competence) {
+         return (
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center gap-3"><Building className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Análise de Imobilizado</CardTitle><CardDescription>Classifique itens relevantes para imobilizado, despesa ou consumo.</CardDescription></div></div>
+                </CardHeader>
+                <CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando Competência</h3><p>Execute a "Validação de Documentos" e selecione um período para iniciar a classificação.</p></CardContent>
+            </Card>
+        );
+    }
+
     return (
         <Card>
             <CardHeader>
-                <div className="flex items-center gap-3"><Building className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Análise de Imobilizado</CardTitle><CardDescription>Classifique os itens. As classificações e códigos de conta serão guardados para utilizações futuras.</CardDescription></div></div>
+                <div className="flex items-center gap-3"><Building className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Análise de Imobilizado (Competência: {competence})</CardTitle><CardDescription>Classifique os itens. Suas escolhas serão lembradas para esta competência e sugeridas para as próximas.</CardDescription></div></div>
             </CardHeader>
             <CardContent>
                 <TooltipProvider>
