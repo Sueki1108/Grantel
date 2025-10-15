@@ -1,111 +1,138 @@
 "use client";
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns, getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { Building, Download, List, Factory, Wrench, HardHat, RotateCcw } from "lucide-react";
+import { getColumnsWithCustomRender } from "@/lib/columns-helper";
+import { Building, Download, List, Factory, Wrench, HardHat, RotateCcw, Save } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { cleanAndToStr } from '@/lib/utils';
 
 
+// Tipos
 type Classification = 'unclassified' | 'imobilizado' | 'uso-consumo' | 'utilizado-em-obra';
 
-interface Item extends Record<string, any> {
-    id: string;
+export interface ItemData extends Record<string, any> {
+    id: string; // Chave Única da Nota + N° do Item
+    uniqueItemId: string; // Chave para persistência (CNPJ-CodigoProduto)
+}
+
+export interface ClassificationStorage {
+    classification: Classification;
+    accountCode?: string;
 }
 
 interface ImobilizadoAnalysisProps {
-    items: Item[];
-    onClassificationChange: (classifications: Record<string, Classification>) => void;
-    initialClassifications: Record<string, Classification>;
+    items: ItemData[];
+    competence: string | null; // ex: "2023-01"
+    onPersistedDataChange: (key: string, data: ClassificationStorage) => void;
+    persistedData: Record<string, ClassificationStorage>;
 }
 
-export function ImobilizadoAnalysis({ items: initialItems, onClassificationChange, initialClassifications }: ImobilizadoAnalysisProps) {
+export function ImobilizadoAnalysis({ items: initialItems, competence, onPersistedDataChange, persistedData }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
-    const [classifiedItems, setClassifiedItems] = useState<Record<string, Classification>>(initialClassifications);
-    const [accountCodes, setAccountCodes] = useState({
-        imobilizado: '',
-        'uso-consumo': '',
-        'utilizado-em-obra': ''
-    });
+    
+    // O estado local agora apenas reflete os códigos de conta da sessão atual
+    const [sessionAccountCodes, setSessionAccountCodes] = useState<Record<string, string>>({});
 
-    useEffect(() => {
-        setClassifiedItems(initialClassifications);
-    }, [initialClassifications]);
-
-    const handleClassify = (itemId: string, classification: Classification) => {
-        const newClassifications = {
-            ...classifiedItems,
-            [itemId]: classification
+    // Combina os dados persistidos com os da sessão para exibição
+    const getDisplayData = (itemUniqueId: string, classification: Classification): ClassificationStorage => {
+        const persistent = persistedData[itemUniqueId];
+        if (persistent?.classification === classification) {
+            return {
+                classification: classification,
+                accountCode: sessionAccountCodes[itemUniqueId] ?? persistent.accountCode ?? ''
+            };
+        }
+        return {
+            classification: classification,
+            accountCode: sessionAccountCodes[itemUniqueId] ?? ''
         };
-        setClassifiedItems(newClassifications);
-        onClassificationChange(newClassifications);
     };
 
-    const handleUnclassify = (itemId: string) => {
-        const newClassifications = { ...classifiedItems };
-        delete newClassifications[itemId];
-        setClassifiedItems(newClassifications);
-        onClassificationChange(newClassifications);
+    const handleClassificationChange = (item: ItemData, newClassification: Classification) => {
+        const currentDisplayData = getDisplayData(item.uniqueItemId, newClassification);
+        
+        onPersistedDataChange(item.uniqueItemId, {
+            classification: newClassification,
+            accountCode: currentDisplayData.accountCode
+        });
+        toast({
+            title: "Item Classificado",
+            description: `O item "${item['Descrição']?.substring(0, 20)}..." foi classificado como ${newClassification}.`
+        });
     };
     
-    const handleAccountCodeChange = (classification: keyof typeof accountCodes, value: string) => {
-        setAccountCodes(prev => ({ ...prev, [classification]: value }));
+    const handleAccountCodeChange = (itemUniqueId: string, code: string) => {
+        // Atualiza o código na sessão
+        setSessionAccountCodes(prev => ({...prev, [itemUniqueId]: code}));
+    };
+
+    const handleSaveAccountCode = (itemUniqueId: string) => {
+        const classification = persistedData[itemUniqueId]?.classification || 'unclassified';
+        if(classification === 'unclassified') {
+            toast({variant: 'destructive', title: 'Item não classificado', description: 'Classifique o item antes de guardar um código de conta.'});
+            return;
+        }
+
+        const newStorageValue: ClassificationStorage = {
+            classification: classification,
+            accountCode: sessionAccountCodes[itemUniqueId] ?? persistedData[itemUniqueId]?.accountCode ?? ''
+        };
+
+        onPersistedDataChange(itemUniqueId, newStorageValue);
+
+        toast({
+            title: "Código de Conta Guardado",
+            description: `O código foi associado permanentemente a este tipo de item.`
+        });
+    };
+    
+    const handleUnclassify = (itemUniqueId: string) => {
+        onPersistedDataChange(itemUniqueId, { classification: 'unclassified', accountCode: undefined });
+         toast({
+            title: "Classificação Removida",
+        });
     };
 
     const filteredItems = useMemo(() => {
-        const unclassified: Item[] = [];
-        const imobilizado: Item[] = [];
-        const usoConsumo: Item[] = [];
-        const utilizadoEmObra: Item[] = [];
+        const categories: Record<Classification, ItemData[]> = {
+            unclassified: [],
+            imobilizado: [],
+            'uso-consumo': [],
+            'utilizado-em-obra': [],
+        };
 
         initialItems.forEach(item => {
-            const classification = classifiedItems[item.id] || 'unclassified';
-            switch (classification) {
-                case 'imobilizado':
-                    imobilizado.push(item);
-                    break;
-                case 'uso-consumo':
-                    usoConsumo.push(item);
-                    break;
-                case 'utilizado-em-obra':
-                    utilizadoEmObra.push(item);
-                    break;
-                default:
-                    unclassified.push(item);
-                    break;
-            }
+            const classification = persistedData[item.uniqueItemId]?.classification || 'unclassified';
+            categories[classification].push(item);
         });
 
-        return { unclassified, imobilizado, 'uso-consumo': usoConsumo, 'utilizado-em-obra': utilizadoEmObra };
-    }, [initialItems, classifiedItems]);
+        return categories;
+    }, [initialItems, persistedData]);
     
-    const handleDownload = (data: Item[], classification: Classification) => {
+    const handleDownload = (data: ItemData[], classification: Classification) => {
         if (data.length === 0) {
             toast({ title: 'Nenhum dado para exportar', variant: 'destructive' });
             return;
         }
-        
-        const code = classification !== 'unclassified' ? accountCodes[classification as keyof typeof accountCodes] : '';
 
         const dataToExport = data.map(item => {
-            const baseItem: Record<string, any> = {
+            const displayData = getDisplayData(item.uniqueItemId, classification);
+            return {
                 'Número da Nota': item['Número da Nota'],
                 'Descrição': item['Descrição'],
                 'CFOP': item['CFOP'],
                 'Descricao CFOP': (item['Descricao CFOP'] || '').substring(0, 20),
                 'Valor Total': item['Valor Total'],
+                'Código da Conta': displayData.accountCode || '',
             };
-            if(code) {
-                baseItem['Código da Conta'] = code;
-            }
-            return baseItem;
         });
 
         const worksheet = XLSX.utils.json_to_sheet(dataToExport);
@@ -115,54 +142,66 @@ export function ImobilizadoAnalysis({ items: initialItems, onClassificationChang
         toast({ title: 'Download Iniciado' });
     };
     
-    const renderTableFor = (data: Item[], classification: Classification) => {
+    const renderTableFor = (data: ItemData[], classification: Classification) => {
         if (!data || data.length === 0) {
             return <div className="text-center text-muted-foreground p-8">Nenhum item nesta categoria.</div>;
         }
 
         const columns = getColumnsWithCustomRender(
             data,
-            ['Número da Nota', 'Descrição', 'CFOP', 'Descricao CFOP', 'Valor Total'],
+            ['Número da Nota', 'Descrição', 'CFOP', 'Valor Total'],
             (row, id) => {
                 const value = row.getValue(id as any);
-                if (id === 'Descricao CFOP' && typeof value === 'string') {
-                    return <div title={value}>{value.substring(0, 20)}...</div>;
-                }
                  if (id === 'Valor Total' && typeof value === 'number') {
                     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 }
                 return <div>{String(value ?? '')}</div>;
             }
         );
+        
+        // Adicionar coluna para Código da Conta se não for 'Não classificado'
+        if (classification !== 'unclassified') {
+            columns.push({
+                id: 'accountCode',
+                header: 'Código da Conta',
+                cell: ({ row }: any) => {
+                    const item = row.original as ItemData;
+                    const displayData = getDisplayData(item.uniqueItemId, classification);
+                    return (
+                        <div className="flex items-center gap-2">
+                            <Input
+                                placeholder="Ex: 1.2.3.01.0001"
+                                value={displayData.accountCode}
+                                onChange={(e) => handleAccountCodeChange(item.uniqueItemId, e.target.value)}
+                                className="h-8"
+                            />
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleSaveAccountCode(item.uniqueItemId)}>
+                                        <Save className="h-4 w-4 text-primary" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Guardar código permanentemente</p></TooltipContent>
+                            </Tooltip>
+                        </div>
+                    );
+                }
+            });
+        }
+
 
         columns.push({
             id: 'actions',
             header: 'Ações',
             cell: ({ row }: any) => {
-                const originalItem = initialItems.find(item => item.id === row.original.id);
-                if (!originalItem) return null;
+                const originalItem = row.original as ItemData;
                 
                 if (classification === 'unclassified') {
                     return (
                         <div className="flex gap-2 justify-center">
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassify(originalItem.id, 'imobilizado')}><Factory className="h-5 w-5" /></Button>
-                                </TooltipTrigger>
-                                <TooltipContent><p>Classificar como Imobilizado</p></TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassify(originalItem.id, 'uso-consumo')}><Wrench className="h-5 w-5" /></Button>
-                                </TooltipTrigger>
-                                <TooltipContent><p>Classificar como Uso e Consumo</p></TooltipContent>
-                            </Tooltip>
-                             <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassify(originalItem.id, 'utilizado-em-obra')}><HardHat className="h-5 w-5" /></Button>
-                                </TooltipTrigger>
-                                <TooltipContent><p>Classificar como Utilizado em Obra</p></TooltipContent>
-                            </Tooltip>
+                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'imobilizado')}><Factory className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Imobilizado</p></TooltipContent></Tooltip>
+                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'uso-consumo')}><Wrench className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Uso e Consumo</p></TooltipContent></Tooltip>
+                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'utilizado-em-obra')}><HardHat className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Utilizado em Obra</p></TooltipContent></Tooltip>
                         </div>
                     );
                 } else {
@@ -170,9 +209,10 @@ export function ImobilizadoAnalysis({ items: initialItems, onClassificationChang
                         <div className="flex justify-center">
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleUnclassify(originalItem.id)}><RotateCcw className="h-5 w-5 text-destructive" /></Button>
-                                </TooltipTrigger>
-                                <TooltipContent><p>Reverter para Não Classificado</p></TooltipContent>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleUnclassify(originalItem.uniqueItemId)}>
+                                        <RotateCcw className="h-5 w-5 text-destructive" />
+                                    </Button>
+                                </TooltipTrigger><TooltipContent><p>Reverter para Não Classificado</p></TooltipContent>
                             </Tooltip>
                         </div>
                     );
@@ -183,66 +223,13 @@ export function ImobilizadoAnalysis({ items: initialItems, onClassificationChang
         return <DataTable columns={columns} data={data} />;
     };
 
-    const ClassificationTabContent = ({
-        data,
-        classification,
-        title,
-        description,
-        showAccountCode = false,
-    }: {
-        data: Item[];
-        classification: Classification;
-        title: string;
-        description: string;
-        showAccountCode?: boolean;
-    }) => (
-         <CardContent>
-            {showAccountCode && (
-                <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-end mb-6 p-4 border rounded-lg bg-muted/50">
-                    <div className="grid gap-1.5">
-                        <Label htmlFor={`${classification}-code`}>Definir Código de Conta para {title}</Label>
-                        <Input
-                            id={`${classification}-code`}
-                            placeholder={`Ex: 1.2.3.01.0001`}
-                            value={accountCodes[classification as keyof typeof accountCodes]}
-                            onChange={(e) => handleAccountCodeChange(classification as keyof typeof accountCodes, e.target.value)}
-                            className="max-w-xs"
-                        />
-                        <p className="text-sm text-muted-foreground">{description}</p>
-                    </div>
-                    <Button onClick={() => handleDownload(data, classification)} disabled={data.length === 0}>
-                        <Download className="mr-2 h-4 w-4" /> Exportar para Excel
-                    </Button>
-                </div>
-            )}
-             {!showAccountCode && (
-                 <div className="flex justify-end mb-4">
-                      <Button onClick={() => handleDownload(data, classification)} disabled={data.length === 0}>
-                        <Download className="mr-2 h-4 w-4" /> Exportar para Excel
-                    </Button>
-                 </div>
-            )}
-            {renderTableFor(data, classification)}
-        </CardContent>
-    );
-
     if (!initialItems || initialItems.length === 0) {
         return (
             <Card>
                 <CardHeader>
-                    <div className="flex items-center gap-3">
-                        <Building className="h-8 w-8 text-primary" />
-                        <div>
-                            <CardTitle className="font-headline text-2xl">Análise de Imobilizado</CardTitle>
-                            <CardDescription>Classifique itens relevantes para imobilizado, despesa ou consumo.</CardDescription>
-                        </div>
-                    </div>
+                    <div className="flex items-center gap-3"><Building className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Análise de Imobilizado</CardTitle><CardDescription>Classifique itens relevantes para imobilizado, despesa ou consumo.</CardDescription></div></div>
                 </CardHeader>
-                <CardContent className="p-8 text-center text-muted-foreground">
-                    <Building className="mx-auto h-12 w-12 mb-4" />
-                    <h3 className="text-xl font-semibold mb-2">Aguardando dados</h3>
-                    <p>Execute a "Validação de Documentos" na primeira aba para carregar os itens para análise.</p>
-                </CardContent>
+                <CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Execute a "Validação de Documentos" na primeira aba para carregar os itens para análise.</p></CardContent>
             </Card>
         );
     }
@@ -250,13 +237,7 @@ export function ImobilizadoAnalysis({ items: initialItems, onClassificationChang
     return (
         <Card>
             <CardHeader>
-                <div className="flex items-center gap-3">
-                    <Building className="h-8 w-8 text-primary" />
-                    <div>
-                        <CardTitle className="font-headline text-2xl">Análise de Imobilizado</CardTitle>
-                        <CardDescription>Classifique itens relevantes e defina os códigos de conta correspondentes.</CardDescription>
-                    </div>
-                </div>
+                <div className="flex items-center gap-3"><Building className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Análise de Imobilizado</CardTitle><CardDescription>Classifique os itens. As classificações e códigos de conta serão guardados para utilizações futuras.</CardDescription></div></div>
             </CardHeader>
             <CardContent>
                 <TooltipProvider>
@@ -274,31 +255,13 @@ export function ImobilizadoAnalysis({ items: initialItems, onClassificationChang
                             </CardContent>
                         </TabsContent>
                         <TabsContent value="imobilizado" className="mt-6">
-                            <ClassificationTabContent
-                                data={filteredItems.imobilizado}
-                                classification="imobilizado"
-                                title="Imobilizado"
-                                description="Código para itens classificados como ativo imobilizado."
-                                showAccountCode={true}
-                            />
+                            {renderTableFor(filteredItems.imobilizado, 'imobilizado')}
                         </TabsContent>
                         <TabsContent value="uso-consumo" className="mt-6">
-                            <ClassificationTabContent
-                                data={filteredItems['uso-consumo']}
-                                classification="uso-consumo"
-                                title="Uso e Consumo"
-                                description="Código para itens classificados como material de uso e consumo."
-                                showAccountCode={true}
-                            />
+                             {renderTableFor(filteredItems['uso-consumo'], 'uso-consumo')}
                         </TabsContent>
                         <TabsContent value="utilizado-em-obra" className="mt-6">
-                             <ClassificationTabContent
-                                data={filteredItems['utilizado-em-obra']}
-                                classification="utilizado-em-obra"
-                                title="Utilizado em Obra"
-                                description="Código para itens classificados como utilizados em obra."
-                                showAccountCode={true}
-                            />
+                             {renderTableFor(filteredItems['utilizado-em-obra'], 'utilizado-em-obra')}
                         </TabsContent>
                     </Tabs>
                 </TooltipProvider>

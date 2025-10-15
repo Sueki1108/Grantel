@@ -28,7 +28,7 @@ import { NfseAnalysis } from "@/components/app/nfse-analysis";
 import { KeyCheckResult } from "@/components/app/key-checker";
 import { SettingsDialog } from "@/components/app/settings-dialog";
 import { cn } from "@/lib/utils";
-import { ImobilizadoAnalysis } from "@/components/app/imobilizado-analysis";
+import { ImobilizadoAnalysis, type ClassificationStorage } from "@/components/app/imobilizado-analysis";
 
 
 
@@ -45,6 +45,9 @@ const requiredFiles = [
     'NFE Operação Não Realizada', 'NFE Operação Desconhecida', 'CTE Desacordo de Serviço'
 ];
 
+const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications';
+
+
 export function AutomatorClientPage() {
     const [files, setFiles] = useState<Record<string, any[]>>({});
     const [xmlFiles, setXmlFiles] = useState<{ nfeEntrada: File[], cte: File[], nfeSaida: File[], nfse: File[] }>({ nfeEntrada: [], cte: [], nfeSaida: [], nfse: [] });
@@ -59,7 +62,7 @@ export function AutomatorClientPage() {
     const [siengeFile, setSiengeFile] = useState<File | null>(null);
     const [lastSaidaNumber, setLastSaidaNumber] = useState<number>(0);
     const [disregardedNfseNotes, setDisregardedNfseNotes] = useState<Set<string>>(new Set());
-
+    const [imobilizadoClassifications, setImobilizadoClassifications] = useState<Record<string, ClassificationStorage>>({});
 
     const { toast } = useToast();
 
@@ -71,16 +74,43 @@ export function AutomatorClientPage() {
     
     // UI Settings state
     const [isWideMode, setIsWideMode] = useState(false);
-    
+
     // =================================================================
-    // UI SETTINGS
+    // PERSISTENCE (localStorage)
     // =================================================================
     useEffect(() => {
-        // Load UI settings from localStorage on initial load
+        // Load imobilizado classifications from localStorage
+        try {
+            const savedClassifications = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
+            if (savedClassifications) {
+                setImobilizadoClassifications(JSON.parse(savedClassifications));
+            }
+        } catch (e) {
+            console.error("Failed to load imobilizado classifications from localStorage", e);
+        }
+
+        // Load UI settings
         const wideMode = localStorage.getItem('ui-widemode') === 'true';
         setIsWideMode(wideMode);
     }, []);
 
+    const handleImobilizadoDataChange = (key: string, data: ClassificationStorage) => {
+        const newClassifications = {
+            ...imobilizadoClassifications,
+            [key]: data,
+        };
+        setImobilizadoClassifications(newClassifications);
+        try {
+            localStorage.setItem(IMOBILIZADO_STORAGE_KEY, JSON.stringify(newClassifications));
+        } catch (e) {
+            console.error("Failed to save imobilizado classifications to localStorage", e);
+            toast({ variant: 'destructive', title: "Erro ao guardar classificações"});
+        }
+    };
+    
+    // =================================================================
+    // UI SETTINGS
+    // =================================================================
     const handleSettingsChange = ({ wideMode }: { wideMode: boolean }) => {
         setIsWideMode(wideMode);
         localStorage.setItem('ui-widemode', String(wideMode));
@@ -225,6 +255,7 @@ export function AutomatorClientPage() {
         setLastSaidaNumber(0);
         setDisregardedNfseNotes(new Set());
         setSelectedPeriods({});
+        // Não limpamos imobilizadoClassifications aqui para manter a persistência
 
         const inputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]');
         inputs.forEach(input => input.value = "");
@@ -791,8 +822,9 @@ export function AutomatorClientPage() {
                          <TabsContent value="imobilizado" className="mt-6">
                             <ImobilizadoAnalysis 
                                 items={processedData?.sheets?.['Imobilizados'] || []}
-                                onClassificationChange={(newClassifications) => setProcessedData(p => p ? ({ ...p, imobilizadoStatus: newClassifications }) : null)}
-                                initialClassifications={processedData?.imobilizadoStatus || {}}
+                                onPersistedDataChange={handleImobilizadoDataChange}
+                                persistedData={imobilizadoClassifications}
+                                competence={competence}
                             />
                         </TabsContent>
 

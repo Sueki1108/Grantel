@@ -1,6 +1,7 @@
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import { KeyCheckResult } from '@/components/app/key-checker';
+import { type ClassificationStorage } from '@/components/app/imobilizado-analysis';
 
 // Types
 type DataFrame = any[];
@@ -25,7 +26,7 @@ export interface ProcessedData {
     keyCheckResults: KeyCheckResult | null;
     saidasStatus?: Record<number, 'emitida' | 'cancelada' | 'inutilizada'>;
     lastSaidaNumber?: number;
-    imobilizadoStatus?: Record<string, 'unclassified' | 'imobilizado' | 'uso-consumo' | 'utilizado-em-obra'>;
+    imobilizadoStatus?: Record<string, ClassificationStorage>;
 }
 
 
@@ -193,11 +194,14 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     log(`- ${itensAcimaDe1200.length} itens com valor total acima de 1200 (não remessa) encontrados.`);
 
     log("Designando itens de valor relevante para análise de Imobilizado...");
-    // A lista de Imobilizados para análise é a mesma de Itens Acima de 1200
-    const imobilizados = itensAcimaDe1200.map((item, index) => ({ 
-        ...item, 
-        id: `${cleanAndToStr(item['Chave Unica'])}-${index}` 
-    }));
+    const imobilizados = itensAcimaDe1200.map((item, index) => {
+        const uniqueItemId = `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
+        return { 
+            ...item, 
+            id: `${cleanAndToStr(item['Chave Unica'])}-${item['Item']}`, // ID para a renderização na tabela
+            uniqueItemId: uniqueItemId // ID para persistência
+        };
+    });
     log(`- ${imobilizados.length} itens designados para a aba de análise de Imobilizado.`);
 
 
