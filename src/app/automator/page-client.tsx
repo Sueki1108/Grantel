@@ -614,6 +614,7 @@ export function AutomatorClientPage() {
     const isClearButtonVisible = Object.keys(files).length > 0 || xmlFiles.nfeEntrada.length > 0 || xmlFiles.cte.length > 0 || xmlFiles.nfeSaida.length > 0 || xmlFiles.nfse.length > 0 || !!processedData || logs.length > 0 || error !== null;
 
     const saidasNfeTabDisabled = !processedData?.sheets['Saídas'] || processedData.sheets['Saídas'].length === 0;
+    const nfseTabDisabled = xmlFiles.nfse.length === 0;
     const analysisTabDisabled = !processedData?.sheets['Chaves Válidas'] || processedData.sheets['Chaves Válidas'].length === 0;
     const imobilizadoTabDisabled = !processedData?.sheets['Imobilizados'] || processedData.sheets['Imobilizados'].length === 0;
     
@@ -681,7 +682,7 @@ export function AutomatorClientPage() {
                                 2. Análise Saídas
                                 {processedData?.sheets['Saídas'] && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
-                            <TabsTrigger value="nfse" className="flex items-center gap-2">
+                            <TabsTrigger value="nfse" disabled={nfseTabDisabled} className="flex items-center gap-2">
                                 3. Análise NFS-e
                                 {xmlFiles.nfse.length > 0 && <FilePieChart className="h-5 w-5 text-primary" />}
                             </TabsTrigger>
