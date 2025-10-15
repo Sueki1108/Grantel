@@ -85,6 +85,7 @@ interface AdditionalAnalysesProps {
     onSpedFilesChange: (files: File[]) => void;
     onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null) => void;
     competence: string | null;
+    onSaveSession: () => void;
 }
 
 export function AdditionalAnalyses({ 
@@ -98,6 +99,7 @@ export function AdditionalAnalyses({
     onSpedFilesChange,
     onSpedProcessed,
     competence,
+    onSaveSession,
 }: AdditionalAnalysesProps) {
     const { toast } = useToast();
 
@@ -441,9 +443,12 @@ export function AdditionalAnalyses({
                              <FileSearch className="h-8 w-8 text-primary" />
                              <div>
                                 <CardTitle className="font-headline text-2xl">Análises e Relatórios Finais</CardTitle>
-                                <CardDescription>Execute análises de conciliação e exporte relatórios completos.</CardDescription>
+                                <CardDescription>Execute análises de conciliação, exporte relatórios e guarde a sessão no histórico.</CardDescription>
                             </div>
                         </div>
+                         <Button onClick={onSaveSession} disabled={!competence}>
+                            <Save className="mr-2 h-4 w-4" /> Guardar Análise no Histórico
+                        </Button>
                     </div>
                 </CardHeader>
              </Card>
