@@ -42,22 +42,22 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
     const [sessionAccountCodes, setSessionAccountCodes] = useState<Record<string, string>>({});
 
     // Combina os dados persistidos com os da sessão para exibição
-    const getDisplayData = (itemUniqueId: string, classification: Classification): ClassificationStorage => {
+     const getDisplayData = (itemUniqueId: string): ClassificationStorage => {
         const persistent = persistedData[itemUniqueId];
-        if (persistent?.classification === classification) {
-            return {
-                classification: classification,
-                accountCode: sessionAccountCodes[itemUniqueId] ?? persistent.accountCode ?? ''
-            };
-        }
+        const sessionCode = sessionAccountCodes[itemUniqueId];
+        const classification = persistent?.classification || 'unclassified';
+
+        // A fonte da verdade para o código é: 1º o que está na sessão, 2º o que está persistido.
+        const accountCode = sessionCode !== undefined ? sessionCode : (persistent?.accountCode ?? '');
+        
         return {
-            classification: classification,
-            accountCode: sessionAccountCodes[itemUniqueId] ?? ''
+            classification,
+            accountCode
         };
     };
 
     const handleClassificationChange = (item: ItemData, newClassification: Classification) => {
-        const currentDisplayData = getDisplayData(item.uniqueItemId, newClassification);
+        const currentDisplayData = getDisplayData(item.uniqueItemId);
         
         onPersistedDataChange(item.uniqueItemId, {
             classification: newClassification,
@@ -89,7 +89,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         onPersistedDataChange(itemUniqueId, newStorageValue);
 
         toast({
-            title: "Código de Conta Guardado",
+            title: "Código do Ativo Guardado",
             description: `O código foi associado permanentemente a este tipo de item.`
         });
     };
@@ -124,14 +124,14 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         }
 
         const dataToExport = data.map(item => {
-            const displayData = getDisplayData(item.uniqueItemId, classification);
+            const displayData = getDisplayData(item.uniqueItemId);
             return {
                 'Número da Nota': item['Número da Nota'],
                 'Descrição': item['Descrição'],
                 'CFOP': item['CFOP'],
                 'Descricao CFOP': (item['Descricao CFOP'] || '').substring(0, 20),
                 'Valor Total': item['Valor Total'],
-                'Código da Conta': displayData.accountCode || '',
+                'Código do Ativo': displayData.accountCode || '',
             };
         });
 
@@ -159,14 +159,14 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             }
         );
         
-        // Adicionar coluna para Código da Conta se não for 'Não classificado'
+        // Adicionar coluna para Código do Ativo se não for 'Não classificado'
         if (classification !== 'unclassified') {
             columns.push({
                 id: 'accountCode',
-                header: 'Código da Conta',
+                header: 'Código do Ativo',
                 cell: ({ row }: any) => {
                     const item = row.original as ItemData;
-                    const displayData = getDisplayData(item.uniqueItemId, classification);
+                    const displayData = getDisplayData(item.uniqueItemId);
                     return (
                         <div className="flex items-center gap-2">
                             <Input
@@ -195,7 +195,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             header: 'Ações',
             cell: ({ row }: any) => {
                 const originalItem = row.original as ItemData;
-                const currentClassification = persistedData[originalItem.uniqueItemId]?.classification || 'unclassified';
+                const currentClassification = getDisplayData(originalItem.uniqueItemId).classification;
 
                 return (
                     <div className="flex gap-2 justify-center">
