@@ -86,8 +86,6 @@ interface AdditionalAnalysesProps {
     onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null) => void;
     competence: string | null;
     onExportSession: () => void;
-    imobilizadoClassifications: AllClassifications;
-    onImobilizadoPersist: (allData: AllClassifications) => void;
 }
 
 export function AdditionalAnalyses({ 
@@ -101,9 +99,7 @@ export function AdditionalAnalyses({
     onSpedFilesChange,
     onSpedProcessed,
     competence,
-    onExportSession,
-    imobilizadoClassifications,
-    onImobilizadoPersist
+    onExportSession
 }: AdditionalAnalysesProps) {
     const { toast } = useToast();
 
@@ -467,9 +463,6 @@ export function AdditionalAnalyses({
                         onClearSiengeFile={onClearSiengeFile}
                         reconciliationResults={reconciliationResults}
                         error={reconciliationError}
-                        competence={competence}
-                        allPersistedData={imobilizadoClassifications}
-                        onPersistData={onImobilizadoPersist}
                     />
                 </TabsContent>
 
@@ -617,12 +610,9 @@ interface ReconciliationAnalysisProps {
     onClearSiengeFile: () => void;
     reconciliationResults: { reconciled: any[], onlyInSienge: any[], onlyInXml: any[] } | null;
     error: string | null;
-    competence: string | null;
-    allPersistedData: AllClassifications;
-    onPersistData: (allData: AllClassifications) => void;
 }
 
-function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error, competence, allPersistedData, onPersistData }: ReconciliationAnalysisProps) {
+function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
     useEffect(() => {
@@ -671,9 +661,9 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                             <div className="flex-grow overflow-auto">
                                <CfopValidator 
                                   items={reconciliationResults?.reconciled || []}
-                                  competence={competence}
-                                  allPersistedData={allPersistedData}
-                                  onPersistData={onPersistData}
+                                  competence={null}
+                                  allPersistedData={{}}
+                                  onPersistData={() => {}}
                                />
                             </div>
                         </DialogContent>
