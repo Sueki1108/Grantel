@@ -19,7 +19,6 @@ import { KeyChecker } from "./key-checker";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AllClassifications } from "./imobilizado-analysis";
 import { CfopValidator, CfopValidationData } from "./cfop-validator";
-import { cfopDescriptions } from "@/lib/cfop";
 
 
 // ===============================================================
@@ -130,7 +129,7 @@ export function AdditionalAnalyses({
     }, [siengeFile, siengeSheetData, onSiengeDataProcessed, toast]);
 
     
-    const { reconciliationResults, error: reconciliationError } = useReconciliation(processedData.siengeSheetData, processedData.sheets['Itens Válidos']);
+    const { reconciliationResults, error: reconciliationError } = useReconciliation(processedData);
 
 
     // Estado Exportação XML Revenda
@@ -188,22 +187,6 @@ export function AdditionalAnalyses({
             }, 0);
             return { [taxName]: formatCurrency(total) };
         }
-    
-        const getCfopDescription = (cfopCode: number): string => {
-            const fullDescription = cfopDescriptions[cfopCode];
-            if (fullDescription) {
-                 // Try to get the description again to handle nested structures, but add checks
-                const nestedDescriptionKey = Object.keys(cfopDescriptions).find(k => cfopDescriptions[Number(k) as keyof typeof cfopDescriptions] === fullDescription);
-                if (nestedDescriptionKey) {
-                    const nestedDescription = cfopDescriptions[Number(nestedDescriptionKey) as keyof typeof cfopDescriptions];
-                    if (nestedDescription && typeof nestedDescription === 'string') {
-                         return nestedDescription.split(' ').slice(0, 3).join(' ');
-                    }
-                }
-                return fullDescription.split(' ').slice(0, 3).join(' ');
-            }
-            return 'N/A';
-        };
     
         const getRelevantData = (row: any, taxKey: string | undefined, taxName: string) => {
             if (!taxKey || !row || typeof row !== 'object' || !h.cfop) return null;
@@ -292,6 +275,14 @@ export function AdditionalAnalyses({
         }, 0);
         return { [taxName]: formatCurrency(total) };
     }
+    
+    const getCfopDescription = (cfopCode: number): string => {
+        const fullDescription = cfopDescriptions[cfopCode];
+        if (fullDescription) {
+             return fullDescription.split(' ').slice(0, 3).join(' ');
+        }
+        return 'N/A';
+    };
 
     const handleAnalyzeResale = useCallback(async () => {
         if (!siengeFile) {
@@ -635,7 +626,10 @@ interface ReconciliationAnalysisProps {
     competence: string | null;
 }
 
-function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
+function useReconciliation(processedData: ProcessedData | null) {
+    const siengeData = processedData?.siengeSheetData;
+    const xmlItems = processedData?.sheets?.['Itens Válidos'];
+    
     if (!siengeData || !xmlItems) {
         return { reconciliationResults: null, error: null };
     }
