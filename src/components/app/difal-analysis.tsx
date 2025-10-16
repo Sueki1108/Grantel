@@ -405,5 +405,3 @@ export function DifalAnalysis() {
         </div>
     );
 }
-
-    
