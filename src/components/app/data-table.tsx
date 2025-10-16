@@ -62,13 +62,15 @@ export function DataTable<TData, TValue>({
       sorting,
       columnFilters,
       globalFilter,
-      rowSelection,
+      rowSelection: rowSelection || {},
     },
   })
 
+  const showSelectionInfo = !!setRowSelection;
+
   return (
     <div>
-        <div className="flex items-center py-4">
+        <div className="flex items-center justify-between py-4">
             <Input
             placeholder="Filtrar todos os dados..."
             value={globalFilter ?? ''}
@@ -77,6 +79,12 @@ export function DataTable<TData, TValue>({
             }
             className="max-w-sm"
             />
+            {showSelectionInfo && (
+              <div className="text-sm text-muted-foreground">
+                  {table.getFilteredSelectedRowModel().rows.length} de{" "}
+                  {table.getFilteredRowModel().rows.length} linha(s) selecionadas.
+              </div>
+            )}
       </div>
       <ScrollArea className="rounded-md border whitespace-nowrap">
         <Table>
@@ -103,7 +111,7 @@ export function DataTable<TData, TValue>({
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
+                  data-state={rowSelection && Object.keys(rowSelection).length > 0 && row.getIsSelected() && "selected"}
                   onClick={row.getCanSelect() ? () => row.toggleSelected() : undefined}
                   className={row.getCanSelect() ? 'cursor-pointer' : ''}
                 >
@@ -136,10 +144,6 @@ export function DataTable<TData, TValue>({
         </Table>
         <ScrollBar orientation="horizontal" />
       </ScrollArea>
-       <div className="flex-1 pt-2 text-sm text-muted-foreground">
-            {table.getFilteredSelectedRowModel().rows.length} de{" "}
-            {table.getFilteredRowModel().rows.length} linha(s) selecionadas.
-        </div>
       <div className="flex items-center justify-end space-x-2 py-4">
         <Button
           variant="outline"
