@@ -124,19 +124,31 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const desconhecida = processedDfs["NFE Operação Desconhecida"] || [];
     const desacordo = processedDfs["CTE Desacordo de Serviço"] || [];
     
-    log("Identificando devoluções (finNFe=4) e separando notas de compra...");
+    log("Identificando notas de devolução de fornecedor (finNFe=4)...");
     const chavesDevolucaoFornecedor = new Set<string>();
     nfe.forEach(nota => {
         if (nota.finNFe === '4') {
             chavesDevolucaoFornecedor.add(cleanAndToStr(nota['Chave de acesso']));
         }
     });
-    log(`- ${chavesDevolucaoFornecedor.size} notas de devolução de fornecedor (finNFe=4) identificadas.`);
+    log(`- ${chavesDevolucaoFornecedor.size} notas de devolução para fornecedor (finNFe=4) identificadas.`);
+    
+    log("Identificando notas de remessa, retorno e outras operações que não são compras...");
+    const chavesRemessaRetorno = new Set<string>();
+    const remessaCfopPrefixes = ['155', '255', '190', '191', '192', '194', '290', '291', '292', '294'];
+    itens.forEach(item => {
+        if (!item || !item.CFOP) return;
+        const cfop = cleanAndToStr(item.CFOP);
+        if (remessaCfopPrefixes.some(prefix => cfop.startsWith(prefix))) {
+            chavesRemessaRetorno.add(cleanAndToStr(item['Chave de acesso']));
+        }
+    });
+     log(`- ${chavesRemessaRetorno.size} chaves de remessa/retorno identificadas via CFOP dos itens.`);
 
 
-    log("Coletando chaves de exceção (canceladas, manifesto, eventos)...");
+    log("Coletando chaves de exceção (canceladas, manifesto)...");
     const chavesExcecao = new Set<string>(eventCanceledKeys);
-    log(`- ${eventCanceledKeys.size} chaves de cancelamento por evento adicionadas.`);
+    log(`- ${eventCanceledKeys.size} chaves de cancelamento por evento de XML adicionadas.`);
 
     const addExceptions = (df: DataFrame, chaveKey: string, statusKey?: string) => {
         df.forEach(row => {
@@ -159,22 +171,24 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     addExceptions(desconhecida, "Chave de acesso");
     addExceptions(desacordo, "Chave de acesso");
 
-    log(`- Total de ${chavesExcecao.size} chaves de exceção coletadas (canceladas, manifesto, eventos).`);
+    log(`- Total de ${chavesExcecao.size} chaves de exceção (canceladas/manifesto) coletadas.`);
 
     log("Filtrando notas e itens válidos...");
     
     const isChaveValida = (row: any) => {
         if(!row) return false;
         const chaveAcesso = cleanAndToStr(row['Chave de acesso']);
-        // Uma chave é válida se NÃO for uma exceção E NÃO for uma devolução de fornecedor.
-        return chaveAcesso && !chavesExcecao.has(chaveAcesso) && !chavesDevolucaoFornecedor.has(chaveAcesso);
+        return chaveAcesso && 
+               !chavesExcecao.has(chaveAcesso) && 
+               !chavesDevolucaoFornecedor.has(chaveAcesso) &&
+               !chavesRemessaRetorno.has(chaveAcesso);
     }
     
     const nfeFiltrada = nfe.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
     const cteFiltrado = cte.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
     
     let notasValidas = nfeFiltrada.filter(isChaveValida);
-    let ctesValidos = cteFiltrado.filter(isChaveValida); // CTes não têm finNFe=4
+    let ctesValidos = cteFiltrado.filter(isChaveValida);
     let saidasValidas = saidas.filter(isChaveValida);
     
     log(`- Total de ${notasValidas.length} NF-es válidas.`);
@@ -190,15 +204,12 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     log(`- ${itensValidosSaidas.length} itens de saída válidos correspondentes.`);
     
     log("Identificando itens para análise de imobilizado...");
-    const remessaCfopsPrefixes = ['59', '69'];
     const itensParaImobilizado = itensValidos.filter(item => {
         if (!item || !item['Valor Unitário']) return false;
-        const cfop = cleanAndToStr(item["CFOP"]);
         const valorUnitario = parseFloat(String(item['Valor Unitário']));
-        const isRemessa = remessaCfopsPrefixes.some(prefix => cfop.startsWith(prefix));
-        return valorUnitario > 1200 && !isRemessa;
+        return valorUnitario > 1200;
     });
-    log(`- ${itensParaImobilizado.length} itens com valor unitário acima de R$ 1.200 (não remessa) encontrados para análise de imobilizado.`);
+    log(`- ${itensParaImobilizado.length} itens com valor unitário acima de R$ 1.200 encontrados para análise de imobilizado.`);
 
     const imobilizados = itensParaImobilizado.map((item) => {
         const uniqueItemId = `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
@@ -216,9 +227,11 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         const chaveAcesso = cleanAndToStr(row['Chave de acesso']);
         const statusVal = row["Status"];
         const isCancelledByStatus = typeof statusVal === 'string' && statusVal.toLowerCase().includes('cancelada');
+        // Adiciona à lista de canceladas se tiver o status OU estiver no set de exceções
         return isCancelledByStatus || chavesExcecao.has(chaveAcesso);
     });
-
+    
+    const remessasERetornos = nfe.filter(row => chavesRemessaRetorno.has(cleanAndToStr(row['Chave de acesso'])));
     const devolucoesDeCompra = nfe.filter(row => chavesDevolucaoFornecedor.has(cleanAndToStr(row['Chave de acesso'])));
     
     const devolucoesDeClientes = saidas.filter(row => {
@@ -227,6 +240,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         return itensDestaNota.some(item => {
             if (!item || !item["CFOP"]) return false;
             const cfop = cleanAndToStr(item["CFOP"]);
+            // Devoluções de Venda de Saída iniciam com 52, 62
             return cfop.startsWith('52') || cfop.startsWith('62');
         });
     });
@@ -269,6 +283,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         "Saídas": saidasValidas, 
         "Itens Válidos Saídas": itensValidosSaidas,
         "Imobilizados": imobilizados,
+        "Remessas e Retornos": remessasERetornos,
         "Devoluções de Compra (Fornecedor)": devolucoesDeCompra,
         "Devoluções de Clientes": devolucoesDeClientes,
         "Notas Canceladas": notasCanceladas,
@@ -298,13 +313,13 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const finalSheetSet: DataFrames = {};
     const displayOrder = [
         "Notas Válidas", "CTEs Válidos", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
-        "Imobilizados", "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes", "Notas Canceladas", ...Object.keys(originalDfs)
+        "Imobilizados", "Remessas e Retornos", "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes", "Notas Canceladas", ...Object.keys(originalDfs)
     ];
 
     displayOrder.forEach(name => {
         let sheetData = finalResult[name];
         if (sheetData && sheetData.length > 0) {
-            if (["Itens Válidos", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados", "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes"].includes(name)) {
+            if (["Itens Válidos", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados", "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes", "Remessas e Retornos"].includes(name)) {
                  sheetData = sheetData.map(addCfopDescriptionToRow);
             }
             finalSheetSet[name] = sheetData;
