@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, type ChangeEvent } from 'react';
@@ -10,6 +11,8 @@ import { getColumnsWithCustomRender } from "@/lib/columns-helper";
 import { FileUp, FileDown, Loader2, Download, AlertTriangle, Cpu, TicketPercent, Copy, Check, RotateCcw } from 'lucide-react';
 import JSZip from 'jszip';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 
 // ===============================================================
 // Types
@@ -371,3 +374,4 @@ export function DifalAnalysis() {
         </div>
     );
 }
+
