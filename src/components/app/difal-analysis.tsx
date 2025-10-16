@@ -184,50 +184,38 @@ export function DifalAnalysis() {
                          <TicketPercent className="h-8 w-8 text-primary" />
                         <div>
                             <CardTitle className="font-headline text-2xl">Ferramenta de Extração para Guia DIFAL</CardTitle>
-                            <CardDescription>Carregue os XMLs de saída para extrair os dados necessários para a emissão das guias de DIFAL.</CardDescription>
+                            <CardDescription>Extraia dados de XMLs para gerar guias e, em seguida, anexe os PDFs para verificação.</CardDescription>
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                         <label htmlFor="xml-upload-difal" className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 cursor-pointer hover:border-primary transition-colors">
+                    <div>
+                        <h3 className="text-lg font-bold mb-2">Etapa 1: Processar XMLs de Saída</h3>
+                        <p className="text-sm text-muted-foreground mb-4">Carregue os XMLs de saída. A ferramenta irá validar as condições e extrair os valores para a geração das guias de DIFAL.</p>
+                        <label htmlFor="xml-upload-difal" className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 cursor-pointer hover:border-primary transition-colors">
                             <FileUp className="h-10 w-10 text-muted-foreground mb-2" />
                             <span className="font-semibold">Carregar XMLs de Saída</span>
-                            <span className="text-sm text-muted-foreground">Arraste ou clique para selecionar</span>
+                            <span className="text-sm text-muted-foreground">Arraste ou clique para selecionar (.xml ou .zip)</span>
                             <input id="xml-upload-difal" type="file" className="sr-only" onChange={handleXmlFileChange} multiple accept=".xml,.zip" />
                         </label>
-                        <label htmlFor="pdf-upload-difal" className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 cursor-pointer hover:border-primary transition-colors">
-                            <FileDown className="h-10 w-10 text-muted-foreground mb-2" />
-                            <span className="font-semibold">Carregar Guias (PDF)</span>
-                            <span className="text-sm text-muted-foreground">Arraste ou clique para selecionar</span>
-                            <input id="pdf-upload-difal" type="file" className="sr-only" onChange={handlePdfFileChange} multiple accept=".pdf" />
-                        </label>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row gap-2 pt-4">
-                        <Button onClick={processXmlFiles} disabled={isLoading || xmlFiles.length === 0} className="w-full">
+                        {xmlFiles.length > 0 && (
+                            <div className="mt-2 text-sm text-muted-foreground">
+                               <span className="font-bold">{xmlFiles.length}</span> ficheiro(s) XML pronto(s) para serem processados.
+                            </div>
+                        )}
+                        <Button onClick={processXmlFiles} disabled={isLoading || xmlFiles.length === 0} className="w-full mt-4">
                             {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : <><Cpu className="mr-2 h-4 w-4" /> Processar XMLs</>}
                         </Button>
                     </div>
 
-                     {xmlFiles.length > 0 && (
-                        <div className="text-sm text-muted-foreground">
-                           <span className="font-bold">{xmlFiles.length}</span> ficheiro(s) XML pronto(s) para serem processados.
-                        </div>
-                    )}
-                    {pdfFiles.length > 0 && (
-                        <div className="text-sm text-muted-foreground">
-                            <span className="font-bold">{pdfFiles.length}</span> ficheiro(s) PDF de guias carregados para verificação.
-                        </div>
-                    )}
                 </CardContent>
             </Card>
 
             {results && (
                 <Card>
                     <CardHeader>
-                        <CardTitle>Resultados da Análise DIFAL</CardTitle>
-                        <CardDescription>Visualize os dados extraídos e as notas que não cumpriram os critérios.</CardDescription>
+                        <CardTitle>Resultados da Análise para Guias DIFAL</CardTitle>
+                        <CardDescription>Utilize os dados das "Notas Válidas" para emitir as suas guias. As "Notas Ignoradas" não cumpriram os critérios necessários.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <Tabs defaultValue="valid">
@@ -251,6 +239,27 @@ export function DifalAnalysis() {
                     </CardContent>
                 </Card>
             )}
+            
+            <Card>
+                 <CardHeader>
+                     <h3 className="text-lg font-bold">Etapa 2: Anexar Guias Emitidas (PDF) para Verificação</h3>
+                     <p className="text-sm text-muted-foreground">Depois de emitir as guias de DIFAL, carregue os ficheiros PDF correspondentes aqui para manter um registo e facilitar a verificação.</p>
+                </CardHeader>
+                <CardContent>
+                     <label htmlFor="pdf-upload-difal" className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 cursor-pointer hover:border-primary transition-colors">
+                        <FileDown className="h-10 w-10 text-muted-foreground mb-2" />
+                        <span className="font-semibold">Carregar Guias (PDF)</span>
+                        <span className="text-sm text-muted-foreground">Arraste ou clique para selecionar</span>
+                        <input id="pdf-upload-difal" type="file" className="sr-only" onChange={handlePdfFileChange} multiple accept=".pdf" />
+                    </label>
+                    {pdfFiles.length > 0 && (
+                        <div className="mt-2 text-sm text-muted-foreground">
+                            <span className="font-bold">{pdfFiles.length}</span> ficheiro(s) PDF de guias carregados para verificação.
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
         </div>
     );
 }
