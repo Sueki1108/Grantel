@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
@@ -11,10 +12,11 @@ import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { cleanAndToStr } from '@/lib/utils';
 
 
 // Tipos
-type Classification = 'unclassified' | 'imobilizado' | 'uso-consumo' | 'utilizado-em-obra';
+export type Classification = 'unclassified' | 'imobilizado' | 'uso-consumo' | 'utilizado-em-obra';
 
 export interface ItemData extends Record<string, any> {
     id: string; // Chave Única da Nota + N° do Item. Identificador único por linha.
@@ -66,23 +68,21 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         
         initialItems.forEach(item => {
             // Tenta obter a classificação da competência atual, ou faz fallback para a mais recente de outras competências
-            const currentClassification = persistedForCompetence.classifications?.[item.uniqueItemId]?.classification;
-            if (currentClassification) {
-                initialClassifications[item.id] = currentClassification;
-            } else {
-                 // Fallback logic
-                let fallbackClassification: Classification | undefined = undefined;
+            let currentClassification = persistedForCompetence.classifications?.[item.uniqueItemId]?.classification;
+            
+            if (!currentClassification) {
+                // Fallback logic
                 for (const otherCompetence in allPersistedData) {
                     if (otherCompetence !== competence) {
                         const classification = allPersistedData[otherCompetence]?.classifications?.[item.uniqueItemId]?.classification;
                         if (classification) {
-                            fallbackClassification = classification;
+                            currentClassification = classification;
                             break; // Usa a primeira que encontrar
                         }
                     }
                 }
-                initialClassifications[item.id] = fallbackClassification || 'unclassified';
             }
+            initialClassifications[item.id] = currentClassification || 'unclassified';
 
 
             const persistedCode = persistedForCompetence.accountCodes?.[item.id]?.accountCode;
@@ -224,26 +224,28 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
                 const currentClassification = sessionClassifications[originalItem.id] || 'unclassified';
 
                 return (
-                    <div className="flex gap-2 justify-center">
-                         {currentClassification !== 'imobilizado' && (
-                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'imobilizado')}><Factory className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Imobilizado</p></TooltipContent></Tooltip>
-                        )}
-                        {currentClassification !== 'uso-consumo' && (
-                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'uso-consumo')}><Wrench className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Uso e Consumo</p></TooltipContent></Tooltip>
-                        )}
-                        {currentClassification !== 'utilizado-em-obra' && (
-                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'utilizado-em-obra')}><HardHat className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Utilizado em Obra</p></TooltipContent></Tooltip>
-                        )}
-                        {currentClassification !== 'unclassified' && (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'unclassified')}>
-                                        <RotateCcw className="h-5 w-5 text-destructive" />
-                                    </Button>
-                                </TooltipTrigger><TooltipContent><p>Reverter para Não Classificado</p></TooltipContent>
-                            </Tooltip>
-                        )}
-                    </div>
+                     <TooltipProvider>
+                        <div className="flex gap-2 justify-center">
+                            {currentClassification !== 'imobilizado' && (
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'imobilizado')}><Factory className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Imobilizado</p></TooltipContent></Tooltip>
+                            )}
+                            {currentClassification !== 'uso-consumo' && (
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'uso-consumo')}><Wrench className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Uso e Consumo</p></TooltipContent></Tooltip>
+                            )}
+                            {currentClassification !== 'utilizado-em-obra' && (
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'utilizado-em-obra')}><HardHat className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Utilizado em Obra</p></TooltipContent></Tooltip>
+                            )}
+                            {currentClassification !== 'unclassified' && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'unclassified')}>
+                                            <RotateCcw className="h-5 w-5 text-destructive" />
+                                        </Button>
+                                    </TooltipTrigger><TooltipContent><p>Reverter para Não Classificado</p></TooltipContent>
+                                </Tooltip>
+                            )}
+                        </div>
+                    </TooltipProvider>
                 );
             }
         });
@@ -320,3 +322,4 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         </Card>
     );
 }
+

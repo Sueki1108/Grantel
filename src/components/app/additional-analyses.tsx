@@ -17,7 +17,9 @@ import type { ProcessedData, SpedInfo } from "@/lib/excel-processor";
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { cleanAndToStr } from "@/lib/utils";
 import { KeyChecker } from "./key-checker";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "../ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { CfopValidator } from "./cfop-validator";
+import { type AllClassifications } from "./imobilizado-analysis";
 
 
 // ===============================================================
@@ -84,6 +86,8 @@ interface AdditionalAnalysesProps {
     onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null) => void;
     competence: string | null;
     onExportSession: () => void;
+    imobilizadoClassifications: AllClassifications;
+    onImobilizadoPersist: (allData: AllClassifications) => void;
 }
 
 export function AdditionalAnalyses({ 
@@ -97,7 +101,9 @@ export function AdditionalAnalyses({
     onSpedFilesChange,
     onSpedProcessed,
     competence,
-    onExportSession
+    onExportSession,
+    imobilizadoClassifications,
+    onImobilizadoPersist
 }: AdditionalAnalysesProps) {
     const { toast } = useToast();
 
@@ -461,6 +467,9 @@ export function AdditionalAnalyses({
                         onClearSiengeFile={onClearSiengeFile}
                         reconciliationResults={reconciliationResults}
                         error={reconciliationError}
+                        competence={competence}
+                        allPersistedData={imobilizadoClassifications}
+                        onPersistData={onImobilizadoPersist}
                     />
                 </TabsContent>
 
@@ -608,9 +617,12 @@ interface ReconciliationAnalysisProps {
     onClearSiengeFile: () => void;
     reconciliationResults: { reconciled: any[], onlyInSienge: any[], onlyInXml: any[] } | null;
     error: string | null;
+    competence: string | null;
+    allPersistedData: AllClassifications;
+    onPersistData: (allData: AllClassifications) => void;
 }
 
-function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error }: ReconciliationAnalysisProps) {
+function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error, competence, allPersistedData, onPersistData }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
     useEffect(() => {
@@ -657,7 +669,12 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                 </DialogDescription>
                             </DialogHeader>
                             <div className="flex-grow overflow-auto">
-                                {/* O componente CfopValidator será colocado aqui */}
+                               <CfopValidator 
+                                  items={reconciliationResults?.reconciled || []}
+                                  competence={competence}
+                                  allPersistedData={allPersistedData}
+                                  onPersistData={onPersistData}
+                               />
                             </div>
                         </DialogContent>
                     </Dialog>
