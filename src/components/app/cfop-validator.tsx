@@ -46,7 +46,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
     useEffect(() => {
         const initialStatus: Record<string, ValidationStatus> = {};
-        // Adiciona uma verificação para garantir que allPersistedClassifications não é undefined
         const persistedValidations = (allPersistedClassifications && allPersistedClassifications['cfopValidations']?.classifications) || {};
 
         items.forEach(item => {
@@ -96,10 +95,11 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         const validated: CfopValidationData[] = [];
         items.forEach(item => {
             const status = validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated';
+            const itemWithStatus = { ...item, validationStatus: status };
             if (status === 'unvalidated') {
-                pending.push({ ...item, validationStatus: status });
+                pending.push(itemWithStatus);
             } else {
-                validated.push({ ...item, validationStatus: status });
+                validated.push(itemWithStatus);
             }
         });
         return { pendingItems: pending, validatedItems: validated };
@@ -111,8 +111,8 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         (row: any, id: string) => {
              if (id === 'Fornecedor') {
                 return (
-                    <div>
-                        <p className="max-w-xs truncate">{row.original.Fornecedor}</p>
+                    <div className="max-w-xs truncate" title={row.original.Fornecedor}>
+                        <p>{row.original.Fornecedor}</p>
                         <p className="text-xs text-muted-foreground">{row.original['CPF/CNPJ do Emitente']}</p>
                     </div>
                 );
