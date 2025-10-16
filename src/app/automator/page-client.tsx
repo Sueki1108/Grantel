@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, Database } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -27,7 +27,8 @@ import { SaidasAnalysis } from "@/components/app/saidas-analysis";
 import { NfseAnalysis } from "@/components/app/nfse-analysis";
 import { KeyCheckResult } from "@/components/app/key-checker";
 import { cn } from "@/lib/utils";
-
+import { ImobilizadoAnalysis, type AllClassifications } from "@/components/app/imobilizado-analysis";
+import { HistoryAnalysis, type SessionData } from "@/components/app/history-analysis";
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -43,6 +44,9 @@ const requiredFiles = [
     'NFE Operação Não Realizada', 'NFE Operação Desconhecida', 'CTE Desacordo de Serviço'
 ];
 
+const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications_v2';
+
+
 export function AutomatorClientPage() {
     const [files, setFiles] = useState<Record<string, any[]>>({});
     const [xmlFiles, setXmlFiles] = useState<{ nfeEntrada: File[], cte: File[], nfeSaida: File[], nfse: File[] }>({ nfeEntrada: [], cte: [], nfeSaida: [], nfse: [] });
@@ -57,6 +61,8 @@ export function AutomatorClientPage() {
     const [siengeFile, setSiengeFile] = useState<File | null>(null);
     const [lastSaidaNumber, setLastSaidaNumber] = useState<number>(0);
     const [disregardedNfseNotes, setDisregardedNfseNotes] = useState<Set<string>>(new Set());
+    const [imobilizadoClassifications, setImobilizadoClassifications] = useState<AllClassifications>({});
+    const [saidasStatus, setSaidasStatus] = useState<Record<number, 'emitida' | 'cancelada' | 'inutilizada'>>({});
 
 
     const { toast } = useToast();
@@ -67,17 +73,127 @@ export function AutomatorClientPage() {
     const [selectedPeriods, setSelectedPeriods] = useState<Record<string, boolean>>({});
     const [isPreProcessing, setIsPreProcessing] = useState(false);
     
+    const [activeMainTab, setActiveMainTab] = useState("history");
+
+    // =================================================================
+    // PERSISTENCE (localStorage)
+    // =================================================================
+    useEffect(() => {
+        // Load imobilizado classifications from localStorage
+        try {
+            const savedImobilizado = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
+            if (savedImobilizado) setImobilizadoClassifications(JSON.parse(savedImobilizado));
+        } catch (e) {
+            console.error("Failed to load imobilizado classifications from localStorage", e);
+        }
+    }, []);
+
+    const handlePersistImobilizado = (allDataToSave: AllClassifications) => {
+        setImobilizadoClassifications(allDataToSave);
+        try {
+            localStorage.setItem(IMOBILIZADO_STORAGE_KEY, JSON.stringify(allDataToSave));
+            toast({
+                title: "Classificações de Imobilizado Guardadas",
+                description: "As suas classificações e códigos de ativo foram guardados no armazenamento local do navegador."
+            });
+        } catch(e) {
+            console.error("Failed to save imobilizado classifications to localStorage", e);
+            toast({ variant: 'destructive', title: "Erro ao guardar classificações"});
+        }
+    };
     
-    // Memoize selectedPeriods to get a stable competence string
+    const handleExportSession = () => {
+        const currentCompetence = competence;
+        if (!currentCompetence || !processedData) {
+            toast({ variant: 'destructive', title: 'Dados insuficientes', description: 'Processe os dados e selecione uma competência antes de exportar.' });
+            return;
+        }
+    
+        // Create an optimized version of processedData without original sheets
+        const optimizedSheets: ProcessedData['sheets'] = {};
+        for (const sheetName in processedData.sheets) {
+            if (!sheetName.startsWith('Original - ')) {
+                optimizedSheets[sheetName] = processedData.sheets[sheetName];
+            }
+        }
+    
+        const optimizedProcessedData = {
+            ...processedData,
+            sheets: optimizedSheets
+        };
+    
+        const sessionData: SessionData = {
+            competence: currentCompetence,
+            processedAt: new Date().toISOString(),
+            processedData: optimizedProcessedData,
+            fileNames: {
+                nfeEntrada: xmlFiles.nfeEntrada.map(f => f.name),
+                cte: xmlFiles.cte.map(f => f.name),
+                nfeSaida: xmlFiles.nfeSaida.map(f => f.name),
+                nfse: xmlFiles.nfse.map(f => f.name),
+                manifesto: Object.keys(fileStatus),
+                sienge: siengeFile ? siengeFile.name : null,
+                sped: spedFiles.map(f => f.name),
+            },
+            lastSaidaNumber,
+            disregardedNfseNotes: Array.from(disregardedNfseNotes),
+            saidasStatus,
+        };
+    
+        try {
+            const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(sessionData, null, 2))}`;
+            const link = document.createElement("a");
+            link.href = jsonString;
+
+            const year = currentCompetence.substring(0,4);
+            const month = currentCompetence.substring(5,7);
+            
+            link.download = `Grantel - Backup Fiscal - ${month}.${year}.json`;
+
+            link.click();
+            toast({ title: "Sessão Exportada", description: `O ficheiro ${link.download} está a ser descarregado.` });
+        } catch (e: any) {
+            console.error("Failed to export session:", e);
+             if (e.message.includes('localStorage')) {
+                toast({ variant: 'destructive', title: 'Erro ao Exportar Sessão', description: "Falha ao guardar sessão: os dados processados podem ser demasiado grandes para o armazenamento local. Tente com um período menor." });
+            } else {
+                toast({ variant: 'destructive', title: 'Erro ao Exportar Sessão', description: e.message });
+            }
+        }
+    };
+    
+    const handleRestoreSession = (session: SessionData) => {
+        handleClearAllData();
+        
+        setProcessedData(session.processedData);
+        setLastSaidaNumber(session.lastSaidaNumber || 0);
+        setSaidasStatus(session.saidasStatus || {});
+        setDisregardedNfseNotes(new Set(session.disregardedNfseNotes || []));
+
+        const periods = session.competence.split('_');
+        const restoredPeriods: Record<string, boolean> = {};
+        periods.forEach(p => { restoredPeriods[p] = true });
+        setSelectedPeriods(restoredPeriods);
+        setAvailablePeriods(periods);
+        
+        toast({
+            title: "Sessão Restaurada com Sucesso",
+            description: `A análise completa para a competência ${session.competence} foi carregada.`,
+        });
+
+        setActiveMainTab("nf-stock");
+    };
+
+    // =================================================================
+    // UI SETTINGS
+    // =================================================================
     const competence = useMemo(() => {
         const activePeriods = Object.keys(selectedPeriods).filter(p => selectedPeriods[p]);
         if (activePeriods.length > 0) {
-            // Sort and join to create a consistent ID, e.g., "2023-01_2023-02"
             return activePeriods.sort().join('_');
         }
         return null;
     }, [selectedPeriods]);
-
 
     const handleLastSaidaNumberChange = useCallback((newNumber: number) => {
         setLastSaidaNumber(newNumber);
@@ -186,7 +302,6 @@ export function AutomatorClientPage() {
             if (input) input.value = "";
         }
         
-        // Don't clear all processed data, just clear what's related if needed
         toast({ title: "Arquivos Removidos", description: `Dados de "${category || fileName}" foram removidos. Processe novamente para atualizar os resultados.` });
     };
 
@@ -203,6 +318,7 @@ export function AutomatorClientPage() {
         setLastSaidaNumber(0);
         setDisregardedNfseNotes(new Set());
         setSelectedPeriods({});
+        setSaidasStatus({});
 
         const inputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]');
         inputs.forEach(input => input.value = "");
@@ -220,14 +336,14 @@ export function AutomatorClientPage() {
         const displayOrder = [
             "Notas Válidas", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
             "Imobilizados",
-            "Emissão Própria", "Notas Canceladas",
+            "Notas Canceladas",
             ...Object.keys(processedData.sheets).filter(name => name.startsWith("Original - "))
         ];
 
         const sheetNameMap: { [key: string]: string } = {
             "Notas Válidas": "Notas Validas", "Itens Válidos": "Itens Validos",
             "Chaves Válidas": "Chaves Validas",
-            "Notas Canceladas": "Notas Canceladas", "Emissão Própria": "Emissao Propria",
+            "Notas Canceladas": "Notas Canceladas",
             "NFE Operação Não Realizada": "NFE Op Nao Realizada",
             "NFE Operação Desconhecida": "NFE Op Desconhecida",
             "CTE Desacordo de Serviço": "CTE Desacordo Servico",
@@ -275,11 +391,10 @@ export function AutomatorClientPage() {
 
         try {
             const periods = new Set<string>();
+            const allXmlsToScan = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
 
-            // 1. Process NFe/CTe XMLs
-            const nfeCteXmls = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
-            if (nfeCteXmls.length > 0) {
-                const { nfe, cte, saidas } = await processUploadedXmls(nfeCteXmls, () => {}); // Use dummy log fn
+            if (allXmlsToScan.length > 0) {
+                const { nfe, cte, saidas } = await processUploadedXmls(allXmlsToScan, () => {}, "desconhecido");
                 [...nfe, ...cte, ...saidas].forEach(doc => {
                     if (doc['Emissão'] && typeof doc['Emissão'] === 'string' && doc['Emissão'].length >= 7) {
                         periods.add(doc['Emissão'].substring(0, 7)); // YYYY-MM
@@ -287,17 +402,15 @@ export function AutomatorClientPage() {
                 });
             }
 
-            // 2. Process NFS-e XMLs
             if (xmlFiles.nfse.length > 0) {
                 const nfseDates = await processNfseForPeriodDetection(xmlFiles.nfse);
                 nfseDates.forEach(dateStr => {
                     if (dateStr && dateStr.length >= 7) {
-                        periods.add(dateStr.substring(0, 7)); // YYYY-MM
+                        periods.add(dateStr.substring(0, 7));
                     }
                 });
             }
             
-            // 3. Process sheet files to get dates
             for (const fileName in files) {
                 if (['NFE', 'CTE', 'Saídas'].includes(fileName)) {
                     files[fileName].forEach(row => {
@@ -306,7 +419,6 @@ export function AutomatorClientPage() {
                             try {
                                 const date = emissionValue instanceof Date ? emissionValue : new Date(emissionValue);
                                 if (!isNaN(date.getTime())) {
-                                    // Adjust for timezone issues by formatting from UTC parts
                                     const year = date.getUTCFullYear();
                                     const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
                                     periods.add(`${year}-${month}`);
@@ -325,7 +437,6 @@ export function AutomatorClientPage() {
             }
             
             setAvailablePeriods(sortedPeriods);
-            // Pre-select all by default
             const initialSelection: Record<string, boolean> = {};
             sortedPeriods.forEach(p => { initialSelection[p] = true; });
             setSelectedPeriods(initialSelection);
@@ -344,12 +455,8 @@ export function AutomatorClientPage() {
     const handleSubmit = () => {
         setError(null);
         setLogs([]);
-        setProcessedData(prev => ({
-             ...(prev || { sheets: {}, spedInfo: null, siengeSheetData: null, keyCheckResults: null }),
-             sheets: {} // Clear only sheets, keep other state
-        }));
+        setProcessedData(null);
         setIsPeriodModalOpen(false);
-        
         setProcessing(true);
         
         setTimeout(async () => {
@@ -358,41 +465,30 @@ export function AutomatorClientPage() {
                 const log = (message: string) => localLogs.push(`[${new Date().toLocaleTimeString()}] ${message}`);
                 
                 let dataToProcess: Record<string, any[]> = {};
-
-                const allXmls = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
-                const hasXmls = allXmls.length > 0;
                 let eventCanceledKeys = new Set<string>();
 
-                if (hasXmls) {
-                    log(`Iniciando processamento de ${allXmls.length} XMLs.`);
-                    const { nfe, cte, saidas, itens, itensSaidas, canceledKeys } = await processUploadedXmls(allXmls, log);
-                    eventCanceledKeys = canceledKeys;
-                    
-                    dataToProcess["NFE"] = nfe;
-                    dataToProcess["Itens"] = itens;
-                    dataToProcess["CTE"] = cte;
-                    dataToProcess["Saídas"] = saidas;
-                    dataToProcess["Itens Saídas"] = itensSaidas;
-                    
-                    log(`Processamento XML concluído: ${nfe.length} NF-e Entradas, ${saidas.length} NF-e Saídas, ${cte.length} CT-es, ${canceledKeys.size} eventos de cancelamento.`);
-                }
+                log("Processando ficheiros XML por categoria...");
+                const { nfe: nfeEntrada, itens: itensEntrada, canceledKeys: canceledEntrada } = await processUploadedXmls(xmlFiles.nfeEntrada, log, "entrada");
+                const { cte, canceledKeys: canceledCte } = await processUploadedXmls(xmlFiles.cte, log, "cte");
+                const { saidas, itensSaidas, canceledKeys: canceledSaida } = await processUploadedXmls(xmlFiles.nfeSaida, log, "saida");
+
+                dataToProcess["NFE"] = nfeEntrada;
+                dataToProcess["Itens"] = itensEntrada;
+                dataToProcess["CTE"] = cte;
+                dataToProcess["Saídas"] = saidas;
+                dataToProcess["Itens Saídas"] = itensSaidas;
                 
-                // Prioriza os dados do XML, mas SEMPRE inclui os dados das planilhas de manifesto para filtragem.
-                for (const fileName in files) {
-                    const mappedName = fileMapping[fileName] || fileName;
-                    const isManifestoFile = [
-                        "NFE Operação Não Realizada", "NFE Operação Desconhecida", "CTE Desacordo de Serviço"
-                    ].includes(fileName);
-                    
-                    if (isManifestoFile || !dataToProcess[mappedName] || dataToProcess[mappedName].length === 0) {
-                        dataToProcess[mappedName] = files[fileName];
-                        log(`Usando dados da planilha carregada: '${fileName}'.`);
-                    } else {
-                         log(`Dados de XML para '${mappedName}' encontrados, ignorando a planilha carregada: '${fileName}'.`);
+                eventCanceledKeys = new Set([...canceledEntrada, ...canceledCte, ...canceledSaida]);
+
+                log(`Processamento XML concluído: ${nfeEntrada.length} NF-e Entradas, ${saidas.length} NF-e Saídas, ${cte.length} CT-es.`);
+                
+                for (const fileName of requiredFiles) {
+                    if (files[fileName]) {
+                        dataToProcess[fileName] = files[fileName];
+                        log(`Usando dados da planilha de manifesto carregada: '${fileName}'.`);
                     }
                 }
                 
-                // Date Range Filtering based on selected periods
                 const activePeriods = Object.keys(selectedPeriods).filter(p => selectedPeriods[p]);
                 if (activePeriods.length > 0) {
                     log(`Aplicando filtro de período para: ${activePeriods.join(', ')}`);
@@ -400,7 +496,7 @@ export function AutomatorClientPage() {
                     const filterByPeriod = (rows: any[]) => {
                         return rows.filter(row => {
                             const emissionValue = row['Emissão'] || row['Data de Emissão'];
-                            if (!emissionValue) return true; // Keep rows without a date
+                            if (!emissionValue) return true;
                             if (typeof emissionValue === 'string' && emissionValue.length >= 7) {
                                 return activePeriods.includes(emissionValue.substring(0, 7));
                             }
@@ -409,57 +505,42 @@ export function AutomatorClientPage() {
                                 if (isNaN(date.getTime())) return false;
                                 const period = format(date, 'yyyy-MM');
                                 return activePeriods.includes(period);
-                            } catch {
-                                return false; // Exclude rows with invalid date format
-                            }
+                            } catch { return false; }
                         });
                     };
                 
-                    const originalNfeCount = dataToProcess['NFE']?.length || 0;
-                    const originalCteCount = dataToProcess['CTE']?.length || 0;
-                    const originalSaidasCount = dataToProcess['Saídas']?.length || 0;
-
-                    const nfeFiltered = filterByPeriod(dataToProcess['NFE'] || []);
-                    const cteFiltered = filterByPeriod(dataToProcess['CTE'] || []);
-                    const saidasFiltered = filterByPeriod(dataToProcess['Saídas'] || []);
+                    Object.keys(dataToProcess).forEach(key => {
+                        if (['NFE', 'CTE', 'Saídas'].includes(key)) {
+                             const originalCount = dataToProcess[key].length;
+                             dataToProcess[key] = filterByPeriod(dataToProcess[key]);
+                             log(`- ${key}: ${dataToProcess[key].length}/${originalCount} registos mantidos após filtro.`);
+                        }
+                    });
+                     
+                    const chavesNfe = new Set(dataToProcess['NFE'].map(n => n['Chave Unica']));
+                    const chavesCte = new Set(dataToProcess['CTE'].map(n => n['Chave Unica']));
+                    const chavesSaidas = new Set(dataToProcess['Saídas'].map(n => n['Chave Unica']));
                     
-                    const chavesNfe = new Set(nfeFiltered.map(n => n['Chave Unica']));
-                    const chavesCte = new Set(cteFiltered.map(n => n['Chave Unica']));
-                    const chavesSaidas = new Set(saidasFiltered.map(n => n['Chave Unica']));
-
-                    dataToProcess['NFE'] = nfeFiltered;
-                    dataToProcess['CTE'] = cteFiltered;
-                    dataToProcess['Saídas'] = saidasFiltered;
-                    
-                    if(dataToProcess['Itens']) {
+                     if(dataToProcess['Itens']) {
                         dataToProcess['Itens'] = (dataToProcess['Itens'] || []).filter(item => chavesNfe.has(item['Chave Unica']) || chavesCte.has(item['Chave Unica']));
                     }
                      if(dataToProcess['Itens Saídas']) {
                         dataToProcess['Itens Saídas'] = (dataToProcess['Itens Saídas'] || []).filter(item => chavesSaidas.has(item['Chave Unica']));
                     }
-
-                    log(`Filtragem por período concluída: ${nfeFiltered.length}/${originalNfeCount} NF-e, ${cteFiltered.length}/${originalCteCount} CT-e, ${saidasFiltered.length}/${originalSaidasCount} Saídas.`);
                 }
 
-                // Now, process the combined and filtered data
                 const resultData = processDataFrames(dataToProcess, eventCanceledKeys, log);
                 setLogs(localLogs);
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
-                setProcessedData(prev => ({
-                    ...prev, // Keep existing state like saidasStatus, etc.
-                    ...resultData, // Overwrite with new results
-                }));
-                toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas." });
+                setProcessedData(resultData);
+                toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
 
             } catch (err: any) {
                 const errorMessage = err.message || "Ocorreu um erro desconhecido durante o processamento.";
                 setError(errorMessage);
-                setProcessedData(prev => ({ 
-                     ...(prev || { sheets: {}, spedInfo: null, siengeSheetData: null, keyCheckResults: null }),
-                    sheets: {} 
-                }));
+                setProcessedData(null);
                 setLogs(prev => [...prev, `[ERRO FATAL] ${errorMessage}`]);
                 toast({ variant: "destructive", title: "Erro no Processamento", description: errorMessage });
             } finally {
@@ -471,29 +552,16 @@ export function AutomatorClientPage() {
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null) => {
         setProcessedData(prevData => {
             if (!prevData) {
-                return {
-                    sheets: {},
-                    spedInfo: spedInfo || null,
-                    siengeSheetData: null,
-                    keyCheckResults: keyCheckResults || null,
-                };
+                return { sheets: {}, spedInfo: spedInfo || null, siengeSheetData: null, keyCheckResults: keyCheckResults || null };
             }
-            return {
-                ...prevData,
-                spedInfo: spedInfo,
-                keyCheckResults: keyCheckResults,
-            };
+            return { ...prevData, spedInfo: spedInfo, keyCheckResults: keyCheckResults };
         });
     }, []);
 
     const handleSiengeDataProcessed = (siengeData: any[] | null) => {
         setProcessedData(prevData => {
             if (!prevData) {
-                return {
-                     sheets: {}, spedInfo: null,
-                    siengeSheetData: siengeData,
-                    keyCheckResults: null,
-                };
+                return { sheets: {}, spedInfo: null, siengeSheetData: siengeData, keyCheckResults: null };
             }
             return { ...prevData, siengeSheetData: siengeData };
         });
@@ -516,11 +584,10 @@ export function AutomatorClientPage() {
     const isProcessButtonDisabled = processing || isPreProcessing || (Object.keys(files).length === 0 && xmlFiles.nfeEntrada.length === 0 && xmlFiles.cte.length === 0 && xmlFiles.nfeSaida.length === 0 && xmlFiles.nfse.length === 0);
     const isClearButtonVisible = Object.keys(files).length > 0 || xmlFiles.nfeEntrada.length > 0 || xmlFiles.cte.length > 0 || xmlFiles.nfeSaida.length > 0 || xmlFiles.nfse.length > 0 || !!processedData || logs.length > 0 || error !== null;
 
-    const nfStockTabDisabled = Object.keys(fileStatus).length === 0 && (xmlFiles.nfeEntrada.length === 0 && xmlFiles.cte.length === 0 && xmlFiles.nfeSaida.length === 0);
     const saidasNfeTabDisabled = !processedData?.sheets['Saídas'] || processedData.sheets['Saídas'].length === 0;
+    const nfseTabDisabled = xmlFiles.nfse.length === 0 && (!processedData || !processedData.fileNames?.nfse || processedData.fileNames.nfse.length === 0);
     const analysisTabDisabled = !processedData?.sheets['Chaves Válidas'] || processedData.sheets['Chaves Válidas'].length === 0;
     const imobilizadoTabDisabled = !processedData?.sheets['Imobilizados'] || processedData.sheets['Imobilizados'].length === 0;
-    
     
     return (
         <div className="min-h-screen bg-background text-foreground">
@@ -543,12 +610,16 @@ export function AutomatorClientPage() {
                 </div>
             </header>
 
-            <main className="p-4 md:p-8 space-y-8">
-                    <Tabs defaultValue="nf-stock" className="w-full">
-                        <TabsList className="grid w-full grid-cols-1 md:grid-cols-5">
+            <main className="p-4 md:p-8">
+                <div className="space-y-8">
+                    <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
+                        <TabsList className="grid w-full grid-cols-1 md:grid-cols-6">
+                             <TabsTrigger value="history" className="flex items-center gap-2">
+                                <History className="h-5 w-5" /> Histórico
+                            </TabsTrigger>
                              <TabsTrigger value="nf-stock" className="flex items-center gap-2">
                                 1. Validação
-                                {(Object.keys(fileStatus).length > 0 || xmlFiles.nfeEntrada.length > 0 || xmlFiles.cte.length > 0 || xmlFiles.nfeSaida.length > 0) && (
+                                {((Object.keys(fileStatus).length > 0 || xmlFiles.nfeEntrada.length > 0 || xmlFiles.cte.length > 0 || xmlFiles.nfeSaida.length > 0) || (processedData)) && (
                                     processedData && Object.keys(processedData.sheets).length > 0 ? <CheckCircle className="h-5 w-5 text-green-600" /> : <AlertTriangle className="h-5 w-5 text-yellow-600" />
                                 )}
                             </TabsTrigger>
@@ -556,276 +627,96 @@ export function AutomatorClientPage() {
                                 2. Análise Saídas
                                 {processedData?.sheets['Saídas'] && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
-                            <TabsTrigger value="nfse" className="flex items-center gap-2">
+                            <TabsTrigger value="nfse" disabled={nfseTabDisabled} className="flex items-center gap-2">
                                 3. Análise NFS-e
-                                {xmlFiles.nfse.length > 0 && <FilePieChart className="h-5 w-5 text-primary" />}
+                                {(!nfseTabDisabled) && <FilePieChart className="h-5 w-5 text-primary" />}
                             </TabsTrigger>
-                            <TabsTrigger value="imobilizado" disabled={imobilizadoTabDisabled} className="flex items-center gap-2">
+                            <TabsTrigger value="imobilizado" disabled={imobilizadoTabDisabled}>
                                 4. Imobilizado
                                 {processedData?.sheets['Imobilizados'] && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                             <TabsTrigger value="analyses" disabled={analysisTabDisabled} className="flex items-center gap-2">
-                                5. Análises Finais
+                                5. Análises Avançadas
                                 {processedData?.keyCheckResults && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                         </TabsList>
 
-                        {/* ======================= ABA 1: VALIDAÇÃO DE DOCUMENTOS ======================= */}
-                        <TabsContent value="nf-stock" className="mt-6">
-                             <Card className="shadow-lg">
-                                <CardHeader>
-                                    <div className="flex items-center gap-3">
-                                        <UploadCloud className="h-8 w-8 text-primary" />
-                                        <div>
-                                            <CardTitle className="font-headline text-2xl">Carregar Arquivos</CardTitle>
-                                            <CardDescription>Carregue os XMLs e/ou as planilhas para iniciar a validação.</CardDescription>
-                                        </div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="space-y-8">
-                                     <div>
-                                        <h3 className="text-lg font-medium mb-4 flex items-center gap-2"><FileUp className="h-5 w-5" />Carregar por XML (Recomendado)</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                            <div>
-                                                <h4 className="text-md font-medium mb-2">XMLs NF-e Entrada</h4>
-                                                <FileUploadForm
-                                                    formId="xml-nfe-entrada"
-                                                    files={{ 'xml-nfe-entrada': xmlFiles.nfeEntrada.length > 0 }}
-                                                    onFileChange={(e) => handleXmlFileChange(e, 'nfeEntrada')}
-                                                    onClearFile={() => handleClearFile('xml-nfe-entrada', 'nfeEntrada')}
-                                                    xmlFileCount={xmlFiles.nfeEntrada.length}
-                                                    displayName="XMLs NF-e Entrada"
-                                                />
-                                            </div>
-                                            <div>
-                                                <h4 className="text-md font-medium mb-2">XMLs CT-e</h4>
-                                                <FileUploadForm
-                                                    formId="xml-cte"
-                                                    files={{ 'xml-cte': xmlFiles.cte.length > 0 }}
-                                                    onFileChange={(e) => handleXmlFileChange(e, 'cte')}
-                                                    onClearFile={() => handleClearFile('xml-cte', 'cte')}
-                                                    xmlFileCount={xmlFiles.cte.length}
-                                                    displayName="XMLs CT-e"
-                                                />
-                                            </div>
-                                            <div>
-                                                <h4 className="text-md font-medium mb-2">XMLs NF-e Saída</h4>
-                                                <FileUploadForm
-                                                    formId="xml-saida"
-                                                    files={{ 'xml-saida': xmlFiles.nfeSaida.length > 0 }}
-                                                    onFileChange={(e) => handleXmlFileChange(e, 'nfeSaida')}
-                                                    onClearFile={() => handleClearFile('xml-saida', 'nfeSaida')}
-                                                    xmlFileCount={xmlFiles.nfeSaida.length}
-                                                    displayName="XMLs NF-e Saída"
-                                                />
-                                            </div>
-                                            <div>
-                                                <h4 className="text-md font-medium mb-2">XMLs NFS-e (Serviço)</h4>
-                                                <FileUploadForm
-                                                    formId="xml-nfse"
-                                                    files={{ 'xml-nfse': xmlFiles.nfse.length > 0 }}
-                                                    onFileChange={(e) => handleXmlFileChange(e, 'nfse')}
-                                                    onClearFile={() => handleClearFile('xml-nfse', 'nfse')}
-                                                    xmlFileCount={xmlFiles.nfse.length}
-                                                    displayName="XMLs NFS-e"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
+                        <div className="mt-6">
+                            <div style={{ display: activeMainTab === 'history' ? 'block' : 'none' }}>
+                                <HistoryAnalysis onRestoreSession={handleRestoreSession} />
+                            </div>
 
-                                    <div className="relative">
-                                        <div className="absolute inset-0 flex items-center">
-                                            <span className="w-full border-t" />
-                                        </div>
-                                        <div className="relative flex justify-center text-xs uppercase">
-                                            <span className="bg-background px-2 text-muted-foreground">E/Ou</span>
-                                        </div>
-                                    </div>
-
-                                     <div>
-                                        <h3 className="text-lg font-medium mb-4 flex items-center gap-2"><Sheet className="h-5 w-5"/>Carregar Planilhas de Manifesto</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                             <FileUploadForm
-                                                requiredFiles={requiredFiles}
-                                                files={fileStatus}
-                                                onFileChange={handleFileChange}
-                                                onClearFile={handleClearFile}
-                                            />
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                             <Card className="shadow-lg mt-8">
-                                <CardHeader>
-                                        <div className="flex items-center gap-3">
-                                        <Cpu className="h-8 w-8 text-primary" />
-                                        <div>
-                                            <CardTitle className="font-headline text-2xl">Processar Arquivos</CardTitle>
-                                            <CardDescription>Inicie a validação dos dados carregados. Será solicitado que selecione o período.</CardDescription>
-                                        </div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="flex flex-col sm:flex-row gap-2 pt-4">
-                                        <Button onClick={startPeriodSelection} disabled={isProcessButtonDisabled} className="w-full">
-                                            {isPreProcessing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Analisando períodos...</> : (processing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : "Validar Dados")}
-                                        </Button>
-                                        {isClearButtonVisible && (
-                                            <Button onClick={handleClearAllData} variant="destructive" className="w-full sm:w-auto">
-                                                <Trash2 className="mr-2 h-4 w-4" /> Limpar Tudo
-                                            </Button>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            {error && (
-                                <Alert variant="destructive" className="mt-8">
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex">
-                                            <AlertCircle className="h-4 w-4" />
-                                            <div className="ml-3">
-                                                <AlertTitle>Erro</AlertTitle>
-                                                <AlertDescription>{error}</AlertDescription>
-                                            </div>
-                                        </div>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(error)}>
-                                            <Copy className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                </Alert>
-                            )}
-
-                             {(logs.length > 0) && (
-                                <Card className="shadow-lg mt-8">
-                                        <CardHeader>
-                                        <div className="flex items-center gap-3">
-                                            <Terminal className="h-8 w-8 text-primary" />
-                                            <div>
-                                                <CardTitle className="font-headline text-2xl">Análise de Processamento</CardTitle>
-                                                <CardDescription>Logs detalhados da execução.</CardDescription>
-                                            </div>
-                                        </div>
-                                    </CardHeader>
-                                        <CardContent>
-                                        <LogDisplay logs={logs} />
-                                    </CardContent>
-                                </Card>
-                            )}
-                            
-                            {processedData?.sheets && Object.keys(processedData.sheets).length > 0 && (
-                                <Card className="shadow-lg mt-8">
+                            <div style={{ display: activeMainTab === 'nf-stock' ? 'block' : 'none' }}>
+                                 <Card className="shadow-lg">
                                     <CardHeader>
-                                        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <CheckCircle className="h-8 w-8 text-primary" />
-                                                <div>
-                                                    <CardTitle className="font-headline text-2xl">Resultados da Validação</CardTitle>
-                                                    <CardDescription>Visualize os dados processados. Os dados necessários para as próximas etapas estão prontos.</CardDescription>
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                                                <Button onClick={handleDownloadExcel} className="w-full">
-                                                    Baixar Planilha (.xlsx)
-                                                </Button>
+                                        <div className="flex items-center gap-3">
+                                            <UploadCloud className="h-8 w-8 text-primary" />
+                                            <div>
+                                                <CardTitle className="font-headline text-2xl">Carregar Arquivos</CardTitle>
+                                                <CardDescription>Carregue os XMLs e/ou as planilhas para iniciar a validação.</CardDescription>
                                             </div>
                                         </div>
                                     </CardHeader>
-                                    <CardContent>
-                                        <ResultsDisplay results={processedData.sheets} />
+                                    <CardContent className="space-y-8">
+                                        <div>
+                                            <h3 className="text-lg font-medium mb-4 flex items-center gap-2"><FileUp className="h-5 w-5" />Carregar por XML (Recomendado)</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                                <FileUploadForm formId="xml-nfe-entrada" files={{ 'xml-nfe-entrada': xmlFiles.nfeEntrada.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfeEntrada')} onClearFile={() => handleClearFile('xml-nfe-entrada', 'nfeEntrada')} xmlFileCount={xmlFiles.nfeEntrada.length} displayName="XMLs NF-e Entrada" />
+                                                <FileUploadForm formId="xml-cte" files={{ 'xml-cte': xmlFiles.cte.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'cte')} onClearFile={() => handleClearFile('xml-cte', 'cte')} xmlFileCount={xmlFiles.cte.length} displayName="XMLs CT-e" />
+                                                <FileUploadForm formId="xml-saida" files={{ 'xml-saida': xmlFiles.nfeSaida.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfeSaida')} onClearFile={() => handleClearFile('xml-saida', 'nfeSaida')} xmlFileCount={xmlFiles.nfeSaida.length} displayName="XMLs NF-e Saída" />
+                                                <FileUploadForm formId="xml-nfse" files={{ 'xml-nfse': xmlFiles.nfse.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfse')} onClearFile={() => handleClearFile('xml-nfse', 'nfse')} xmlFileCount={xmlFiles.nfse.length} displayName="XMLs NFS-e" />
+                                            </div>
+                                        </div>
+                                        <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">E/Ou</span></div></div>
+                                        <div>
+                                            <h3 className="text-lg font-medium mb-4 flex items-center gap-2"><Sheet className="h-5 w-5"/>Carregar Planilhas de Manifesto</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                <FileUploadForm requiredFiles={requiredFiles} files={fileStatus} onFileChange={handleFileChange} onClearFile={handleClearFile} />
+                                            </div>
+                                        </div>
                                     </CardContent>
                                 </Card>
-                            )}
-                        </TabsContent>
-                        
-                        {/* ======================= ABA 2: Análise de Saídas (NF-e) ======================= */}
-                        <TabsContent value="saidas-nfe" className="mt-6">
-                             {processedData && processedData.sheets['Saídas'] ? (
-                                <SaidasAnalysis 
-                                    saidasData={processedData.sheets['Saídas']}
-                                    initialStatus={processedData.saidasStatus || null}
-                                    onStatusChange={(newStatus) => setProcessedData(p => p ? ({ ...p, saidasStatus: newStatus }) : null)}
-                                    lastPeriodNumber={lastSaidaNumber}
-                                    onLastPeriodNumberChange={handleLastSaidaNumberChange}
-                                />
-                             ) : (
-                                  <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
-                             )}
-                        </TabsContent>
-
-                        {/* ======================= ABA 3: Análise NFS-e ======================= */}
-                        <TabsContent value="nfse" className="mt-6">
-                            <NfseAnalysis
-                                nfseFiles={xmlFiles.nfse}
-                                disregardedNotes={disregardedNfseNotes}
-                                onDisregardedNotesChange={setDisregardedNfseNotes}
-                            />
-                        </TabsContent>
-                        
-                        {/* ======================= ABA 4: IMOBILIZADO ======================= */}
-                        <TabsContent value="imobilizado" className="mt-6">
-                             {processedData?.sheets?.Imobilizados ? (
-                                <AdditionalAnalyses 
-                                    processedData={processedData}
-                                    onProcessedDataChange={setProcessedData}
-                                    siengeFile={siengeFile}
-                                    onSiengeFileChange={setSiengeFile}
-                                    onSiengeDataProcessed={handleSiengeDataProcessed}
-                                    onClearSiengeFile={() => {
-                                        setSiengeFile(null);
-                                        handleSiengeDataProcessed(null);
-                                        const input = document.querySelector('input[name="Itens do Sienge"]') as HTMLInputElement;
-                                        if (input) input.value = '';
-                                    }}
-                                    allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]}
-                                    spedFiles={spedFiles}
-                                    onSpedFilesChange={setSpedFiles}
-                                    onSpedProcessed={handleSpedProcessed}
-                                    competence={competence}
-                                />
-                             ) : (
-                                  <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card>
-                             )}
-                        </TabsContent>
-
-                        {/* ======================= ABA 5: ANÁLISES FINAIS ======================= */}
-                         <TabsContent value="analyses" className="mt-6">
-                             {processedData ? (
-                                <AdditionalAnalyses 
-                                    processedData={processedData}
-                                    onProcessedDataChange={setProcessedData}
-                                    siengeFile={siengeFile}
-                                    onSiengeFileChange={setSiengeFile}
-                                    onSiengeDataProcessed={handleSiengeDataProcessed}
-                                    onClearSiengeFile={() => {
-                                        setSiengeFile(null);
-                                        handleSiengeDataProcessed(null);
-                                        const input = document.querySelector('input[name="Itens do Sienge"]') as HTMLInputElement;
-                                        if (input) input.value = '';
-                                    }}
-                                    allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]}
-                                    spedFiles={spedFiles}
-                                    onSpedFilesChange={setSpedFiles}
-                                    onSpedProcessed={handleSpedProcessed}
-                                    competence={competence}
-                                />
-                             ) : (
-                                  <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
-                             )}
-                        </TabsContent>
+                                <Card className="shadow-lg mt-8">
+                                    <CardHeader><div className="flex items-center gap-3"><Cpu className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Processar Arquivos</CardTitle><CardDescription>Inicie a validação dos dados carregados. Será solicitado que selecione o período.</CardDescription></div></div></CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <div className="flex flex-col sm:flex-row gap-2 pt-4">
+                                            <Button onClick={startPeriodSelection} disabled={isProcessButtonDisabled} className="w-full">{isPreProcessing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Analisando...</> : (processing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : "Validar Dados")}</Button>
+                                            {isClearButtonVisible && <Button onClick={handleClearAllData} variant="destructive" className="w-full sm:w-auto"><Trash2 className="mr-2 h-4 w-4" /> Limpar Tudo</Button>}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                {error && <Alert variant="destructive" className="mt-8"><div className="flex justify-between items-start"><div className="flex"><AlertCircle className="h-4 w-4" /><div className="ml-3"><AlertTitle>Erro</AlertTitle><AlertDescription>{error}</AlertDescription></div></div><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(error)}><Copy className="h-4 w-4" /></Button></div></Alert>}
+                                {(logs.length > 0) && <Card className="shadow-lg mt-8"><CardHeader><div className="flex items-center gap-3"><Terminal className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Análise de Processamento</CardTitle><CardDescription>Logs detalhados da execução.</CardDescription></div></div></CardHeader><CardContent><LogDisplay logs={logs} /></CardContent></Card>}
+                                {processedData?.sheets && Object.keys(processedData.sheets).length > 0 && <Card className="shadow-lg mt-8"><CardHeader><div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><CheckCircle className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Resultados da Validação</CardTitle><CardDescription>Visualize os dados processados. Os dados necessários para as próximas etapas estão prontos.</CardDescription></div></div><div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto"><Button onClick={handleDownloadExcel} className="w-full">Baixar Planilha (.xlsx)</Button></div></div></CardHeader><CardContent><ResultsDisplay results={processedData.sheets} /></CardContent></Card>}
+                            </div>
+                            
+                            <div style={{ display: activeMainTab === 'saidas-nfe' ? 'block' : 'none' }}>
+                                {processedData && processedData.sheets['Saídas'] && !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} initialStatus={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>}
+                            </div>
+                            
+                            <div style={{ display: activeMainTab === 'nfse' ? 'block' : 'none' }}>
+                                {!nfseTabDisabled ? <NfseAnalysis nfseFiles={xmlFiles.nfse} disregardedNotes={disregardedNfseNotes} onDisregardedNotesChange={setDisregardedNfseNotes} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FilePieChart className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando ficheiros</h3><p>Carregue os XMLs de NFS-e na primeira aba para habilitar esta análise.</p></CardContent></Card>}
+                            </div>
+                            
+                            <div style={{ display: activeMainTab === 'imobilizado' ? 'block' : 'none' }}>
+                                {!imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} onPersistData={handlePersistImobilizado} allPersistedData={imobilizadoClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card>}
+                            </div>
+                            
+                            <div style={{ display: activeMainTab === 'analyses' ? 'block' : 'none' }}>
+                                {!analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onSiengeDataProcessed={handleSiengeDataProcessed} siengeFile={siengeFile} onSiengeFileChange={setSiengeFile} onClearSiengeFile={() => { setSiengeFile(null); handleSiengeDataProcessed(null); const input = document.querySelector('input[name="Itens do Sienge"]') as HTMLInputElement; if (input) input.value = ''; }} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>}
+                            </div>
+                        </div>
 
                     </Tabs>
                 </div>
             </main>
             
-            {/* Period Selection Modal */}
             <Dialog open={isPeriodModalOpen} onOpenChange={setIsPeriodModalOpen}>
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2"><Filter /> Selecionar Períodos</DialogTitle>
                         <DialogDescription>
-                            Selecione os meses de referência que deseja incluir no processamento.
+                            Selecione os meses de referência que deseja incluir no processamento. Isto definirá a competência da sessão.
                         </DialogDescription>
                     </DialogHeader>
                     <ScrollArea className="h-72 w-full rounded-md border p-4">
@@ -864,7 +755,7 @@ export function AutomatorClientPage() {
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsPeriodModalOpen(false)}>Cancelar</Button>
                         <Button onClick={handleSubmit} disabled={Object.values(selectedPeriods).every(v => !v)}>
-                            Processar Períodos Selecionados
+                            Processar Períodos
                         </Button>
                     </DialogFooter>
                 </DialogContent>
