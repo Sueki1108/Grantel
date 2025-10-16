@@ -153,7 +153,13 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const nfeFiltrada = nfe.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
     const cteFiltrado = cte.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
     
-    let notasValidas = nfeFiltrada.filter(isChaveValida);
+    // Separar devoluções de clientes
+    const devolucoesDeClientes = nfeFiltrada.filter(row => row.isDevolucaoCliente);
+    log(`- ${devolucoesDeClientes.length} devoluções de clientes identificadas e separadas.`);
+    
+    const notasEntradaPuras = nfeFiltrada.filter(row => !row.isDevolucaoCliente);
+
+    let notasValidas = notasEntradaPuras.filter(isChaveValida);
     let ctesValidos = cteFiltrado.filter(isChaveValida);
     let saidasValidas = saidas.filter(isChaveValida);
     
@@ -235,6 +241,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         "Saídas": saidasValidas, 
         "Itens Válidos Saídas": itensValidosSaidas,
         "Imobilizados": imobilizados,
+        "Devoluções de Clientes": devolucoesDeClientes,
         "Notas Canceladas": notasCanceladas,
         ...originalDfs 
     };
@@ -262,13 +269,13 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const finalSheetSet: DataFrames = {};
     const displayOrder = [
         "Notas Válidas", "CTEs Válidos", "Itens Válidos", "Itens Acima de 1200", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
-        "Imobilizados", "Notas Canceladas", ...Object.keys(originalDfs)
+        "Imobilizados", "Devoluções de Clientes", "Notas Canceladas", ...Object.keys(originalDfs)
     ];
 
     displayOrder.forEach(name => {
         let sheetData = finalResult[name];
         if (sheetData && sheetData.length > 0) {
-            if (["Itens Válidos", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados", "Itens Acima de 1200"].includes(name)) {
+            if (["Itens Válidos", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados", "Itens Acima de 1200", "Devoluções de Clientes"].includes(name)) {
                  sheetData = sheetData.map(addCfopDescriptionToRow);
             }
             finalSheetSet[name] = sheetData;
