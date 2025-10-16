@@ -450,7 +450,7 @@ export function AdditionalAnalyses({
                      <KeyChecker 
                         chavesValidas={processedData.sheets['Chaves Válidas'] || []}
                         spedFiles={spedFiles}
-                        onFilesChange={onSpedFilesChange}
+                        onFilesChange={setSpedFiles}
                         onSpedProcessed={onSpedProcessed}
                         initialSpedInfo={processedData.spedInfo}
                         initialKeyCheckResults={processedData.keyCheckResults}

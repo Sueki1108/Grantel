@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -1101,5 +1100,3 @@ export function KeyChecker({
         </div>
     );
 }
-
-    

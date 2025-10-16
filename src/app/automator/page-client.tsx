@@ -26,7 +26,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { SaidasAnalysis } from "@/components/app/saidas-analysis";
 import { NfseAnalysis } from "@/components/app/nfse-analysis";
 import { KeyCheckResult } from "@/components/app/key-checker";
-import { SettingsDialog } from "@/components/app/settings-dialog";
 import { cn } from "@/lib/utils";
 import { ImobilizadoAnalysis, type AllClassifications } from "@/components/app/imobilizado-analysis";
 import { HistoryAnalysis, type SessionData } from "@/components/app/history-analysis";
@@ -74,8 +73,6 @@ export function AutomatorClientPage() {
     const [selectedPeriods, setSelectedPeriods] = useState<Record<string, boolean>>({});
     const [isPreProcessing, setIsPreProcessing] = useState(false);
     
-    // UI Settings state
-    const [isWideMode, setIsWideMode] = useState(false);
     const [activeMainTab, setActiveMainTab] = useState("history");
 
     // =================================================================
@@ -89,10 +86,6 @@ export function AutomatorClientPage() {
         } catch (e) {
             console.error("Failed to load imobilizado classifications from localStorage", e);
         }
-
-        // Load UI settings
-        const wideMode = localStorage.getItem('ui-widemode') === 'true';
-        setIsWideMode(wideMode);
     }, []);
 
     const handlePersistImobilizado = (allDataToSave: AllClassifications) => {
@@ -161,7 +154,11 @@ export function AutomatorClientPage() {
             toast({ title: "Sessão Exportada", description: `O ficheiro ${link.download} está a ser descarregado.` });
         } catch (e: any) {
             console.error("Failed to export session:", e);
-            toast({ variant: 'destructive', title: 'Erro ao Exportar Sessão', description: e.message });
+             if (e.message.includes('localStorage')) {
+                toast({ variant: 'destructive', title: 'Erro ao Exportar Sessão', description: "Falha ao guardar sessão: os dados processados podem ser demasiado grandes para o armazenamento local. Tente com um período menor." });
+            } else {
+                toast({ variant: 'destructive', title: 'Erro ao Exportar Sessão', description: e.message });
+            }
         }
     };
     
@@ -190,15 +187,6 @@ export function AutomatorClientPage() {
     // =================================================================
     // UI SETTINGS
     // =================================================================
-    const handleSettingsChange = ({ wideMode }: { wideMode: boolean }) => {
-        setIsWideMode(wideMode);
-        localStorage.setItem('ui-widemode', String(wideMode));
-        toast({
-            title: "Configurações salvas",
-            description: `O modo amplo foi ${wideMode ? 'ativado' : 'desativado'}.`,
-        });
-    };
-
     const competence = useMemo(() => {
         const activePeriods = Object.keys(selectedPeriods).filter(p => selectedPeriods[p]);
         if (activePeriods.length > 0) {
@@ -548,7 +536,6 @@ export function AutomatorClientPage() {
 
                 setProcessedData(resultData);
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
-                setActiveMainTab("nf-stock");
 
             } catch (err: any) {
                 const errorMessage = err.message || "Ocorreu um erro desconhecido durante o processamento.";
@@ -618,14 +605,13 @@ export function AutomatorClientPage() {
                         </div>
                      </div>
                      <div className="flex items-center gap-2">
-                        <SettingsDialog initialWideMode={isWideMode} onSettingsChange={handleSettingsChange} />
                         <ThemeToggle />
                      </div>
                 </div>
             </header>
 
-            <main className="container mx-auto p-4 md:p-8">
-                <div className={cn("mx-auto space-y-8", isWideMode ? "max-w-full" : "max-w-screen-2xl")}>
+            <main className="p-4 md:p-8">
+                <div className="mx-auto space-y-8">
                     <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
                         <TabsList className="grid w-full grid-cols-1 md:grid-cols-6">
                              <TabsTrigger value="history" className="flex items-center gap-2">
