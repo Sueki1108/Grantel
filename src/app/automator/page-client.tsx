@@ -46,6 +46,7 @@ const requiredFiles = [
 ];
 
 const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications_v2';
+const SESSIONS_STORAGE_KEY = 'analysisSessions_v2';
 
 
 export function AutomatorClientPage() {
@@ -79,9 +80,10 @@ export function AutomatorClientPage() {
     const [activeMainTab, setActiveMainTab] = useState("history");
 
     // =================================================================
-    // PERSISTENCE (localStorage for Imobilizado only)
+    // PERSISTENCE (localStorage)
     // =================================================================
     useEffect(() => {
+        // Load imobilizado classifications from localStorage
         try {
             const savedImobilizado = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
             if (savedImobilizado) setImobilizadoClassifications(JSON.parse(savedImobilizado));
@@ -89,6 +91,7 @@ export function AutomatorClientPage() {
             console.error("Failed to load imobilizado classifications from localStorage", e);
         }
 
+        // Load UI settings
         const wideMode = localStorage.getItem('ui-widemode') === 'true';
         setIsWideMode(wideMode);
     }, []);
@@ -106,28 +109,55 @@ export function AutomatorClientPage() {
             toast({ variant: 'destructive', title: "Erro ao guardar classificações"});
         }
     };
-
+    
     const handleExportSession = () => {
         const currentCompetence = competence;
         if (!currentCompetence || !processedData) {
             toast({ variant: 'destructive', title: 'Dados insuficientes', description: 'Processe os dados e selecione uma competência antes de exportar.' });
             return;
         }
-
+    
+        // Create an optimized version of processedData without original sheets
+        const optimizedSheets: ProcessedData['sheets'] = {};
+        for (const sheetName in processedData.sheets) {
+            if (!sheetName.startsWith('Original - ')) {
+                optimizedSheets[sheetName] = processedData.sheets[sheetName];
+            }
+        }
+    
+        const optimizedProcessedData = {
+            ...processedData,
+            sheets: optimizedSheets
+        };
+    
         const sessionData: SessionData = {
             competence: currentCompetence,
             processedAt: new Date().toISOString(),
-            processedData,
+            processedData: optimizedProcessedData,
+            fileNames: {
+                nfeEntrada: xmlFiles.nfeEntrada.map(f => f.name),
+                cte: xmlFiles.cte.map(f => f.name),
+                nfeSaida: xmlFiles.nfeSaida.map(f => f.name),
+                nfse: xmlFiles.nfse.map(f => f.name),
+                manifesto: Object.keys(fileStatus),
+                sienge: siengeFile ? siengeFile.name : null,
+                sped: spedFiles.map(f => f.name),
+            },
             lastSaidaNumber,
             disregardedNfseNotes: Array.from(disregardedNfseNotes),
             saidasStatus,
         };
-
+    
         try {
             const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(sessionData, null, 2))}`;
             const link = document.createElement("a");
             link.href = jsonString;
-            link.download = `sessao_automator_${currentCompetence}_${new Date().toISOString().split('T')[0]}.json`;
+
+            const year = currentCompetence.substring(0,4);
+            const month = currentCompetence.substring(5,7);
+            
+            link.download = `Grantel - Backup Fiscal - ${month}.${year}.json`;
+
             link.click();
             toast({ title: "Sessão Exportada", description: `O ficheiro ${link.download} está a ser descarregado.` });
         } catch (e: any) {
@@ -319,7 +349,7 @@ export function AutomatorClientPage() {
         const displayOrder = [
             "Notas Válidas", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
             "Imobilizados",
-            "Devoluções de Clientes", "Notas Canceladas",
+            "Notas Canceladas",
             ...Object.keys(processedData.sheets).filter(name => name.startsWith("Original - "))
         ];
 
@@ -333,7 +363,6 @@ export function AutomatorClientPage() {
             "Saídas": "Saidas",
             "Itens Válidos Saídas": "Itens Validos Saidas",
             "Imobilizados": "Imobilizados",
-            "Devoluções de Clientes": "Devolucoes Clientes",
             "Original - NFE": "Entradas",
             "Original - Saídas": "Saidas Originais",
             "Original - CTE": "CTE",
@@ -569,7 +598,7 @@ export function AutomatorClientPage() {
     const isClearButtonVisible = Object.keys(files).length > 0 || xmlFiles.nfeEntrada.length > 0 || xmlFiles.cte.length > 0 || xmlFiles.nfeSaida.length > 0 || xmlFiles.nfse.length > 0 || !!processedData || logs.length > 0 || error !== null;
 
     const saidasNfeTabDisabled = !processedData?.sheets['Saídas'] || processedData.sheets['Saídas'].length === 0;
-    const nfseTabDisabled = xmlFiles.nfse.length === 0 && (!processedData?.fileNames?.nfse || processedData.fileNames.nfse.length === 0);
+    const nfseTabDisabled = xmlFiles.nfse.length === 0 && (!processedData || !processedData.fileNames?.nfse || processedData.fileNames.nfse.length === 0);
     const analysisTabDisabled = !processedData?.sheets['Chaves Válidas'] || processedData.sheets['Chaves Válidas'].length === 0;
     const imobilizadoTabDisabled = !processedData?.sheets['Imobilizados'] || processedData.sheets['Imobilizados'].length === 0;
     
@@ -853,6 +882,7 @@ export function AutomatorClientPage() {
                                   <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
                              )}
                         </TabsContent>
+
                     </Tabs>
                 </div>
             </main>
@@ -906,6 +936,7 @@ export function AutomatorClientPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
 
             <footer className="mt-12 border-t py-6">
                 <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
