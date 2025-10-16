@@ -1,32 +1,18 @@
 "use client";
 
-import { useState, useEffect, type ChangeEvent } from 'react';
+import { useState, useRef, type ChangeEvent } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { History, Upload, Trash2, Download, FileJson } from "lucide-react";
+import { History, Upload, FileJson } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
+import type { ProcessedData } from '@/lib/excel-processor';
 
 
 // Tipos
 export interface SessionData {
     competence: string;
     processedAt: string;
-    processedData: any; 
+    processedData: ProcessedData; 
     lastSaidaNumber: number;
     disregardedNfseNotes: string[]; 
     saidasStatus: Record<number, 'emitida' | 'cancelada' | 'inutilizada'>;
@@ -38,7 +24,7 @@ interface HistoryAnalysisProps {
 
 export function HistoryAnalysis({ onRestoreSession }: HistoryAnalysisProps) {
     const { toast } = useToast();
-    const fileInputRef = useState<HTMLInputElement | null>(null);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     const handleImportClick = () => {
         fileInputRef.current?.click();
@@ -61,16 +47,12 @@ export function HistoryAnalysis({ onRestoreSession }: HistoryAnalysisProps) {
             const content = await file.text();
             const sessionData: SessionData = JSON.parse(content);
             
-            // Validação simples da estrutura do ficheiro
             if (!sessionData.competence || !sessionData.processedAt || !sessionData.processedData) {
                 throw new Error("O ficheiro JSON não parece ser uma sessão válida.");
             }
 
             onRestoreSession(sessionData);
-            toast({
-                title: 'Sessão Importada com Sucesso',
-                description: `Análise para a competência ${sessionData.competence} foi restaurada.`,
-            });
+
         } catch (error: any) {
             console.error("Failed to import session:", error);
             toast({
@@ -79,7 +61,6 @@ export function HistoryAnalysis({ onRestoreSession }: HistoryAnalysisProps) {
                 description: error.message || 'Ocorreu um erro ao ler o ficheiro da sessão.',
             });
         } finally {
-            // Limpa o input para permitir carregar o mesmo ficheiro novamente
             if (event.target) {
                 event.target.value = '';
             }
@@ -94,9 +75,9 @@ export function HistoryAnalysis({ onRestoreSession }: HistoryAnalysisProps) {
                     <div className="flex items-center gap-3">
                         <History className="h-8 w-8 text-primary" />
                         <div>
-                            <CardTitle className="font-headline text-2xl">Importar Sessão</CardTitle>
+                            <CardTitle className="font-headline text-2xl">Histórico e Recuperação de Sessões</CardTitle>
                             <CardDescription>
-                                Recupere uma análise completa a partir de um ficheiro de sessão (.json) guardado anteriormente.
+                                Importe uma sessão de análise guardada anteriormente a partir de um ficheiro .json para continuar o seu trabalho.
                             </CardDescription>
                         </div>
                     </div>

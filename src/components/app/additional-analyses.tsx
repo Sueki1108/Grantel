@@ -103,7 +103,6 @@ export function AdditionalAnalyses({
 }: AdditionalAnalysesProps) {
     const { toast } = useToast();
 
-    // Estado Inconsistências (Sienge) - Sienge Data is now passed from parent
     const siengeSheetData = processedData.siengeSheetData;
     
     useEffect(() => {
@@ -133,7 +132,6 @@ export function AdditionalAnalyses({
     }, [processedData.siengeSheetData, processedData.sheets]);
 
 
-    // Estado Exportação XML Revenda
     const [isExporting, setIsExporting] = useState(false);
     const [resaleAnalysis, setResaleAnalysis] = useState<{ noteKeys: Set<string>; xmls: File[] } | null>(null);
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
@@ -180,19 +178,9 @@ export function AdditionalAnalyses({
         const cfopRows: InconsistentRow[] = [];
         const icms: any[] = [], pis: any[] = [], cofins: any[] = [], ipi: any[] = [], icmsSt: any[] = [];
         
-        const getTaxFooter = (data: any[], taxName: string): Record<string, string> | undefined => {
-            if (!data || data.length === 0) return undefined;
-            const total = data.reduce((sum, row) => {
-                const value = parseFloat(String(row?.[taxName] || '0').replace(',', '.'));
-                return sum + (isNaN(value) ? 0 : value);
-            }, 0);
-            return { [taxName]: formatCurrency(total) };
-        }
-    
         const getCfopDescription = (cfopCode: number): string => {
             const fullDescription = cfopDescriptions[cfopCode];
             if (fullDescription) {
-                 // Try to get the description again to handle nested structures, but add checks
                 const nestedDescriptionKey = Object.keys(cfopDescriptions).find(k => cfopDescriptions[Number(k) as keyof typeof cfopDescriptions] === fullDescription);
                 if (nestedDescriptionKey) {
                     const nestedDescription = cfopDescriptions[Number(nestedDescriptionKey) as keyof typeof cfopDescriptions];
@@ -731,7 +719,6 @@ function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
             return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
         };
 
-        // Pass 1: Valor Total
         let result = reconciliationPass(remainingSiengeItems, remainingXmlItems, 
             (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]),
             (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
@@ -741,7 +728,6 @@ function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
         remainingSiengeItems = result.remainingSienge;
         remainingXmlItems = result.remainingXml;
 
-        // Pass 2: ICMS Outras
         if (h.icmsOutras) {
              result = reconciliationPass(remainingSiengeItems, remainingXmlItems, 
                 (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.icmsOutras!]),
@@ -753,7 +739,6 @@ function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
             remainingXmlItems = result.remainingXml;
         }
 
-        // Pass 3: Valor Total + Desconto
         if (h.desconto) {
             result = reconciliationPass(remainingSiengeItems, remainingXmlItems,
                 (item) => getComparisonKey(
@@ -769,7 +754,6 @@ function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
             remainingXmlItems = result.remainingXml;
         }
         
-        // Pass 4: Valor Total - Frete
         if (h.frete) {
             result = reconciliationPass(remainingSiengeItems, remainingXmlItems,
                 (item) => getComparisonKey(
@@ -785,7 +769,6 @@ function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
             remainingXmlItems = result.remainingXml;
         }
 
-        // Pass 5: Valor Total - IPI Despesas - ICMS ST
         if (h.ipiDespesas || h.icmsSt) {
             result = reconciliationPass(remainingSiengeItems, remainingXmlItems,
                 (item) => getComparisonKey(
@@ -803,7 +786,6 @@ function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
             remainingXmlItems = result.remainingXml;
         }
         
-        // Pass 6: Valor Total - Frete - IPI Despesas
         if (h.frete || h.ipiDespesas) {
             result = reconciliationPass(remainingSiengeItems, remainingXmlItems,
                 (item) => getComparisonKey(
@@ -821,7 +803,6 @@ function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
             remainingXmlItems = result.remainingXml;
         }
 
-        // Pass 7: Valor Total + Desconto - Frete
         if (h.desconto || h.frete) {
             result = reconciliationPass(remainingSiengeItems, remainingXmlItems,
                 (item) => getComparisonKey(
@@ -839,7 +820,6 @@ function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
             remainingXmlItems = result.remainingXml;
         }
 
-        // Pass 8: Valor Total - Despesas Acessórias
         if (h.despesasAcessorias) {
             result = reconciliationPass(remainingSiengeItems, remainingXmlItems,
                 (item) => getComparisonKey(
@@ -855,7 +835,6 @@ function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
             remainingXmlItems = result.remainingXml;
         }
         
-        // Pass 9: Preço Unitário
         if (h.precoUnitario) {
             result = reconciliationPass(remainingSiengeItems, remainingXmlItems, 
                 (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.precoUnitario!]),
@@ -867,7 +846,6 @@ function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
             remainingXmlItems = result.remainingXml;
         }
 
-        // Pass 10: Agregação por Produto Fiscal
         if (h.produtoFiscal && h.valorTotal) {
             const groupAndSum = (items: any[], notaKey: string, cnpjKey: string, productKey: string, valueKey: string) => {
                 const grouped = new Map<string, { items: any[], sum: number }>();
@@ -892,7 +870,6 @@ function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
             siengeGrouped.forEach((siengeGroup, key) => {
                 const xmlGroup = xmlGrouped.get(key);
                 if (xmlGroup && Math.abs(siengeGroup.sum - xmlGroup.sum) < 0.01) {
-                    // Match found, aggregate and add to reconciled
                     const aggregate = (items: any[], valueKey: string) => {
                         return items.reduce((acc, item, index) => {
                             if (index === 0) return { ...item };
@@ -913,12 +890,11 @@ function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
                         ...aggregatedXml,
                         ...Object.fromEntries(Object.entries(aggregatedSienge).map(([k, v]) => [`Sienge_${k}`, v])),
                         'Observações': `Conciliado por Agregação de Produto (${siengeGroup.items.length} itens)`,
-                        'Valor Total': aggregatedXml['Valor Total'], // Ensure correct total is displayed
+                        'Valor Total': aggregatedXml['Valor Total'],
                         'Quantidade': siengeGroup.items.reduce((sum, i) => sum + (parseFloat(String(i['Qtde'] || '0').replace(',', '.')) || 0), 0)
                     };
                     reconciled.push(reconciledRow);
 
-                    // Remove matched items from the 'unmatched' sets
                     siengeGroup.items.forEach(item => stillUnmatchedSienge.delete(item));
                     xmlGroup.items.forEach(item => stillUnmatchedXml.delete(item));
                 }
