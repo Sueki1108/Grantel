@@ -12,26 +12,31 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { cleanAndToStr } from '@/lib/utils';
 
 
 // Tipos
 type Classification = 'unclassified' | 'imobilizado' | 'uso-consumo' | 'utilizado-em-obra';
 
 export interface ItemData extends Record<string, any> {
-    id: string; // Chave Única da Nota + N° do Item
-    uniqueItemId: string; // Chave para persistência (CNPJ-CodigoProduto)
+    id: string; // Chave Única da Nota + N° do Item. Identificador único por linha.
+    uniqueItemId: string; // Chave para persistência de CLASSIFICAÇÃO (CNPJ-CodigoProduto)
 }
 
 export interface ClassificationStorage {
     classification: Classification;
-    accountCode?: string;
 }
 
-// A estrutura geral que será guardada no localStorage
+export interface AccountCodeStorage {
+    [itemLineId: string]: { // A chave é o 'id' do item (único por linha)
+        accountCode?: string;
+    };
+}
+
+// Estrutura geral para guardar as classificações e os códigos
 export interface AllClassifications {
     [competence: string]: {
-        [uniqueItemId: string]: ClassificationStorage;
+        classifications: { [uniqueItemId: string]: ClassificationStorage };
+        accountCodes: AccountCodeStorage;
     };
 }
 
@@ -39,113 +44,88 @@ export interface AllClassifications {
 interface ImobilizadoAnalysisProps {
     items: ItemData[];
     competence: string | null; // ex: "2023-01_2023-02"
-    onPersistedDataChange: (key: string, data: ClassificationStorage) => void;
+    onPersistedDataChange: (competence: string, uniqueItemId: string, itemLineId: string, data: Partial<AllClassifications[string]>) => void;
     persistedData: AllClassifications;
 }
 
 export function ImobilizadoAnalysis({ items: initialItems, competence, onPersistedDataChange, persistedData }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
-    // Corrigido: Estado para gerir os códigos de conta em edição na sessão atual.
+    // Estado para gerir os códigos de conta em edição na sessão atual. A chave é o id da linha.
     const [sessionAccountCodes, setSessionAccountCodes] = useState<Record<string, string>>({});
 
-     // Efeito para sincronizar o estado de edição com os dados persistidos quando a competência ou os dados mudam.
+    // Efeito para sincronizar o estado de edição com os dados persistidos.
     useEffect(() => {
         if (!competence) return;
         const initialCodes: Record<string, string> = {};
-        const dataForCompetence = persistedData[competence] || {};
+        const dataForCompetence = persistedData[competence]?.accountCodes || {};
         initialItems.forEach(item => {
-            const persistedItem = dataForCompetence[item.uniqueItemId];
-            if (persistedItem && persistedItem.accountCode) {
-                initialCodes[item.uniqueItemId] = persistedItem.accountCode;
+            const persistedCode = dataForCompetence[item.id]?.accountCode;
+            if (persistedCode) {
+                initialCodes[item.id] = persistedCode;
             }
         });
         setSessionAccountCodes(initialCodes);
     }, [competence, persistedData, initialItems]);
 
 
-    const getDisplayData = useCallback((itemUniqueId: string): ClassificationStorage => {
-        if (!competence) return { classification: 'unclassified', accountCode: '' };
-
-        const dataForCompetence = persistedData[competence] || {};
-        const specificItemData = dataForCompetence[itemUniqueId];
-        
-        // Agora, o `sessionAccountCodes` é a fonte da verdade para o que está no input
-        const sessionCode = sessionAccountCodes[itemUniqueId];
-        
-        if (specificItemData) {
-            // Prioriza o código da sessão (o que está a ser editado), se não, usa o que está guardado
-            return {
-                classification: specificItemData.classification,
-                accountCode: sessionCode !== undefined ? sessionCode : specificItemData.accountCode
-            };
+    const getDisplayClassification = useCallback((itemUniqueId: string): Classification => {
+        if (competence) {
+            const classificationForCompetence = persistedData[competence]?.classifications?.[itemUniqueId]?.classification;
+            if (classificationForCompetence) return classificationForCompetence;
         }
         
-        // Fallback: Se não há dados para este item nesta competência, verifica outras.
         for (const otherCompetence in persistedData) {
-            if (otherCompetence !== competence && persistedData[otherCompetence]?.[itemUniqueId]) {
-                const fallbackData = persistedData[otherCompetence][itemUniqueId];
-                 // A classificação é herdada, mas o código de conta só é mostrado se não houver um código de sessão
-                return {
-                     classification: fallbackData.classification,
-                     accountCode: sessionCode !== undefined ? sessionCode : fallbackData.accountCode
-                };
-            }
+            const fallbackClassification = persistedData[otherCompetence]?.classifications?.[itemUniqueId]?.classification;
+            if (fallbackClassification) return fallbackClassification;
         }
         
-         // Se não há dados em nenhuma competência, usa o código da sessão ou vazio.
-        return { classification: 'unclassified', accountCode: sessionCode || '' };
+        return 'unclassified';
 
-    }, [persistedData, competence, sessionAccountCodes]);
+    }, [persistedData, competence]);
 
     const handleClassificationChange = (item: ItemData, newClassification: Classification) => {
         if (!competence) return;
-        const currentDisplayData = getDisplayData(item.uniqueItemId);
         
-        onPersistedDataChange(item.uniqueItemId, {
-            classification: newClassification,
-            accountCode: currentDisplayData.accountCode
-        });
+        const newClassificationData = {
+            [item.uniqueItemId]: { classification: newClassification }
+        };
+        
+        onPersistedDataChange(competence, item.uniqueItemId, item.id, { classifications: newClassificationData });
+
         toast({
             title: "Item Classificado",
-            description: `O item "${item['Descrição']?.substring(0, 20)}..." foi classificado como ${newClassification}.`
+            description: `O item "${item['Descrição']?.substring(0, 20)}..." foi classificado como ${newClassification.replace('-', ' e ')}.`
         });
     };
     
-    // Corrigido: Atualiza apenas o estado do item específico que está a ser alterado.
-    const handleAccountCodeChange = (itemUniqueId: string, code: string) => {
-        setSessionAccountCodes(prev => ({...prev, [itemUniqueId]: code}));
+    const handleAccountCodeChange = (itemLineId: string, code: string) => {
+        setSessionAccountCodes(prev => ({...prev, [itemLineId]: code}));
     };
 
-    const handleSaveAccountCode = (itemUniqueId: string) => {
+    const handleSaveAccountCode = (itemLineId: string) => {
         if (!competence) return;
-        
-        const displayData = getDisplayData(itemUniqueId);
-        if(displayData.classification === 'unclassified') {
-            toast({variant: 'destructive', title: 'Item não classificado', description: 'Classifique o item antes de guardar um código de conta.'});
-            return;
-        }
 
-        // Usa o valor do estado de sessão (`sessionAccountCodes`) para guardar.
-        const newStorageValue: ClassificationStorage = {
-            classification: displayData.classification,
-            accountCode: sessionAccountCodes[itemUniqueId] ?? displayData.accountCode ?? ''
+        const codeToSave = sessionAccountCodes[itemLineId] ?? '';
+        
+        const newAccountCodeData: AccountCodeStorage = {
+             [itemLineId]: { accountCode: codeToSave }
         };
 
-        onPersistedDataChange(itemUniqueId, newStorageValue);
+        const item = initialItems.find(i => i.id === itemLineId);
+        if (!item) return;
+
+        onPersistedDataChange(competence, item.uniqueItemId, item.id, { accountCodes: newAccountCodeData });
 
         toast({
             title: "Código do Ativo Guardado",
-            description: `O código foi associado a este item para a competência atual.`
+            description: `O código foi associado a esta linha de item para a competência atual.`
         });
     };
     
     const handleUnclassify = (item: ItemData) => {
          if (!competence) return;
-        onPersistedDataChange(item.uniqueItemId, { classification: 'unclassified', accountCode: undefined });
-         toast({
-            title: "Classificação Removida",
-        });
+        handleClassificationChange(item, 'unclassified');
     };
 
     const filteredItems = useMemo(() => {
@@ -157,12 +137,12 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         };
 
         initialItems.forEach(item => {
-            const displayData = getDisplayData(item.uniqueItemId);
-            categories[displayData.classification].push(item);
+            const classification = getDisplayClassification(item.uniqueItemId);
+            categories[classification].push(item);
         });
 
         return categories;
-    }, [initialItems, getDisplayData]);
+    }, [initialItems, getDisplayClassification]);
     
     const handleDownload = (data: ItemData[], classification: Classification) => {
         if (data.length === 0) {
@@ -171,14 +151,15 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         }
 
         const dataToExport = data.map(item => {
-            const displayData = getDisplayData(item.uniqueItemId);
+             const accountCode = (competence && persistedData[competence]?.accountCodes?.[item.id]?.accountCode) || sessionAccountCodes[item.id] || '';
             return {
                 'Número da Nota': item['Número da Nota'],
                 'Descrição': item['Descrição'],
                 'CFOP': item['CFOP'],
                 'Descricao CFOP': (item['Descricao CFOP'] || '').substring(0, 20),
+                'Valor Unitário': item['Valor Unitário'],
                 'Valor Total': item['Valor Total'],
-                'Código do Ativo': displayData.accountCode || '',
+                'Código do Ativo': classification === 'imobilizado' ? accountCode : '',
             };
         });
 
@@ -194,37 +175,37 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             return <div className="text-center text-muted-foreground p-8">Nenhum item nesta categoria.</div>;
         }
 
+        const columnsToShow: (keyof ItemData)[] = ['Número da Nota', 'Descrição', 'CFOP', 'Valor Unitário', 'Valor Total'];
         const columns = getColumnsWithCustomRender(
             data,
-            ['Número da Nota', 'Descrição', 'CFOP', 'Valor Total'],
+            columnsToShow,
             (row, id) => {
                 const value = row.getValue(id as any);
-                 if (id === 'Valor Total' && typeof value === 'number') {
-                    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                 if ((id === 'Valor Total' || id === 'Valor Unitário') && typeof value === 'number') {
+                    return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
                 }
                 return <div>{String(value ?? '')}</div>;
             }
         );
         
-        if (classification !== 'unclassified') {
+        if (classification === 'imobilizado') {
             columns.push({
                 id: 'accountCode',
                 header: 'Código do Ativo',
                 cell: ({ row }: any) => {
                     const item = row.original as ItemData;
-                    // O valor do input agora vem diretamente do estado da sessão `sessionAccountCodes`.
-                    const codeInSession = sessionAccountCodes[item.uniqueItemId] || '';
+                    const codeInSession = sessionAccountCodes[item.id] || '';
                     return (
                         <div className="flex items-center gap-2">
                             <Input
                                 placeholder="Ex: 1.2.3.01.0001"
                                 value={codeInSession}
-                                onChange={(e) => handleAccountCodeChange(item.uniqueItemId, e.target.value)}
+                                onChange={(e) => handleAccountCodeChange(item.id, e.target.value)}
                                 className="h-8"
                             />
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleSaveAccountCode(item.uniqueItemId)}>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleSaveAccountCode(item.id)}>
                                         <Save className="h-4 w-4 text-primary" />
                                     </Button>
                                 </TooltipTrigger>
@@ -241,7 +222,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             header: 'Ações',
             cell: ({ row }: any) => {
                 const originalItem = row.original as ItemData;
-                const currentClassification = getDisplayData(originalItem.uniqueItemId).classification;
+                const currentClassification = getDisplayClassification(originalItem.uniqueItemId);
 
                 return (
                     <div className="flex gap-2 justify-center">

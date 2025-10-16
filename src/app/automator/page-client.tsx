@@ -28,7 +28,7 @@ import { NfseAnalysis } from "@/components/app/nfse-analysis";
 import { KeyCheckResult } from "@/components/app/key-checker";
 import { SettingsDialog } from "@/components/app/settings-dialog";
 import { cn } from "@/lib/utils";
-import { ImobilizadoAnalysis, type AllClassifications, type ClassificationStorage } from "@/components/app/imobilizado-analysis";
+import { ImobilizadoAnalysis, type AllClassifications } from "@/components/app/imobilizado-analysis";
 import { HistoryAnalysis, type SessionMetadata } from "@/components/app/history-analysis";
 
 
@@ -45,7 +45,7 @@ const requiredFiles = [
     'NFE Operação Não Realizada', 'NFE Operação Desconhecida', 'CTE Desacordo de Serviço'
 ];
 
-const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications_v2';
+const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications_v3';
 const SESSIONS_STORAGE_KEY = 'analysisSessions_v1';
 
 
@@ -96,28 +96,33 @@ export function AutomatorClientPage() {
         setIsWideMode(wideMode);
     }, []);
 
-    const handleImobilizadoDataChange = (itemUniqueId: string, data: ClassificationStorage) => {
-        if (!competence) {
-            toast({ variant: 'destructive', title: "Competência não definida", description: "Processe os arquivos e selecione um período primeiro." });
-            return;
-        }
+    const handleImobilizadoDataChange = (competence: string, uniqueItemId: string, itemLineId: string, data: Partial<AllClassifications[string]>) => {
+        setImobilizadoClassifications(prev => {
+            const newCompetenceData = {
+                classifications: {
+                    ...prev[competence]?.classifications,
+                    ...(data.classifications || {})
+                },
+                accountCodes: {
+                    ...prev[competence]?.accountCodes,
+                    ...(data.accountCodes || {})
+                }
+            };
 
-        const newClassifications: AllClassifications = {
-            ...imobilizadoClassifications,
-            [competence]: {
-                ...(imobilizadoClassifications[competence] || {}),
-                [itemUniqueId]: data,
-            },
-        };
-        
-        setImobilizadoClassifications(newClassifications);
-        
-        try {
-            localStorage.setItem(IMOBILIZADO_STORAGE_KEY, JSON.stringify(newClassifications));
-        } catch (e) {
-            console.error("Failed to save imobilizado classifications to localStorage", e);
-            toast({ variant: 'destructive', title: "Erro ao guardar classificações"});
-        }
+            const newState = {
+                ...prev,
+                [competence]: newCompetenceData
+            };
+            
+            try {
+                localStorage.setItem(IMOBILIZADO_STORAGE_KEY, JSON.stringify(newState));
+            } catch (e) {
+                console.error("Failed to save imobilizado classifications to localStorage", e);
+                toast({ variant: 'destructive', title: "Erro ao guardar classificações"});
+            }
+
+            return newState;
+        });
     };
 
     const handleSaveSession = () => {
@@ -385,7 +390,7 @@ export function AutomatorClientPage() {
             const allXmlsToScan = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
 
             if (allXmlsToScan.length > 0) {
-                const { nfe, cte, saidas } = await processUploadedXmls(allXmlsToScan, () => {}, "desconhecido");
+                const { nfe, cte, saidas } = await processUploadedXmls(allXmlsToScan, () => {});
                 [...nfe, ...cte, ...saidas].forEach(doc => {
                     if (doc['Emissão'] && typeof doc['Emissão'] === 'string' && doc['Emissão'].length >= 7) {
                         periods.add(doc['Emissão'].substring(0, 7)); // YYYY-MM
@@ -463,24 +468,23 @@ export function AutomatorClientPage() {
                 let dataToProcess: Record<string, any[]> = {};
                 let eventCanceledKeys = new Set<string>();
 
-                // Process each XML category separately to respect user's choice
                 log("Processando ficheiros XML por categoria...");
-                const { nfe: nfeEntrada, itens: itensEntrada, canceledKeys: canceledEntrada } = await processUploadedXmls(xmlFiles.nfeEntrada, log, "entrada");
-                const { cte, canceledKeys: canceledCte } = await processUploadedXmls(xmlFiles.cte, log, "cte");
-                const { saidas, itensSaidas, canceledKeys: canceledSaida } = await processUploadedXmls(xmlFiles.nfeSaida, log, "saida");
+                const { nfe: nfeEntrada, itens: itensEntrada, canceledKeys: canceledEntrada, saidas: nfeDevolucoes, itensSaidas: itensDevolucoes } = await processUploadedXmls(xmlFiles.nfeEntrada, log);
+                const { cte, canceledKeys: canceledCte } = await processUploadedXmls(xmlFiles.cte, log);
+                const { saidas, itensSaidas, canceledKeys: canceledSaida } = await processUploadedXmls(xmlFiles.nfeSaida, log);
 
-                // Combine results
                 dataToProcess["NFE"] = nfeEntrada;
                 dataToProcess["Itens"] = itensEntrada;
                 dataToProcess["CTE"] = cte;
                 dataToProcess["Saídas"] = saidas;
                 dataToProcess["Itens Saídas"] = itensSaidas;
+                dataToProcess["Devoluções de Clientes"] = nfeDevolucoes;
+                dataToProcess["Itens Devoluções Clientes"] = itensDevolucoes;
                 
                 eventCanceledKeys = new Set([...canceledEntrada, ...canceledCte, ...canceledSaida]);
 
-                log(`Processamento XML concluído: ${nfeEntrada.length} NF-e Entradas, ${saidas.length} NF-e Saídas, ${cte.length} CT-es.`);
+                log(`Processamento XML concluído: ${nfeEntrada.length} NF-e Entradas, ${nfeDevolucoes.length} Devoluções de Cliente, ${saidas.length} NF-e Saídas, ${cte.length} CT-es.`);
                 
-                // Merge with sheet data (manifesto files only)
                 for (const fileName of requiredFiles) {
                     if (files[fileName]) {
                         dataToProcess[fileName] = files[fileName];
@@ -488,7 +492,6 @@ export function AutomatorClientPage() {
                     }
                 }
                 
-                // Date Range Filtering based on selected periods
                 const activePeriods = Object.keys(selectedPeriods).filter(p => selectedPeriods[p]);
                 if (activePeriods.length > 0) {
                     log(`Aplicando filtro de período para: ${activePeriods.join(', ')}`);
@@ -496,7 +499,7 @@ export function AutomatorClientPage() {
                     const filterByPeriod = (rows: any[]) => {
                         return rows.filter(row => {
                             const emissionValue = row['Emissão'] || row['Data de Emissão'];
-                            if (!emissionValue) return true; // Keep rows without a date
+                            if (!emissionValue) return true; 
                             if (typeof emissionValue === 'string' && emissionValue.length >= 7) {
                                 return activePeriods.includes(emissionValue.substring(0, 7));
                             }
@@ -506,13 +509,13 @@ export function AutomatorClientPage() {
                                 const period = format(date, 'yyyy-MM');
                                 return activePeriods.includes(period);
                             } catch {
-                                return false; // Exclude rows with invalid date format
+                                return false; 
                             }
                         });
                     };
                 
                     Object.keys(dataToProcess).forEach(key => {
-                        if (['NFE', 'CTE', 'Saídas'].includes(key)) {
+                        if (['NFE', 'CTE', 'Saídas', 'Devoluções de Clientes'].includes(key)) {
                              const originalCount = dataToProcess[key].length;
                              dataToProcess[key] = filterByPeriod(dataToProcess[key]);
                              log(`- ${key}: ${dataToProcess[key].length}/${originalCount} registos mantidos após filtro.`);
@@ -531,7 +534,6 @@ export function AutomatorClientPage() {
                     }
                 }
 
-                // Now, process the combined and filtered data
                 const resultData = processDataFrames(dataToProcess, eventCanceledKeys, log);
                 setLogs(localLogs);
 
@@ -608,7 +610,6 @@ export function AutomatorClientPage() {
     const handleRestoreSession = (session: SessionMetadata) => {
         handleClearAllData();
         
-        // Restore lightweight state
         setLastSaidaNumber(session.lastSaidaNumber || 0);
         setSaidasStatus(session.saidasStatus || {});
         setDisregardedNfseNotes(new Set(session.disregardedNfseNotes || []));
@@ -625,7 +626,6 @@ export function AutomatorClientPage() {
             duration: 10000,
         });
 
-        // Switch to the validation tab to prompt for file upload
         setActiveMainTab("nf-stock");
     };
 
@@ -984,5 +984,3 @@ export function AutomatorClientPage() {
         </div>
     );
 }
-
-    

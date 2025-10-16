@@ -88,7 +88,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const allSheetNames = [
         "NFE", "CTE", "Itens", "Saídas", "Itens Saídas",
         "NFE Operação Não Realizada", "NFE Operação Desconhecida", 
-        "CTE Desacordo de Serviço"
+        "CTE Desacordo de Serviço", "Devoluções de Clientes", "Itens Devoluções Clientes"
     ];
 
     allSheetNames.forEach(name => {
@@ -107,7 +107,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     });
     log("Preparação inicial concluída.");
 
-    const nfe = processedDfs["NFE"] || [];
+    let nfe = processedDfs["NFE"] || [];
     const cte = processedDfs["CTE"] || [];
     const itens = processedDfs["Itens"] || [];
     const saidas = processedDfs["Saídas"] || [];
@@ -115,6 +115,10 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const naoRealizada = processedDfs["NFE Operação Não Realizada"] || [];
     const desconhecida = processedDfs["NFE Operação Desconhecida"] || [];
     const desacordo = processedDfs["CTE Desacordo de Serviço"] || [];
+    const devolucoesDeClientes = processedDfs["Devoluções de Clientes"] || [];
+
+    // Combine devoluções de clientes com as notas de entrada para um tratamento unificado inicial
+    nfe = [...nfe, ...devolucoesDeClientes];
 
     log("Coletando chaves de exceção (canceladas, manifesto, eventos)...");
     const chavesExcecao = new Set<string>(eventCanceledKeys);
@@ -173,19 +177,20 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     log("Identificando itens para análise de imobilizado...");
     const remessaCfopsPrefixes = ['59', '69'];
     const itensAcimaDe1200 = itensValidos.filter(item => {
+        if (!item || !item['Valor Unitário']) return false;
         const cfop = cleanAndToStr(item["CFOP"]);
-        const valorUnitario = item['Valor Unitário'] || 0;
+        const valorUnitario = parseFloat(String(item['Valor Unitário']));
         const isRemessa = remessaCfopsPrefixes.some(prefix => cfop.startsWith(prefix));
         return valorUnitario > 1200 && !isRemessa;
     });
     log(`- ${itensAcimaDe1200.length} itens com valor unitário acima de R$ 1.200 (não remessa) encontrados para análise de imobilizado.`);
 
-    const imobilizados = itensAcimaDe1200.map((item, index) => {
+    const imobilizados = itensAcimaDe1200.map((item) => {
         const uniqueItemId = `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
         return { 
             ...item, 
-            id: `${cleanAndToStr(item['Chave Unica'])}-${item['Item']}`, // ID para a renderização na tabela
-            uniqueItemId: uniqueItemId // ID para persistência
+            id: `${cleanAndToStr(item['Chave Unica'])}-${item['Item']}`, 
+            uniqueItemId: uniqueItemId 
         };
     });
 
@@ -237,6 +242,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         "Itens Válidos Saídas": itensValidosSaidas,
         "Imobilizados": imobilizados,
         "Notas Canceladas": notasCanceladas,
+        "Devoluções de Clientes": devolucoesDeClientes, // Keeping this for display
         ...originalDfs 
     };
     
@@ -263,13 +269,13 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const finalSheetSet: DataFrames = {};
     const displayOrder = [
         "Notas Válidas", "CTEs Válidos", "Itens Válidos", "Itens Acima de 1200", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
-        "Imobilizados", "Notas Canceladas", ...Object.keys(originalDfs)
+        "Imobilizados", "Notas Canceladas", "Devoluções de Clientes", ...Object.keys(originalDfs)
     ];
 
     displayOrder.forEach(name => {
         let sheetData = finalResult[name];
         if (sheetData && sheetData.length > 0) {
-            if (["Itens Válidos", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados", "Itens Acima de 1200"].includes(name)) {
+            if (["Itens Válidos", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados", "Itens Acima de 1200", "Devoluções de Clientes"].includes(name)) {
                  sheetData = sheetData.map(addCfopDescriptionToRow);
             }
             finalSheetSet[name] = sheetData;
