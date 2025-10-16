@@ -72,7 +72,7 @@ const DifalItem = ({ item, isChecked, onToggleCheck }: { item: DifalData, isChec
     const { toast } = useToast();
 
     const copyToClipboard = (text: string | number, type: string) => {
-        const textToCopy = String(text);
+        const textToCopy = typeof text === 'number' ? text.toFixed(2) : String(text);
         navigator.clipboard.writeText(textToCopy).then(() => {
             toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: textToCopy });
         }).catch(() => {
@@ -405,5 +405,3 @@ export function DifalAnalysis() {
         </div>
     );
 }
-
-    
