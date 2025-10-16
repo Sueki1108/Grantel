@@ -416,7 +416,7 @@ export function AutomatorClientPage() {
             const allXmlsToScan = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
 
             if (allXmlsToScan.length > 0) {
-                const { nfe, cte, saidas } = await processUploadedXmls(allXmlsToScan, () => {});
+                const { nfe, cte, saidas } = await processUploadedXmls(allXmlsToScan);
                 [...nfe, ...cte, ...saidas].forEach(doc => {
                     if (doc['Emissão'] && typeof doc['Emissão'] === 'string' && doc['Emissão'].length >= 7) {
                         periods.add(doc['Emissão'].substring(0, 7)); // YYYY-MM
@@ -491,7 +491,7 @@ export function AutomatorClientPage() {
 
                 log("Processando ficheiros XML...");
                 const allUploadedXml = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
-                const { nfe, cte, saidas, itens, itensSaidas, canceledKeys } = await processUploadedXmls(allUploadedXml, log);
+                const { nfe, cte, saidas, itens, itensSaidas, canceledKeys } = await processUploadedXmls(allUploadedXml);
                 
                 dataToProcess["NFE"] = nfe;
                 dataToProcess["Itens"] = itens;

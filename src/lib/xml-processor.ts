@@ -320,7 +320,7 @@ export const processNfseForPeriodDetection = async (files: File[]): Promise<stri
 // MAIN PROCESSING FUNCTION
 // =================================================================
 
-export const processUploadedXmls = async (files: File[], log: LogFunction): Promise<XmlData> => {
+export const processUploadedXmls = async (files: File[]): Promise<XmlData> => {
     const combinedData: XmlData = {
         nfe: [], cte: [], itens: [], saidas: [], itensSaidas: [], canceledKeys: new Set()
     };
@@ -329,7 +329,6 @@ export const processUploadedXmls = async (files: File[], log: LogFunction): Prom
         return combinedData;
     }
 
-    log(`Processando ${files.length} ficheiros XML.`);
     const parser = new DOMParser();
 
     for (const file of files) {
@@ -339,20 +338,18 @@ export const processUploadedXmls = async (files: File[], log: LogFunction): Prom
             
             const errorNode = xmlDoc.querySelector('parsererror');
             if (errorNode) {
-                log(`AVISO: Falha ao parsear o ficheiro ${file.name}. Não é um XML válido.`);
+                // Not logging parse errors as it's too verbose for the user
                 continue;
             }
 
             let parsedResult: Partial<XmlData> | null = null;
             
             if (xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'procEventoNFe').length > 0 || xmlDoc.getElementsByTagName('procEventoCTe').length > 0) {
-                parsedResult = parseCancelEvent(xmlDoc, log);
+                parsedResult = parseCancelEvent(xmlDoc, () => {});
             } else if (xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'nfeProc').length > 0) {
-                parsedResult = parseNFe(xmlDoc, log);
+                parsedResult = parseNFe(xmlDoc, () => {});
             } else if (xmlDoc.getElementsByTagName('cteProc').length > 0) {
-                parsedResult = parseCTe(xmlDoc, log);
-            } else {
-                log(`AVISO: Ficheiro ${file.name} não parece ser NFe, CTe ou Evento padrão. Será ignorado.`);
+                parsedResult = parseCTe(xmlDoc, () => {});
             }
             
             if(parsedResult) {
@@ -368,7 +365,7 @@ export const processUploadedXmls = async (files: File[], log: LogFunction): Prom
             }
 
         } catch (error: any) {
-            log(`ERRO ao processar o ficheiro ${file.name}: ${error.message}`);
+            console.error(`ERRO ao processar o ficheiro ${file.name}: ${error.message}`);
         }
     }
     

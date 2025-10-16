@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, type ChangeEvent } from 'react';
@@ -9,7 +8,6 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
 import { FileUp, FileDown, Loader2, Download, AlertTriangle, Cpu, TicketPercent, Copy, Check, RotateCcw } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import JSZip from 'jszip';
 import { cn } from '@/lib/utils';
 
@@ -148,7 +146,6 @@ const DifalItem = ({ item, isChecked, onToggleCheck }: { item: DifalData, isChec
 // ===============================================================
 export function DifalAnalysis() {
     const [xmlFiles, setXmlFiles] = useState<File[]>([]);
-    const [pdfFiles, setPdfFiles] = useState<File[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [results, setResults] = useState<{ valid: DifalData[], ignored: IgnoredData[] } | null>(null);
     const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
@@ -195,13 +192,6 @@ export function DifalAnalysis() {
         
         setXmlFiles(prev => [...prev, ...newFiles]);
         toast({ title: `${newFiles.length} ficheiro(s) XML adicionados.`, description: `${extractedCount > 0 ? `(${extractedCount} de .zip)` : ''} Clique em processar para analisar.` });
-    };
-
-    const handlePdfFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const selectedFiles = e.target.files;
-        if (!selectedFiles) return;
-        setPdfFiles(prev => [...prev, ...Array.from(selectedFiles)]);
-        toast({ title: `${selectedFiles.length} ficheiro(s) PDF adicionados.` });
     };
 
     const processXmlFiles = async () => {
@@ -299,13 +289,13 @@ export function DifalAnalysis() {
                          <TicketPercent className="h-8 w-8 text-primary" />
                         <div>
                             <CardTitle className="font-headline text-2xl">Ferramenta de Extração para Guia DIFAL</CardTitle>
-                            <CardDescription>Extraia dados de XMLs para gerar guias e, em seguida, anexe os PDFs para verificação.</CardDescription>
+                            <CardDescription>Carregue os XMLs de saída, processe-os e veja os resultados para a geração da guia.</CardDescription>
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
                     <div>
-                        <h3 className="text-lg font-bold mb-2">Etapa 1: Processar XMLs de Saída</h3>
+                        <h3 className="text-lg font-bold mb-2">Processar XMLs de Saída</h3>
                         <p className="text-sm text-muted-foreground mb-4">Carregue os XMLs de saída. A ferramenta irá validar as condições e extrair os valores para a geração das guias de DIFAL.</p>
                         <label htmlFor="xml-upload-difal" className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 cursor-pointer hover:border-primary transition-colors">
                             <FileUp className="h-10 w-10 text-muted-foreground mb-2" />
@@ -378,30 +368,6 @@ export function DifalAnalysis() {
                     </CardContent>
                 </Card>
             )}
-            
-            <Card>
-                 <CardHeader>
-                     <h3 className="text-lg font-bold">Etapa 2: Anexar Guias Emitidas (PDF) para Verificação</h3>
-                     <p className="text-sm text-muted-foreground">Depois de emitir as guias de DIFAL, carregue os ficheiros PDF correspondentes aqui para manter um registo e facilitar a verificação.</p>
-                </CardHeader>
-                <CardContent>
-                     <label htmlFor="pdf-upload-difal" className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 cursor-pointer hover:border-primary transition-colors">
-                        <FileDown className="h-10 w-10 text-muted-foreground mb-2" />
-                        <span className="font-semibold">Carregar Guias (PDF)</span>
-                        <span className="text-sm text-muted-foreground">Arraste ou clique para selecionar</span>
-                        <input id="pdf-upload-difal" type="file" className="sr-only" onChange={handlePdfFileChange} multiple accept=".pdf" />
-                    </label>
-                    {pdfFiles.length > 0 && (
-                        <div className="mt-4 space-y-1 text-sm">
-                            <h4 className='font-medium'>Ficheiros PDF carregados:</h4>
-                            <ul className="list-disc list-inside text-muted-foreground">
-                                {pdfFiles.map((file, i) => <li key={i}>{file.name}</li>)}
-                            </ul>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-
         </div>
     );
 }
