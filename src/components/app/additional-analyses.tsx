@@ -12,6 +12,7 @@ import JSZip from 'jszip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
 import { getColumns, getColumnsWithCustomRender } from "@/lib/columns-helper";
+import { cfopDescriptions } from "@/lib/cfop";
 import type { ProcessedData, SpedInfo } from "@/lib/excel-processor";
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { cleanAndToStr } from "@/lib/utils";
@@ -628,7 +629,18 @@ interface ReconciliationAnalysisProps {
 
 function useReconciliation(processedData: ProcessedData | null) {
     const siengeData = processedData?.siengeSheetData;
-    const xmlItems = processedData?.sheets?.['Itens Válidos'];
+    
+    // Use only items from valid entry notes and CTEs for reconciliation
+    const notasValidas = processedData?.sheets?.['Notas Válidas'] || [];
+    const ctesValidos = processedData?.sheets?.['CTEs Válidos'] || [];
+    const allItems = processedData?.sheets?.['Itens'] || [];
+
+    const chavesEntradaValidas = new Set([
+        ...notasValidas.map(n => n['Chave de acesso']),
+        ...ctesValidos.map(c => c['Chave de acesso'])
+    ]);
+
+    const xmlItems = allItems.filter(item => chavesEntradaValidas.has(item['Chave de acesso']));
     
     if (!siengeData || !xmlItems) {
         return { reconciliationResults: null, error: null };
@@ -654,7 +666,7 @@ function useReconciliation(processedData: ProcessedData | null) {
 
         const filteredSiengeData = siengeData.filter(row => {
             const espValue = row[espHeader] ? String(row[espHeader]).trim().toUpperCase() : '';
-            return espValue === 'NFE' || espValue === 'NFSR';
+            return espValue === 'NFE' || espValue === 'NFSR' || espValue === 'CTE';
         });
 
 
@@ -671,6 +683,7 @@ function useReconciliation(processedData: ProcessedData | null) {
             icmsSt: findHeader(filteredSiengeData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
             despesasAcessorias: findHeader(filteredSiengeData, ['despesas acessórias', 'despesasacessorias', 'voutro']),
             precoUnitario: findHeader(filteredSiengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
+            esp: espHeader,
         };
         
 
@@ -692,7 +705,7 @@ function useReconciliation(processedData: ProcessedData | null) {
 
         const reconciliationPass = (
             siengeItems: any[],
-            xmlItems: any[],
+            xmlItemsList: any[],
             getSiengeKey: (item: any) => string | null,
             getXmlKey: (item: any) => string | null,
         ) => {
@@ -700,7 +713,7 @@ function useReconciliation(processedData: ProcessedData | null) {
             const stillUnmatchedSienge: any[] = [];
             const xmlMap = new Map<string, any[]>();
 
-            xmlItems.forEach(item => {
+            xmlItemsList.forEach(item => {
                 const key = getXmlKey(item);
                 if (key) {
                     if (!xmlMap.has(key)) xmlMap.set(key, []);
@@ -720,6 +733,7 @@ function useReconciliation(processedData: ProcessedData | null) {
                             ...matchedXmlItem,
                             'Sienge_CFOP': siengeItem[h.cfop as string] || 'N/A',
                             'Sienge_Descrição': siengeItem[h.siengeDesc as string] || 'N/A',
+                            'Sienge_Esp': siengeItem[h.esp as string] || 'N/A',
                         };
 
                         matchedInPass.push(mergedItem);
@@ -897,4 +911,3 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
          </Card>
     );
 }
-
