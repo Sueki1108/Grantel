@@ -98,8 +98,6 @@ interface AdditionalAnalysesProps {
     onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null) => void;
     competence: string | null;
     onExportSession: () => void;
-    imobilizadoClassifications: AllClassifications;
-    onPersistImobilizado: (data: AllClassifications) => void;
 }
 
 export function AdditionalAnalyses({ 
@@ -113,13 +111,10 @@ export function AdditionalAnalyses({
     onSpedFilesChange,
     onSpedProcessed,
     competence,
-    onExportSession,
-    imobilizadoClassifications,
-    onPersistImobilizado
+    onExportSession
 }: AdditionalAnalysesProps) {
     const { toast } = useToast();
 
-    // Estado Inconsistências (Sienge) - Sienge Data is now passed from parent
     const siengeSheetData = processedData.siengeSheetData;
     
     useEffect(() => {
@@ -139,17 +134,11 @@ export function AdditionalAnalyses({
     }, [siengeFile, siengeSheetData, onSiengeDataProcessed, toast]);
 
     
-    const { reconciliationResults, error: reconciliationError } = useMemo(() => {
-        const siengeData = processedData.siengeSheetData;
-        const xmlItems = processedData.sheets['Itens Válidos'];
-        if (!siengeData || !xmlItems) {
-            return { reconciliationResults: null, error: null };
-        }
-        return useReconciliation(siengeData, xmlItems);
-    }, [processedData.siengeSheetData, processedData.sheets]);
+    const { reconciliationResults, error: reconciliationError } = useReconciliation(
+        processedData.siengeSheetData, 
+        processedData.sheets['Itens Válidos']
+    );
 
-
-    // Estado Exportação XML Revenda
     const [isExporting, setIsExporting] = useState(false);
     const [resaleAnalysis, setResaleAnalysis] = useState<{ noteKeys: Set<string>; xmls: File[] } | null>(null);
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
@@ -196,15 +185,6 @@ export function AdditionalAnalyses({
         const cfopRows: InconsistentRow[] = [];
         const icms: any[] = [], pis: any[] = [], cofins: any[] = [], ipi: any[] = [], icmsSt: any[] = [];
         
-        const getTaxFooter = (data: any[], taxName: string): Record<string, string> | undefined => {
-            if (!data || data.length === 0) return undefined;
-            const total = data.reduce((sum, row) => {
-                const value = parseFloat(String(row?.[taxName] || '0').replace(',', '.'));
-                return sum + (isNaN(value) ? 0 : value);
-            }, 0);
-            return { [taxName]: formatCurrency(total) };
-        }
-    
         const getCfopDescription = (cfopCode: number): string => {
             const fullDescription = cfopDescriptions[cfopCode];
             if (fullDescription) {
@@ -495,9 +475,6 @@ export function AdditionalAnalyses({
                         onClearSiengeFile={onClearSiengeFile}
                         reconciliationResults={reconciliationResults}
                         error={reconciliationError}
-                        competence={competence}
-                        imobilizadoClassifications={imobilizadoClassifications}
-                        onPersistImobilizado={onPersistImobilizado}
                     />
                 </TabsContent>
 
@@ -645,12 +622,9 @@ interface ReconciliationAnalysisProps {
     onClearSiengeFile: () => void;
     reconciliationResults: { reconciled: any[], onlyInSienge: any[], onlyInXml: any[] } | null;
     error: string | null;
-    competence: string | null;
-    imobilizadoClassifications: AllClassifications;
-    onPersistImobilizado: (data: AllClassifications) => void;
 }
 
-function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error, competence, imobilizadoClassifications, onPersistImobilizado }: ReconciliationAnalysisProps) {
+function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
     useEffect(() => {
@@ -680,7 +654,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                         <GitCompareArrows className="h-8 w-8 text-primary" />
                         <div>
                             <CardTitle className="font-headline text-2xl">Conciliação de Itens (XML vs Sienge)</CardTitle>
-                            <CardDescription>Carregue a planilha do Sienge para iniciar a conciliação e validar os lançamentos.</CardDescription>
+                            <CardDescription>Carregue a planilha do Sienge para correlacionar os itens do XML com os lançamentos do Sienge.</CardDescription>
                         </div>
                     </div>
                      <Dialog>
@@ -697,12 +671,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                 </DialogDescription>
                             </DialogHeader>
                             <div className="flex-grow overflow-auto">
-                                <CfopValidator 
-                                    reconciledItems={reconciliationResults?.reconciled || []} 
-                                    competence={competence}
-                                    imobilizadoClassifications={imobilizadoClassifications}
-                                    onPersistImobilizado={onPersistImobilizado}
-                                />
+                                {/* O componente CfopValidator será colocado aqui */}
                             </div>
                         </DialogContent>
                     </Dialog>
@@ -794,29 +763,33 @@ function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
         const h = {
             cnpj: findHeader(filteredSiengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
             numero: findHeader(filteredSiengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
-            valorTotal: findHeader(filteredSiengeData, ['valor total', 'valor', 'vlr total']),
-            cfop: findHeader(filteredSiengeData, ['cfop']),
-            produtoFiscal: findHeader(filteredSiengeData, ['produto fiscal', 'descrição do item', 'descrição']),
+            codigoProduto: findHeader(filteredSiengeData, ['código do produto fiscal', 'codigo produto fiscal', 'codigoproduto']),
         };
         
-        if (!h.cnpj || !h.numero) throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ') na planilha Sienge.");
+        if (!h.cnpj || !h.numero || !h.codigoProduto) {
+            throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Código do Produto Fiscal') na planilha Sienge.");
+        }
 
         const getReconciliationKey = (item: any, source: 'xml' | 'sienge') => {
              const numero = source === 'xml' ? item['Número da Nota'] : item[h.numero!];
              const cnpj = source === 'xml' ? item['CPF/CNPJ do Emitente'] : item[h.cnpj!];
-             const produto = source === 'xml' ? item['Código'] : item['Código do Produto Fiscal']; // Sienge might have this
+             const produto = source === 'xml' ? item['Código'] : item[h.codigoProduto!];
+             if (!numero || !cnpj || !produto) return null;
              return `${cleanAndToStr(numero)}-${cleanAndToStr(cnpj)}-${cleanAndToStr(produto)}`;
         };
         
         const xmlMap = new Map<string, any>();
-        xmlItems.forEach(item => xmlMap.set(getReconciliationKey(item, 'xml'), item));
+        xmlItems.forEach(item => {
+            const key = getReconciliationKey(item, 'xml');
+            if (key) xmlMap.set(key, item);
+        });
 
         const reconciled: any[] = [];
         const onlyInSienge: any[] = [];
 
         filteredSiengeData.forEach(siengeItem => {
             const key = getReconciliationKey(siengeItem, 'sienge');
-            if (xmlMap.has(key)) {
+            if (key && xmlMap.has(key)) {
                 const xmlItem = xmlMap.get(key);
                 const combined = { ...xmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])) };
                 reconciled.push(combined);
@@ -832,142 +805,4 @@ function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
     } catch (err: any) {
         return { reconciliationResults: null, error: err.message };
     }
-}
-
-
-// ===============================================================
-// Componente de Validação de CFOP
-// ===============================================================
-interface CfopValidatorProps {
-    reconciledItems: any[];
-    competence: string | null;
-    imobilizadoClassifications: AllClassifications;
-    onPersistImobilizado: (data: AllClassifications) => void;
-}
-
-function CfopValidator({ reconciledItems, competence, imobilizadoClassifications, onPersistImobilizado }: CfopValidatorProps) {
-    const [localClassifications, setLocalClassifications] = useState<Record<string, keyof typeof classificationCfops | 'unclassified'>>({});
-    const [hasChanges, setHasChanges] = useState(false);
-
-    useEffect(() => {
-        if (!competence || !reconciledItems.length) return;
-        const initialClassifications: Record<string, keyof typeof classificationCfops | 'unclassified'> = {};
-
-        reconciledItems.forEach(item => {
-            const uniqueItemId = `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
-            let foundClassification: keyof typeof classificationCfops | 'unclassified' = 'unclassified';
-            
-            // Look in all persisted data for a classification for this item
-            for (const comp in imobilizadoClassifications) {
-                const classification = imobilizadoClassifications[comp]?.classifications?.[uniqueItemId]?.classification;
-                if (classification && classification !== 'imobilizado' && classification !== 'unclassified') {
-                    foundClassification = classification;
-                    break;
-                }
-            }
-            initialClassifications[uniqueItemId] = foundClassification;
-        });
-
-        setLocalClassifications(initialClassifications);
-        setHasChanges(false);
-    }, [reconciledItems, competence, imobilizadoClassifications]);
-
-    const handleClassificationChange = (uniqueItemId: string, classification: keyof typeof classificationCfops) => {
-        setLocalClassifications(prev => ({ ...prev, [uniqueItemId]: classification }));
-        setHasChanges(true);
-    };
-
-    const handleSaveChanges = () => {
-        if (!competence) return;
-        
-        const updatedData = JSON.parse(JSON.stringify(imobilizadoClassifications));
-        if (!updatedData[competence]) {
-            updatedData[competence] = { classifications: {}, accountCodes: {} };
-        }
-
-        Object.entries(localClassifications).forEach(([uniqueItemId, classification]) => {
-            if (classification !== 'unclassified') {
-                updatedData[competence].classifications[uniqueItemId] = { classification };
-            }
-        });
-
-        onPersistImobilizado(updatedData);
-        setHasChanges(false);
-    };
-
-    const validationResults = useMemo(() => {
-        return reconciledItems.map(item => {
-            const uniqueItemId = `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
-            const classification = localClassifications[uniqueItemId];
-            const siengeCfopHeader = Object.keys(item).find(k => k.toLowerCase().includes('sienge_') && k.toLowerCase().includes('cfop'));
-            const siengeCfop = siengeCfopHeader ? cleanAndToStr(item[siengeCfopHeader]) : '';
-
-            let isValid = null;
-            let expectedCfops: string[] = [];
-
-            if (classification && classification !== 'unclassified') {
-                expectedCfops = classificationCfops[classification];
-                isValid = expectedCfops.includes(siengeCfop);
-            }
-
-            return { ...item, uniqueItemId, classification, siengeCfop, isValid, expectedCfops };
-        });
-    }, [reconciledItems, localClassifications]);
-
-    if (!reconciledItems.length) {
-        return <p className="text-center text-muted-foreground">Nenhum item conciliado para validar.</p>;
-    }
-
-    return (
-        <div className="space-y-4">
-             <div className="flex justify-end items-center gap-4">
-                <p className="text-sm text-muted-foreground">{hasChanges ? "Existem alterações não guardadas." : "Alterações guardadas."}</p>
-                <Button onClick={handleSaveChanges} disabled={!hasChanges}>
-                    <Save className="mr-2 h-4 w-4" /> Guardar Classificações
-                </Button>
-            </div>
-            <div className="rounded-md border">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Item</TableHead>
-                            <TableHead>CFOP Sienge</TableHead>
-                            <TableHead>Classificação</TableHead>
-                            <TableHead>Status</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {validationResults.map((item, index) => (
-                            <TableRow key={index}>
-                                <TableCell>
-                                    <p className="font-medium">{item['Descrição']}</p>
-                                    <p className="text-sm text-muted-foreground">{item['Código']}</p>
-                                </TableCell>
-                                <TableCell>{item.siengeCfop}</TableCell>
-                                <TableCell>
-                                    <div className="flex gap-2">
-                                        {(Object.keys(classificationCfops) as Array<keyof typeof classificationCfops>).map(c => (
-                                            <Button 
-                                                key={c}
-                                                variant={item.classification === c ? 'default' : 'outline'}
-                                                size="sm"
-                                                onClick={() => handleClassificationChange(item.uniqueItemId, c)}
-                                            >
-                                                {c}
-                                            </Button>
-                                        ))}
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    {item.isValid === true && <Badge variant="default" className="bg-green-600"><Check className="mr-1 h-4 w-4" /> Correto</Badge>}
-                                    {item.isValid === false && <Badge variant="destructive"><X className="mr-1 h-4 w-4" /> INCORRETO (Esperado: {item.expectedCfops.join(' ou ')})</Badge>}
-                                    {item.isValid === null && <Badge variant="secondary"><BadgeHelp className="mr-1 h-4 w-4"/> Não Classificado</Badge>}
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </div>
-        </div>
-    )
 }
