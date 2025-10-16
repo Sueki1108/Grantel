@@ -98,8 +98,13 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
     }, [competence, allPersistedData, initialItems]);
 
 
-    const handleClassificationChange = (item: ItemData, newClassification: Classification) => {
-        setSessionClassifications(prev => ({ ...prev, [item.id]: newClassification }));
+     const handleClassificationChange = (item: ItemData, newClassification: Classification) => {
+        const itemsToUpdate = initialItems.filter(i => i.uniqueItemId === item.uniqueItemId);
+        const newClassifications = { ...sessionClassifications };
+        itemsToUpdate.forEach(i => {
+            newClassifications[i.id] = newClassification;
+        });
+        setSessionClassifications(newClassifications);
         setHasChanges(true);
     };
     

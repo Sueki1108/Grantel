@@ -28,6 +28,15 @@ export interface ProcessedData {
     saidasStatus?: Record<number, 'emitida' | 'cancelada' | 'inutilizada'>;
     lastSaidaNumber?: number;
     imobilizadoClassifications?: AllClassifications;
+    fileNames?: { // For user reference in history
+        nfeEntrada: string[];
+        cte: string[];
+        nfeSaida: string[];
+        nfse: string[];
+        manifesto: string[];
+        sienge: string | null;
+        sped: string[];
+    };
 }
 
 
@@ -79,7 +88,7 @@ const renameChaveColumn = (df: DataFrame): DataFrame => {
 // MAIN PROCESSING FUNCTION
 // =================================================================
 
-export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): ProcessedData {
+export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames'> {
     
     log("Iniciando preparação dos dados no navegador...");
     const originalDfs: DataFrames = {};
@@ -88,7 +97,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const allSheetNames = [
         "NFE", "CTE", "Itens", "Saídas", "Itens Saídas",
         "NFE Operação Não Realizada", "NFE Operação Desconhecida", 
-        "CTE Desacordo de Serviço", "Devoluções de Clientes", "Itens Devoluções Clientes"
+        "CTE Desacordo de Serviço",
     ];
 
     allSheetNames.forEach(name => {
@@ -107,7 +116,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     });
     log("Preparação inicial concluída.");
 
-    let nfe = processedDfs["NFE"] || [];
+    const nfe = processedDfs["NFE"] || [];
     const cte = processedDfs["CTE"] || [];
     const itens = processedDfs["Itens"] || [];
     const saidas = processedDfs["Saídas"] || [];
@@ -115,11 +124,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const naoRealizada = processedDfs["NFE Operação Não Realizada"] || [];
     const desconhecida = processedDfs["NFE Operação Desconhecida"] || [];
     const desacordo = processedDfs["CTE Desacordo de Serviço"] || [];
-    const devolucoesDeClientes = processedDfs["Devoluções de Clientes"] || [];
-
-    // Combine devoluções de clientes com as notas de entrada para um tratamento unificado inicial
-    nfe = [...nfe, ...devolucoesDeClientes];
-
+    
     log("Coletando chaves de exceção (canceladas, manifesto, eventos)...");
     const chavesExcecao = new Set<string>(eventCanceledKeys);
     log(`- ${eventCanceledKeys.size} chaves de cancelamento por evento adicionadas.`);
@@ -186,11 +191,14 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     log(`- ${itensAcimaDe1200.length} itens com valor unitário acima de R$ 1.200 (não remessa) encontrados para análise de imobilizado.`);
 
     const imobilizados = itensAcimaDe1200.map((item) => {
+        // A chave única para CLASSIFICAÇÃO persistente é baseada no fornecedor e no produto
         const uniqueItemId = `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
+        // O id único para a LINHA DA TABELA é para gerir o estado de UI (código do ativo)
+        const id = `${cleanAndToStr(item['Chave Unica'])}-${item['Item']}`;
         return { 
             ...item, 
-            id: `${cleanAndToStr(item['Chave Unica'])}-${item['Item']}`, 
-            uniqueItemId: uniqueItemId 
+            id: id,
+            uniqueItemId: uniqueItemId,
         };
     });
 
@@ -236,13 +244,11 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         "Notas Válidas": notasValidas,
         "CTEs Válidos": ctesValidos,
         "Itens Válidos": itensValidos, 
-        "Itens Acima de 1200": itensAcimaDe1200,
         "Chaves Válidas": chavesValidas,
         "Saídas": saidasValidas, 
         "Itens Válidos Saídas": itensValidosSaidas,
         "Imobilizados": imobilizados,
         "Notas Canceladas": notasCanceladas,
-        "Devoluções de Clientes": devolucoesDeClientes, // Keeping this for display
         ...originalDfs 
     };
     
@@ -268,14 +274,14 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     
     const finalSheetSet: DataFrames = {};
     const displayOrder = [
-        "Notas Válidas", "CTEs Válidos", "Itens Válidos", "Itens Acima de 1200", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
-        "Imobilizados", "Notas Canceladas", "Devoluções de Clientes", ...Object.keys(originalDfs)
+        "Notas Válidas", "CTEs Válidos", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
+        "Imobilizados", "Notas Canceladas", ...Object.keys(originalDfs)
     ];
 
     displayOrder.forEach(name => {
         let sheetData = finalResult[name];
         if (sheetData && sheetData.length > 0) {
-            if (["Itens Válidos", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados", "Itens Acima de 1200", "Devoluções de Clientes"].includes(name)) {
+            if (["Itens Válidos", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados"].includes(name)) {
                  sheetData = sheetData.map(addCfopDescriptionToRow);
             }
             finalSheetSet[name] = sheetData;
