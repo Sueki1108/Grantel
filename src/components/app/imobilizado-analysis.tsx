@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { cleanAndToStr } from '@/lib/utils';
 import { RowSelectionState } from '@tanstack/react-table';
+import { Checkbox } from '../ui/checkbox';
 
 
 // Tipos
@@ -212,6 +213,27 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             }
         );
         
+        columns.unshift({
+            id: 'select',
+            header: ({ table }) => (
+                <Checkbox
+                    checked={table.getIsAllPageRowsSelected()}
+                    onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                    aria-label="Selecionar todas"
+                />
+            ),
+            cell: ({ row }) => (
+                <Checkbox
+                    checked={row.getIsSelected()}
+                    onCheckedChange={(value) => row.toggleSelected(!!value)}
+                    aria-label="Selecionar linha"
+                    onClick={(e) => e.stopPropagation()}
+                />
+            ),
+            enableSorting: false,
+            enableHiding: false,
+        });
+
         if (classification === 'imobilizado') {
             columns.push({
                 id: 'accountCode',

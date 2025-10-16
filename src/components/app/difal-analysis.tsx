@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, type ChangeEvent } from 'react';
@@ -6,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns } from "@/lib/columns-helper";
+import { getColumnsWithCustomRender } from "@/lib/columns-helper";
 import { FileUp, FileDown, Loader2, Download, AlertTriangle, Cpu, TicketPercent } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import JSZip from 'jszip';
@@ -176,6 +177,25 @@ export function DifalAnalysis() {
         toast({ title: "Download Iniciado" });
     };
 
+    const currencyFormatter = new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+    });
+
+    const columns = (isIgnored: boolean = false) => getColumnsWithCustomRender(
+        (isIgnored ? results?.ignored : results?.valid) || [],
+        isIgnored 
+            ? ['Chave de Acesso', 'Valor da Nota', 'Motivo da Rejeição']
+            : ['Chave de Acesso', 'Valor Total da Nota', 'Valor da Guia (10%)'],
+        (row, id) => {
+            const value = row.original[id as keyof typeof row.original];
+            if (typeof value === 'number') {
+                return <div className="text-right">{currencyFormatter.format(value)}</div>;
+            }
+            return <div>{String(value)}</div>;
+        }
+    );
+
     return (
         <div className="space-y-6">
             <Card>
@@ -227,13 +247,13 @@ export function DifalAnalysis() {
                                 <Button onClick={() => handleDownloadExcel(results.valid, "Notas_Validas_DIFAL")} size="sm" className="mb-4" disabled={results.valid.length === 0}>
                                     <Download className="mr-2 h-4 w-4" /> Baixar Lista de Válidas
                                 </Button>
-                                <DataTable columns={getColumns(results.valid)} data={results.valid} />
+                                <DataTable columns={columns(false)} data={results.valid} />
                             </TabsContent>
                             <TabsContent value="ignored" className="mt-4">
                                  <Button onClick={() => handleDownloadExcel(results.ignored, "Notas_Ignoradas_DIFAL")} size="sm" className="mb-4" disabled={results.ignored.length === 0}>
                                     <Download className="mr-2 h-4 w-4" /> Baixar Lista de Ignoradas
                                 </Button>
-                                <DataTable columns={getColumns(results.ignored)} data={results.ignored} />
+                                <DataTable columns={columns(true)} data={results.ignored} />
                             </TabsContent>
                         </Tabs>
                     </CardContent>
