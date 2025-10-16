@@ -127,7 +127,7 @@ export function AdditionalAnalyses({
     
     const { reconciliationResults, error: reconciliationError } = useReconciliation(
         processedData.siengeSheetData, 
-        processedData.sheets['Itens Válidos']
+        processedData.sheets['Itens Válidos'] // Itens Válidos são apenas de Entradas
     );
 
     const [isExporting, setIsExporting] = useState(false);
@@ -442,7 +442,7 @@ export function AdditionalAnalyses({
             <Tabs defaultValue="sped" className="w-full">
                 <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="sped">Verificação SPED</TabsTrigger>
-                    <TabsTrigger value="reconciliation">Conciliação Itens (XML x Sienge)</TabsTrigger>
+                    <TabsTrigger value="reconciliation">Conciliação Itens (XML vs Sienge)</TabsTrigger>
                     <TabsTrigger value="conferencias">Conferência (Sienge)</TabsTrigger>
                 </TabsList>
 
@@ -466,7 +466,6 @@ export function AdditionalAnalyses({
                         onClearSiengeFile={onClearSiengeFile}
                         reconciliationResults={reconciliationResults}
                         error={reconciliationError}
-                        competence={competence}
                         allPersistedClassifications={allPersistedClassifications}
                         onPersistAllClassifications={onPersistAllClassifications}
                     />
@@ -616,7 +615,6 @@ interface ReconciliationAnalysisProps {
     onClearSiengeFile: () => void;
     reconciliationResults: { reconciled: any[], onlyInSienge: any[], onlyInXml: any[] } | null;
     error: string | null;
-    competence: string | null;
     allPersistedClassifications: AllClassifications,
     onPersistAllClassifications: (allData: AllClassifications) => void,
 }
@@ -627,7 +625,6 @@ function ReconciliationAnalysis({
     onClearSiengeFile, 
     reconciliationResults, 
     error,
-    competence,
     allPersistedClassifications,
     onPersistAllClassifications,
 }: ReconciliationAnalysisProps) {
@@ -807,7 +804,7 @@ function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
 
             const reconciliationPass = (
                 siengeItems: any[],
-                xmlItems: any[],
+                xmlItemsList: any[],
                 getSiengeKey: (item: any) => string | null,
                 getXmlKey: (item: any) => string | null,
                 passName: string
@@ -816,7 +813,7 @@ function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
                 const stillUnmatchedSienge: any[] = [];
                 const xmlMap = new Map<string, any[]>();
 
-                xmlItems.forEach(item => {
+                xmlItemsList.forEach(item => {
                     const key = getXmlKey(item);
                     if (key) {
                         if (!xmlMap.has(key)) xmlMap.set(key, []);
