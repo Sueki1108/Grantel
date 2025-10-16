@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -27,7 +27,8 @@ import { SaidasAnalysis } from "@/components/app/saidas-analysis";
 import { NfseAnalysis } from "@/components/app/nfse-analysis";
 import { KeyCheckResult } from "@/components/app/key-checker";
 import { ImobilizadoAnalysis, type AllClassifications } from "@/components/app/imobilizado-analysis";
-import { HistoryAnalysis, type SessionData, type XmlFileContent } from "@/components/app/history-analysis";
+import { HistoryAnalysis, type SessionData } from "@/components/app/history-analysis";
+import { DifalAnalysis } from "@/components/app/difal-analysis";
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -101,50 +102,45 @@ export function AutomatorClientPage() {
         }
     };
     
-    const handleExportSession = async () => {
+    const handleExportSession = () => {
         const currentCompetence = competence;
         if (!currentCompetence || !processedData) {
             toast({ variant: 'destructive', title: 'Dados insuficientes', description: 'Processe os dados e selecione uma competência antes de exportar.' });
             return;
         }
-
-        const readFileAsBase64 = (file: File): Promise<string> => {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = () => resolve(String(reader.result).split(',')[1]);
-                reader.onerror = error => reject(error);
-            });
+    
+        const optimizedSheets: ProcessedData['sheets'] = {};
+        for (const sheetName in processedData.sheets) {
+            if (!sheetName.startsWith('Original - ')) {
+                optimizedSheets[sheetName] = processedData.sheets[sheetName];
+            }
         }
-
-        const createXmlFileContents = async (files: File[]): Promise<XmlFileContent[]> => {
-            const promises = files.map(async file => ({
-                name: file.name,
-                content: await readFileAsBase64(file),
-            }));
-            return Promise.all(promises);
-        }
-
-        toast({ title: "A preparar a exportação...", description: "A ler o conteúdo dos ficheiros. Por favor aguarde." });
+    
+        const optimizedProcessedData = {
+            ...processedData,
+            sheets: optimizedSheets
+        };
+    
+        const sessionData: SessionData = {
+            competence: currentCompetence,
+            processedAt: new Date().toISOString(),
+            processedData: optimizedProcessedData,
+            fileNames: {
+                nfeEntrada: xmlFiles.nfeEntrada.map(f => f.name),
+                cte: xmlFiles.cte.map(f => f.name),
+                nfeSaida: xmlFiles.nfeSaida.map(f => f.name),
+                nfse: xmlFiles.nfse.map(f => f.name),
+                manifesto: Object.keys(fileStatus),
+                sienge: siengeFile ? siengeFile.name : null,
+                sped: spedFiles.map(f => f.name),
+            },
+            lastSaidaNumber,
+            disregardedNfseNotes: Array.from(disregardedNfseNotes),
+            saidasStatus,
+        };
     
         try {
-            const sessionData: SessionData = {
-                version: '2.0',
-                competence: currentCompetence,
-                processedAt: new Date().toISOString(),
-                processedData: processedData,
-                xmlFileContents: {
-                    nfeEntrada: await createXmlFileContents(xmlFiles.nfeEntrada),
-                    cte: await createXmlFileContents(xmlFiles.cte),
-                    nfeSaida: await createXmlFileContents(xmlFiles.nfeSaida),
-                    nfse: await createXmlFileContents(xmlFiles.nfse),
-                },
-                lastSaidaNumber,
-                disregardedNfseNotes: Array.from(disregardedNfseNotes),
-                saidasStatus,
-            };
-    
-            const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(sessionData))}`;
+            const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(sessionData, null, 2))}`;
             const link = document.createElement("a");
             link.href = jsonString;
 
@@ -157,59 +153,34 @@ export function AutomatorClientPage() {
             toast({ title: "Sessão Exportada", description: `O ficheiro ${link.download} está a ser descarregado.` });
         } catch (e: any) {
             console.error("Failed to export session:", e);
-            toast({ variant: 'destructive', title: 'Erro ao Exportar Sessão', description: e.message });
+             if (e.message.includes('localStorage')) {
+                toast({ variant: 'destructive', title: 'Erro ao Exportar Sessão', description: "Falha ao guardar sessão: os dados processados podem ser demasiado grandes para o armazenamento local. Tente com um período menor." });
+            } else {
+                toast({ variant: 'destructive', title: 'Erro ao Exportar Sessão', description: e.message });
+            }
         }
     };
     
     const handleRestoreSession = (session: SessionData) => {
         handleClearAllData();
         
-        try {
-            setProcessedData(session.processedData);
-            setLastSaidaNumber(session.lastSaidaNumber || 0);
-            setSaidasStatus(session.saidasStatus || {});
-            setDisregardedNfseNotes(new Set(session.disregardedNfseNotes || []));
+        setProcessedData(session.processedData);
+        setLastSaidaNumber(session.lastSaidaNumber || 0);
+        setSaidasStatus(session.saidasStatus || {});
+        setDisregardedNfseNotes(new Set(session.disregardedNfseNotes || []));
 
-            // Recreate File objects from base64 content
-            const recreateFiles = (contents: XmlFileContent[]): File[] => {
-                return contents.map(c => {
-                    const byteString = atob(c.content);
-                    const ab = new ArrayBuffer(byteString.length);
-                    const ia = new Uint8Array(ab);
-                    for (let i = 0; i < byteString.length; i++) {
-                        ia[i] = byteString.charCodeAt(i);
-                    }
-                    return new File([ab], c.name, { type: 'application/xml' });
-                });
-            }
+        const periods = session.competence.split('_');
+        const restoredPeriods: Record<string, boolean> = {};
+        periods.forEach(p => { restoredPeriods[p] = true });
+        setSelectedPeriods(restoredPeriods);
+        setAvailablePeriods(periods);
+        
+        toast({
+            title: "Sessão Restaurada com Sucesso",
+            description: `A análise completa para a competência ${session.competence} foi carregada.`,
+        });
 
-            if (session.xmlFileContents) {
-                setXmlFiles({
-                    nfeEntrada: recreateFiles(session.xmlFileContents.nfeEntrada || []),
-                    cte: recreateFiles(session.xmlFileContents.cte || []),
-                    nfeSaida: recreateFiles(session.xmlFileContents.nfeSaida || []),
-                    nfse: recreateFiles(session.xmlFileContents.nfse || []),
-                });
-            }
-
-            const periods = session.competence.split('_');
-            const restoredPeriods: Record<string, boolean> = {};
-            periods.forEach(p => { restoredPeriods[p] = true });
-            setSelectedPeriods(restoredPeriods);
-            setAvailablePeriods(periods);
-            
-            toast({
-                title: "Sessão Restaurada com Sucesso",
-                description: `A análise completa para a competência ${session.competence} foi carregada.`,
-            });
-
-            setActiveMainTab("nf-stock");
-
-        } catch (e: any) {
-            console.error("Failed to restore session:", e);
-            toast({ variant: 'destructive', title: "Erro ao Restaurar Sessão", description: "O formato do ficheiro de backup pode ser inválido ou corrompido." });
-            handleClearAllData(); // Clear partial data
-        }
+        setActiveMainTab("nf-stock");
     };
 
     // =================================================================
@@ -364,12 +335,14 @@ export function AutomatorClientPage() {
         const displayOrder = [
             "Notas Válidas", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
             "Imobilizados",
+            "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes", "Remessas e Retornos",
             "Notas Canceladas",
             ...Object.keys(processedData.sheets).filter(name => name.startsWith("Original - "))
         ];
 
         const sheetNameMap: { [key: string]: string } = {
-            "Notas Válidas": "Notas Validas", "Itens Válidos": "Itens Validos",
+            "Notas Válidas": "Notas Validas",
+            "Itens Válidos": "Itens Validos",
             "Chaves Válidas": "Chaves Validas",
             "Notas Canceladas": "Notas Canceladas",
             "NFE Operação Não Realizada": "NFE Op Nao Realizada",
@@ -383,6 +356,9 @@ export function AutomatorClientPage() {
             "Original - CTE": "CTE",
             "Original - Itens": "Itens Entradas",
             "Original - Itens Saídas": "Itens Saídas Originais",
+            "Devoluções de Compra (Fornecedor)": "Dev Compra Fornecedor",
+            "Devoluções de Clientes": "Dev Clientes",
+            "Remessas e Retornos": "Remessas Retornos",
         };
 
         displayOrder.forEach(sheetName => {
@@ -422,7 +398,7 @@ export function AutomatorClientPage() {
             const allXmlsToScan = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
 
             if (allXmlsToScan.length > 0) {
-                const { nfe, cte, saidas } = await processUploadedXmls(allXmlsToScan);
+                const { nfe, cte, saidas } = await processUploadedXmls(allXmlsToScan, () => {});
                 [...nfe, ...cte, ...saidas].forEach(doc => {
                     if (doc['Emissão'] && typeof doc['Emissão'] === 'string' && doc['Emissão'].length >= 7) {
                         periods.add(doc['Emissão'].substring(0, 7)); // YYYY-MM
@@ -611,7 +587,7 @@ export function AutomatorClientPage() {
     const isClearButtonVisible = Object.keys(files).length > 0 || xmlFiles.nfeEntrada.length > 0 || xmlFiles.cte.length > 0 || xmlFiles.nfeSaida.length > 0 || xmlFiles.nfse.length > 0 || !!processedData || logs.length > 0 || error !== null;
 
     const saidasNfeTabDisabled = !processedData?.sheets['Saídas'] || processedData.sheets['Saídas'].length === 0;
-    const nfseTabDisabled = xmlFiles.nfse.length === 0 && (!processedData || !session.xmlFileContents?.nfse || session.xmlFileContents.nfse.length === 0);
+    const nfseTabDisabled = xmlFiles.nfse.length === 0 && (!processedData || !processedData.fileNames?.nfse || processedData.fileNames.nfse.length === 0);
     const analysisTabDisabled = !processedData?.sheets['Chaves Válidas'] || processedData.sheets['Chaves Válidas'].length === 0;
     const imobilizadoTabDisabled = !processedData?.sheets['Imobilizados'] || processedData.sheets['Imobilizados'].length === 0;
     
@@ -639,7 +615,7 @@ export function AutomatorClientPage() {
             <main className="p-4 md:p-8">
                 <div className="space-y-8">
                     <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
-                        <TabsList className="grid w-full grid-cols-1 md:grid-cols-6">
+                        <TabsList className="grid w-full grid-cols-1 md:grid-cols-7">
                              <TabsTrigger value="history" className="flex items-center gap-2">
                                 <History className="h-5 w-5" /> Histórico
                             </TabsTrigger>
@@ -661,6 +637,9 @@ export function AutomatorClientPage() {
                                 4. Imobilizado
                                 {processedData?.sheets['Imobilizados'] && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
+                             <TabsTrigger value="difal" className="flex items-center gap-2">
+                                <TicketPercent className="h-5 w-5" /> Guia DIFAL
+                            </TabsTrigger>
                             <TabsTrigger value="analyses" disabled={analysisTabDisabled} className="flex items-center gap-2">
                                 5. Análises Avançadas
                                 {processedData?.keyCheckResults && <CheckCircle className="h-5 w-5 text-green-600" />}
@@ -668,11 +647,11 @@ export function AutomatorClientPage() {
                         </TabsList>
 
                         <div className="mt-6">
-                            <div style={{ display: activeMainTab === 'history' ? 'block' : 'none' }}>
+                            <TabsContent value="history">
                                 <HistoryAnalysis onRestoreSession={handleRestoreSession} />
-                            </div>
+                            </TabsContent>
 
-                            <div style={{ display: activeMainTab === 'nf-stock' ? 'block' : 'none' }}>
+                            <TabsContent value="nf-stock">
                                  <Card className="shadow-lg">
                                     <CardHeader>
                                         <div className="flex items-center gap-3">
@@ -714,23 +693,27 @@ export function AutomatorClientPage() {
                                 {error && <Alert variant="destructive" className="mt-8"><div className="flex justify-between items-start"><div className="flex"><AlertCircle className="h-4 w-4" /><div className="ml-3"><AlertTitle>Erro</AlertTitle><AlertDescription>{error}</AlertDescription></div></div><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(error)}><Copy className="h-4 w-4" /></Button></div></Alert>}
                                 {(logs.length > 0) && <Card className="shadow-lg mt-8"><CardHeader><div className="flex items-center gap-3"><Terminal className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Análise de Processamento</CardTitle><CardDescription>Logs detalhados da execução.</CardDescription></div></div></CardHeader><CardContent><LogDisplay logs={logs} /></CardContent></Card>}
                                 {processedData?.sheets && Object.keys(processedData.sheets).length > 0 && <Card className="shadow-lg mt-8"><CardHeader><div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><CheckCircle className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Resultados da Validação</CardTitle><CardDescription>Visualize os dados processados. Os dados necessários para as próximas etapas estão prontos.</CardDescription></div></div><div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto"><Button onClick={handleDownloadExcel} className="w-full">Baixar Planilha (.xlsx)</Button></div></div></CardHeader><CardContent><ResultsDisplay results={processedData.sheets} /></CardContent></Card>}
-                            </div>
+                            </TabsContent>
                             
-                            <div style={{ display: activeMainTab === 'saidas-nfe' ? 'block' : 'none' }}>
+                            <TabsContent value="saidas-nfe">
                                 {processedData && processedData.sheets['Saídas'] && !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} initialStatus={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>}
-                            </div>
+                            </TabsContent>
                             
-                            <div style={{ display: activeMainTab === 'nfse' ? 'block' : 'none' }}>
+                            <TabsContent value="nfse">
                                 {!nfseTabDisabled ? <NfseAnalysis nfseFiles={xmlFiles.nfse} disregardedNotes={disregardedNfseNotes} onDisregardedNotesChange={setDisregardedNfseNotes} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FilePieChart className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando ficheiros</h3><p>Carregue os XMLs de NFS-e na primeira aba para habilitar esta análise.</p></CardContent></Card>}
-                            </div>
+                            </TabsContent>
                             
-                            <div style={{ display: activeMainTab === 'imobilizado' ? 'block' : 'none' }}>
+                             <TabsContent value="imobilizado">
                                 {!imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} onPersistData={handlePersistImobilizado} allPersistedData={imobilizadoClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card>}
-                            </div>
+                            </TabsContent>
                             
-                            <div style={{ display: activeMainTab === 'analyses' ? 'block' : 'none' }}>
+                            <TabsContent value="difal">
+                                <DifalAnalysis />
+                            </TabsContent>
+                            
+                            <TabsContent value="analyses">
                                 {!analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onSiengeDataProcessed={handleSiengeDataProcessed} siengeFile={siengeFile} onSiengeFileChange={setSiengeFile} onClearSiengeFile={() => { setSiengeFile(null); handleSiengeDataProcessed(null); const input = document.querySelector('input[name="Itens do Sienge"]') as HTMLInputElement; if (input) input.value = ''; }} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>}
-                            </div>
+                            </TabsContent>
                         </div>
 
                     </Tabs>
