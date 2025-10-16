@@ -9,22 +9,27 @@ import type { ProcessedData } from '@/lib/excel-processor';
 
 
 // Tipos
+export interface XmlFileContent {
+    name: string;
+    content: string; // base64
+}
+
 export interface SessionData {
+    version: '2.0';
     competence: string;
     processedAt: string;
-    processedData: ProcessedData; 
+    processedData: ProcessedData;
     lastSaidaNumber: number;
     disregardedNfseNotes: string[]; 
     saidasStatus: Record<number, 'emitida' | 'cancelada' | 'inutilizada'>;
-    fileNames: {
-        nfeEntrada: string[];
-        cte: string[];
-        nfeSaida: string[];
-        nfse: string[];
-        manifesto: string[];
-        sienge: string | null;
-        sped: string[];
+    xmlFileContents: {
+        nfeEntrada: XmlFileContent[];
+        cte: XmlFileContent[];
+        nfeSaida: XmlFileContent[];
+        nfse: XmlFileContent[];
     };
+    // Deprecated in v2.0
+    fileNames?: any; 
 }
 
 interface HistoryAnalysisProps {
@@ -56,8 +61,8 @@ export function HistoryAnalysis({ onRestoreSession }: HistoryAnalysisProps) {
             const content = await file.text();
             const sessionData: SessionData = JSON.parse(content);
             
-            if (!sessionData.competence || !sessionData.processedAt || !sessionData.processedData) {
-                throw new Error("O ficheiro JSON não parece ser uma sessão válida.");
+            if (!sessionData.competence || !sessionData.processedAt || !sessionData.processedData || !(sessionData.version === '2.0')) {
+                throw new Error("O ficheiro JSON não parece ser uma sessão válida ou está numa versão antiga.");
             }
 
             onRestoreSession(sessionData);
