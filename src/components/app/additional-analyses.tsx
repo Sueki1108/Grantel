@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, type ChangeEvent, useCallback } from "react";
@@ -46,7 +47,7 @@ const readFileAsJson = (file: File): Promise<any[]> => {
                 const worksheet = workbook.Sheets[sheetName];
                 const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
                 resolve(jsonData);
-            } catch (err: any) => {
+            } catch (err: any) {
                 reject(err);
             }
         };
@@ -120,7 +121,7 @@ export function AdditionalAnalyses({
                 const data = await readFileAsJson(siengeFile);
                 onSiengeDataProcessed(data);
                 toast({ title: 'Análise Sienge Concluída', description: 'Os dados foram processados e as abas de conferência foram atualizadas.' });
-            } catch (error: any) => {
+            } catch (error: any) {
                 toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: error.message });
                 onSiengeDataProcessed(null);
             }
@@ -902,3 +903,4 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
          </Card>
     );
 }
+
