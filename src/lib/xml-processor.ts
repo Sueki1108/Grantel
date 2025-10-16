@@ -2,7 +2,6 @@
 
 // Types
 type LogFunction = (message: string) => void;
-type XmlDataType = "entrada" | "saida" | "cte" | "desconhecido";
 
 export interface XmlData {
     nfe: any[];
@@ -12,6 +11,16 @@ export interface XmlData {
     itensSaidas: any[];
     canceledKeys: Set<string>;
 }
+
+const EMPTY_XML_DATA: XmlData = {
+    nfe: [],
+    cte: [],
+    itens: [],
+    saidas: [],
+    itensSaidas: [],
+    canceledKeys: new Set(),
+};
+
 
 // =================================================================
 // XML PARSING HELPERS
@@ -311,7 +320,7 @@ export const processNfseForPeriodDetection = async (files: File[]): Promise<stri
 // MAIN PROCESSING FUNCTION
 // =================================================================
 
-export const processUploadedXmls = async (files: File[], log: LogFunction, uploadType: XmlDataType): Promise<XmlData> => {
+export const processUploadedXmls = async (files: File[], log: LogFunction): Promise<XmlData> => {
     const combinedData: XmlData = {
         nfe: [], cte: [], itens: [], saidas: [], itensSaidas: [], canceledKeys: new Set()
     };
@@ -320,7 +329,7 @@ export const processUploadedXmls = async (files: File[], log: LogFunction, uploa
         return combinedData;
     }
 
-    log(`Processando ${files.length} ficheiros XML como '${uploadType}'.`);
+    log(`Processando ${files.length} ficheiros XML.`);
     const parser = new DOMParser();
 
     for (const file of files) {
@@ -334,30 +343,12 @@ export const processUploadedXmls = async (files: File[], log: LogFunction, uploa
                 continue;
             }
 
-            let parsedResult: Partial<XmlData> | null = {};
+            let parsedResult: Partial<XmlData> | null = null;
             
             if (xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'procEventoNFe').length > 0 || xmlDoc.getElementsByTagName('procEventoCTe').length > 0) {
                 parsedResult = parseCancelEvent(xmlDoc, log);
             } else if (xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'nfeProc').length > 0) {
-                 if (uploadType === 'desconhecido') {
-                    // Se o tipo for desconhecido, usa a lógica interna do parseNFe para decidir
-                    parsedResult = parseNFe(xmlDoc, log);
-                } else {
-                    const tempResult = parseNFe(xmlDoc, log);
-                    if (tempResult) {
-                         // Força a categoria com base no local do upload, se diferente da detecção automática
-                        const isSaidaAuto = cleanAndToStr(tempResult.nfe?.[0]?.emitCNPJ || tempResult.saidas?.[0]?.emitCNPJ) === GRANTEL_CNPJ;
-                        const isSaidaUpload = uploadType === 'saida';
-
-                        if (isSaidaUpload && !isSaidaAuto) {
-                             parsedResult = { saidas: tempResult.nfe, itensSaidas: tempResult.itens, nfe: [], itens: [] };
-                        } else if (!isSaidaUpload && isSaidaAuto) {
-                            parsedResult = { nfe: tempResult.saidas, itens: tempResult.itensSaidas, saidas: [], itensSaidas: [] };
-                        } else {
-                            parsedResult = tempResult;
-                        }
-                    }
-                }
+                parsedResult = parseNFe(xmlDoc, log);
             } else if (xmlDoc.getElementsByTagName('cteProc').length > 0) {
                 parsedResult = parseCTe(xmlDoc, log);
             } else {
@@ -365,12 +356,13 @@ export const processUploadedXmls = async (files: File[], log: LogFunction, uploa
             }
             
             if(parsedResult) {
-                if(parsedResult.nfe) combinedData.nfe.push(...parsedResult.nfe);
-                if(parsedResult.cte) combinedData.cte.push(...parsedResult.cte);
-                if(parsedResult.itens) combinedData.itens.push(...parsedResult.itens);
-                if(parsedResult.saidas) combinedData.saidas.push(...parsedResult.saidas);
-                if(parsedResult.itensSaidas) combinedData.itensSaidas.push(...parsedResult.itensSaidas);
-                if(parsedResult.canceledKeys) {
+                // Merge results into combinedData
+                combinedData.nfe.push(...(parsedResult.nfe || []));
+                combinedData.cte.push(...(parsedResult.cte || []));
+                combinedData.itens.push(...(parsedResult.itens || []));
+                combinedData.saidas.push(...(parsedResult.saidas || []));
+                combinedData.itensSaidas.push(...(parsedResult.itensSaidas || []));
+                if (parsedResult.canceledKeys) {
                     parsedResult.canceledKeys.forEach(key => combinedData.canceledKeys.add(key));
                 }
             }
