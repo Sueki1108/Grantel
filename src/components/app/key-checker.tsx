@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -560,7 +561,7 @@ export function KeyChecker({
                 // CT-e (D100)
                 } else if (reg === 'D100' && parts.length > 11 && parts[10]?.length === 44) {
                     key = parts[10];
-                     docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
+                     docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[17] };
                 }
 
                 if (key && docData) {
@@ -636,12 +637,8 @@ export function KeyChecker({
 
             // Value Check
             const xmlValue = nota.Total || (nota.type === 'CTE' ? nota['Valor da Prestação'] : 0) || 0;
-            let spedValue = 0;
-            if (docType === 'CTE') {
-                 spedValue = parseFloat(String(spedDoc.vlDoc || '0').replace(',', '.'));
-            } else { //NFE
-                 spedValue = parseFloat(String(spedDoc.vlDoc || '0').replace(',', '.'));
-            }
+            let spedValue = parseFloat(String(spedDoc.vlDoc || '0').replace(',', '.'));
+            
             baseDivergence['Valor XML'] = xmlValue;
             baseDivergence['Valor SPED'] = spedValue;
             if (Math.abs(xmlValue - spedValue) > 0.01) {
@@ -1104,3 +1101,5 @@ export function KeyChecker({
         </div>
     );
 }
+
+    
