@@ -36,9 +36,10 @@ interface KeyItemProps {
 const KeyItem = ({ keyInfo, isDuplicate }: KeyItemProps) => {
     const { toast } = useToast();
 
-    const copyToClipboard = (text: string, type: string) => {
-        navigator.clipboard.writeText(text).then(() => {
-            toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: text });
+    const copyToClipboard = (text: string | number, type: string) => {
+        const textToCopy = String(text);
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: textToCopy });
         }).catch(() => {
             toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
         });
@@ -58,43 +59,54 @@ const KeyItem = ({ keyInfo, isDuplicate }: KeyItemProps) => {
         }
     }, [keyInfo.Emissão]);
 
+    const rawValue = keyInfo.Total || 0;
     const formattedValue = useMemo(() => {
         if (typeof keyInfo.Total !== 'number') return 'N/A';
         return keyInfo.Total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }, [keyInfo.Total]);
     
     return (
-        <div className={`p-3 rounded-lg border flex flex-col gap-3 transition-colors bg-secondary/50`}>
-            <div className="font-mono text-sm break-all">
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="text-muted-foreground">Chave:</span>
-                    <span>{keyInfo.key}</span>
-                </div>
-                 {isDuplicate && (
-                    <div className="flex items-center gap-1 text-xs text-amber-700 font-semibold">
-                        <AlertTriangle className="h-3 w-3" />
-                        <span>Possível duplicidade</span>
-                    </div>
-                )}
+        <div className={`p-4 rounded-lg border flex flex-col gap-3 transition-colors bg-secondary/50`}>
+            <div className="font-mono text-sm break-all flex items-center gap-2">
+                 <span className="text-muted-foreground">Chave:</span>
+                 <span>{keyInfo.key}</span>
+                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => copyToClipboard(keyInfo.key, 'Chave')}>
+                    <Copy className="h-4 w-4" />
+                </Button>
             </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm flex-grow">
-                     <div className="text-muted-foreground">Fornecedor: {keyInfo.Fornecedor || 'N/A'}</div>
-                    <div className="text-muted-foreground">Emissão: {formattedDate}</div>
-                    <div className="text-muted-foreground">Valor: {formattedValue}</div>
+             {isDuplicate && (
+                <div className="flex items-center gap-1 text-xs text-amber-700 font-semibold">
+                    <AlertTriangle className="h-3 w-3" />
+                    <span>Possível duplicidade</span>
                 </div>
-                 <div className="flex items-center gap-2">
-                    <div className="text-sm font-mono flex items-center gap-2 bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">
-                        <span className="text-foreground">NF: {invoiceNumber}</span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(invoiceNumber, 'Número da NF')}>
-                            <Copy className="h-4 w-4" />
-                        </Button>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-sm">
+                <div className="flex flex-col">
+                    <span className="font-semibold">Fornecedor</span>
+                    <span className="text-muted-foreground truncate" title={keyInfo.Fornecedor}>{keyInfo.Fornecedor || 'N/A'}</span>
+                </div>
+                 <div className="flex flex-col">
+                    <span className="font-semibold">Nº da Nota</span>
+                    <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">{invoiceNumber}</span>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(invoiceNumber, 'Número da NF')}><Copy className="h-3 w-3" /></Button>
                     </div>
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => copyToClipboard(keyInfo.key, 'Chave')}>
-                        <Copy className="h-4 w-4" />
-                    </Button>
-                 </div>
+                </div>
+                <div className="flex flex-col">
+                    <span className="font-semibold">Emissão</span>
+                     <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">{formattedDate}</span>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(formattedDate, 'Data')}><Copy className="h-3 w-3" /></Button>
+                    </div>
+                </div>
+                <div className="flex flex-col">
+                    <span className="font-semibold">Valor</span>
+                    <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">{formattedValue}</span>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(rawValue, 'Valor')}><Copy className="h-3 w-3" /></Button>
+                    </div>
+                </div>
             </div>
         </div>
     );
