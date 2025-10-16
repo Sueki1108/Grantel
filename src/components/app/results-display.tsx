@@ -13,9 +13,9 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
     const [activeTab, setActiveTab] = useState('');
 
     const orderedSheetNames = [
-        "Notas Válidas", "CTEs Válidos", "Itens Válidos", "Itens Acima de 1200", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
+        "Notas Válidas", "CTEs Válidos", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
         "Imobilizados",
-        "Devoluções de Clientes", "Notas Canceladas",
+        "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes", "Notas Canceladas",
         ...Object.keys(results).filter(name => name.startsWith("Original - "))
     ];
     

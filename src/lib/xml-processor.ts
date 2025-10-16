@@ -76,6 +76,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction, uploadType: XmlDataType
         'Emissão': getTagValue(ide, 'dhEmi').substring(0, 10),
         'Total': parseFloat(getTagValue(total, 'vNF')) || 0,
         'Status': infProt && getTagValue(infProt, 'cStat') === '100' ? 'Autorizadas' : 'Canceladas',
+        'finNFe': getTagValue(ide, 'finNFe'), // Adicionando finNFe
     };
 
     if (isSaida) {
@@ -300,7 +301,7 @@ export const processUploadedXmls = async (files: File[], log: LogFunction, uploa
                 continue;
             }
 
-            let parsedResult: Partial<XmlData> | null = null;
+            let parsedResult: Partial<XmlData> | null = {};
             
             if (xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'procEventoNFe').length > 0 || xmlDoc.getElementsByTagName('procEventoCTe').length > 0) {
                 parsedResult = parseCancelEvent(xmlDoc, log);

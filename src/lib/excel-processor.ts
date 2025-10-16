@@ -1,4 +1,3 @@
-
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import { KeyCheckResult } from '@/components/app/key-checker';
@@ -125,6 +124,16 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const desconhecida = processedDfs["NFE Operação Desconhecida"] || [];
     const desacordo = processedDfs["CTE Desacordo de Serviço"] || [];
     
+    log("Identificando devoluções (finNFe=4) e separando notas de compra...");
+    const chavesDevolucaoFornecedor = new Set<string>();
+    nfe.forEach(nota => {
+        if (nota.finNFe === '4') {
+            chavesDevolucaoFornecedor.add(cleanAndToStr(nota['Chave de acesso']));
+        }
+    });
+    log(`- ${chavesDevolucaoFornecedor.size} notas de devolução de fornecedor (finNFe=4) identificadas.`);
+
+
     log("Coletando chaves de exceção (canceladas, manifesto, eventos)...");
     const chavesExcecao = new Set<string>(eventCanceledKeys);
     log(`- ${eventCanceledKeys.size} chaves de cancelamento por evento adicionadas.`);
@@ -157,14 +166,15 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const isChaveValida = (row: any) => {
         if(!row) return false;
         const chaveAcesso = cleanAndToStr(row['Chave de acesso']);
-        return chaveAcesso && !chavesExcecao.has(chaveAcesso);
+        // Uma chave é válida se NÃO for uma exceção E NÃO for uma devolução de fornecedor.
+        return chaveAcesso && !chavesExcecao.has(chaveAcesso) && !chavesDevolucaoFornecedor.has(chaveAcesso);
     }
     
     const nfeFiltrada = nfe.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
     const cteFiltrado = cte.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
     
     let notasValidas = nfeFiltrada.filter(isChaveValida);
-    let ctesValidos = cteFiltrado.filter(isChaveValida);
+    let ctesValidos = cteFiltrado.filter(isChaveValida); // CTes não têm finNFe=4
     let saidasValidas = saidas.filter(isChaveValida);
     
     log(`- Total de ${notasValidas.length} NF-es válidas.`);
@@ -208,6 +218,19 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         const isCancelledByStatus = typeof statusVal === 'string' && statusVal.toLowerCase().includes('cancelada');
         return isCancelledByStatus || chavesExcecao.has(chaveAcesso);
     });
+
+    const devolucoesDeCompra = nfe.filter(row => chavesDevolucaoFornecedor.has(cleanAndToStr(row['Chave de acesso'])));
+    
+    const devolucoesDeClientes = saidas.filter(row => {
+        if (!row || !row['Chave Unica']) return false;
+        const itensDestaNota = itensSaidas.filter(i => cleanAndToStr(i['Chave Unica']) === cleanAndToStr(row['Chave Unica']));
+        return itensDestaNota.some(item => {
+            if (!item || !item["CFOP"]) return false;
+            const cfop = cleanAndToStr(item["CFOP"]);
+            return cfop.startsWith('52') || cfop.startsWith('62');
+        });
+    });
+
     
     const chavesValidasEntrada = notasValidas.map(row => ({
         "Chave de acesso": cleanAndToStr(row["Chave de acesso"]),
@@ -246,6 +269,8 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         "Saídas": saidasValidas, 
         "Itens Válidos Saídas": itensValidosSaidas,
         "Imobilizados": imobilizados,
+        "Devoluções de Compra (Fornecedor)": devolucoesDeCompra,
+        "Devoluções de Clientes": devolucoesDeClientes,
         "Notas Canceladas": notasCanceladas,
         ...originalDfs 
     };
@@ -273,13 +298,13 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const finalSheetSet: DataFrames = {};
     const displayOrder = [
         "Notas Válidas", "CTEs Válidos", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
-        "Imobilizados", "Notas Canceladas", ...Object.keys(originalDfs)
+        "Imobilizados", "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes", "Notas Canceladas", ...Object.keys(originalDfs)
     ];
 
     displayOrder.forEach(name => {
         let sheetData = finalResult[name];
         if (sheetData && sheetData.length > 0) {
-            if (["Itens Válidos", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados"].includes(name)) {
+            if (["Itens Válidos", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados", "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes"].includes(name)) {
                  sheetData = sheetData.map(addCfopDescriptionToRow);
             }
             finalSheetSet[name] = sheetData;
