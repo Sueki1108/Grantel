@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { FileUp, FileDown, Loader2, Download, AlertTriangle, Cpu, TicketPercent, Copy } from 'lucide-react';
+import { FileUp, FileDown, Loader2, Download, AlertTriangle, Cpu, TicketPercent, Copy, Check, RotateCcw } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import JSZip from 'jszip';
+import { cn } from '@/lib/utils';
 
 // ===============================================================
 // Types
@@ -67,7 +68,7 @@ const getTagValue = (element: Element | undefined, query: string): string => {
 // ===============================================================
 // Item Component
 // ===============================================================
-const DifalItem = ({ item }: { item: DifalData }) => {
+const DifalItem = ({ item, isChecked, onToggleCheck }: { item: DifalData, isChecked: boolean, onToggleCheck: () => void }) => {
     const { toast } = useToast();
 
     const copyToClipboard = (text: string | number, type: string) => {
@@ -90,12 +91,21 @@ const DifalItem = ({ item }: { item: DifalData }) => {
 
 
     return (
-         <div className="p-4 rounded-lg border flex flex-col gap-3 transition-colors bg-secondary/50">
-            <div className="font-mono text-sm break-all flex items-center gap-2">
-                 <span className="text-muted-foreground">Chave:</span>
-                 <span className='truncate'>{item['Chave de Acesso']}</span>
-                 <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => copyToClipboard(item['Chave de Acesso'], 'Chave')}>
-                    <Copy className="h-4 w-4" />
+         <div className={cn(
+            "p-4 rounded-lg border flex flex-col gap-3 transition-colors",
+            isChecked ? "bg-green-100 dark:bg-green-900/30 border-green-500/50" : "bg-secondary/50"
+         )}>
+            <div className='flex justify-between items-start'>
+                <div className="font-mono text-sm break-all flex items-center gap-2">
+                     <span className="text-muted-foreground">Chave:</span>
+                     <span className='truncate'>{item['Chave de Acesso']}</span>
+                     <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => copyToClipboard(item['Chave de Acesso'], 'Chave')}>
+                        <Copy className="h-4 w-4" />
+                    </Button>
+                </div>
+                <Button size="sm" variant={isChecked ? "default" : "outline"} onClick={onToggleCheck} className="whitespace-nowrap">
+                    {isChecked ? <RotateCcw className="mr-2 h-4 w-4" /> : <Check className="mr-2 h-4 w-4" />}
+                    {isChecked ? "Desmarcar" : "Verificar"}
                 </Button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-sm">
@@ -141,7 +151,20 @@ export function DifalAnalysis() {
     const [pdfFiles, setPdfFiles] = useState<File[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [results, setResults] = useState<{ valid: DifalData[], ignored: IgnoredData[] } | null>(null);
+    const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
     const { toast } = useToast();
+    
+    const handleToggleCheck = (chave: string) => {
+        setCheckedItems(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(chave)) {
+                newSet.delete(chave);
+            } else {
+                newSet.add(chave);
+            }
+            return newSet;
+        });
+    };
 
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const selectedFiles = e.target.files;
@@ -249,8 +272,16 @@ export function DifalAnalysis() {
         }
         
         const dataToExport = data.map(item => {
-            const { ...rest } = item;
-            return rest;
+             if (sheetName === "Notas_Validas_DIFAL") {
+                return {
+                    'Chave de Acesso': item['Chave de Acesso'],
+                    'Número da Nota': item['Número da Nota'],
+                    'Data de Emissão': item['Data de Emissão'],
+                    'Valor Total da Nota': item['Valor Total da Nota'],
+                    'Valor da Guia (10%)': item['Valor da Guia (10%)'],
+                };
+            }
+            return item;
         });
 
         const worksheet = XLSX.utils.json_to_sheet(dataToExport);
@@ -312,7 +343,14 @@ export function DifalAnalysis() {
                                     <Download className="mr-2 h-4 w-4" /> Baixar Lista de Válidas
                                 </Button>
                                 {results.valid.length > 0 ? (
-                                    results.valid.map(item => <DifalItem key={item['Chave de Acesso']} item={item} />)
+                                    results.valid.map(item => 
+                                        <DifalItem 
+                                            key={item['Chave de Acesso']} 
+                                            item={item} 
+                                            isChecked={checkedItems.has(item['Chave de Acesso'])}
+                                            onToggleCheck={() => handleToggleCheck(item['Chave de Acesso'])}
+                                        />
+                                    )
                                 ) : (
                                     <p className="text-center text-muted-foreground py-4">Nenhuma nota válida encontrada.</p>
                                 )}
@@ -367,5 +405,3 @@ export function DifalAnalysis() {
         </div>
     );
 }
-
-    
