@@ -358,7 +358,7 @@ export function DifalAnalysis() {
                             <TabsContent value="ignored" className="mt-4">
                                  <Button onClick={() => handleDownloadExcel(results.ignored, "Notas_Ignoradas_DIFAL")} size="sm" className="mb-4" disabled={results.ignored.length === 0}>
                                     <Download className="mr-2 h-4 w-4" /> Baixar Lista de Ignoradas
-                                </Button>
+                                 </Button>
                                 <DataTable 
                                     columns={getColumnsWithCustomRender(
                                         results.ignored, 
