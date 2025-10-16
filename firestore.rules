@@ -1,12 +1,49 @@
+/**
+ * @fileoverview Firestore Security Rules for Grantel application.
+ *
+ * Core Philosophy:
+ * This ruleset allows public read access to all data. Write access is also public,
+ * but in a real application, you would likely want to restrict write access based on user roles or ownership.
+ * Since this is a prototyping ruleset, write access is open for demonstration and quick iteration.
+ *
+ * Data Structure:
+ * The Firestore database contains two top-level collections: `sheetData` and `checkedRows`.
+ *  - `/sheetData`: Stores the uploaded spreadsheet data.
+ *  - `/checkedRows`: Stores the checked state of rows in the spreadsheet.
+ *
+ * Key Security Decisions:
+ * - Public read access for all collections.
+ * - Public write access for all collections (for prototyping purposes, this would be restricted in production).
+ * - No user-specific data or ownership enforced in this prototype.
+ */
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Warning: This rule allows anyone to read and write to your database.
-    // For a production application, you should implement more granular
-    // security rules.
-    match /{document=**} {
-      allow read, write: if true;
+
+    /**
+     * @description Allows public read and write access to spreadsheet data.
+     * @path /sheetData/{sheetDataId}
+     * @allow (get, list) if true
+     * @allow (create, update, delete) if true
+     * @deny (create, update, delete) if false
+     * @principle Allows any user to read and write spreadsheet data.
+     */
+    match /sheetData/{sheetDataId} {
+      allow get, list: if true;
+      allow create, update, delete: if true;
+    }
+
+    /**
+     * @description Allows public read and write access to checked row data.
+     * @path /checkedRows/{checkedRowId}
+     * @allow (get, list) if true
+     * @allow (create, update, delete) if true
+     * @deny (create, update, delete) if false
+     * @principle Allows any user to read and write checked row data.
+     */
+    match /checkedRows/{checkedRowId} {
+      allow get, list: if true;
+      allow create, update, delete: if true;
     }
   }
 }
