@@ -24,10 +24,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ProcessedData } from '@/lib/excel-processor';
 
 
 // Tipos
-export interface SessionMetadata {
+export interface SessionData {
     competence: string;
     processedAt: string;
     fileNames: {
@@ -39,6 +40,7 @@ export interface SessionMetadata {
         sienge: string | null;
         sped: string[];
     };
+    processedData: ProcessedData;
     // Armazenar os estados leves
     lastSaidaNumber: number;
     disregardedNfseNotes: string[]; // Convert Set to Array for JSON
@@ -47,11 +49,11 @@ export interface SessionMetadata {
 
 interface HistoryAnalysisProps {
     sessionsKey: string;
-    onRestoreSession: (session: SessionMetadata) => void;
+    onRestoreSession: (session: SessionData) => void;
 }
 
 export function HistoryAnalysis({ sessionsKey, onRestoreSession }: HistoryAnalysisProps) {
-    const [sessions, setSessions] = useState<SessionMetadata[]>([]);
+    const [sessions, setSessions] = useState<SessionData[]>([]);
     const { toast } = useToast();
 
     useEffect(() => {
@@ -59,7 +61,7 @@ export function HistoryAnalysis({ sessionsKey, onRestoreSession }: HistoryAnalys
              try {
                 const savedSessions = localStorage.getItem(sessionsKey);
                 if (savedSessions) {
-                    const parsedSessions: SessionMetadata[] = JSON.parse(savedSessions);
+                    const parsedSessions: SessionData[] = JSON.parse(savedSessions);
                     // Ordenar por data de processamento, mais recente primeiro
                     parsedSessions.sort((a, b) => new Date(b.processedAt).getTime() - new Date(a.processedAt).getTime());
                     setSessions(parsedSessions);
@@ -101,7 +103,7 @@ export function HistoryAnalysis({ sessionsKey, onRestoreSession }: HistoryAnalys
         }
     }
     
-    const countFiles = (fileNames: SessionMetadata['fileNames']) => {
+    const countFiles = (fileNames: SessionData['fileNames']) => {
         if (!fileNames) return 0;
         return (fileNames.nfeEntrada?.length || 0) + 
                (fileNames.cte?.length || 0) + 
@@ -121,7 +123,7 @@ export function HistoryAnalysis({ sessionsKey, onRestoreSession }: HistoryAnalys
                         <div>
                             <CardTitle className="font-headline text-2xl">Histórico de Análises</CardTitle>
                             <CardDescription>
-                                Sessões de trabalho guardadas. Para restaurar, clique em "Restaurar" e carregue novamente os ficheiros originais.
+                                Sessões de trabalho guardadas. Clique em "Restaurar" para carregar uma análise completa.
                             </CardDescription>
                         </div>
                     </div>
@@ -202,7 +204,7 @@ export function HistoryAnalysis({ sessionsKey, onRestoreSession }: HistoryAnalys
                                                 <TooltipTrigger asChild>
                                                     <div className="flex items-center gap-2">
                                                         <Package className="h-5 w-5"/>
-                                                        <span>{countFiles(session.fileNames)} ficheiros</span>
+                                                        <span>{countFiles(session.fileNames)} ficheiros originais</span>
                                                     </div>
                                                 </TooltipTrigger>
                                                 <TooltipContent align="start" className="max-w-xs">
@@ -227,7 +229,7 @@ export function HistoryAnalysis({ sessionsKey, onRestoreSession }: HistoryAnalys
                         <div className="text-center text-muted-foreground py-12">
                             <History className="mx-auto h-12 w-12 mb-4" />
                             <h3 className="text-xl font-semibold">Nenhuma sessão guardada</h3>
-                            <p>Após validar os dados, pode guardar a análise no histórico na aba de "Análises Finais".</p>
+                            <p>Após validar os dados, pode guardar a análise no histórico na aba de "Análises Avançadas".</p>
                         </div>
                     )}
                  </TooltipProvider>
