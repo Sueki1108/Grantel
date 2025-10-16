@@ -10,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 
@@ -44,105 +43,109 @@ export interface AllClassifications {
 interface ImobilizadoAnalysisProps {
     items: ItemData[];
     competence: string | null; // ex: "2023-01_2023-02"
-    onPersistedDataChange: (competence: string, uniqueItemId: string, itemLineId: string, data: Partial<AllClassifications[string]>) => void;
-    persistedData: AllClassifications;
+    onPersistData: (allDataToSave: AllClassifications) => void;
+    allPersistedData: AllClassifications;
 }
 
-export function ImobilizadoAnalysis({ items: initialItems, competence, onPersistedDataChange, persistedData }: ImobilizadoAnalysisProps) {
+export function ImobilizadoAnalysis({ items: initialItems, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
-    // Estado para gerir os códigos de conta em edição na sessão atual. A chave é o id da linha.
+    // Estado local para gerir as classificações e códigos de conta da sessão atual.
+    const [sessionClassifications, setSessionClassifications] = useState<Record<string, Classification>>({});
     const [sessionAccountCodes, setSessionAccountCodes] = useState<Record<string, string>>({});
+    const [hasChanges, setHasChanges] = useState(false);
 
-    // Efeito para sincronizar o estado de edição com os dados persistidos.
+
+    // Efeito para carregar o estado persistido para o estado local da sessão quando a competência ou os itens mudam.
     useEffect(() => {
         if (!competence) return;
+        
+        const initialClassifications: Record<string, Classification> = {};
         const initialCodes: Record<string, string> = {};
-        const dataForCompetence = persistedData[competence]?.accountCodes || {};
+        const persistedForCompetence = allPersistedData[competence] || { classifications: {}, accountCodes: {} };
+        
         initialItems.forEach(item => {
-            const persistedCode = dataForCompetence[item.id]?.accountCode;
+            // Tenta obter a classificação da competência atual, ou faz fallback para a mais recente de outras competências
+            const currentClassification = persistedForCompetence.classifications?.[item.uniqueItemId]?.classification;
+            if (currentClassification) {
+                initialClassifications[item.id] = currentClassification;
+            } else {
+                 // Fallback logic
+                let fallbackClassification: Classification | undefined = undefined;
+                for (const otherCompetence in allPersistedData) {
+                    if (otherCompetence !== competence) {
+                        const classification = allPersistedData[otherCompetence]?.classifications?.[item.uniqueItemId]?.classification;
+                        if (classification) {
+                            fallbackClassification = classification;
+                            break; // Usa a primeira que encontrar
+                        }
+                    }
+                }
+                initialClassifications[item.id] = fallbackClassification || 'unclassified';
+            }
+
+
+            const persistedCode = persistedForCompetence.accountCodes?.[item.id]?.accountCode;
             if (persistedCode) {
                 initialCodes[item.id] = persistedCode;
             }
         });
+
+        setSessionClassifications(initialClassifications);
         setSessionAccountCodes(initialCodes);
-    }, [competence, persistedData, initialItems]);
+        setHasChanges(false);
 
+    }, [competence, allPersistedData, initialItems]);
 
-    const getDisplayClassification = useCallback((itemUniqueId: string): Classification => {
-        if (competence) {
-            const classificationForCompetence = persistedData[competence]?.classifications?.[itemUniqueId]?.classification;
-            if (classificationForCompetence) return classificationForCompetence;
-        }
-        
-        for (const otherCompetence in persistedData) {
-            const fallbackClassification = persistedData[otherCompetence]?.classifications?.[itemUniqueId]?.classification;
-            if (fallbackClassification) return fallbackClassification;
-        }
-        
-        return 'unclassified';
-
-    }, [persistedData, competence]);
 
     const handleClassificationChange = (item: ItemData, newClassification: Classification) => {
-        if (!competence) return;
-        
-        const newClassificationData = {
-            [item.uniqueItemId]: { classification: newClassification }
-        };
-        
-        onPersistedDataChange(competence, item.uniqueItemId, item.id, { classifications: newClassificationData });
-
-        toast({
-            title: "Item Classificado",
-            description: `O item "${item['Descrição']?.substring(0, 20)}..." foi classificado como ${newClassification.replace('-', ' e ')}.`
-        });
+        setSessionClassifications(prev => ({ ...prev, [item.id]: newClassification }));
+        setHasChanges(true);
     };
     
     const handleAccountCodeChange = (itemLineId: string, code: string) => {
         setSessionAccountCodes(prev => ({...prev, [itemLineId]: code}));
+        setHasChanges(true);
     };
 
-    const handleSaveAccountCode = (itemLineId: string) => {
+    const handleSaveChanges = () => {
         if (!competence) return;
 
-        const codeToSave = sessionAccountCodes[itemLineId] ?? '';
-        
-        const newAccountCodeData: AccountCodeStorage = {
-             [itemLineId]: { accountCode: codeToSave }
-        };
+        const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
+        if (!updatedPersistedData[competence]) {
+            updatedPersistedData[competence] = { classifications: {}, accountCodes: {} };
+        }
 
-        const item = initialItems.find(i => i.id === itemLineId);
-        if (!item) return;
+        initialItems.forEach(item => {
+            const sessionClassification = sessionClassifications[item.id];
+            if (sessionClassification) {
+                 if (!updatedPersistedData[competence].classifications) updatedPersistedData[competence].classifications = {};
+                 updatedPersistedData[competence].classifications[item.uniqueItemId] = { classification: sessionClassification };
+            }
 
-        onPersistedDataChange(competence, item.uniqueItemId, item.id, { accountCodes: newAccountCodeData });
-
-        toast({
-            title: "Código do Ativo Guardado",
-            description: `O código foi associado a esta linha de item para a competência atual.`
+            const sessionCode = sessionAccountCodes[item.id];
+            if (sessionCode !== undefined) { // Permite guardar códigos vazios
+                if (!updatedPersistedData[competence].accountCodes) updatedPersistedData[competence].accountCodes = {};
+                updatedPersistedData[competence].accountCodes[item.id] = { accountCode: sessionCode };
+            }
         });
-    };
-    
-    const handleUnclassify = (item: ItemData) => {
-         if (!competence) return;
-        handleClassificationChange(item, 'unclassified');
+        
+        onPersistData(updatedPersistedData);
+        setHasChanges(false);
     };
 
     const filteredItems = useMemo(() => {
         const categories: Record<Classification, ItemData[]> = {
-            unclassified: [],
-            imobilizado: [],
-            'uso-consumo': [],
-            'utilizado-em-obra': [],
+            unclassified: [], imobilizado: [], 'uso-consumo': [], 'utilizado-em-obra': [],
         };
 
         initialItems.forEach(item => {
-            const classification = getDisplayClassification(item.uniqueItemId);
+            const classification = sessionClassifications[item.id] || 'unclassified';
             categories[classification].push(item);
         });
 
         return categories;
-    }, [initialItems, getDisplayClassification]);
+    }, [initialItems, sessionClassifications]);
     
     const handleDownload = (data: ItemData[], classification: Classification) => {
         if (data.length === 0) {
@@ -151,7 +154,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         }
 
         const dataToExport = data.map(item => {
-             const accountCode = (competence && persistedData[competence]?.accountCodes?.[item.id]?.accountCode) || sessionAccountCodes[item.id] || '';
+             const accountCode = sessionAccountCodes[item.id] || '';
             return {
                 'Número da Nota': item['Número da Nota'],
                 'Descrição': item['Descrição'],
@@ -194,23 +197,14 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
                 header: 'Código do Ativo',
                 cell: ({ row }: any) => {
                     const item = row.original as ItemData;
-                    const codeInSession = sessionAccountCodes[item.id] || '';
                     return (
                         <div className="flex items-center gap-2">
                             <Input
                                 placeholder="Ex: 1.2.3.01.0001"
-                                value={codeInSession}
+                                value={sessionAccountCodes[item.id] || ''}
                                 onChange={(e) => handleAccountCodeChange(item.id, e.target.value)}
                                 className="h-8"
                             />
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleSaveAccountCode(item.id)}>
-                                        <Save className="h-4 w-4 text-primary" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent><p>Guardar código</p></TooltipContent>
-                            </Tooltip>
                         </div>
                     );
                 }
@@ -222,7 +216,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             header: 'Ações',
             cell: ({ row }: any) => {
                 const originalItem = row.original as ItemData;
-                const currentClassification = getDisplayClassification(originalItem.uniqueItemId);
+                const currentClassification = sessionClassifications[originalItem.id] || 'unclassified';
 
                 return (
                     <div className="flex gap-2 justify-center">
@@ -238,7 +232,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
                         {currentClassification !== 'unclassified' && (
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleUnclassify(originalItem)}>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'unclassified')}>
                                         <RotateCcw className="h-5 w-5 text-destructive" />
                                     </Button>
                                 </TooltipTrigger><TooltipContent><p>Reverter para Não Classificado</p></TooltipContent>
@@ -277,7 +271,18 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
     return (
         <Card>
             <CardHeader>
-                <div className="flex items-center gap-3"><Building className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Análise de Imobilizado (Competência: {competence})</CardTitle><CardDescription>Classifique os itens. Suas escolhas serão lembradas para esta competência e sugeridas para as próximas.</CardDescription></div></div>
+                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <Building className="h-8 w-8 text-primary" />
+                        <div>
+                            <CardTitle className="font-headline text-2xl">Análise de Imobilizado (Competência: {competence})</CardTitle>
+                            <CardDescription>Classifique os itens. As suas escolhas serão guardadas ao clicar no botão "Guardar Alterações".</CardDescription>
+                        </div>
+                    </div>
+                     <Button onClick={handleSaveChanges} disabled={!hasChanges}>
+                        <Save className="mr-2 h-4 w-4" /> Guardar Alterações
+                    </Button>
+                </div>
             </CardHeader>
             <CardContent>
                 <TooltipProvider>
@@ -290,9 +295,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
                         </TabsList>
 
                         <TabsContent value="unclassified" className="mt-6">
-                            <CardContent>
-                                {renderTableFor(filteredItems.unclassified, 'unclassified')}
-                            </CardContent>
+                            {renderTableFor(filteredItems.unclassified, 'unclassified')}
                         </TabsContent>
                         <TabsContent value="imobilizado" className="mt-6">
                              <Button onClick={() => handleDownload(filteredItems.imobilizado, 'imobilizado')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>

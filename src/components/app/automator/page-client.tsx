@@ -28,7 +28,7 @@ import { NfseAnalysis } from "@/components/app/nfse-analysis";
 import { KeyCheckResult } from "@/components/app/key-checker";
 import { SettingsDialog } from "@/components/app/settings-dialog";
 import { cn } from "@/lib/utils";
-import { ImobilizadoAnalysis, type AllClassifications, type ClassificationStorage } from "@/components/app/imobilizado-analysis";
+import { ImobilizadoAnalysis, type AllClassifications } from "@/components/app/imobilizado-analysis";
 import { HistoryAnalysis, type SessionData } from "@/components/app/history-analysis";
 
 
@@ -96,25 +96,15 @@ export function AutomatorClientPage() {
         setIsWideMode(wideMode);
     }, []);
 
-    const handleImobilizadoDataChange = (itemUniqueId: string, data: ClassificationStorage) => {
-        if (!competence) {
-            toast({ variant: 'destructive', title: "Competência não definida", description: "Processe os arquivos e selecione um período primeiro." });
-            return;
-        }
-
-        const newClassifications: AllClassifications = {
-            ...imobilizadoClassifications,
-            [competence]: {
-                ...(imobilizadoClassifications[competence] || {}),
-                [itemUniqueId]: data,
-            },
-        };
-        
-        setImobilizadoClassifications(newClassifications);
-        
+    const handlePersistImobilizado = (allDataToSave: AllClassifications) => {
+        setImobilizadoClassifications(allDataToSave);
         try {
-            localStorage.setItem(IMOBILIZADO_STORAGE_KEY, JSON.stringify(newClassifications));
-        } catch (e) {
+            localStorage.setItem(IMOBILIZADO_STORAGE_KEY, JSON.stringify(allDataToSave));
+            toast({
+                title: "Classificações de Imobilizado Guardadas",
+                description: "As suas classificações e códigos de ativo foram guardados no armazenamento local do navegador."
+            });
+        } catch(e) {
             console.error("Failed to save imobilizado classifications to localStorage", e);
             toast({ variant: 'destructive', title: "Erro ao guardar classificações"});
         }
@@ -189,7 +179,6 @@ export function AutomatorClientPage() {
         toast({
             title: "Sessão Restaurada com Sucesso",
             description: `A análise completa para a competência ${session.competence} foi carregada.`,
-            duration: 7000,
         });
 
         // Switch to the first analysis tab to show the restored data
@@ -502,7 +491,7 @@ export function AutomatorClientPage() {
 
                 // Process each XML category separately to respect user's choice
                 log("Processando ficheiros XML por categoria...");
-                const { nfe: nfeEntrada, itens: itensEntrada, canceledKeys: canceledEntrada } = await processUploadedXmls(xmlFiles.nfeEntrada, log, "entrada");
+                const { nfe: nfeEntrada, itens: itensEntrada, canceledKeys: canceledEntrada, saidas: devolucoesClientes } = await processUploadedXmls(xmlFiles.nfeEntrada, log, "entrada");
                 const { cte, canceledKeys: canceledCte } = await processUploadedXmls(xmlFiles.cte, log, "cte");
                 const { saidas, itensSaidas, canceledKeys: canceledSaida } = await processUploadedXmls(xmlFiles.nfeSaida, log, "saida");
 
@@ -513,9 +502,12 @@ export function AutomatorClientPage() {
                 dataToProcess["Saídas"] = saidas;
                 dataToProcess["Itens Saídas"] = itensSaidas;
                 
+                // Keep devoluções separate
+                dataToProcess["Devoluções de Clientes"] = devolucoesClientes;
+                
                 eventCanceledKeys = new Set([...canceledEntrada, ...canceledCte, ...canceledSaida]);
 
-                log(`Processamento XML concluído: ${nfeEntrada.length} NF-e Entradas, ${saidas.length} NF-e Saídas, ${cte.length} CT-es.`);
+                log(`Processamento XML concluído: ${nfeEntrada.length} NF-e Entradas, ${saidas.length} NF-e Saídas, ${cte.length} CT-es, ${devolucoesClientes.length} Devoluções de Cliente.`);
                 
                 // Merge with sheet data (manifesto files only)
                 for (const fileName of requiredFiles) {
@@ -549,7 +541,7 @@ export function AutomatorClientPage() {
                     };
                 
                     Object.keys(dataToProcess).forEach(key => {
-                        if (['NFE', 'CTE', 'Saídas'].includes(key)) {
+                        if (['NFE', 'CTE', 'Saídas', 'Devoluções de Clientes'].includes(key)) {
                              const originalCount = dataToProcess[key].length;
                              dataToProcess[key] = filterByPeriod(dataToProcess[key]);
                              log(`- ${key}: ${dataToProcess[key].length}/${originalCount} registos mantidos após filtro.`);
@@ -638,7 +630,7 @@ export function AutomatorClientPage() {
     const isClearButtonVisible = Object.keys(files).length > 0 || xmlFiles.nfeEntrada.length > 0 || xmlFiles.cte.length > 0 || xmlFiles.nfeSaida.length > 0 || xmlFiles.nfse.length > 0 || !!processedData || logs.length > 0 || error !== null;
 
     const saidasNfeTabDisabled = !processedData?.sheets['Saídas'] || processedData.sheets['Saídas'].length === 0;
-    const nfseTabDisabled = xmlFiles.nfse.length === 0 && (!processedData || !session.processedData.fileNames.nfse || session.processedData.fileNames.nfse.length === 0);
+    const nfseTabDisabled = xmlFiles.nfse.length === 0 && (!processedData || !processedData.fileNames?.nfse || processedData.fileNames.nfse.length === 0);
     const analysisTabDisabled = !processedData?.sheets['Chaves Válidas'] || processedData.sheets['Chaves Válidas'].length === 0;
     const imobilizadoTabDisabled = !processedData?.sheets['Imobilizados'] || processedData.sheets['Imobilizados'].length === 0;
     
@@ -902,8 +894,8 @@ export function AutomatorClientPage() {
                          <TabsContent value="imobilizado" className="mt-6">
                             <ImobilizadoAnalysis 
                                 items={processedData?.sheets?.['Imobilizados'] || []}
-                                onPersistedDataChange={handleImobilizadoDataChange}
-                                persistedData={imobilizadoClassifications}
+                                onPersistData={handlePersistImobilizado}
+                                allPersistedData={imobilizadoClassifications}
                                 competence={competence}
                             />
                         </TabsContent>
