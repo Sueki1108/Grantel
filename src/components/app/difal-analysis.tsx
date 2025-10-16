@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { FileUp, FileDown, Loader2, Download, AlertTriangle, Cpu, TicketPercent } from 'lucide-react';
+import { FileUp, FileDown, Loader2, Download, AlertTriangle, Cpu, TicketPercent, Copy } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import JSZip from 'jszip';
 
@@ -18,6 +18,8 @@ import JSZip from 'jszip';
 
 type DifalData = {
     'Chave de Acesso': string;
+    'Número da Nota': string;
+    'Data de Emissão': string;
     'Valor Total da Nota': number;
     'Valor da Guia (10%)': number;
 };
@@ -60,6 +62,76 @@ const getTagValue = (element: Element | undefined, query: string): string => {
     const tag = element.querySelector(query);
     return tag?.textContent ?? '';
 };
+
+
+// ===============================================================
+// Item Component
+// ===============================================================
+const DifalItem = ({ item }: { item: DifalData }) => {
+    const { toast } = useToast();
+
+    const copyToClipboard = (text: string | number, type: string) => {
+        const textToCopy = String(text);
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: textToCopy });
+        }).catch(() => {
+            toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
+        });
+    };
+    
+    const formattedDate = useMemo(() => {
+        if (!item['Data de Emissão']) return 'N/A';
+        try {
+            const dateStr = String(item['Data de Emissão']).substring(0, 10);
+            const [year, month, day] = dateStr.split('-');
+            return `${day}/${month}/${year}`;
+        } catch { return 'Inválida'; }
+    }, [item['Data de Emissão']]);
+
+
+    return (
+         <div className="p-4 rounded-lg border flex flex-col gap-3 transition-colors bg-secondary/50">
+            <div className="font-mono text-sm break-all flex items-center gap-2">
+                 <span className="text-muted-foreground">Chave:</span>
+                 <span className='truncate'>{item['Chave de Acesso']}</span>
+                 <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => copyToClipboard(item['Chave de Acesso'], 'Chave')}>
+                    <Copy className="h-4 w-4" />
+                </Button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-sm">
+                <div className="flex flex-col">
+                    <span className="font-semibold">Nº da Nota</span>
+                     <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">{item['Número da Nota']}</span>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(item['Número da Nota'], 'Número da Nota')}><Copy className="h-3 w-3" /></Button>
+                    </div>
+                </div>
+                <div className="flex flex-col">
+                    <span className="font-semibold">Emissão</span>
+                     <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">{formattedDate}</span>
+                         <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(formattedDate, 'Data')}><Copy className="h-3 w-3" /></Button>
+                    </div>
+                </div>
+                 <div className="flex flex-col">
+                    <span className="font-semibold">Valor Total da Nota</span>
+                     <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">{item['Valor Total da Nota'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(item['Valor Total da Nota'], 'Valor Total')}><Copy className="h-3 w-3" /></Button>
+                    </div>
+                </div>
+                 <div className="flex flex-col">
+                    <span className="font-semibold">Valor da Guia (10%)</span>
+                     <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">{item['Valor da Guia (10%)'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(item['Valor da Guia (10%)'], 'Valor da Guia')}><Copy className="h-3 w-3" /></Button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 // ===============================================================
 // Main Component
@@ -132,6 +204,8 @@ export function DifalAnalysis() {
                 const destCnpj = getTagValue(xmlDoc, 'dest > CNPJ');
                 const infCpl = getTagValue(xmlDoc, 'infAdic > infCpl');
                 const valorTotal = parseFloat(getTagValue(xmlDoc, 'total > ICMSTot > vNF') || '0');
+                const nNF = getTagValue(xmlDoc, 'ide > nNF');
+                const dhEmi = getTagValue(xmlDoc, 'ide > dhEmi');
                 
                 let isGrantelEmitter = emitCnpj === GRANTEL_CNPJ;
                 let isGrantelDest = destCnpj === GRANTEL_CNPJ;
@@ -140,8 +214,10 @@ export function DifalAnalysis() {
                 if (isGrantelEmitter && isGrantelDest && hasSelviria) {
                     validData.push({
                         'Chave de Acesso': chaveAcesso,
+                        'Número da Nota': nNF,
+                        'Data de Emissão': dhEmi,
                         'Valor Total da Nota': valorTotal,
-                        'Valor da Guia (10%)': valorTotal * 0.1,
+                        'Valor da Guia (10%)': parseFloat((valorTotal * 0.1).toFixed(2)),
                     });
                 } else {
                     let reason = [];
@@ -171,30 +247,18 @@ export function DifalAnalysis() {
             toast({ variant: 'destructive', title: "Nenhum dado para baixar" });
             return;
         }
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), sheetName.substring(0, 31));
-        XLSX.writeFile(wb, `Analise_DIFAL_${sheetName}.xlsx`);
+        
+        const dataToExport = data.map(item => {
+            const { ...rest } = item;
+            return rest;
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName.substring(0, 31));
+        XLSX.writeFile(workbook, `Analise_DIFAL_${sheetName}.xlsx`);
         toast({ title: "Download Iniciado" });
     };
-
-    const currencyFormatter = new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL',
-    });
-
-    const columns = (isIgnored: boolean = false) => getColumnsWithCustomRender(
-        (isIgnored ? results?.ignored : results?.valid) || [],
-        isIgnored 
-            ? ['Chave de Acesso', 'Valor da Nota', 'Motivo da Rejeição']
-            : ['Chave de Acesso', 'Valor Total da Nota', 'Valor da Guia (10%)'],
-        (row, id) => {
-            const value = row.original[id as keyof typeof row.original];
-            if (typeof value === 'number') {
-                return <div className="text-right">{currencyFormatter.format(value)}</div>;
-            }
-            return <div>{String(value)}</div>;
-        }
-    );
 
     return (
         <div className="space-y-6">
@@ -243,17 +307,34 @@ export function DifalAnalysis() {
                                 <TabsTrigger value="valid">Notas Válidas para DIFAL ({results.valid.length})</TabsTrigger>
                                 <TabsTrigger value="ignored">Notas Ignoradas ({results.ignored.length})</TabsTrigger>
                             </TabsList>
-                            <TabsContent value="valid" className="mt-4">
-                                <Button onClick={() => handleDownloadExcel(results.valid, "Notas_Validas_DIFAL")} size="sm" className="mb-4" disabled={results.valid.length === 0}>
+                            <TabsContent value="valid" className="mt-4 space-y-2">
+                                <Button onClick={() => handleDownloadExcel(results.valid, "Notas_Validas_DIFAL")} size="sm" className="mb-2" disabled={results.valid.length === 0}>
                                     <Download className="mr-2 h-4 w-4" /> Baixar Lista de Válidas
                                 </Button>
-                                <DataTable columns={columns(false)} data={results.valid} />
+                                {results.valid.length > 0 ? (
+                                    results.valid.map(item => <DifalItem key={item['Chave de Acesso']} item={item} />)
+                                ) : (
+                                    <p className="text-center text-muted-foreground py-4">Nenhuma nota válida encontrada.</p>
+                                )}
                             </TabsContent>
                             <TabsContent value="ignored" className="mt-4">
                                  <Button onClick={() => handleDownloadExcel(results.ignored, "Notas_Ignoradas_DIFAL")} size="sm" className="mb-4" disabled={results.ignored.length === 0}>
                                     <Download className="mr-2 h-4 w-4" /> Baixar Lista de Ignoradas
                                 </Button>
-                                <DataTable columns={columns(true)} data={results.ignored} />
+                                <DataTable 
+                                    columns={getColumnsWithCustomRender(
+                                        results.ignored, 
+                                        ['Chave de Acesso', 'Valor da Nota', 'Motivo da Rejeição'],
+                                        (row, id) => {
+                                            const value = row.original[id as keyof typeof row.original];
+                                            if (typeof value === 'number') {
+                                                return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
+                                            }
+                                            return <div>{String(value)}</div>;
+                                        }
+                                    )} 
+                                    data={results.ignored} 
+                                />
                             </TabsContent>
                         </Tabs>
                     </CardContent>
@@ -273,8 +354,11 @@ export function DifalAnalysis() {
                         <input id="pdf-upload-difal" type="file" className="sr-only" onChange={handlePdfFileChange} multiple accept=".pdf" />
                     </label>
                     {pdfFiles.length > 0 && (
-                        <div className="mt-2 text-sm text-muted-foreground">
-                            <span className="font-bold">{pdfFiles.length}</span> ficheiro(s) PDF de guias carregados para verificação.
+                        <div className="mt-4 space-y-1 text-sm">
+                            <h4 className='font-medium'>Ficheiros PDF carregados:</h4>
+                            <ul className="list-disc list-inside text-muted-foreground">
+                                {pdfFiles.map((file, i) => <li key={i}>{file.name}</li>)}
+                            </ul>
                         </div>
                     )}
                 </CardContent>
@@ -283,3 +367,5 @@ export function DifalAnalysis() {
         </div>
     );
 }
+
+    
