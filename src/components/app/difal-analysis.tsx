@@ -401,6 +401,9 @@ export function DifalAnalysis() {
                     )}
                 </CardContent>
             </Card>
+
         </div>
     );
 }
+
+    
