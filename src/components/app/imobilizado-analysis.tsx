@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { cleanAndToStr } from '@/lib/utils';
+import { RowSelectionState } from '@tanstack/react-table';
 
 
 // Tipos
@@ -56,6 +57,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
     const [sessionClassifications, setSessionClassifications] = useState<Record<string, Classification>>({});
     const [sessionAccountCodes, setSessionAccountCodes] = useState<Record<string, string>>({});
     const [hasChanges, setHasChanges] = useState(false);
+    const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
 
     // Efeito para carregar o estado persistido para o estado local da sessão quando a competência ou os itens mudam.
@@ -94,19 +96,33 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         setSessionClassifications(initialClassifications);
         setSessionAccountCodes(initialCodes);
         setHasChanges(false);
+        setRowSelection({}); // Limpa a seleção ao trocar de competência/dados
 
     }, [competence, allPersistedData, initialItems]);
 
 
-     const handleClassificationChange = (item: ItemData, newClassification: Classification) => {
-        const itemsToUpdate = initialItems.filter(i => i.uniqueItemId === item.uniqueItemId);
+     const handleClassificationChange = (itemsToUpdate: ItemData[], newClassification: Classification) => {
         const newClassifications = { ...sessionClassifications };
-        itemsToUpdate.forEach(i => {
-            newClassifications[i.id] = newClassification;
+        
+        itemsToUpdate.forEach(item => {
+            // Propaga a mudança para todos os itens com a mesma chave de produto única
+            const itemsWithSameProductKey = initialItems.filter(i => i.uniqueItemId === item.uniqueItemId);
+            itemsWithSameProductKey.forEach(i => {
+                newClassifications[i.id] = newClassification;
+            });
         });
+
         setSessionClassifications(newClassifications);
         setHasChanges(true);
     };
+
+    const handleBulkClassification = (newClassification: Classification) => {
+        const selectedItemIds = Object.keys(rowSelection);
+        const selectedItems = initialItems.filter((item, index) => selectedItemIds.includes(String(index)));
+        handleClassificationChange(selectedItems, newClassification);
+        setRowSelection({}); // Limpa a seleção após a ação
+    };
+
     
     const handleAccountCodeChange = (itemLineId: string, code: string) => {
         setSessionAccountCodes(prev => ({...prev, [itemLineId]: code}));
@@ -183,7 +199,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             return <div className="text-center text-muted-foreground p-8">Nenhum item nesta categoria.</div>;
         }
 
-        const columnsToShow: (keyof ItemData)[] = ['Número da Nota', 'Descrição', 'CFOP', 'Valor Unitário', 'Valor Total'];
+        const columnsToShow: (keyof ItemData)[] = ['Fornecedor', 'CPF/CNPJ do Emitente', 'Número da Nota', 'Descrição', 'CFOP', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
         const columns = getColumnsWithCustomRender(
             data,
             columnsToShow,
@@ -192,7 +208,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
                  if ((id === 'Valor Total' || id === 'Valor Unitário') && typeof value === 'number') {
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
                 }
-                return <div>{String(value ?? '')}</div>;
+                return <div className="truncate max-w-xs">{String(value ?? '')}</div>;
             }
         );
         
@@ -203,7 +219,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
                 cell: ({ row }: any) => {
                     const item = row.original as ItemData;
                     return (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                             <Input
                                 placeholder="Ex: 1.2.3.01.0001"
                                 value={sessionAccountCodes[item.id] || ''}
@@ -218,27 +234,27 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
 
         columns.push({
             id: 'actions',
-            header: 'Ações',
+            header: 'Ações Individuais',
             cell: ({ row }: any) => {
                 const originalItem = row.original as ItemData;
                 const currentClassification = sessionClassifications[originalItem.id] || 'unclassified';
 
                 return (
                      <TooltipProvider>
-                        <div className="flex gap-2 justify-center">
+                        <div className="flex gap-1 justify-center" onClick={(e) => e.stopPropagation()}>
                             {currentClassification !== 'imobilizado' && (
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'imobilizado')}><Factory className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Imobilizado</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'imobilizado')}><Factory className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Imobilizado</p></TooltipContent></Tooltip>
                             )}
                             {currentClassification !== 'uso-consumo' && (
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'uso-consumo')}><Wrench className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Uso e Consumo</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'uso-consumo')}><Wrench className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Uso e Consumo</p></TooltipContent></Tooltip>
                             )}
                             {currentClassification !== 'utilizado-em-obra' && (
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'utilizado-em-obra')}><HardHat className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Utilizado em Obra</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'utilizado-em-obra')}><HardHat className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Utilizado em Obra</p></TooltipContent></Tooltip>
                             )}
                             {currentClassification !== 'unclassified' && (
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange(originalItem, 'unclassified')}>
+                                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'unclassified')}>
                                             <RotateCcw className="h-5 w-5 text-destructive" />
                                         </Button>
                                     </TooltipTrigger><TooltipContent><p>Reverter para Não Classificado</p></TooltipContent>
@@ -250,7 +266,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             }
         });
 
-        return <DataTable columns={columns} data={data} />;
+        return <DataTable columns={columns} data={data} rowSelection={rowSelection} setRowSelection={setRowSelection} />;
     };
 
     if (!initialItems || initialItems.length === 0) {
@@ -275,51 +291,68 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         );
     }
 
-    return (
-        <Card>
-            <CardHeader>
-                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <Building className="h-8 w-8 text-primary" />
-                        <div>
-                            <CardTitle className="font-headline text-2xl">Análise de Imobilizado (Competência: {competence})</CardTitle>
-                            <CardDescription>Classifique os itens. As suas escolhas serão guardadas ao clicar no botão "Guardar Alterações".</CardDescription>
-                        </div>
-                    </div>
-                     <Button onClick={handleSaveChanges} disabled={!hasChanges}>
-                        <Save className="mr-2 h-4 w-4" /> Guardar Alterações
-                    </Button>
-                </div>
-            </CardHeader>
-            <CardContent>
-                <TooltipProvider>
-                    <Tabs defaultValue="unclassified" className="w-full">
-                        <TabsList className="grid w-full grid-cols-4">
-                            <TabsTrigger value="unclassified" className="flex gap-2"><List />Não Classificados ({filteredItems.unclassified.length})</TabsTrigger>
-                            <TabsTrigger value="imobilizado" className="flex gap-2"><Factory />Imobilizado ({filteredItems.imobilizado.length})</TabsTrigger>
-                            <TabsTrigger value="uso-consumo" className="flex gap-2"><Wrench />Uso e Consumo ({filteredItems['uso-consumo'].length})</TabsTrigger>
-                            <TabsTrigger value="utilizado-em-obra" className="flex gap-2"><HardHat />Utilizado em Obra ({filteredItems['utilizado-em-obra'].length})</TabsTrigger>
-                        </TabsList>
+    const numSelected = Object.keys(rowSelection).length;
 
-                        <TabsContent value="unclassified" className="mt-6">
-                            {renderTableFor(filteredItems.unclassified, 'unclassified')}
-                        </TabsContent>
-                        <TabsContent value="imobilizado" className="mt-6">
-                             <Button onClick={() => handleDownload(filteredItems.imobilizado, 'imobilizado')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                            {renderTableFor(filteredItems.imobilizado, 'imobilizado')}
-                        </TabsContent>
-                        <TabsContent value="uso-consumo" className="mt-6">
-                            <Button onClick={() => handleDownload(filteredItems['uso-consumo'], 'uso-consumo')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                             {renderTableFor(filteredItems['uso-consumo'], 'uso-consumo')}
-                        </TabsContent>
-                        <TabsContent value="utilizado-em-obra" className="mt-6">
-                            <Button onClick={() => handleDownload(filteredItems['utilizado-em-obra'], 'utilizado-em-obra')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                             {renderTableFor(filteredItems['utilizado-em-obra'], 'utilizado-em-obra')}
-                        </TabsContent>
-                    </Tabs>
-                </TooltipProvider>
-            </CardContent>
-        </Card>
+    return (
+        <div className='relative'>
+             {numSelected > 0 && (
+                <div className="sticky bottom-4 z-20 w-full flex justify-center">
+                    <Card className="flex items-center gap-4 p-3 shadow-2xl animate-in fade-in-0 slide-in-from-bottom-5">
+                         <span className="text-sm font-medium pl-2">{numSelected} item(ns) selecionado(s)</span>
+                        <div className="h-6 border-l" />
+                         <span className="text-sm font-medium">Classificar como:</span>
+                         <div className="flex gap-2">
+                             <Button size="sm" onClick={() => handleBulkClassification('imobilizado')}><Factory className="mr-2 h-4 w-4" /> Imobilizado</Button>
+                             <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('uso-consumo')}><Wrench className="mr-2 h-4 w-4" /> Uso e Consumo</Button>
+                             <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('utilizado-em-obra')}><HardHat className="mr-2 h-4 w-4" /> Utilizado em Obra</Button>
+                         </div>
+                    </Card>
+                </div>
+            )}
+            <Card>
+                <CardHeader>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <Building className="h-8 w-8 text-primary" />
+                            <div>
+                                <CardTitle className="font-headline text-2xl">Análise de Imobilizado (Competência: {competence})</CardTitle>
+                                <CardDescription>Classifique os itens. Clique nas linhas para selecionar múltiplos itens e use a barra de ações. Suas escolhas serão guardadas ao clicar no botão "Guardar Alterações".</CardDescription>
+                            </div>
+                        </div>
+                        <Button onClick={handleSaveChanges} disabled={!hasChanges}>
+                            <Save className="mr-2 h-4 w-4" /> Guardar Alterações
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <TooltipProvider>
+                        <Tabs defaultValue="unclassified" className="w-full">
+                            <TabsList className="grid w-full grid-cols-4">
+                                <TabsTrigger value="unclassified" className="flex gap-2"><List />Não Classificados ({filteredItems.unclassified.length})</TabsTrigger>
+                                <TabsTrigger value="imobilizado" className="flex gap-2"><Factory />Imobilizado ({filteredItems.imobilizado.length})</TabsTrigger>
+                                <TabsTrigger value="uso-consumo" className="flex gap-2"><Wrench />Uso e Consumo ({filteredItems['uso-consumo'].length})</TabsTrigger>
+                                <TabsTrigger value="utilizado-em-obra" className="flex gap-2"><HardHat />Utilizado em Obra ({filteredItems['utilizado-em-obra'].length})</TabsTrigger>
+                            </TabsList>
+
+                            <TabsContent value="unclassified" className="mt-6">
+                                {renderTableFor(filteredItems.unclassified, 'unclassified')}
+                            </TabsContent>
+                            <TabsContent value="imobilizado" className="mt-6">
+                                <Button onClick={() => handleDownload(filteredItems.imobilizado, 'imobilizado')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
+                                {renderTableFor(filteredItems.imobilizado, 'imobilizado')}
+                            </TabsContent>
+                            <TabsContent value="uso-consumo" className="mt-6">
+                                <Button onClick={() => handleDownload(filteredItems['uso-consumo'], 'uso-consumo')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
+                                {renderTableFor(filteredItems['uso-consumo'], 'uso-consumo')}
+                            </TabsContent>
+                            <TabsContent value="utilizado-em-obra" className="mt-6">
+                                <Button onClick={() => handleDownload(filteredItems['utilizado-em-obra'], 'utilizado-em-obra')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
+                                {renderTableFor(filteredItems['utilizado-em-obra'], 'utilizado-em-obra')}
+                            </TabsContent>
+                        </Tabs>
+                    </TooltipProvider>
+                </CardContent>
+            </Card>
+        </div>
     );
 }
-
