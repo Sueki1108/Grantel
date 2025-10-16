@@ -1,3 +1,4 @@
+
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import { KeyCheckResult } from '@/components/app/key-checker';
@@ -153,13 +154,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const nfeFiltrada = nfe.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
     const cteFiltrado = cte.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
     
-    // Separar devoluções de clientes
-    const devolucoesDeClientes = nfeFiltrada.filter(row => row.isDevolucaoCliente);
-    log(`- ${devolucoesDeClientes.length} devoluções de clientes identificadas e separadas.`);
-    
-    const notasEntradaPuras = nfeFiltrada.filter(row => !row.isDevolucaoCliente);
-
-    let notasValidas = notasEntradaPuras.filter(isChaveValida);
+    let notasValidas = nfeFiltrada.filter(isChaveValida);
     let ctesValidos = cteFiltrado.filter(isChaveValida);
     let saidasValidas = saidas.filter(isChaveValida);
     
@@ -179,11 +174,11 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const remessaCfopsPrefixes = ['59', '69'];
     const itensAcimaDe1200 = itensValidos.filter(item => {
         const cfop = cleanAndToStr(item["CFOP"]);
-        const valorTotal = item['Valor Total'] || 0;
+        const valorUnitario = item['Valor Unitário'] || 0;
         const isRemessa = remessaCfopsPrefixes.some(prefix => cfop.startsWith(prefix));
-        return valorTotal > 1200 && !isRemessa;
+        return valorUnitario > 1200 && !isRemessa;
     });
-    log(`- ${itensAcimaDe1200.length} itens com valor total acima de R$ 1.200 (não remessa) encontrados para análise de imobilizado.`);
+    log(`- ${itensAcimaDe1200.length} itens com valor unitário acima de R$ 1.200 (não remessa) encontrados para análise de imobilizado.`);
 
     const imobilizados = itensAcimaDe1200.map((item, index) => {
         const uniqueItemId = `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
@@ -241,7 +236,6 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         "Saídas": saidasValidas, 
         "Itens Válidos Saídas": itensValidosSaidas,
         "Imobilizados": imobilizados,
-        "Devoluções de Clientes": devolucoesDeClientes,
         "Notas Canceladas": notasCanceladas,
         ...originalDfs 
     };
@@ -269,13 +263,13 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const finalSheetSet: DataFrames = {};
     const displayOrder = [
         "Notas Válidas", "CTEs Válidos", "Itens Válidos", "Itens Acima de 1200", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
-        "Imobilizados", "Devoluções de Clientes", "Notas Canceladas", ...Object.keys(originalDfs)
+        "Imobilizados", "Notas Canceladas", ...Object.keys(originalDfs)
     ];
 
     displayOrder.forEach(name => {
         let sheetData = finalResult[name];
         if (sheetData && sheetData.length > 0) {
-            if (["Itens Válidos", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados", "Itens Acima de 1200", "Devoluções de Clientes"].includes(name)) {
+            if (["Itens Válidos", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados", "Itens Acima de 1200"].includes(name)) {
                  sheetData = sheetData.map(addCfopDescriptionToRow);
             }
             finalSheetSet[name] = sheetData;
