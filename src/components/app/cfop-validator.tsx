@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { Check, ThumbsDown, ThumbsUp, RotateCcw, Save, AlertTriangle, CheckCircle, FileWarning } from "lucide-react";
+import { ThumbsDown, ThumbsUp, RotateCcw, Save, AlertTriangle, CheckCircle, FileWarning } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from '../ui/badge';
@@ -34,6 +34,7 @@ interface CfopValidatorProps {
 }
 
 const getUniqueProductKey = (item: CfopValidationData): string => {
+    // Usa o Código do produto do XML e o CNPJ do emitente
     return `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
 };
 
@@ -45,7 +46,8 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
     useEffect(() => {
         const initialStatus: Record<string, ValidationStatus> = {};
-        const persistedValidations = allPersistedClassifications['cfopValidations']?.classifications || {};
+        // Adiciona uma verificação para garantir que allPersistedClassifications não é undefined
+        const persistedValidations = (allPersistedClassifications && allPersistedClassifications['cfopValidations']?.classifications) || {};
 
         items.forEach(item => {
             const uniqueProductKey = getUniqueProductKey(item);
@@ -71,7 +73,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     };
 
     const handleSaveChanges = () => {
-        const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedClassifications));
+        const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedClassifications || {}));
         if (!updatedPersistedData['cfopValidations']) {
             updatedPersistedData['cfopValidations'] = { classifications: {}, accountCodes: {} };
         }
@@ -110,10 +112,13 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
              if (id === 'Fornecedor') {
                 return (
                     <div>
-                        <p>{row.original.Fornecedor}</p>
+                        <p className="max-w-xs truncate">{row.original.Fornecedor}</p>
                         <p className="text-xs text-muted-foreground">{row.original['CPF/CNPJ do Emitente']}</p>
                     </div>
                 );
+            }
+             if (id === 'Descrição' || id === 'Sienge_Descrição') {
+                return <div className="max-w-xs truncate" title={row.getValue(id)}>{String(row.getValue(id) ?? '')}</div>;
             }
             return <div>{String(row.getValue(id) ?? '')}</div>;
         }
