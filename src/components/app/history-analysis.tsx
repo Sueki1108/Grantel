@@ -16,6 +16,15 @@ export interface SessionData {
     lastSaidaNumber: number;
     disregardedNfseNotes: string[]; 
     saidasStatus: Record<number, 'emitida' | 'cancelada' | 'inutilizada'>;
+    fileNames: {
+        nfeEntrada: string[];
+        cte: string[];
+        nfeSaida: string[];
+        nfse: string[];
+        manifesto: string[];
+        sienge: string | null;
+        sped: string[];
+    };
 }
 
 interface HistoryAnalysisProps {
@@ -87,7 +96,7 @@ export function HistoryAnalysis({ onRestoreSession }: HistoryAnalysisProps) {
                  <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/50 p-8 transition-all min-h-[200px]">
                     <FileJson className="h-12 w-12 text-muted-foreground mb-4" />
                     <h3 className="text-xl font-semibold mb-2">Importar ficheiro de sessão</h3>
-                    <p className="text-muted-foreground mb-6 text-center">Clique no botão abaixo para selecionar e carregar o seu ficheiro `sessao_automator_....json`.</p>
+                    <p className="text-muted-foreground mb-6 text-center">Clique no botão abaixo para selecionar e carregar o seu ficheiro `Grantel - Backup Fiscal - ... .json`.</p>
                     <Button onClick={handleImportClick}>
                         <Upload className="mr-2 h-4 w-4" /> Procurar Ficheiro de Sessão
                     </Button>

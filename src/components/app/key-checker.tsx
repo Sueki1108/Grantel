@@ -924,7 +924,7 @@ export function KeyChecker({
                                     {isCorrecting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Corrigindo...</> : 'Corrigir e Baixar Arquivo SPED'}
                                 </Button>
                             </DialogTrigger>
-                           <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+                           <DialogContent className="max-w-[95vw] h-[90vh] flex flex-col">
                                 <DialogHeader>
                                     <DialogTitle>Correção do Arquivo SPED</DialogTitle>
                                     <DialogDescription>
