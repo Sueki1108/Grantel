@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FileSearch, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Save } from "lucide-react";
+import { FileSearch, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Save, Check, X, BadgeHelp } from "lucide-react";
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,7 +16,9 @@ import type { ProcessedData, SpedInfo } from "@/lib/excel-processor";
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { cleanAndToStr } from "@/lib/utils";
 import { KeyChecker } from "./key-checker";
-import { type Classification } from "./imobilizado-analysis";
+import { type AllClassifications } from "./imobilizado-analysis";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
+import { Badge } from "../ui/badge";
 
 
 // ===============================================================
@@ -30,9 +32,15 @@ type InconsistentRow = {
 type SiengeValidationResult = {
     row: any;
     expectedCfops: string[];
-    classification: Classification;
+    classification: keyof typeof classificationCfops;
     isValid: boolean;
 };
+
+const classificationCfops = {
+    'Uso e Consumo': ['1556', '2556', '1407', '2407'],
+    'Utilizado em Obra': ['1128', '2128'],
+};
+
 
 const readFileAsJson = (file: File): Promise<any[]> => {
     return new Promise((resolve, reject) => {
@@ -40,14 +48,10 @@ const readFileAsJson = (file: File): Promise<any[]> => {
         reader.onload = (event) => {
             try {
                 const data = event.target?.result;
-                if (!data) {
-                    throw new Error("Não foi possível ler o conteúdo do arquivo.");
-                }
+                if (!data) throw new Error("Não foi possível ler o conteúdo do arquivo.");
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
-                if (!sheetName) {
-                    throw new Error("A planilha não contém nenhuma aba.");
-                }
+                if (!sheetName) throw new Error("A planilha não contém nenhuma aba.");
                 const worksheet = workbook.Sheets[sheetName];
                 const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
                 resolve(jsonData);
@@ -94,6 +98,8 @@ interface AdditionalAnalysesProps {
     onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null) => void;
     competence: string | null;
     onExportSession: () => void;
+    imobilizadoClassifications: AllClassifications;
+    onPersistImobilizado: (data: AllClassifications) => void;
 }
 
 export function AdditionalAnalyses({ 
@@ -108,6 +114,8 @@ export function AdditionalAnalyses({
     onSpedProcessed,
     competence,
     onExportSession,
+    imobilizadoClassifications,
+    onPersistImobilizado
 }: AdditionalAnalysesProps) {
     const { toast } = useToast();
 
@@ -200,7 +208,6 @@ export function AdditionalAnalyses({
         const getCfopDescription = (cfopCode: number): string => {
             const fullDescription = cfopDescriptions[cfopCode];
             if (fullDescription) {
-                 // Try to get the description again to handle nested structures, but add checks
                 const nestedDescriptionKey = Object.keys(cfopDescriptions).find(k => cfopDescriptions[Number(k) as keyof typeof cfopDescriptions] === fullDescription);
                 if (nestedDescriptionKey) {
                     const nestedDescription = cfopDescriptions[Number(nestedDescriptionKey) as keyof typeof cfopDescriptions];
@@ -455,7 +462,7 @@ export function AdditionalAnalyses({
                             </div>
                         </div>
                          <Button onClick={onExportSession} disabled={!competence}>
-                            <Download className="mr-2 h-4 w-4" /> Exportar Sessão (.json)
+                            <Save className="mr-2 h-4 w-4" /> Exportar Sessão (.json)
                         </Button>
                     </div>
                 </CardHeader>
@@ -486,9 +493,11 @@ export function AdditionalAnalyses({
                         siengeFile={siengeFile}
                         onSiengeFileChange={handleSiengeFileChange}
                         onClearSiengeFile={onClearSiengeFile}
-                        processedData={processedData}
                         reconciliationResults={reconciliationResults}
                         error={reconciliationError}
+                        competence={competence}
+                        imobilizadoClassifications={imobilizadoClassifications}
+                        onPersistImobilizado={onPersistImobilizado}
                     />
                 </TabsContent>
 
@@ -632,305 +641,16 @@ export function AdditionalAnalyses({
 
 interface ReconciliationAnalysisProps {
     siengeFile: File | null;
-    processedData: ProcessedData;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
     reconciliationResults: { reconciled: any[], onlyInSienge: any[], onlyInXml: any[] } | null;
     error: string | null;
+    competence: string | null;
+    imobilizadoClassifications: AllClassifications;
+    onPersistImobilizado: (data: AllClassifications) => void;
 }
 
-function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
-    if (!siengeData || !xmlItems) {
-        return { reconciliationResults: null, error: null };
-    }
-
-    try {
-        const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
-            if (!data || data.length === 0 || !data[0]) return undefined;
-            const headers = Object.keys(data[0]);
-            const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
-            for (const name of possibleNames) {
-                const normalizedName = normalizeKey(name);
-                const found = normalizedHeaders.find(h => h.normalized === normalizedName);
-                if (found) return found.original;
-            }
-            return undefined;
-        };
-
-        const espHeader = findHeader(siengeData, ['esp']);
-        if (!espHeader) {
-            throw new Error("Não foi possível encontrar a coluna 'Esp' na planilha Sienge para filtragem.");
-        }
-
-        const filteredSiengeData = siengeData.filter(row => {
-            const espValue = row[espHeader] ? String(row[espHeader]).trim().toUpperCase() : '';
-            return espValue === 'NFE' || espValue === 'NFSR';
-        });
-
-
-        const h = {
-            cnpj: findHeader(filteredSiengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
-            numero: findHeader(filteredSiengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
-            valorTotal: findHeader(filteredSiengeData, ['valor total', 'valor', 'vlr total']),
-            icmsOutras: findHeader(filteredSiengeData, ['icms outras', 'icmsoutras']),
-            desconto: findHeader(filteredSiengeData, ['desconto']),
-            frete: findHeader(filteredSiengeData, ['frete']),
-            ipiDespesas: findHeader(filteredSiengeData, ['ipi despesas', 'ipidespesas']),
-            icmsSt: findHeader(filteredSiengeData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
-            despesasAcessorias: findHeader(filteredSiengeData, ['despesas acessórias', 'despesasacessorias', 'voutro']),
-            precoUnitario: findHeader(filteredSiengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
-            produtoFiscal: findHeader(filteredSiengeData, ['produto fiscal', 'descrição do item', 'descrição']),
-        };
-        
-
-        if (!h.cnpj || !h.numero || !h.valorTotal) {
-            throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge.");
-        }
-
-        const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
-            const cleanNumero = cleanAndToStr(numero);
-            const cleanCnpj = String(cnpj).replace(/\D/g, '');
-            const cleanValor = parseFloat(String(valor || '0').replace(',', '.')).toFixed(2);
-            if (!cleanNumero || !cleanCnpj || cleanValor === 'NaN') return null;
-            return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
-        };
-
-        const reconciled: any[] = [];
-        let remainingXmlItems = [...xmlItems];
-        let remainingSiengeItems = [...filteredSiengeData];
-
-        const reconciliationPass = (
-            siengeItems: any[],
-            xmlItems: any[],
-            getSiengeKey: (item: any) => string | null,
-            getXmlKey: (item: any) => string | null = getSiengeKey,
-            passName: string
-        ) => {
-            const matchedInPass: any[] = [];
-            const stillUnmatchedSienge: any[] = [];
-            const xmlMap = new Map<string, any[]>();
-
-            xmlItems.forEach(item => {
-                const key = getXmlKey(item);
-                if (key) {
-                    if (!xmlMap.has(key)) xmlMap.set(key, []);
-                    xmlMap.get(key)!.push(item);
-                }
-            });
-
-            siengeItems.forEach(siengeItem => {
-                const key = getSiengeKey(siengeItem);
-                if (key && xmlMap.has(key)) {
-                    const matchedXmlItems = xmlMap.get(key)!;
-                    if (matchedXmlItems.length > 0) {
-                        const matchedXmlItem = matchedXmlItems.shift(); // Take one match
-                        if (matchedXmlItems.length === 0) {
-                            xmlMap.delete(key);
-                        }
-                        matchedInPass.push({ ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 'Observações': `Conciliado via ${passName}` });
-                        return; // Sienge item is matched, move to next
-                    }
-                }
-                stillUnmatchedSienge.push(siengeItem);
-            });
-            
-            const stillUnmatchedXml = Array.from(xmlMap.values()).flat();
-            return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
-        };
-
-        let result = reconciliationPass(remainingSiengeItems, remainingXmlItems, 
-            (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]),
-            (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
-            "Valor Total"
-        );
-        reconciled.push(...result.matched);
-        remainingSiengeItems = result.remainingSienge;
-        remainingXmlItems = result.remainingXml;
-
-        if (h.icmsOutras) {
-             result = reconciliationPass(remainingSiengeItems, remainingXmlItems, 
-                (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.icmsOutras!]),
-                (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
-                "ICMS Outras"
-            );
-            reconciled.push(...result.matched);
-            remainingSiengeItems = result.remainingSienge;
-            remainingXmlItems = result.remainingXml;
-        }
-
-        if (h.desconto) {
-            result = reconciliationPass(remainingSiengeItems, remainingXmlItems,
-                (item) => getComparisonKey(
-                    item[h.numero!], 
-                    item[h.cnpj!], 
-                    parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto!] || '0').replace(',', '.'))
-                ),
-                (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
-                "Valor Total + Desconto"
-            );
-            reconciled.push(...result.matched);
-            remainingSiengeItems = result.remainingSienge;
-            remainingXmlItems = result.remainingXml;
-        }
-        
-        if (h.frete) {
-            result = reconciliationPass(remainingSiengeItems, remainingXmlItems,
-                (item) => getComparisonKey(
-                    item[h.numero!], 
-                    item[h.cnpj!], 
-                    parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.frete!] || '0').replace(',', '.'))
-                ),
-                (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
-                "Valor Total - Frete"
-            );
-            reconciled.push(...result.matched);
-            remainingSiengeItems = result.remainingSienge;
-            remainingXmlItems = result.remainingXml;
-        }
-
-        if (h.ipiDespesas || h.icmsSt) {
-            result = reconciliationPass(remainingSiengeItems, remainingXmlItems,
-                (item) => getComparisonKey(
-                    item[h.numero!], 
-                    item[h.cnpj!], 
-                    parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) 
-                    - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0)
-                    - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)
-                ),
-                (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
-                "Valor Total - IPI/ICMS ST"
-            );
-            reconciled.push(...result.matched);
-            remainingSiengeItems = result.remainingSienge;
-            remainingXmlItems = result.remainingXml;
-        }
-        
-        if (h.frete || h.ipiDespesas) {
-            result = reconciliationPass(remainingSiengeItems, remainingXmlItems,
-                (item) => getComparisonKey(
-                    item[h.numero!], 
-                    item[h.cnpj!], 
-                    parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) 
-                    - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0)
-                    - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0)
-                ),
-                (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
-                "Valor Total - Frete/IPI"
-            );
-            reconciled.push(...result.matched);
-            remainingSiengeItems = result.remainingSienge;
-            remainingXmlItems = result.remainingXml;
-        }
-
-        if (h.desconto || h.frete) {
-            result = reconciliationPass(remainingSiengeItems, remainingXmlItems,
-                (item) => getComparisonKey(
-                    item[h.numero!], 
-                    item[h.cnpj!], 
-                    parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) 
-                    + (h.desconto ? parseFloat(String(item[h.desconto] || '0').replace(',', '.')) : 0)
-                    - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0)
-                ),
-                (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
-                "Valor Total + Desc - Frete"
-            );
-            reconciled.push(...result.matched);
-            remainingSiengeItems = result.remainingSienge;
-            remainingXmlItems = result.remainingXml;
-        }
-
-        if (h.despesasAcessorias) {
-            result = reconciliationPass(remainingSiengeItems, remainingXmlItems,
-                (item) => getComparisonKey(
-                    item[h.numero!], 
-                    item[h.cnpj!], 
-                    parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.despesasAcessorias!] || '0').replace(',', '.'))
-                ),
-                (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
-                "Valor Total - Desp. Acess."
-            );
-            reconciled.push(...result.matched);
-            remainingSiengeItems = result.remainingSienge;
-            remainingXmlItems = result.remainingXml;
-        }
-        
-        if (h.precoUnitario) {
-            result = reconciliationPass(remainingSiengeItems, remainingXmlItems, 
-                (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.precoUnitario!]),
-                (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Unitário']),
-                "Preço Unitário"
-            );
-            reconciled.push(...result.matched);
-            remainingSiengeItems = result.remainingSienge;
-            remainingXmlItems = result.remainingXml;
-        }
-
-        if (h.produtoFiscal && h.valorTotal) {
-            const groupAndSum = (items: any[], notaKey: string, cnpjKey: string, productKey: string, valueKey: string) => {
-                const grouped = new Map<string, { items: any[], sum: number }>();
-                items.forEach(item => {
-                    const key = `${item[notaKey]}-${item[cnpjKey]}-${item[productKey]}`;
-                    if (!grouped.has(key)) {
-                        grouped.set(key, { items: [], sum: 0 });
-                    }
-                    const group = grouped.get(key)!;
-                    group.items.push(item);
-                    group.sum += parseFloat(String(item[valueKey] || '0').replace(',', '.'));
-                });
-                return grouped;
-            };
-
-            const siengeGrouped = groupAndSum(remainingSiengeItems, h.numero!, h.cnpj!, h.produtoFiscal!, h.valorTotal!);
-            const xmlGrouped = groupAndSum(remainingXmlItems, 'Número da Nota', 'CPF/CNPJ do Emitente', 'Descrição', 'Valor Total');
-
-            const stillUnmatchedSienge = new Set(remainingSiengeItems);
-            const stillUnmatchedXml = new Set(remainingXmlItems);
-
-            siengeGrouped.forEach((siengeGroup, key) => {
-                const xmlGroup = xmlGrouped.get(key);
-                if (xmlGroup && Math.abs(siengeGroup.sum - xmlGroup.sum) < 0.01) {
-                    const aggregate = (items: any[], valueKey: string) => {
-                        return items.reduce((acc, item, index) => {
-                            if (index === 0) return { ...item };
-                            Object.keys(item).forEach(k => {
-                                if (typeof item[k] === 'number' && k !== 'Número da Nota') {
-                                    acc[k] = (acc[k] || 0) + item[k];
-                                }
-                            });
-                            acc[valueKey] = (acc[valueKey] || 0) + item[valueKey];
-                            return acc;
-                        }, {});
-                    };
-
-                    const aggregatedSienge = aggregate(siengeGroup.items, h.valorTotal!);
-                    const aggregatedXml = aggregate(xmlGroup.items, 'Valor Total');
-                    
-                    const reconciledRow = {
-                        ...aggregatedXml,
-                        ...Object.fromEntries(Object.entries(aggregatedSienge).map(([k, v]) => [`Sienge_${k}`, v])),
-                        'Observações': `Conciliado por Agregação de Produto (${siengeGroup.items.length} itens)`,
-                        'Valor Total': aggregatedXml['Valor Total'],
-                        'Quantidade': siengeGroup.items.reduce((sum, i) => sum + (parseFloat(String(i['Qtde'] || '0').replace(',', '.')) || 0), 0)
-                    };
-                    reconciled.push(reconciledRow);
-
-                    siengeGroup.items.forEach(item => stillUnmatchedSienge.delete(item));
-                    xmlGroup.items.forEach(item => stillUnmatchedXml.delete(item));
-                }
-            });
-
-            remainingSiengeItems = Array.from(stillUnmatchedSienge);
-            remainingXmlItems = Array.from(stillUnmatchedXml);
-        }
-
-        return { reconciliationResults: { reconciled, onlyInSienge: remainingSiengeItems, onlyInXml: remainingXmlItems }, error: null };
-    } catch (err: any) {
-        return { reconciliationResults: null, error: err.message };
-    }
-}
-
-
-function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, processedData, reconciliationResults, error }: ReconciliationAnalysisProps) {
+function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error, competence, imobilizadoClassifications, onPersistImobilizado }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
     useEffect(() => {
@@ -955,12 +675,37 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
     return (
          <Card>
             <CardHeader>
-                <div className="flex items-center gap-3">
-                    <GitCompareArrows className="h-8 w-8 text-primary" />
-                    <div>
-                        <CardTitle className="font-headline text-2xl">Conciliação de Itens (XML vs Sienge)</CardTitle>
-                        <CardDescription>Carregue a planilha do Sienge. A comparação será executada automaticamente.</CardDescription>
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <GitCompareArrows className="h-8 w-8 text-primary" />
+                        <div>
+                            <CardTitle className="font-headline text-2xl">Conciliação de Itens (XML vs Sienge)</CardTitle>
+                            <CardDescription>Carregue a planilha do Sienge para iniciar a conciliação e validar os lançamentos.</CardDescription>
+                        </div>
                     </div>
+                     <Dialog>
+                        <DialogTrigger asChild>
+                             <Button disabled={!reconciliationResults || reconciliationResults.reconciled.length === 0}>
+                                Validar CFOP de Itens Conciliados
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-[95vw] h-[90vh] flex flex-col">
+                            <DialogHeader>
+                                <DialogTitle>Validação de CFOP dos Itens Conciliados</DialogTitle>
+                                <DialogDescription>
+                                    Classifique os itens e verifique se o CFOP lançado no Sienge está correto. As classificações são guardadas automaticamente.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="flex-grow overflow-auto">
+                                <CfopValidator 
+                                    reconciledItems={reconciliationResults?.reconciled || []} 
+                                    competence={competence}
+                                    imobilizadoClassifications={imobilizadoClassifications}
+                                    onPersistImobilizado={onPersistImobilizado}
+                                />
+                            </div>
+                        </DialogContent>
+                    </Dialog>
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -970,17 +715,8 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                     onFileChange={onSiengeFileChange}
                     onClearFile={onClearSiengeFile}
                 />
-                {!processedData.sheets['Itens Válidos'] && (
-                     <Alert variant="destructive">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertTitle>Dados XML em falta</AlertTitle>
-                        <AlertDescription>
-                            Processe os XMLs de entrada na primeira aba para habilitar a conciliação.
-                        </AlertDescription>
-                    </Alert>
-                )}
                 
-                {reconciliationResults && (
+                {reconciliationResults ? (
                     <div className="mt-6">
                         <Tabs defaultValue="reconciled">
                             <TabsList className="h-auto flex-wrap justify-start">
@@ -1004,7 +740,13 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                             </div>
                         </Tabs>
                     </div>
+                ) : (
+                     <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
+                        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                        <p className="mt-4 text-center">Aguardando o ficheiro "Itens do Sienge" para executar a conciliação automaticamente...</p>
+                    </div>
                 )}
+
                  {error && (
                     <Alert variant="destructive">
                         <AlertTriangle className="h-4 w-4" />
@@ -1014,13 +756,218 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                         </AlertDescription>
                     </Alert>
                 )}
-                 {!siengeFile && processedData.sheets['Itens Válidos'] && (
-                     <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
-                        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                        <p className="mt-4 text-center">Aguardando o ficheiro "Itens do Sienge" para executar a conciliação automaticamente...</p>
-                    </div>
-                 )}
             </CardContent>
          </Card>
     );
+}
+
+// ===============================================================
+// Lógica de Conciliação
+// ===============================================================
+
+function useReconciliation(siengeData: any[] | null, xmlItems: any[] | null) {
+    if (!siengeData || !xmlItems) {
+        return { reconciliationResults: null, error: null };
+    }
+
+    try {
+        const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
+            if (!data || data.length === 0 || !data[0]) return undefined;
+            const headers = Object.keys(data[0]);
+            const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
+            for (const name of possibleNames) {
+                const normalizedName = normalizeKey(name);
+                const found = normalizedHeaders.find(h => h.normalized === normalizedName);
+                if (found) return found.original;
+            }
+            return undefined;
+        };
+
+        const espHeader = findHeader(siengeData, ['esp']);
+        if (!espHeader) throw new Error("Não foi possível encontrar a coluna 'Esp' na planilha Sienge para filtragem.");
+
+        const filteredSiengeData = siengeData.filter(row => {
+            const espValue = row[espHeader] ? String(row[espHeader]).trim().toUpperCase() : '';
+            return espValue === 'NFE' || espValue === 'NFSR';
+        });
+
+        const h = {
+            cnpj: findHeader(filteredSiengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
+            numero: findHeader(filteredSiengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
+            valorTotal: findHeader(filteredSiengeData, ['valor total', 'valor', 'vlr total']),
+            cfop: findHeader(filteredSiengeData, ['cfop']),
+            produtoFiscal: findHeader(filteredSiengeData, ['produto fiscal', 'descrição do item', 'descrição']),
+        };
+        
+        if (!h.cnpj || !h.numero) throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ') na planilha Sienge.");
+
+        const getReconciliationKey = (item: any, source: 'xml' | 'sienge') => {
+             const numero = source === 'xml' ? item['Número da Nota'] : item[h.numero!];
+             const cnpj = source === 'xml' ? item['CPF/CNPJ do Emitente'] : item[h.cnpj!];
+             const produto = source === 'xml' ? item['Código'] : item['Código do Produto Fiscal']; // Sienge might have this
+             return `${cleanAndToStr(numero)}-${cleanAndToStr(cnpj)}-${cleanAndToStr(produto)}`;
+        };
+        
+        const xmlMap = new Map<string, any>();
+        xmlItems.forEach(item => xmlMap.set(getReconciliationKey(item, 'xml'), item));
+
+        const reconciled: any[] = [];
+        const onlyInSienge: any[] = [];
+
+        filteredSiengeData.forEach(siengeItem => {
+            const key = getReconciliationKey(siengeItem, 'sienge');
+            if (xmlMap.has(key)) {
+                const xmlItem = xmlMap.get(key);
+                const combined = { ...xmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])) };
+                reconciled.push(combined);
+                xmlMap.delete(key);
+            } else {
+                onlyInSienge.push(siengeItem);
+            }
+        });
+
+        const onlyInXml = Array.from(xmlMap.values());
+
+        return { reconciliationResults: { reconciled, onlyInSienge, onlyInXml }, error: null };
+    } catch (err: any) {
+        return { reconciliationResults: null, error: err.message };
+    }
+}
+
+
+// ===============================================================
+// Componente de Validação de CFOP
+// ===============================================================
+interface CfopValidatorProps {
+    reconciledItems: any[];
+    competence: string | null;
+    imobilizadoClassifications: AllClassifications;
+    onPersistImobilizado: (data: AllClassifications) => void;
+}
+
+function CfopValidator({ reconciledItems, competence, imobilizadoClassifications, onPersistImobilizado }: CfopValidatorProps) {
+    const [localClassifications, setLocalClassifications] = useState<Record<string, keyof typeof classificationCfops | 'unclassified'>>({});
+    const [hasChanges, setHasChanges] = useState(false);
+
+    useEffect(() => {
+        if (!competence || !reconciledItems.length) return;
+        const initialClassifications: Record<string, keyof typeof classificationCfops | 'unclassified'> = {};
+
+        reconciledItems.forEach(item => {
+            const uniqueItemId = `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
+            let foundClassification: keyof typeof classificationCfops | 'unclassified' = 'unclassified';
+            
+            // Look in all persisted data for a classification for this item
+            for (const comp in imobilizadoClassifications) {
+                const classification = imobilizadoClassifications[comp]?.classifications?.[uniqueItemId]?.classification;
+                if (classification && classification !== 'imobilizado' && classification !== 'unclassified') {
+                    foundClassification = classification;
+                    break;
+                }
+            }
+            initialClassifications[uniqueItemId] = foundClassification;
+        });
+
+        setLocalClassifications(initialClassifications);
+        setHasChanges(false);
+    }, [reconciledItems, competence, imobilizadoClassifications]);
+
+    const handleClassificationChange = (uniqueItemId: string, classification: keyof typeof classificationCfops) => {
+        setLocalClassifications(prev => ({ ...prev, [uniqueItemId]: classification }));
+        setHasChanges(true);
+    };
+
+    const handleSaveChanges = () => {
+        if (!competence) return;
+        
+        const updatedData = JSON.parse(JSON.stringify(imobilizadoClassifications));
+        if (!updatedData[competence]) {
+            updatedData[competence] = { classifications: {}, accountCodes: {} };
+        }
+
+        Object.entries(localClassifications).forEach(([uniqueItemId, classification]) => {
+            if (classification !== 'unclassified') {
+                updatedData[competence].classifications[uniqueItemId] = { classification };
+            }
+        });
+
+        onPersistImobilizado(updatedData);
+        setHasChanges(false);
+    };
+
+    const validationResults = useMemo(() => {
+        return reconciledItems.map(item => {
+            const uniqueItemId = `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
+            const classification = localClassifications[uniqueItemId];
+            const siengeCfopHeader = Object.keys(item).find(k => k.toLowerCase().includes('sienge_') && k.toLowerCase().includes('cfop'));
+            const siengeCfop = siengeCfopHeader ? cleanAndToStr(item[siengeCfopHeader]) : '';
+
+            let isValid = null;
+            let expectedCfops: string[] = [];
+
+            if (classification && classification !== 'unclassified') {
+                expectedCfops = classificationCfops[classification];
+                isValid = expectedCfops.includes(siengeCfop);
+            }
+
+            return { ...item, uniqueItemId, classification, siengeCfop, isValid, expectedCfops };
+        });
+    }, [reconciledItems, localClassifications]);
+
+    if (!reconciledItems.length) {
+        return <p className="text-center text-muted-foreground">Nenhum item conciliado para validar.</p>;
+    }
+
+    return (
+        <div className="space-y-4">
+             <div className="flex justify-end items-center gap-4">
+                <p className="text-sm text-muted-foreground">{hasChanges ? "Existem alterações não guardadas." : "Alterações guardadas."}</p>
+                <Button onClick={handleSaveChanges} disabled={!hasChanges}>
+                    <Save className="mr-2 h-4 w-4" /> Guardar Classificações
+                </Button>
+            </div>
+            <div className="rounded-md border">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Item</TableHead>
+                            <TableHead>CFOP Sienge</TableHead>
+                            <TableHead>Classificação</TableHead>
+                            <TableHead>Status</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {validationResults.map((item, index) => (
+                            <TableRow key={index}>
+                                <TableCell>
+                                    <p className="font-medium">{item['Descrição']}</p>
+                                    <p className="text-sm text-muted-foreground">{item['Código']}</p>
+                                </TableCell>
+                                <TableCell>{item.siengeCfop}</TableCell>
+                                <TableCell>
+                                    <div className="flex gap-2">
+                                        {(Object.keys(classificationCfops) as Array<keyof typeof classificationCfops>).map(c => (
+                                            <Button 
+                                                key={c}
+                                                variant={item.classification === c ? 'default' : 'outline'}
+                                                size="sm"
+                                                onClick={() => handleClassificationChange(item.uniqueItemId, c)}
+                                            >
+                                                {c}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    {item.isValid === true && <Badge variant="default" className="bg-green-600"><Check className="mr-1 h-4 w-4" /> Correto</Badge>}
+                                    {item.isValid === false && <Badge variant="destructive"><X className="mr-1 h-4 w-4" /> INCORRETO (Esperado: {item.expectedCfops.join(' ou ')})</Badge>}
+                                    {item.isValid === null && <Badge variant="secondary"><BadgeHelp className="mr-1 h-4 w-4"/> Não Classificado</Badge>}
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
+        </div>
+    )
 }
