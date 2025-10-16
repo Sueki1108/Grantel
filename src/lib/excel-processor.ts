@@ -181,19 +181,17 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     
     log("Identificando itens para análise de imobilizado...");
     const remessaCfopsPrefixes = ['59', '69'];
-    const itensAcimaDe1200 = itensValidos.filter(item => {
+    const itensParaImobilizado = itensValidos.filter(item => {
         if (!item || !item['Valor Unitário']) return false;
         const cfop = cleanAndToStr(item["CFOP"]);
         const valorUnitario = parseFloat(String(item['Valor Unitário']));
         const isRemessa = remessaCfopsPrefixes.some(prefix => cfop.startsWith(prefix));
         return valorUnitario > 1200 && !isRemessa;
     });
-    log(`- ${itensAcimaDe1200.length} itens com valor unitário acima de R$ 1.200 (não remessa) encontrados para análise de imobilizado.`);
+    log(`- ${itensParaImobilizado.length} itens com valor unitário acima de R$ 1.200 (não remessa) encontrados para análise de imobilizado.`);
 
-    const imobilizados = itensAcimaDe1200.map((item) => {
-        // A chave única para CLASSIFICAÇÃO persistente é baseada no fornecedor e no produto
+    const imobilizados = itensParaImobilizado.map((item) => {
         const uniqueItemId = `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
-        // O id único para a LINHA DA TABELA é para gerir o estado de UI (código do ativo)
         const id = `${cleanAndToStr(item['Chave Unica'])}-${item['Item']}`;
         return { 
             ...item, 

@@ -5,17 +5,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FileSearch, Sheet, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Building, Save, Database } from "lucide-react";
+import { FileSearch, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Save, Check, Ban } from "lucide-react";
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
 import { getColumns, getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { cfopDescriptions } from "@/lib/cfop";
 import type { ProcessedData, SpedInfo } from "@/lib/excel-processor";
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { cleanAndToStr } from "@/lib/utils";
 import { KeyChecker } from "./key-checker";
+import { type Classification } from "./imobilizado-analysis";
 
 
 // ===============================================================
@@ -24,6 +24,13 @@ import { KeyChecker } from "./key-checker";
 type InconsistentRow = { 
     row: any; 
     originalIndex: number 
+};
+
+type SiengeValidationResult = {
+    row: any;
+    expectedCfops: string[];
+    classification: Classification;
+    isValid: boolean;
 };
 
 const readFileAsJson = (file: File): Promise<any[]> => {
@@ -56,9 +63,6 @@ const readFileAsJson = (file: File): Promise<any[]> => {
 // ===============================================================
 // Constantes e Helpers
 // ===============================================================
-const inconsistentCfopColumns = ["Número", "Credor", "CPF/CNPJ", "CFOP", "Descricao CFOP", "UF do Fornecedor", "Correção Sugerida"];
-
-
 const formatCurrency = (value: any) => {
     const num = parseFloat(String(value).replace(',', '.'));
     if (isNaN(num)) return String(value ?? '');
@@ -144,120 +148,69 @@ export function AdditionalAnalyses({
         }
     };
     
-    const taxAndReconciliationAnalyses = useMemo(() => {
-        if (!siengeSheetData || siengeSheetData.length === 0) {
-            return { inconsistentCfopRows: [], taxConferences: { icms: [], pis: [], cofins: [], ipi: [], icmsSt: [] } };
+    const siengeValidation = useMemo((): SiengeValidationResult[] => {
+        if (!siengeSheetData || !competence || !processedData.imobilizadoClassifications) {
+            return [];
         }
-    
-        const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
-             if (!data || data.length === 0 || !data[0]) return undefined;
-             const headers = Object.keys(data[0]);
-             const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
-             for (const name of possibleNames) {
-                 const normalizedName = normalizeKey(name);
-                 const found = normalizedHeaders.find(h => h.normalized === normalizedName);
-                 if (found) return found.original;
-             }
-             return undefined;
-        };
-    
-        const h = {
-            uf: findHeader(siengeSheetData, ['uf', 'uf do fornecedor']), 
-            cfop: findHeader(siengeSheetData, ['cfop']),
-            icms: findHeader(siengeSheetData, ['icms', 'valor icms', 'vlr icms']), 
-            pis: findHeader(siengeSheetData, ['pis', 'valor pis', 'vlr pis']),
-            cofins: findHeader(siengeSheetData, ['cofins', 'valor cofins', 'vlr cofins']), 
-            ipi: findHeader(siengeSheetData, ['ipi', 'valor ipi', 'vlr ipi']),
-            icmsSt: findHeader(siengeSheetData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
-            numero: findHeader(siengeSheetData, ['número', 'numero', 'numero da nota', 'nota fiscal']), 
-            fornecedor: findHeader(siengeSheetData, ['credor', 'fornecedor', 'nome do fornecedor']),
-            cpfCnpj: findHeader(siengeSheetData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
-            descricao: findHeader(siengeSheetData, ['descrição', 'descrição do item', 'produto fiscal']),
+
+        const classifications = processedData.imobilizadoClassifications[competence]?.classifications || {};
+        if (Object.keys(classifications).length === 0) return [];
+
+        const findHeader = (possibleNames: string[]): string | undefined => {
+            if (siengeSheetData.length === 0 || !siengeSheetData[0]) return undefined;
+            const headers = Object.keys(siengeSheetData[0]);
+            for (const name of possibleNames) {
+                const found = headers.find(h => normalizeKey(h) === normalizeKey(name));
+                if (found) return found;
+            }
+            return undefined;
         };
 
-        const cfopRows: InconsistentRow[] = [];
-        const icms: any[] = [], pis: any[] = [], cofins: any[] = [], ipi: any[] = [], icmsSt: any[] = [];
-        
-        const getCfopDescription = (cfopCode: number): string => {
-            const fullDescription = cfopDescriptions[cfopCode];
-            if (fullDescription) {
-                const nestedDescriptionKey = Object.keys(cfopDescriptions).find(k => cfopDescriptions[Number(k) as keyof typeof cfopDescriptions] === fullDescription);
-                if (nestedDescriptionKey) {
-                    const nestedDescription = cfopDescriptions[Number(nestedDescriptionKey) as keyof typeof cfopDescriptions];
-                    if (nestedDescription && typeof nestedDescription === 'string') {
-                         return nestedDescription.split(' ').slice(0, 3).join(' ');
-                    }
-                }
-                return fullDescription.split(' ').slice(0, 3).join(' ');
-            }
-            return 'N/A';
+        const h = {
+            cnpj: findHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor']),
+            codigo: findHeader(['código do insumo', 'codigo', 'cod insumo', 'código']),
+            cfop: findHeader(['cfop']),
         };
-    
-        const getRelevantData = (row: any, taxKey: string | undefined, taxName: string) => {
-            if (!taxKey || !row || typeof row !== 'object' || !h.cfop) return null;
-            const relevantRow: Record<string, any> = {};
-            if(h.numero && h.numero in row) relevantRow["Número"] = row[h.numero];
-            if(h.cpfCnpj && h.cpfCnpj in row) relevantRow["CPF/CNPJ"] = row[h.cpfCnpj];
-            if(h.fornecedor && h.fornecedor in row) relevantRow["Credor"] = row[h.fornecedor];
-            const cfopVal = row[h.cfop] ?? row['CFOP'];
-            const cfopCode = parseInt(cleanAndToStr(cfopVal), 10);
-            relevantRow["CFOP"] = cfopCode;
-            relevantRow["Descricao CFOP"] = getCfopDescription(cfopCode);
-            if(taxKey in row) relevantRow[taxName] = row[taxKey];
-            if(h.descricao && h.descricao in row) relevantRow["Descrição"] = row[h.descricao];
-            return relevantRow;
+
+        if (!h.cnpj || !h.codigo || !h.cfop) {
+            toast({ variant: 'destructive', title: 'Colunas Sienge não encontradas', description: "Não foi possível encontrar 'CPF/CNPJ', 'Código do Insumo' e 'CFOP' na planilha." });
+            return [];
         }
-    
-        siengeSheetData.forEach((row, index) => {
-            if (!row || typeof row !== 'object') return;
-    
-            if (h.uf && row[h.uf] && h.cfop) {
-                const cfopVal = row[h.cfop] ?? row['CFOP'];
-                if(cfopVal) {
-                    const uf = String(row[h.uf] || '').toUpperCase().trim();
-                    const cfop = String(cfopVal || '').trim();
-                    if (uf && cfop) {
-                        const isInterstate = uf !== 'PR';
-                        const firstDigit = cfop.charAt(0);
-                        const cfopCode = parseInt(cfop, 10);
-                        const baseRow = {
-                            "Número": (h.numero && row[h.numero]) || '', 
-                            "Credor": (h.fornecedor && row[h.fornecedor]) || '', 
-                            "CPF/CNPJ": (h.cpfCnpj && row[h.cpfCnpj]) || '',
-                            "CFOP": cfop,
-                            "Descricao CFOP": getCfopDescription(cfopCode),
-                            "UF do Fornecedor": uf,
-                        };
-                        if (isInterstate && firstDigit !== '2' && !['5', '6', '7'].includes(firstDigit)) {
-                            cfopRows.push({ row: { ...baseRow, "Correção Sugerida": `2${cfop.substring(1)}` }, originalIndex: index });
-                        } else if (!isInterstate && firstDigit !== '1' && !['5', '6', '7'].includes(firstDigit)) {
-                             cfopRows.push({ row: { ...baseRow, "Correção Sugerida": `1${cfop.substring(1)}` }, originalIndex: index });
-                        }
-                    }
-                }
-            }
-    
-            if (h.icms && parseFloat(String(row[h.icms] || '0').replace(',', '.')) > 0) icms.push(getRelevantData(row, h.icms, "Valor ICMS")!);
-            if (h.pis && parseFloat(String(row[h.pis] || '0').replace(',', '.')) > 0) pis.push(getRelevantData(row, h.pis, "Valor PIS")!);
-            if (h.cofins && parseFloat(String(row[h.cofins] || '0').replace(',', '.')) > 0) cofins.push(getRelevantData(row, h.cofins, "Valor COFINS")!);
-            if (h.ipi && parseFloat(String(row[h.ipi] || '0').replace(',', '.')) > 0) ipi.push(getRelevantData(row, h.ipi, "Valor IPI")!);
-            if (h.icmsSt && parseFloat(String(row[h.icmsSt] || '0').replace(',', '.')) > 0) icmsSt.push(getRelevantData(row, h.icmsSt, "Valor ICMS ST")!);
-        });
         
-        const uniqueCfopRowsMap = new Map<string, InconsistentRow>();
-        cfopRows.forEach(item => {
-            const numero = item.row['Número'];
-            const cnpj = item.row['CPF/CNPJ'];
-            if (numero && cnpj) {
-                const key = `${cleanAndToStr(numero)}-${cleanAndToStr(cnpj)}`;
-                if (!uniqueCfopRowsMap.has(key)) {
-                    uniqueCfopRowsMap.set(key, item);
+        const cfopRules: Record<Classification, string[]> = {
+            'imobilizado': [], // Sem regra de CFOP para imobilizado
+            'uso-consumo': ['1556', '2556', '1407', '2407'],
+            'utilizado-em-obra': ['1128', '2128'],
+            'unclassified': []
+        };
+
+        const results: SiengeValidationResult[] = [];
+        siengeSheetData.forEach(row => {
+            const uniqueItemId = `${cleanAndToStr(row[h.cnpj!])}-${cleanAndToStr(row[h.codigo!])}`;
+            const classificationData = classifications[uniqueItemId];
+            
+            if (classificationData) {
+                const classification = classificationData.classification;
+                const expectedCfops = cfopRules[classification];
+                const actualCfop = cleanAndToStr(row[h.cfop!]);
+
+                let isValid = true;
+                // Only validate if there are rules for the classification
+                if (expectedCfops.length > 0) {
+                    isValid = expectedCfops.includes(actualCfop);
                 }
+
+                results.push({
+                    row: row,
+                    classification,
+                    expectedCfops,
+                    isValid
+                });
             }
         });
-    
-        return { inconsistentCfopRows: Array.from(uniqueCfopRowsMap.values()), taxConferences: { icms, pis, cofins, ipi, icmsSt } };
-    }, [siengeSheetData]);
+        return results;
+    }, [siengeSheetData, competence, processedData.imobilizadoClassifications]);
+
 
     const handleDownloadConferencia = (data: any[], title: string) => {
         if (!data || data.length === 0) {
@@ -271,15 +224,6 @@ export function AdditionalAnalyses({
         const fileName = `Grantel - Conferência ${title}.xlsx`;
         XLSX.writeFile(workbook, fileName);
     };
-
-    const getTaxFooter = (data: any[], taxName: string): Record<string, string> | undefined => {
-        if (!data || data.length === 0) return undefined;
-        const total = data.reduce((sum, row) => {
-            const value = parseFloat(String(row?.[taxName] || '0').replace(',', '.'));
-            return sum + (isNaN(value) ? 0 : value);
-        }, 0);
-        return { [taxName]: formatCurrency(total) };
-    }
 
     const handleAnalyzeResale = useCallback(async () => {
         if (!siengeFile) {
@@ -445,7 +389,7 @@ export function AdditionalAnalyses({
                 <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="sped">Verificação SPED</TabsTrigger>
                     <TabsTrigger value="reconciliation">Conciliação Itens (XML x Sienge)</TabsTrigger>
-                    <TabsTrigger value="conferencias">Conferência e Revenda (Sienge)</TabsTrigger>
+                    <TabsTrigger value="conferencias">Conferência (Sienge)</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="sped" className="mt-6">
@@ -479,7 +423,7 @@ export function AdditionalAnalyses({
                                 <UploadCloud className="h-8 w-8 text-primary" />
                                 <div>
                                     <CardTitle className="font-headline text-2xl">Carregar Planilha Sienge</CardTitle>
-                                    <CardDescription>Carregue a planilha "Itens do Sienge" para analisar as inconsistências de impostos e identificar notas de revenda.</CardDescription>
+                                    <CardDescription>Carregue a planilha "Itens do Sienge" para validar CFOPs e identificar notas de revenda.</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
@@ -493,56 +437,49 @@ export function AdditionalAnalyses({
                         </CardContent>
                     </Card>
                     
-                    <Tabs defaultValue="tax_check" className="w-full">
+                    <Tabs defaultValue="cfop_validation" className="w-full">
                         <TabsList className="grid w-full grid-cols-2">
-                           <TabsTrigger value="tax_check">Conferência de Impostos</TabsTrigger>
+                           <TabsTrigger value="cfop_validation">Validação de CFOP</TabsTrigger>
                            <TabsTrigger value="resale_export">Exportação de Revenda</TabsTrigger>
                         </TabsList>
-
-                        <TabsContent value="tax_check" className="mt-6">
+                        
+                        <TabsContent value="cfop_validation" className="mt-6">
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Resultados da Conferência de Impostos</CardTitle>
-                                    <CardDescription>Listagem de todos os itens da planilha Sienge que possuem valores nos campos de impostos.</CardDescription>
+                                    <CardTitle>Validação de CFOP (Sienge vs. Classificação)</CardTitle>
+                                    <CardDescription>Verifica se o CFOP lançado no Sienge corresponde à classificação definida na aba "Imobilizado".</CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    {siengeSheetData && siengeSheetData.length > 0 ? (
-                                        <Tabs defaultValue="cfop_uf">
-                                            <TabsList className="h-auto flex-wrap justify-start">
-                                                <TabsTrigger value="cfop_uf">CFOP/UF ({taxAndReconciliationAnalyses.inconsistentCfopRows.length})</TabsTrigger>
-                                                <TabsTrigger value="icms">ICMS ({taxAndReconciliationAnalyses.taxConferences.icms.length})</TabsTrigger>
-                                                <TabsTrigger value="pis">PIS ({taxAndReconciliationAnalyses.taxConferences.pis.length})</TabsTrigger>
-                                                <TabsTrigger value="cofins">COFINS ({taxAndReconciliationAnalyses.taxConferences.cofins.length})</TabsTrigger>
-                                                <TabsTrigger value="ipi">IPI ({taxAndReconciliationAnalyses.taxConferences.ipi.length})</TabsTrigger>
-                                                <TabsTrigger value="icms_st">ICMS ST ({taxAndReconciliationAnalyses.taxConferences.icmsSt.length})</TabsTrigger>
-                                            </TabsList>
-                                            <TabsContent value="cfop_uf" className="mt-4">
-                                                <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.inconsistentCfopRows.map(r => r.row), 'CFOP_UF_Inconsistencias')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.inconsistentCfopRows.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar Inconsistências</Button>
-                                                <DataTable columns={getColumnsWithCustomRender(taxAndReconciliationAnalyses.inconsistentCfopRows.map(r => r.row), inconsistentCfopColumns)} data={taxAndReconciliationAnalyses.inconsistentCfopRows.map(r => r.row)} />
-                                            </TabsContent>
-                                            <TabsContent value="icms" className="mt-4">
-                                                <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.taxConferences.icms, 'ICMS')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.taxConferences.icms.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                                <DataTable columns={getColumns(taxAndReconciliationAnalyses.taxConferences.icms)} data={taxAndReconciliationAnalyses.taxConferences.icms} footer={getTaxFooter(taxAndReconciliationAnalyses.taxConferences.icms, 'Valor ICMS')} />
-                                            </TabsContent>
-                                            <TabsContent value="pis" className="mt-4">
-                                                <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.taxConferences.pis, 'PIS')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.taxConferences.pis.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                                <DataTable columns={getColumns(taxAndReconciliationAnalyses.taxConferences.pis)} data={taxAndReconciliationAnalyses.taxConferences.pis} footer={getTaxFooter(taxAndReconciliationAnalyses.taxConferences.pis, 'Valor PIS')} />
-                                            </TabsContent>
-                                            <TabsContent value="cofins" className="mt-4">
-                                                <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.taxConferences.cofins, 'COFINS')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.taxConferences.cofins.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                                <DataTable columns={getColumns(taxAndReconciliationAnalyses.taxConferences.cofins)} data={taxAndReconciliationAnalyses.taxConferences.cofins} footer={getTaxFooter(taxAndReconciliationAnalyses.taxConferences.cofins, 'Valor COFINS')} />
-                                            </TabsContent>
-                                            <TabsContent value="ipi" className="mt-4">
-                                                <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.taxConferences.ipi, 'IPI')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.taxConferences.ipi.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                                <DataTable columns={getColumns(taxAndReconciliationAnalyses.taxConferences.ipi)} data={taxAndReconciliationAnalyses.taxConferences.ipi} footer={getTaxFooter(taxAndReconciliationAnalyses.taxConferences.ipi, 'Valor IPI')} />
-                                            </TabsContent>
-                                            <TabsContent value="icms_st" className="mt-4">
-                                                <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.taxConferences.icmsSt, 'ICMS_ST')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.taxConferences.icmsSt.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                                <DataTable columns={getColumns(taxAndReconciliationAnalyses.taxConferences.icmsSt)} data={taxAndReconciliationAnalyses.taxConferences.icmsSt} footer={getTaxFooter(taxAndReconciliationAnalyses.taxConferences.icmsSt, 'Valor ICMS ST')} />
-                                            </TabsContent>
-                                        </Tabs>
+                                    {!siengeSheetData || siengeValidation.length === 0 ? (
+                                        <div className="p-8 text-center text-muted-foreground">
+                                            <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
+                                            <h3 className="text-xl font-semibold mb-2">Aguardando Dados</h3>
+                                            <p>Carregue a planilha Sienge e classifique itens na aba "Imobilizado" para iniciar a validação.</p>
+                                        </div>
                                     ) : (
-                                        <div className="p-8 text-center text-muted-foreground"><AlertTriangle className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Nenhum dado para analisar</h3><p>Carregue la planilha "Itens do Sienge" acima para iniciar a análise de conferências.</p></div>
+                                        <DataTable 
+                                            columns={getColumnsWithCustomRender(
+                                                siengeValidation.map(v => v.row),
+                                                Object.keys(siengeValidation[0].row),
+                                                (row: any, id: string) => {
+                                                    const validationData = siengeValidation.find(v => v.row === row.original);
+                                                    if (id === 'CFOP') {
+                                                        const isValid = validationData?.isValid ?? true;
+                                                        const isApplicable = (validationData?.expectedCfops.length ?? 0) > 0;
+                                                        return (
+                                                             <div className="flex items-center gap-2">
+                                                                {isApplicable ? (
+                                                                    isValid ? <Check className="h-5 w-5 text-green-500" /> : <Ban className="h-5 w-5 text-red-500" />
+                                                                ) : null}
+                                                                <span>{row.original[id]}</span>
+                                                            </div>
+                                                        )
+                                                    }
+                                                    return <div>{String(row.original[id] ?? '')}</div>;
+                                                }
+                                            )} 
+                                            data={siengeValidation.map(v => v.row)} 
+                                        />
                                     )}
                                 </CardContent>
                             </Card>
@@ -599,7 +536,6 @@ export function AdditionalAnalyses({
                                 </CardContent>
                             </Card>
                         </TabsContent>
-
                     </Tabs>
                 </TabsContent>
             </Tabs>
