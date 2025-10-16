@@ -45,6 +45,7 @@ const requiredFiles = [
 ];
 
 const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications_v2';
+const SESSIONS_STORAGE_KEY = 'analysisSessions_v2';
 
 
 export function AutomatorClientPage() {
@@ -592,7 +593,7 @@ export function AutomatorClientPage() {
     return (
         <div className="min-h-screen bg-background text-foreground">
             <header className="sticky top-0 z-20 w-full border-b bg-background/80 backdrop-blur-sm">
-                <div className="container mx-auto flex h-16 items-center justify-between px-4">
+                <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
                      <div className="flex items-center gap-4">
                         <Button asChild variant="outline" size="icon" title="Voltar ao início">
                             <Link href="/">
@@ -610,8 +611,7 @@ export function AutomatorClientPage() {
                 </div>
             </header>
 
-            <main className="p-4 md:p-8">
-                <div className="mx-auto space-y-8">
+            <main className="p-4 md:p-8 space-y-8">
                     <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
                         <TabsList className="grid w-full grid-cols-1 md:grid-cols-6">
                              <TabsTrigger value="history" className="flex items-center gap-2">
@@ -708,7 +708,6 @@ export function AutomatorClientPage() {
                         </div>
 
                     </Tabs>
-                </div>
             </main>
             
             <Dialog open={isPeriodModalOpen} onOpenChange={setIsPeriodModalOpen}>

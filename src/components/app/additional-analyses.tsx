@@ -38,7 +38,9 @@ const readFileAsJson = (file: File): Promise<any[]> => {
                 if (!data) throw new Error("Não foi possível ler o conteúdo do arquivo.");
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
-                if (!sheetName) throw new Error("A planilha não contém nenhuma aba.");
+                if (!sheetName) {
+                    throw new Error("A planilha não contém nenhuma aba.");
+                }
                 const worksheet = workbook.Sheets[sheetName];
                 const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
                 resolve(jsonData);
