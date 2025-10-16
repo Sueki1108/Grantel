@@ -28,8 +28,8 @@ import { NfseAnalysis } from "@/components/app/nfse-analysis";
 import { KeyCheckResult } from "@/components/app/key-checker";
 import { SettingsDialog } from "@/components/app/settings-dialog";
 import { cn } from "@/lib/utils";
-import { ImobilizadoAnalysis, type AllClassifications } from "@/components/app/imobilizado-analysis";
-import { HistoryAnalysis, type SessionMetadata } from "@/components/app/history-analysis";
+import { ImobilizadoAnalysis, type AllClassifications, type ClassificationStorage } from "@/components/app/imobilizado-analysis";
+import { HistoryAnalysis, type SessionData } from "@/components/app/history-analysis";
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -45,8 +45,8 @@ const requiredFiles = [
     'NFE Operação Não Realizada', 'NFE Operação Desconhecida', 'CTE Desacordo de Serviço'
 ];
 
-const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications_v3';
-const SESSIONS_STORAGE_KEY = 'analysisSessions_v1';
+const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications_v2';
+const SESSIONS_STORAGE_KEY = 'analysisSessions_v2';
 
 
 export function AutomatorClientPage() {
@@ -96,33 +96,28 @@ export function AutomatorClientPage() {
         setIsWideMode(wideMode);
     }, []);
 
-    const handleImobilizadoDataChange = (competence: string, uniqueItemId: string, itemLineId: string, data: Partial<AllClassifications[string]>) => {
-        setImobilizadoClassifications(prev => {
-            const newCompetenceData = {
-                classifications: {
-                    ...prev[competence]?.classifications,
-                    ...(data.classifications || {})
-                },
-                accountCodes: {
-                    ...prev[competence]?.accountCodes,
-                    ...(data.accountCodes || {})
-                }
-            };
+    const handleImobilizadoDataChange = (itemUniqueId: string, data: ClassificationStorage) => {
+        if (!competence) {
+            toast({ variant: 'destructive', title: "Competência não definida", description: "Processe os arquivos e selecione um período primeiro." });
+            return;
+        }
 
-            const newState = {
-                ...prev,
-                [competence]: newCompetenceData
-            };
-            
-            try {
-                localStorage.setItem(IMOBILIZADO_STORAGE_KEY, JSON.stringify(newState));
-            } catch (e) {
-                console.error("Failed to save imobilizado classifications to localStorage", e);
-                toast({ variant: 'destructive', title: "Erro ao guardar classificações"});
-            }
-
-            return newState;
-        });
+        const newClassifications: AllClassifications = {
+            ...imobilizadoClassifications,
+            [competence]: {
+                ...(imobilizadoClassifications[competence] || {}),
+                [itemUniqueId]: data,
+            },
+        };
+        
+        setImobilizadoClassifications(newClassifications);
+        
+        try {
+            localStorage.setItem(IMOBILIZADO_STORAGE_KEY, JSON.stringify(newClassifications));
+        } catch (e) {
+            console.error("Failed to save imobilizado classifications to localStorage", e);
+            toast({ variant: 'destructive', title: "Erro ao guardar classificações"});
+        }
     };
 
     const handleSaveSession = () => {
@@ -131,11 +126,15 @@ export function AutomatorClientPage() {
             toast({ variant: 'destructive', title: 'Competência não definida', description: 'Processe os dados primeiro.' });
             return;
         }
+        if (!processedData) {
+            toast({ variant: 'destructive', title: 'Dados não processados', description: 'Valide os dados antes de guardar a sessão.' });
+            return;
+        }
 
-        const sessionMetadata: SessionMetadata = {
+        const sessionData: SessionData = {
             competence: currentCompetence,
             processedAt: new Date().toISOString(),
-            fileNames: {
+            fileNames: { // Still useful for user reference in the history tab
                 nfeEntrada: xmlFiles.nfeEntrada.map(f => f.name),
                 cte: xmlFiles.cte.map(f => f.name),
                 nfeSaida: xmlFiles.nfeSaida.map(f => f.name),
@@ -144,6 +143,8 @@ export function AutomatorClientPage() {
                 sienge: siengeFile ? siengeFile.name : null,
                 sped: spedFiles.map(f => f.name),
             },
+            processedData: processedData,
+            // Armazenar os estados leves
             lastSaidaNumber: lastSaidaNumber,
             disregardedNfseNotes: Array.from(disregardedNfseNotes),
             saidasStatus: saidasStatus,
@@ -151,19 +152,51 @@ export function AutomatorClientPage() {
 
         try {
             const existingSessionsRaw = localStorage.getItem(SESSIONS_STORAGE_KEY);
-            const existingSessions: SessionMetadata[] = existingSessionsRaw ? JSON.parse(existingSessionsRaw) : [];
+            const existingSessions: SessionData[] = existingSessionsRaw ? JSON.parse(existingSessionsRaw) : [];
             
             const newSessions = existingSessions.filter(s => s.competence !== currentCompetence);
-            newSessions.push(sessionMetadata);
+            newSessions.push(sessionData);
 
             localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(newSessions));
-            toast({ title: "Sessão Guardada no Histórico", description: `A análise para a competência ${currentCompetence} foi guardada.` });
-        } catch (e) {
+            toast({ title: "Sessão Guardada no Histórico", description: `A análise completa para a competência ${currentCompetence} foi guardada.` });
+        } catch (e: any) {
             console.error("Failed to save session to localStorage", e);
-            toast({ variant: 'destructive', title: `ERRO: Falha ao guardar a sessão no histórico: ${e}` });
+             toast({
+                variant: 'destructive',
+                title: `ERRO: Falha ao guardar a sessão`,
+                description: "Os dados processados podem ser demasiado grandes para o armazenamento local. Tente com um período menor."
+            });
         }
     };
     
+    const handleRestoreSession = (session: SessionData) => {
+        handleClearAllData();
+        
+        // Restore the entire processed state
+        setProcessedData(session.processedData);
+        
+        // Restore lightweight state
+        setLastSaidaNumber(session.lastSaidaNumber || 0);
+        setSaidasStatus(session.saidasStatus || {});
+        setDisregardedNfseNotes(new Set(session.disregardedNfseNotes || []));
+
+        // Restore period selection
+        const periods = session.competence.split('_');
+        const restoredPeriods: Record<string, boolean> = {};
+        periods.forEach(p => { restoredPeriods[p] = true });
+        setSelectedPeriods(restoredPeriods);
+        setAvailablePeriods(periods);
+        
+        toast({
+            title: "Sessão Restaurada com Sucesso",
+            description: `A análise completa para a competência ${session.competence} foi carregada.`,
+            duration: 7000,
+        });
+
+        // Switch to the first analysis tab to show the restored data
+        setActiveMainTab("nf-stock");
+    };
+
     // =================================================================
     // UI SETTINGS
     // =================================================================
@@ -390,7 +423,7 @@ export function AutomatorClientPage() {
             const allXmlsToScan = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
 
             if (allXmlsToScan.length > 0) {
-                const { nfe, cte, saidas } = await processUploadedXmls(allXmlsToScan, () => {});
+                const { nfe, cte, saidas } = await processUploadedXmls(allXmlsToScan, () => {}, "desconhecido");
                 [...nfe, ...cte, ...saidas].forEach(doc => {
                     if (doc['Emissão'] && typeof doc['Emissão'] === 'string' && doc['Emissão'].length >= 7) {
                         periods.add(doc['Emissão'].substring(0, 7)); // YYYY-MM
@@ -468,23 +501,27 @@ export function AutomatorClientPage() {
                 let dataToProcess: Record<string, any[]> = {};
                 let eventCanceledKeys = new Set<string>();
 
+                // Process each XML category separately to respect user's choice
                 log("Processando ficheiros XML por categoria...");
-                const { nfe: nfeEntrada, itens: itensEntrada, canceledKeys: canceledEntrada, saidas: nfeDevolucoes, itensSaidas: itensDevolucoes } = await processUploadedXmls(xmlFiles.nfeEntrada, log);
-                const { cte, canceledKeys: canceledCte } = await processUploadedXmls(xmlFiles.cte, log);
-                const { saidas, itensSaidas, canceledKeys: canceledSaida } = await processUploadedXmls(xmlFiles.nfeSaida, log);
+                const { nfe: nfeEntrada, itens: itensEntrada, canceledKeys: canceledEntrada, saidas: devolucoesClientes } = await processUploadedXmls(xmlFiles.nfeEntrada, log, "entrada");
+                const { cte, canceledKeys: canceledCte } = await processUploadedXmls(xmlFiles.cte, log, "cte");
+                const { saidas, itensSaidas, canceledKeys: canceledSaida } = await processUploadedXmls(xmlFiles.nfeSaida, log, "saida");
 
+                // Combine results
                 dataToProcess["NFE"] = nfeEntrada;
                 dataToProcess["Itens"] = itensEntrada;
                 dataToProcess["CTE"] = cte;
                 dataToProcess["Saídas"] = saidas;
                 dataToProcess["Itens Saídas"] = itensSaidas;
-                dataToProcess["Devoluções de Clientes"] = nfeDevolucoes;
-                dataToProcess["Itens Devoluções Clientes"] = itensDevolucoes;
+                
+                // Keep devoluções separate
+                dataToProcess["Devoluções de Clientes"] = devolucoesClientes;
                 
                 eventCanceledKeys = new Set([...canceledEntrada, ...canceledCte, ...canceledSaida]);
 
-                log(`Processamento XML concluído: ${nfeEntrada.length} NF-e Entradas, ${nfeDevolucoes.length} Devoluções de Cliente, ${saidas.length} NF-e Saídas, ${cte.length} CT-es.`);
+                log(`Processamento XML concluído: ${nfeEntrada.length} NF-e Entradas, ${saidas.length} NF-e Saídas, ${cte.length} CT-es, ${devolucoesClientes.length} Devoluções de Cliente.`);
                 
+                // Merge with sheet data (manifesto files only)
                 for (const fileName of requiredFiles) {
                     if (files[fileName]) {
                         dataToProcess[fileName] = files[fileName];
@@ -492,6 +529,7 @@ export function AutomatorClientPage() {
                     }
                 }
                 
+                // Date Range Filtering based on selected periods
                 const activePeriods = Object.keys(selectedPeriods).filter(p => selectedPeriods[p]);
                 if (activePeriods.length > 0) {
                     log(`Aplicando filtro de período para: ${activePeriods.join(', ')}`);
@@ -499,7 +537,7 @@ export function AutomatorClientPage() {
                     const filterByPeriod = (rows: any[]) => {
                         return rows.filter(row => {
                             const emissionValue = row['Emissão'] || row['Data de Emissão'];
-                            if (!emissionValue) return true; 
+                            if (!emissionValue) return true; // Keep rows without a date
                             if (typeof emissionValue === 'string' && emissionValue.length >= 7) {
                                 return activePeriods.includes(emissionValue.substring(0, 7));
                             }
@@ -509,7 +547,7 @@ export function AutomatorClientPage() {
                                 const period = format(date, 'yyyy-MM');
                                 return activePeriods.includes(period);
                             } catch {
-                                return false; 
+                                return false; // Exclude rows with invalid date format
                             }
                         });
                     };
@@ -534,6 +572,7 @@ export function AutomatorClientPage() {
                     }
                 }
 
+                // Now, process the combined and filtered data
                 const resultData = processDataFrames(dataToProcess, eventCanceledKeys, log);
                 setLogs(localLogs);
 
@@ -603,32 +642,11 @@ export function AutomatorClientPage() {
     const isClearButtonVisible = Object.keys(files).length > 0 || xmlFiles.nfeEntrada.length > 0 || xmlFiles.cte.length > 0 || xmlFiles.nfeSaida.length > 0 || xmlFiles.nfse.length > 0 || !!processedData || logs.length > 0 || error !== null;
 
     const saidasNfeTabDisabled = !processedData?.sheets['Saídas'] || processedData.sheets['Saídas'].length === 0;
-    const nfseTabDisabled = xmlFiles.nfse.length === 0;
+    const nfseTabDisabled = xmlFiles.nfse.length === 0 && (!processedData || !processedData.fileNames?.nfse || processedData.fileNames.nfse.length === 0);
     const analysisTabDisabled = !processedData?.sheets['Chaves Válidas'] || processedData.sheets['Chaves Válidas'].length === 0;
     const imobilizadoTabDisabled = !processedData?.sheets['Imobilizados'] || processedData.sheets['Imobilizados'].length === 0;
     
-    const handleRestoreSession = (session: SessionMetadata) => {
-        handleClearAllData();
-        
-        setLastSaidaNumber(session.lastSaidaNumber || 0);
-        setSaidasStatus(session.saidasStatus || {});
-        setDisregardedNfseNotes(new Set(session.disregardedNfseNotes || []));
-
-        const periods = session.competence.split('_');
-        const restoredPeriods: Record<string, boolean> = {};
-        periods.forEach(p => { restoredPeriods[p] = true });
-        setSelectedPeriods(restoredPeriods);
-        setAvailablePeriods(periods);
-        
-        toast({
-            title: "Sessão Restaurada Parcialmente",
-            description: "As classificações foram carregadas. Por favor, carregue novamente os ficheiros originais listados no histórico e clique em 'Validar Dados' para continuar.",
-            duration: 10000,
-        });
-
-        setActiveMainTab("nf-stock");
-    };
-
+    
     
     return (
         <div className="min-h-screen bg-background text-foreground">
@@ -661,7 +679,7 @@ export function AutomatorClientPage() {
                             </TabsTrigger>
                              <TabsTrigger value="nf-stock" className="flex items-center gap-2">
                                 1. Validação
-                                {(Object.keys(fileStatus).length > 0 || xmlFiles.nfeEntrada.length > 0 || xmlFiles.cte.length > 0 || xmlFiles.nfeSaida.length > 0) && (
+                                {((Object.keys(fileStatus).length > 0 || xmlFiles.nfeEntrada.length > 0 || xmlFiles.cte.length > 0 || xmlFiles.nfeSaida.length > 0) || (processedData)) && (
                                     processedData && Object.keys(processedData.sheets).length > 0 ? <CheckCircle className="h-5 w-5 text-green-600" /> : <AlertTriangle className="h-5 w-5 text-yellow-600" />
                                 )}
                             </TabsTrigger>
@@ -671,7 +689,7 @@ export function AutomatorClientPage() {
                             </TabsTrigger>
                             <TabsTrigger value="nfse" disabled={nfseTabDisabled} className="flex items-center gap-2">
                                 3. Análise NFS-e
-                                {xmlFiles.nfse.length > 0 && <FilePieChart className="h-5 w-5 text-primary" />}
+                                {(!nfseTabDisabled) && <FilePieChart className="h-5 w-5 text-primary" />}
                             </TabsTrigger>
                             <TabsTrigger value="imobilizado" disabled={imobilizadoTabDisabled}>
                                 4. Imobilizado
