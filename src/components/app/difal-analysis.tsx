@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, type ChangeEvent } from 'react';
@@ -5,18 +6,18 @@ import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown, CalendarIcon } from 'lucide-react';
+import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown, Calendar as CalendarIcon } from 'lucide-react';
 import JSZip from 'jszip';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Checkbox } from '../ui/checkbox';
-import { Label } from '../ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from './data-table';
 import { getColumnsWithCustomRender } from '@/lib/columns-helper';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Calendar } from '../ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { ProcessedData } from '@/lib/excel-processor';
 
 // ===============================================================
@@ -183,12 +184,11 @@ interface DifalAnalysisProps {
 }
 
 export function DifalAnalysis({ processedData }: DifalAnalysisProps) {
-    const [xmlFiles, setXmlFiles] = useState<File[]>([]);
     const [pdfFiles, setPdfFiles] = useState<File[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [results, setResults] = useState<{ valid: DifalData[], ignored: IgnoredData[] } | null>(null);
-    const [dueDate, setDueDate] = useState<Date | undefined>();
     const [verificationStatuses, setVerificationStatuses] = useState<Record<string, VerificationStatus>>({});
+    const [dueDate, setDueDate] = useState<Date | undefined>(new Date());
 
     const { toast } = useToast();
 
@@ -200,37 +200,6 @@ export function DifalAnalysis({ processedData }: DifalAnalysisProps) {
                 [checkId]: isChecked
             }
         }));
-    };
-
-    const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-        const selectedFiles = e.target.files;
-        if (!selectedFiles) return;
-        
-        let newFiles: File[] = [];
-        let extractedCount = 0;
-
-        for (const file of Array.from(selectedFiles)) {
-             if (file.type === 'application/zip' || file.name.toLowerCase().endsWith('.zip')) {
-                try {
-                    const zip = await JSZip.loadAsync(file);
-                    for (const relativePath in zip.files) {
-                        const zipEntry = zip.files[relativePath];
-                        if (!zipEntry?.dir && relativePath.toLowerCase().endsWith('.xml')) {
-                            const content = await zipEntry.async('string');
-                            newFiles.push(new File([content], zipEntry.name, { type: 'application/xml' }));
-                            extractedCount++;
-                        }
-                    }
-                } catch (error) {
-                    toast({ variant: "destructive", title: `Erro ao descompactar ${file.name}` });
-                }
-            } else if (file.type === 'text/xml' || file.name.toLowerCase().endsWith('.xml')) {
-                newFiles.push(file);
-            }
-        }
-        
-        setXmlFiles(prev => [...prev, ...newFiles]);
-        toast({ title: `${newFiles.length} ficheiro(s) XML adicionados.`, description: `${extractedCount > 0 ? `(${extractedCount} de .zip)` : ''} Clique em processar para analisar.` });
     };
 
     const handlePdfFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -337,12 +306,37 @@ export function DifalAnalysis({ processedData }: DifalAnalysisProps) {
                 <CardContent className="space-y-8">
                     <div>
                         <h3 className="text-lg font-bold mb-2">Etapa 1: Processar Dados Base</h3>
-                         <p className="text-sm text-muted-foreground mb-4">
-                            Clique no botão abaixo para analisar as notas de devolução de clientes já processadas na primeira aba.
-                        </p>
-                        <Button onClick={processXmlFiles} disabled={isLoading || !processedData} className="w-full mt-4">
-                            {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : <><Cpu className="mr-2 h-4 w-4" /> Analisar Devoluções para DIFAL</>}
-                        </Button>
+                         <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                             <div>
+                                <Label htmlFor='due-date'>Data de Vencimento da Guia</Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            id="due-date"
+                                            variant={"outline"}
+                                            className={cn(
+                                                "w-full justify-start text-left font-normal",
+                                                !dueDate && "text-muted-foreground"
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {dueDate ? format(dueDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : <span>Selecione uma data</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                        <Calendar
+                                            mode="single"
+                                            selected={dueDate}
+                                            onSelect={setDueDate}
+                                            initialFocus
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <Button onClick={processXmlFiles} disabled={isLoading || !processedData} className="w-full self-end">
+                                {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : <><Cpu className="mr-2 h-4 w-4" /> Analisar Devoluções para DIFAL</>}
+                            </Button>
+                        </div>
                     </div>
 
                     <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Etapa 2</span></div></div>
