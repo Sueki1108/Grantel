@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, type ChangeEvent } from 'react';
@@ -5,11 +6,9 @@ import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown } from 'lucide-react';
+import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown, CalendarIcon } from 'lucide-react';
 import JSZip from 'jszip';
 import { cn } from '@/lib/utils';
-import { DatePickerWithRange } from './date-picker-with-range';
-import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Checkbox } from '../ui/checkbox';
@@ -17,6 +16,8 @@ import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from './data-table';
 import { getColumnsWithCustomRender } from '@/lib/columns-helper';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Calendar } from '../ui/calendar';
 
 // ===============================================================
 // Types
@@ -52,6 +53,7 @@ const verificationItems = [
 ];
 
 const GRANTEL_CNPJ = "81732042000119";
+
 
 // ===============================================================
 // Helper Functions
@@ -181,7 +183,7 @@ export function DifalAnalysis() {
     const [pdfFiles, setPdfFiles] = useState<File[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [results, setResults] = useState<{ valid: DifalData[], ignored: IgnoredData[] } | null>(null);
-    const [dueDate, setDueDate] = useState<DateRange | undefined>();
+    const [dueDate, setDueDate] = useState<Date | undefined>();
     const [verificationStatuses, setVerificationStatuses] = useState<Record<string, VerificationStatus>>({});
 
     const { toast } = useToast();
@@ -352,12 +354,29 @@ export function DifalAnalysis() {
                         <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
                             <div>
                                 <Label htmlFor='due-date'>Data de Vencimento da Guia</Label>
-                                <DatePickerWithRange 
-                                    id="due-date"
-                                    date={dueDate}
-                                    onDateChange={setDueDate}
-                                />
-                                {dueDate?.from && <p className="text-sm text-muted-foreground mt-2">Vencimento selecionado: {format(dueDate.from, "dd/MM/yyyy", { locale: ptBR })}</p>}
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            id="due-date"
+                                            variant={"outline"}
+                                            className={cn(
+                                                "w-full justify-start text-left font-normal",
+                                                !dueDate && "text-muted-foreground"
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {dueDate ? format(dueDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : <span>Selecione uma data</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                        <Calendar
+                                            mode="single"
+                                            selected={dueDate}
+                                            onSelect={setDueDate}
+                                            initialFocus
+                                        />
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                             <div className='flex flex-col gap-2'>
                                 <Label>Carregar XMLs de Saída (.xml ou .zip)</Label>
@@ -433,7 +452,7 @@ export function DifalAnalysis() {
                             <TabsContent value="ignored" className="mt-4">
                                  <Button onClick={() => handleDownloadExcel(results.ignored, "Notas_Ignoradas_DIFAL")} size="sm" className="mb-4" disabled={results.ignored.length === 0}>
                                     <Download className="mr-2 h-4 w-4" /> Baixar Lista de Ignoradas
-                                </Button>
+                                 </Button>
                                 <DataTable 
                                     columns={getColumnsWithCustomRender(
                                         results.ignored, 
@@ -456,3 +475,5 @@ export function DifalAnalysis() {
         </div>
     );
 }
+
+    
