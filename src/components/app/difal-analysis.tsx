@@ -8,15 +8,13 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown } from 'lucide-react';
 import JSZip from 'jszip';
 import { cn } from '@/lib/utils';
-import { DatePickerWithRange } from './date-picker-with-range';
-import { DateRange } from 'react-day-picker';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { Checkbox } from '../ui/checkbox';
 import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from './data-table';
 import { getColumnsWithCustomRender } from '@/lib/columns-helper';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 
 // ===============================================================
 // Types
@@ -52,6 +50,19 @@ const verificationItems = [
 ];
 
 const GRANTEL_CNPJ = "81732042000119";
+
+const months = [
+    { value: "01", label: "Janeiro" }, { value: "02", label: "Fevereiro" },
+    { value: "03", label: "Março" }, { value: "04", label: "Abril" },
+    { value: "05", label: "Maio" }, { value: "06", label: "Junho" },
+    { value: "07", label: "Julho" }, { value: "08", label: "Agosto" },
+    { value: "09", label: "Setembro" }, { value: "10", label: "Outubro" },
+    { value: "11", label: "Novembro" }, { value: "12", label: "Dezembro" }
+];
+
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 5 }, (_, i) => String(currentYear - 2 + i));
+
 
 // ===============================================================
 // Helper Functions
@@ -181,7 +192,8 @@ export function DifalAnalysis() {
     const [pdfFiles, setPdfFiles] = useState<File[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [results, setResults] = useState<{ valid: DifalData[], ignored: IgnoredData[] } | null>(null);
-    const [dueDate, setDueDate] = useState<DateRange | undefined>();
+    const [selectedMonth, setSelectedMonth] = useState<string | undefined>();
+    const [selectedYear, setSelectedYear] = useState<string | undefined>();
     const [verificationStatuses, setVerificationStatuses] = useState<Record<string, VerificationStatus>>({});
 
     const { toast } = useToast();
@@ -350,14 +362,26 @@ export function DifalAnalysis() {
                     <div>
                         <h3 className="text-lg font-bold mb-2">Etapa 1: Definir Data e Processar XMLs</h3>
                         <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-                            <div>
-                                <Label htmlFor='due-date'>Data de Vencimento da Guia</Label>
-                                <DatePickerWithRange 
-                                    id="due-date"
-                                    date={dueDate}
-                                    onDateChange={setDueDate}
-                                />
-                                {dueDate?.from && <p className="text-sm text-muted-foreground mt-2">Vencimento selecionado: {format(dueDate.from, "dd/MM/yyyy", { locale: ptBR })}</p>}
+                             <div className="flex flex-col gap-2">
+                                <Label>Data de Vencimento da Guia</Label>
+                                <div className="flex gap-2">
+                                    <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Selecione o Mês" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {months.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    <Select value={selectedYear} onValueChange={setSelectedYear}>
+                                        <SelectTrigger className="w-[120px]">
+                                            <SelectValue placeholder="Ano" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
                             <div className='flex flex-col gap-2'>
                                 <Label>Carregar XMLs de Saída (.xml ou .zip)</Label>
@@ -456,4 +480,3 @@ export function DifalAnalysis() {
         </div>
     );
 }
-    
