@@ -8,13 +8,16 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown } from 'lucide-react';
 import JSZip from 'jszip';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Checkbox } from '../ui/checkbox';
 import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from './data-table';
 import { getColumnsWithCustomRender } from '@/lib/columns-helper';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { CalendarIcon } from 'lucide-react';
+import { Calendar } from '../ui/calendar';
 
 // ===============================================================
 // Types
@@ -50,9 +53,6 @@ const verificationItems = [
 ];
 
 const GRANTEL_CNPJ = "81732042000119";
-
-const currentYear = new Date().getFullYear();
-const years = Array.from({ length: 5 }, (_, i) => String(currentYear - 2 + i));
 
 
 // ===============================================================
@@ -183,7 +183,7 @@ export function DifalAnalysis() {
     const [pdfFiles, setPdfFiles] = useState<File[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [results, setResults] = useState<{ valid: DifalData[], ignored: IgnoredData[] } | null>(null);
-    const [selectedYear, setSelectedYear] = useState<string | undefined>(String(currentYear));
+    const [dueDate, setDueDate] = useState<Date | undefined>();
     const [verificationStatuses, setVerificationStatuses] = useState<Record<string, VerificationStatus>>({});
 
     const { toast } = useToast();
@@ -336,12 +336,6 @@ export function DifalAnalysis() {
         toast({ title: "Download Iniciado" });
     };
 
-    const guidePeriod = useMemo(() => {
-        if (!selectedYear) return 'não definido';
-        const currentMonth = new Date().getMonth() + 1;
-        return `${String(currentMonth).padStart(2, '0')}/${selectedYear}`;
-    }, [selectedYear]);
-
     return (
         <div className="space-y-6">
             <Card>
@@ -358,19 +352,31 @@ export function DifalAnalysis() {
                     <div>
                         <h3 className="text-lg font-bold mb-2">Etapa 1: Definir Data e Processar XMLs</h3>
                         <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-                             <div className="flex flex-col gap-2">
-                                <Label>Data de Vencimento da Guia</Label>
-                                <div className="flex gap-2">
-                                    <Select value={selectedYear} onValueChange={setSelectedYear}>
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Selecione o Ano" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                 <p className="text-sm text-muted-foreground mt-2">Período da Guia: {guidePeriod}</p>
+                            <div>
+                                <Label htmlFor='due-date'>Data de Vencimento da Guia</Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            id="due-date"
+                                            variant={"outline"}
+                                            className={cn(
+                                                "w-full justify-start text-left font-normal",
+                                                !dueDate && "text-muted-foreground"
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {dueDate ? format(dueDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : <span>Selecione uma data</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                        <Calendar
+                                            mode="single"
+                                            selected={dueDate}
+                                            onSelect={setDueDate}
+                                            initialFocus
+                                        />
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                             <div className='flex flex-col gap-2'>
                                 <Label>Carregar XMLs de Saída (.xml ou .zip)</Label>
