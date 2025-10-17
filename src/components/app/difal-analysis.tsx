@@ -7,7 +7,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown, Calendar as CalendarIcon } from 'lucide-react';
-import JSZip from 'jszip';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -52,41 +51,6 @@ const verificationItems = [
     { id: 'cnpj', label: 'CNPJs (Emitente/Dest.) conferem' },
     { id: 'municipality', label: 'Município de Destino = Selvíria' },
 ];
-
-const GRANTEL_CNPJ = "81732042000119";
-
-
-// ===============================================================
-// Helper Functions
-// ===============================================================
-const readFileAsText = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            if (event.target && event.target.result instanceof ArrayBuffer) {
-                const buffer = event.target.result;
-                try {
-                    const decoder = new TextDecoder('utf-8', { fatal: true });
-                    resolve(decoder.decode(buffer));
-                } catch (e) {
-                    const decoder = new TextDecoder('iso-8859-1');
-                    resolve(decoder.decode(buffer));
-                }
-            } else {
-                reject(new Error('Falha ao ler o ficheiro como ArrayBuffer.'));
-            }
-        };
-        reader.onerror = () => reject(new Error(`Erro ao ler o ficheiro: ${file.name}`));
-        reader.readAsArrayBuffer(file);
-    });
-};
-
-const getTagValue = (element: Element | undefined, query: string): string => {
-    if (!element) return '';
-    const tag = element.querySelector(query);
-    return tag?.textContent ?? '';
-};
-
 
 // ===============================================================
 // Item Component
@@ -210,7 +174,7 @@ export function DifalAnalysis({ processedData }: DifalAnalysisProps) {
     };
 
     const processXmlFiles = async () => {
-        if (!processedData?.sheets['Devoluções de Clientes']) {
+        if (!processedData?.sheets?.['Devoluções de Clientes']) {
              toast({ variant: "destructive", title: "Dados de base em falta", description: "Execute primeiro a 'Validação de Documentos' na primeira aba para carregar os dados das notas." });
             return;
         }
