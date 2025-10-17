@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown } from 'lucide-react';
+import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown, CalendarIcon } from 'lucide-react';
 import JSZip from 'jszip';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -16,8 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from './data-table';
 import { getColumnsWithCustomRender } from '@/lib/columns-helper';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { CalendarIcon } from 'lucide-react';
 import { Calendar } from '../ui/calendar';
+import { ProcessedData } from '@/lib/excel-processor';
 
 // ===============================================================
 // Types
@@ -178,7 +178,11 @@ const DifalItem = ({ item, verificationStatus, onVerificationChange }: { item: D
 // ===============================================================
 // Main Component
 // ===============================================================
-export function DifalAnalysis() {
+interface DifalAnalysisProps {
+    processedData: ProcessedData | null;
+}
+
+export function DifalAnalysis({ processedData }: DifalAnalysisProps) {
     const [xmlFiles, setXmlFiles] = useState<File[]>([]);
     const [pdfFiles, setPdfFiles] = useState<File[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -237,8 +241,8 @@ export function DifalAnalysis() {
     };
 
     const processXmlFiles = async () => {
-        if (xmlFiles.length === 0) {
-            toast({ variant: "destructive", title: "Nenhum XML carregado", description: "Por favor, carregue os ficheiros XML de saída." });
+        if (!processedData?.sheets['Devoluções de Clientes']) {
+             toast({ variant: "destructive", title: "Dados de base em falta", description: "Execute primeiro a 'Validação de Documentos' na primeira aba para carregar os dados das notas." });
             return;
         }
 
@@ -247,54 +251,34 @@ export function DifalAnalysis() {
         
         const validData: DifalData[] = [];
         const ignoredData: IgnoredData[] = [];
-        const parser = new DOMParser();
 
-        for (const file of xmlFiles) {
-            try {
-                const xmlText = await readFileAsText(file);
-                const xmlDoc = parser.parseFromString(xmlText, "application/xml");
+        const devolucoes = processedData.sheets['Devoluções de Clientes'] || [];
+        
+        for (const nota of devolucoes) {
+            const infCpl = nota.infCpl || ''; // Supondo que infCpl é extraído
+            const valorTotal = nota['Total'] || 0;
+            const chaveAcesso = nota['Chave de acesso'];
 
-                const chaveAcesso = xmlDoc.querySelector('infNFe')?.getAttribute('Id')?.replace('NFe', '') || 'Chave não encontrada';
-                const emitCnpj = getTagValue(xmlDoc, 'emit > CNPJ');
-                const destCnpj = getTagValue(xmlDoc, 'dest > CNPJ');
-                const infCpl = getTagValue(xmlDoc, 'infAdic > infCpl');
-                const valorTotal = parseFloat(getTagValue(xmlDoc, 'total > ICMSTot > vNF') || '0');
-                const nNF = getTagValue(xmlDoc, 'ide > nNF');
-                const dhEmi = getTagValue(xmlDoc, 'ide > dhEmi');
-                
-                let isGrantelEmitter = emitCnpj === GRANTEL_CNPJ;
-                let isGrantelDest = destCnpj === GRANTEL_CNPJ;
-                let hasSelviria = infCpl.toUpperCase().includes("SELVIRIA/MS");
-
-                if (isGrantelEmitter && isGrantelDest && hasSelviria) {
-                    validData.push({
-                        'Chave de Acesso': chaveAcesso,
-                        'Número da Nota': nNF,
-                        'Data de Emissão': dhEmi,
-                        'Valor Total da Nota': valorTotal,
-                        'Valor da Guia (10%)': parseFloat((valorTotal * 0.1).toFixed(2)),
-                    });
-                } else {
-                    let reason = [];
-                    if (!isGrantelEmitter) reason.push("Emitente não é a Grantel");
-                    if (!isGrantelDest) reason.push("Destinatário não é a Grantel");
-                    if (!hasSelviria) reason.push("Local de entrega não é Selvíria/MS");
-                    ignoredData.push({
-                        'Chave de Acesso': chaveAcesso,
-                        'Valor da Nota': valorTotal,
-                        'Motivo da Rejeição': reason.join('; '),
-                    });
-                }
-
-            } catch (err) {
-                console.error("Erro ao processar ficheiro", file.name, err);
-                ignoredData.push({ 'Chave de Acesso': file.name, 'Valor da Nota': 0, 'Motivo da Rejeição': 'Erro de leitura do XML' });
+            if (infCpl.toUpperCase().includes("SELVIRIA/MS")) {
+                 validData.push({
+                    'Chave de Acesso': chaveAcesso,
+                    'Número da Nota': nota['Número'],
+                    'Data de Emissão': nota['Emissão'],
+                    'Valor Total da Nota': valorTotal,
+                    'Valor da Guia (10%)': parseFloat((valorTotal * 0.1).toFixed(2)),
+                });
+            } else {
+                 ignoredData.push({
+                    'Chave de Acesso': chaveAcesso,
+                    'Valor da Nota': valorTotal,
+                    'Motivo da Rejeição': 'Local de entrega não é Selvíria/MS.',
+                });
             }
         }
         
         setResults({ valid: validData, ignored: ignoredData });
         setIsLoading(false);
-        toast({ title: "Processamento Concluído", description: `${validData.length} notas válidas para DIFAL e ${ignoredData.length} notas ignoradas.` });
+        toast({ title: "Processamento Concluído", description: `${validData.length} notas de devolução válidas para DIFAL e ${ignoredData.length} ignoradas.` });
     };
 
     const handleDownloadReport = () => {
@@ -344,52 +328,20 @@ export function DifalAnalysis() {
                          <TicketPercent className="h-8 w-8 text-primary" />
                         <div>
                             <CardTitle className="font-headline text-2xl">Ferramenta de Extração e Conferência para Guia DIFAL</CardTitle>
-                            <CardDescription>Extraia dados de XMLs para gerar guias e, em seguida, anexe os PDFs para verificação.</CardDescription>
+                            <CardDescription>
+                                Esta ferramenta analisa as 'Devoluções de Clientes' da aba de Validação para identificar as notas elegíveis para a guia DIFAL.
+                            </CardDescription>
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-8">
                     <div>
-                        <h3 className="text-lg font-bold mb-2">Etapa 1: Definir Data e Processar XMLs</h3>
-                        <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-                            <div>
-                                <Label htmlFor='due-date'>Data de Vencimento da Guia</Label>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            id="due-date"
-                                            variant={"outline"}
-                                            className={cn(
-                                                "w-full justify-start text-left font-normal",
-                                                !dueDate && "text-muted-foreground"
-                                            )}
-                                        >
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {dueDate ? format(dueDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : <span>Selecione uma data</span>}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0">
-                                        <Calendar
-                                            mode="single"
-                                            selected={dueDate}
-                                            onSelect={setDueDate}
-                                            initialFocus
-                                        />
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                            <div className='flex flex-col gap-2'>
-                                <Label>Carregar XMLs de Saída (.xml ou .zip)</Label>
-                                <label htmlFor="xml-upload-difal" className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 cursor-pointer hover:border-primary transition-colors h-full">
-                                    <FileUp className="h-8 w-8 text-muted-foreground mb-1" />
-                                    <span className="font-semibold text-sm">Clique ou arraste para carregar</span>
-                                    <input id="xml-upload-difal" type="file" className="sr-only" onChange={handleXmlFileChange} multiple accept=".xml,.zip" />
-                                </label>
-                                {xmlFiles.length > 0 && <div className="text-sm text-muted-foreground"><span className="font-bold">{xmlFiles.length}</span> ficheiro(s) XML pronto(s).</div>}
-                            </div>
-                        </div>
-                        <Button onClick={processXmlFiles} disabled={isLoading || xmlFiles.length === 0} className="w-full mt-4">
-                            {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : <><Cpu className="mr-2 h-4 w-4" /> Processar XMLs</>}
+                        <h3 className="text-lg font-bold mb-2">Etapa 1: Processar Dados Base</h3>
+                         <p className="text-sm text-muted-foreground mb-4">
+                            Clique no botão abaixo para analisar as notas de devolução de clientes já processadas na primeira aba.
+                        </p>
+                        <Button onClick={processXmlFiles} disabled={isLoading || !processedData} className="w-full mt-4">
+                            {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : <><Cpu className="mr-2 h-4 w-4" /> Analisar Devoluções para DIFAL</>}
                         </Button>
                     </div>
 

@@ -726,7 +726,7 @@ export function AutomatorClientPage() {
                         </TabsContent>
 
                         <TabsContent value="difal" className="mt-6">
-                            <DifalAnalysis />
+                            <DifalAnalysis processedData={processedData}/>
                         </TabsContent>
                         
                         <TabsContent value="analyses" className="mt-6">
