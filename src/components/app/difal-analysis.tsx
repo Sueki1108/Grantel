@@ -336,13 +336,10 @@ export function DifalAnalysis() {
         toast({ title: "Download Iniciado" });
     };
 
-    const dueDate = useMemo(() => {
+    const guidePeriod = useMemo(() => {
         if (!selectedYear) return 'não definido';
         const currentMonth = new Date().getMonth() + 1;
-        // Logic to determine the due date based on month and year can be complex,
-        // for now, we just display the selected period
         return `${String(currentMonth).padStart(2, '0')}/${selectedYear}`;
-
     }, [selectedYear]);
 
     return (
@@ -373,7 +370,7 @@ export function DifalAnalysis() {
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                 <p className="text-sm text-muted-foreground mt-2">Período da Guia: {dueDate}</p>
+                                 <p className="text-sm text-muted-foreground mt-2">Período da Guia: {guidePeriod}</p>
                             </div>
                             <div className='flex flex-col gap-2'>
                                 <Label>Carregar XMLs de Saída (.xml ou .zip)</Label>
