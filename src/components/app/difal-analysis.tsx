@@ -51,15 +51,6 @@ const verificationItems = [
 
 const GRANTEL_CNPJ = "81732042000119";
 
-const months = [
-    { value: "01", label: "Janeiro" }, { value: "02", label: "Fevereiro" },
-    { value: "03", label: "Março" }, { value: "04", label: "Abril" },
-    { value: "05", label: "Maio" }, { value: "06", label: "Junho" },
-    { value: "07", label: "Julho" }, { value: "08", label: "Agosto" },
-    { value: "09", label: "Setembro" }, { value: "10", label: "Outubro" },
-    { value: "11", label: "Novembro" }, { value: "12", label: "Dezembro" }
-];
-
 const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 5 }, (_, i) => String(currentYear - 2 + i));
 
@@ -192,8 +183,7 @@ export function DifalAnalysis() {
     const [pdfFiles, setPdfFiles] = useState<File[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [results, setResults] = useState<{ valid: DifalData[], ignored: IgnoredData[] } | null>(null);
-    const [selectedMonth, setSelectedMonth] = useState<string | undefined>();
-    const [selectedYear, setSelectedYear] = useState<string | undefined>();
+    const [selectedYear, setSelectedYear] = useState<string | undefined>(String(currentYear));
     const [verificationStatuses, setVerificationStatuses] = useState<Record<string, VerificationStatus>>({});
 
     const { toast } = useToast();
@@ -346,6 +336,15 @@ export function DifalAnalysis() {
         toast({ title: "Download Iniciado" });
     };
 
+    const dueDate = useMemo(() => {
+        if (!selectedYear) return 'não definido';
+        const currentMonth = new Date().getMonth() + 1;
+        // Logic to determine the due date based on month and year can be complex,
+        // for now, we just display the selected period
+        return `${String(currentMonth).padStart(2, '0')}/${selectedYear}`;
+
+    }, [selectedYear]);
+
     return (
         <div className="space-y-6">
             <Card>
@@ -365,23 +364,16 @@ export function DifalAnalysis() {
                              <div className="flex flex-col gap-2">
                                 <Label>Data de Vencimento da Guia</Label>
                                 <div className="flex gap-2">
-                                    <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Selecione o Mês" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {months.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
                                     <Select value={selectedYear} onValueChange={setSelectedYear}>
-                                        <SelectTrigger className="w-[120px]">
-                                            <SelectValue placeholder="Ano" />
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Selecione o Ano" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                 </div>
+                                 <p className="text-sm text-muted-foreground mt-2">Período da Guia: {dueDate}</p>
                             </div>
                             <div className='flex flex-col gap-2'>
                                 <Label>Carregar XMLs de Saída (.xml ou .zip)</Label>
