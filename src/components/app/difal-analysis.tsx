@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, type ChangeEvent } from 'react';
@@ -6,7 +5,7 @@ import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, Check, RotateCcw, AlertTriangle, FileDown, CalendarIcon } from 'lucide-react';
+import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown } from 'lucide-react';
 import JSZip from 'jszip';
 import { cn } from '@/lib/utils';
 import { DatePickerWithRange } from './date-picker-with-range';
@@ -15,6 +14,9 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Checkbox } from '../ui/checkbox';
 import { Label } from '../ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DataTable } from './data-table';
+import { getColumnsWithCustomRender } from '@/lib/columns-helper';
 
 // ===============================================================
 // Types
@@ -27,6 +29,13 @@ type DifalData = {
     'Valor Total da Nota': number;
     'Valor da Guia (10%)': number;
 };
+
+type IgnoredData = {
+    'Chave de Acesso': string;
+    'Valor da Nota': number;
+    'Motivo da Rejeição': string;
+};
+
 
 type VerificationStatus = {
     [checkName: string]: boolean;
@@ -171,7 +180,7 @@ export function DifalAnalysis() {
     const [xmlFiles, setXmlFiles] = useState<File[]>([]);
     const [pdfFiles, setPdfFiles] = useState<File[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [results, setResults] = useState<{ valid: DifalData[] } | null>(null);
+    const [results, setResults] = useState<{ valid: DifalData[], ignored: IgnoredData[] } | null>(null);
     const [dueDate, setDueDate] = useState<DateRange | undefined>();
     const [verificationStatuses, setVerificationStatuses] = useState<Record<string, VerificationStatus>>({});
 
@@ -235,6 +244,7 @@ export function DifalAnalysis() {
         setResults(null);
         
         const validData: DifalData[] = [];
+        const ignoredData: IgnoredData[] = [];
         const parser = new DOMParser();
 
         for (const file of xmlFiles) {
@@ -262,15 +272,27 @@ export function DifalAnalysis() {
                         'Valor Total da Nota': valorTotal,
                         'Valor da Guia (10%)': parseFloat((valorTotal * 0.1).toFixed(2)),
                     });
+                } else {
+                    let reason = [];
+                    if (!isGrantelEmitter) reason.push("Emitente não é a Grantel");
+                    if (!isGrantelDest) reason.push("Destinatário não é a Grantel");
+                    if (!hasSelviria) reason.push("Local de entrega não é Selvíria/MS");
+                    ignoredData.push({
+                        'Chave de Acesso': chaveAcesso,
+                        'Valor da Nota': valorTotal,
+                        'Motivo da Rejeição': reason.join('; '),
+                    });
                 }
+
             } catch (err) {
                 console.error("Erro ao processar ficheiro", file.name, err);
+                ignoredData.push({ 'Chave de Acesso': file.name, 'Valor da Nota': 0, 'Motivo da Rejeição': 'Erro de leitura do XML' });
             }
         }
         
-        setResults({ valid: validData });
+        setResults({ valid: validData, ignored: ignoredData });
         setIsLoading(false);
-        toast({ title: "Processamento Concluído", description: `${validData.length} notas válidas para DIFAL.` });
+        toast({ title: "Processamento Concluído", description: `${validData.length} notas válidas para DIFAL e ${ignoredData.length} notas ignoradas.` });
     };
 
     const handleDownloadReport = () => {
@@ -299,6 +321,17 @@ export function DifalAnalysis() {
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Relatório de Conferência');
         XLSX.writeFile(workbook, `Relatorio_Conferencia_DIFAL.xlsx`);
         toast({ title: 'Relatório Gerado' });
+    };
+    
+    const handleDownloadExcel = (data: any[], sheetName: string) => {
+        if (!data || data.length === 0) {
+            toast({ variant: 'destructive', title: "Nenhum dado para baixar" });
+            return;
+        }
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), sheetName.substring(0, 31));
+        XLSX.writeFile(wb, `Analise_DIFAL_${sheetName}.xlsx`);
+        toast({ title: "Download Iniciado" });
     };
 
     return (
@@ -377,22 +410,50 @@ export function DifalAnalysis() {
                             </Button>
                         </div>
                     </CardHeader>
-                    <CardContent className='space-y-2'>
-                        {results.valid.length > 0 ? (
-                            results.valid.map(item => 
-                                <DifalItem 
-                                    key={item['Chave de Acesso']} 
-                                    item={item} 
-                                    verificationStatus={verificationStatuses[item['Chave de Acesso']] || {}}
-                                    onVerificationChange={(checkId, isChecked) => handleVerificationChange(item['Chave de Acesso'], checkId, isChecked)}
+                    <CardContent>
+                        <Tabs defaultValue="valid">
+                            <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="valid">Notas Válidas para DIFAL ({results.valid.length})</TabsTrigger>
+                                <TabsTrigger value="ignored">Notas Ignoradas ({results.ignored.length})</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="valid" className="mt-4 space-y-2">
+                                {results.valid.length > 0 ? (
+                                    results.valid.map(item => 
+                                        <DifalItem 
+                                            key={item['Chave de Acesso']} 
+                                            item={item} 
+                                            verificationStatus={verificationStatuses[item['Chave de Acesso']] || {}}
+                                            onVerificationChange={(checkId, isChecked) => handleVerificationChange(item['Chave de Acesso'], checkId, isChecked)}
+                                        />
+                                    )
+                                ) : (
+                                    <p className="text-center text-muted-foreground py-8">Nenhuma nota válida encontrada.</p>
+                                )}
+                            </TabsContent>
+                            <TabsContent value="ignored" className="mt-4">
+                                 <Button onClick={() => handleDownloadExcel(results.ignored, "Notas_Ignoradas_DIFAL")} size="sm" className="mb-4" disabled={results.ignored.length === 0}>
+                                    <Download className="mr-2 h-4 w-4" /> Baixar Lista de Ignoradas
+                                 </Button>
+                                <DataTable 
+                                    columns={getColumnsWithCustomRender(
+                                        results.ignored, 
+                                        ['Chave de Acesso', 'Valor da Nota', 'Motivo da Rejeição'],
+                                        (row, id) => {
+                                            const value = row.original[id as keyof typeof row.original];
+                                            if (typeof value === 'number') {
+                                                return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
+                                            }
+                                            return <div>{String(value)}</div>;
+                                        }
+                                    )} 
+                                    data={results.ignored} 
                                 />
-                            )
-                        ) : (
-                            <p className="text-center text-muted-foreground py-8">Nenhuma nota válida para DIFAL encontrada nos XMLs processados.</p>
-                        )}
+                            </TabsContent>
+                        </Tabs>
                     </CardContent>
                 </Card>
             )}
         </div>
     );
 }
+    
