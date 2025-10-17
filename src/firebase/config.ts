@@ -5,5 +5,5 @@ export const firebaseConfig = {
   projectId: "grantel-1oth2",
   storageBucket: "grantel-1oth2.firebasestorage.app",
   messagingSenderId: "698741029963",
-  appId: "1:698741029963:web:11155a6c80a65859dde1ce"
+  appId: "1:698741029963:web:23c99d0787cab13cdde1ce"
 };
