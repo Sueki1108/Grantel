@@ -1,32 +1,28 @@
 /**
- * @fileoverview Firestore Security Rules for Grantel application.
+ * @fileOverview Firestore Security Rules for Spreadsheet Data Management.
  *
  * Core Philosophy:
- * This ruleset allows public read access to all data. Write access is also public,
- * but in a real application, you would likely want to restrict write access based on user roles or ownership.
- * Since this is a prototyping ruleset, write access is open for demonstration and quick iteration.
+ * This ruleset allows public read and write access to spreadsheet data and checked row states.
+ * This is appropriate for prototyping and explicitly permitted by the design document.
  *
  * Data Structure:
- * The Firestore database contains two top-level collections: `sheetData` and `checkedRows`.
- *  - `/sheetData`: Stores the uploaded spreadsheet data.
- *  - `/checkedRows`: Stores the checked state of rows in the spreadsheet.
+ * - /sheetData: Stores the uploaded spreadsheet data.
+ * - /checkedRows: Stores the checked state of rows in the spreadsheet.
  *
  * Key Security Decisions:
- * - Public read access for all collections.
- * - Public write access for all collections (for prototyping purposes, this would be restricted in production).
- * - No user-specific data or ownership enforced in this prototype.
+ * - Public Read/Write: All users, including unauthenticated users, can read and write all data.
+ *   This simplifies initial prototyping but should be restricted for production.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Allows public read and write access to spreadsheet data.
-     * @path /sheetData/{sheetDataId}
-     * @allow (get, list) if true
-     * @allow (create, update, delete) if true
-     * @deny (create, update, delete) if false
-     * @principle Allows any user to read and write spreadsheet data.
+     * @description Allows public read access (get, list) to the /sheetData collection.
+     * @path /sheetData
+     * @allow (get, list) Access to /sheetData is public.
+     * @deny (create, update, delete) No specific restrictions, but typically writes would be limited in a real application.
+     * @principle Allows anyone to read the sheet data.
      */
     match /sheetData/{sheetDataId} {
       allow get, list: if true;
@@ -34,12 +30,11 @@ service cloud.firestore {
     }
 
     /**
-     * @description Allows public read and write access to checked row data.
-     * @path /checkedRows/{checkedRowId}
-     * @allow (get, list) if true
-     * @allow (create, update, delete) if true
-     * @deny (create, update, delete) if false
-     * @principle Allows any user to read and write checked row data.
+     * @description Allows public read access (get, list) to the /checkedRows collection.
+     * @path /checkedRows
+     * @allow (get, list) Access to /checkedRows is public.
+     * @deny (create, update, delete) No specific restrictions, but typically writes would be limited in a real application.
+     * @principle Allows anyone to read the checked rows.
      */
     match /checkedRows/{checkedRowId} {
       allow get, list: if true;
