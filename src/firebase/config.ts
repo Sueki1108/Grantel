@@ -1,9 +1,9 @@
 export const firebaseConfig = {
-  apiKey: "AIzaSyBVi6N-Linrk9k6z9vO-Z36XmtsD9QKwwA",
-  authDomain: "grantel-1oth2.firebaseapp.com",
-  databaseURL: "https://grantel-1oth2-default-rtdb.firebaseio.com",
-  projectId: "grantel-1oth2",
-  storageBucket: "grantel-1oth2.firebasestorage.app",
-  messagingSenderId: "698741029963",
-  appId: "1:698741029963:web:23c99d0787cab13cdde1ce"
+  apiKey: "AIzaSyCvMI5iLzFeUtG4IAl_yWT_uqk4aPrF3UA",
+  authDomain: "grantel-2.firebaseapp.com",
+  databaseURL: "https://grantel-2-default-rtdb.firebaseio.com",
+  projectId: "grantel-2",
+  storageBucket: "grantel-2.firebasestorage.app",
+  messagingSenderId: "779018807095",
+  appId: "1:779018807095:web:edf441c9f44460783edcb2"
 };
