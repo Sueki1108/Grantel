@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -733,6 +732,7 @@ export function AutomatorClientPage() {
                         <TabsContent value="analyses" className="mt-6">
                             {!analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onSiengeDataProcessed={handleSiengeDataProcessed} siengeFile={siengeFile} onSiengeFileChange={setSiengeFile} onClearSiengeFile={() => { setSiengeFile(null); handleSiengeDataProcessed(null); const input = document.querySelector('input[name="Itens do Sienge"]') as HTMLInputElement; if (input) input.value = ''; }} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>}
                         </TabsContent>
+
                     </Tabs>
                 </div>
             </main>
