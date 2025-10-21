@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { ProcessedData } from '@/lib/excel-processor';
 
 // ===============================================================
-// Types
+// Tipos
 // ===============================================================
 
 type DifalData = {
@@ -155,6 +155,28 @@ export function DifalAnalysis({ processedData }: DifalAnalysisProps) {
     const [dueDate, setDueDate] = useState<Date | undefined>(new Date());
 
     const { toast } = useToast();
+    
+    if (!processedData) {
+        return (
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center gap-3">
+                         <TicketPercent className="h-8 w-8 text-primary" />
+                        <div>
+                            <CardTitle className="font-headline text-2xl">Ferramenta de Extração e Conferência para Guia DIFAL</CardTitle>
+                        </div>
+                    </div>
+                </CardHeader>
+                 <CardContent>
+                    <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
+                        <AlertTriangle className="h-12 w-12 text-amber-500" />
+                        <h3 className="mt-4 text-xl font-semibold">Aguardando Dados</h3>
+                        <p className="mt-2 text-center">Execute a "Validação de Documentos" na primeira aba para carregar os dados das notas e habilitar esta ferramenta.</p>
+                    </div>
+                </CardContent>
+            </Card>
+        )
+    }
 
     const handleVerificationChange = (chave: string, checkId: string, isChecked: boolean) => {
         setVerificationStatuses(prev => ({
@@ -175,7 +197,7 @@ export function DifalAnalysis({ processedData }: DifalAnalysisProps) {
 
     const processXmlFiles = async () => {
         if (!processedData?.sheets?.['Devoluções de Clientes']) {
-             toast({ variant: "destructive", title: "Dados de base em falta", description: "Execute primeiro a 'Validação de Documentos' na primeira aba para carregar os dados das notas." });
+             toast({ variant: "destructive", title: "Dados de base em falta", description: "A planilha 'Devoluções de Clientes' não foi encontrada nos dados processados." });
             return;
         }
 
@@ -188,7 +210,7 @@ export function DifalAnalysis({ processedData }: DifalAnalysisProps) {
         const devolucoes = processedData.sheets['Devoluções de Clientes'] || [];
         
         for (const nota of devolucoes) {
-            const infCpl = nota.infCpl || ''; // Supondo que infCpl é extraído
+            const infCpl = nota.infCpl || ''; 
             const valorTotal = nota['Total'] || 0;
             const chaveAcesso = nota['Chave de acesso'];
 
