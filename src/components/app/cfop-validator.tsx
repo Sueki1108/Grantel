@@ -9,7 +9,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from '../ui/badge';
 import type { AllClassifications } from './imobilizado-analysis';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 
 
@@ -46,10 +45,9 @@ const getUniqueProductKey = (item: CfopValidationData): string => {
 
 const getBaseCfop = (cfop: string): string => {
     if (!cfop || typeof cfop !== 'string' || cfop.length < 4) {
-        return cfop || 'N/A';
+        return 'Outros';
     }
-    // Agrupa por 1128/2128 -> 128
-    return cfop.substring(1);
+    return cfop.substring(1); // Agrupa por 1128/2128 -> 128
 };
 
 
@@ -104,19 +102,30 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     };
     
     // Colunas da Tabela
-    const columns = getColumnsWithCustomRender(
+    const columns = useMemo(() => getColumnsWithCustomRender(
         items,
-        ['Fornecedor', 'Número da Nota', 'Descrição XML', 'Descrição Sienge', 'CFOP XML', 'CST XML', 'CFOP Sienge'],
+        ['Fornecedor', 'Número da Nota', 'Descrição', 'Sienge_Descrição', 'CFOP', 'CST do ICMS', 'Sienge_CFOP'],
         (row: any, id: string) => {
-            const value = row.getValue(id);
+             const customIdMap: Record<string, string> = {
+                'Descrição': 'Descrição XML',
+                'Sienge_Descrição': 'Descrição Sienge',
+                'CFOP': 'CFOP XML',
+                'CST do ICMS': 'CST XML',
+                'Sienge_CFOP': 'CFOP Sienge',
+                'Número da Nota': 'Nota',
+            };
+            const displayName = customIdMap[id] || id;
+
+            const value = row.original[id];
+            
              if (id === 'Fornecedor') {
                 return (
-                    <div className="max-w-[200px] truncate" title={row.original.Fornecedor}>
-                        <p>{row.original.Fornecedor}</p>
+                    <div className="max-w-[200px] truncate" title={value}>
+                        <p>{value}</p>
                     </div>
                 );
             }
-            if (id === 'Descrição XML' || id === 'Descrição Sienge') {
+             if (id === 'Descrição' || id === 'Sienge_Descrição') {
                 return <div className="max-w-xs truncate" title={String(value ?? '')}>{String(value ?? '')}</div>;
             }
             if (id === 'Número da Nota') {
@@ -124,7 +133,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             }
             return <div>{String(value ?? '')}</div>;
         }
-    );
+    ).map(col => ({...col, header: columnNameMap[col.id as string] || col.id})), [items]);
 
     const actionColumn: any = {
         id: 'Ações',
@@ -161,17 +170,12 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         }
     };
 
-    const groupedAndFilteredItems = useMemo((): GroupedItems => {
+    const groupedItems = useMemo((): GroupedItems => {
         const groups: GroupedItems = {};
         
         items.forEach(item => {
-            const status = validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated';
-            if (activeFilter !== 'all' && status !== activeFilter) {
-                return; // Pula o item se não corresponder ao filtro ativo
-            }
-
             const baseCfop = getBaseCfop(item.Sienge_CFOP);
-            const key = baseCfop; // A chave do grupo é a base do CFOP
+            const key = baseCfop;
 
              if (!groups[key]) {
                 groups[key] = [];
@@ -179,7 +183,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             groups[key].push(item);
         });
 
-        // Agora, para cada grupo, cria o título correto
         const finalGroups: GroupedItems = {};
          for (const key in groups) {
             const itemsInGroup = groups[key];
@@ -191,12 +194,34 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         }
 
         return finalGroups;
-    }, [items, validationStatus, activeFilter]);
+    }, [items]);
     
+    const filteredItemsByTab = (tabItems: CfopValidationData[]) => {
+        if (activeFilter === 'all') return tabItems;
+        return tabItems.filter(item => (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter);
+    };
+
+    const columnNameMap: Record<string, string> = {
+        'Fornecedor': 'Fornecedor',
+        'Número da Nota': 'Nota',
+        'Descrição': 'Descrição XML',
+        'Sienge_Descrição': 'Descrição Sienge',
+        'CFOP': 'CFOP XML',
+        'CST do ICMS': 'CST XML',
+        'Sienge_CFOP': 'CFOP Sienge',
+    };
+
+    const fullColumns = useMemo(() => [ ...columns.map(c => ({...c, header: columnNameMap[c.id as string] || c.id})), statusColumn, actionColumn], [columns]);
+
+    const sortedGroupTitles = useMemo(() => Object.keys(groupedItems).sort((a, b) => {
+        const firstNumA = parseInt(a.split(' ')[0], 10);
+        const firstNumB = parseInt(b.split(' ')[0], 10);
+        return firstNumA - firstNumB;
+    }), [groupedItems]);
 
     return (
         <div className="space-y-4 h-full flex flex-col">
-            <Tabs value={activeFilter} onValueChange={(value) => setActiveFilter(value as any)} className="w-full">
+            <Tabs defaultValue="unvalidated" value={activeFilter} onValueChange={(value) => setActiveFilter(value as any)} className="w-full">
                 <TabsList className="grid w-full grid-cols-5">
                     <TabsTrigger value="all">Todos</TabsTrigger>
                     <TabsTrigger value="unvalidated">Pendentes</TabsTrigger>
@@ -207,28 +232,26 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             </Tabs>
              
              <div className="flex-grow overflow-hidden">
-                <Accordion type="multiple" className="w-full">
-                    {Object.entries(groupedAndFilteredItems)
-                        .sort(([titleA], [titleB]) => titleA.localeCompare(titleB))
-                        .map(([title, itemsInGroup]) => (
-                        <AccordionItem value={title} key={title}>
-                            <AccordionTrigger>
-                                <div className='flex items-center gap-2'>
-                                    <span className="font-semibold text-base">CFOP {title}</span>
-                                    <Badge variant="secondary">{itemsInGroup.length} itens</Badge>
-                                </div>
-                            </AccordionTrigger>
-                            <AccordionContent>
-                                <DataTable columns={[...columns, statusColumn, actionColumn]} data={itemsInGroup} />
-                            </AccordionContent>
-                        </AccordionItem>
+                <Tabs defaultValue={sortedGroupTitles[0]} className="w-full">
+                    <TabsList className="h-auto flex-wrap justify-start">
+                         {sortedGroupTitles.map(title => (
+                            <TabsTrigger key={title} value={title}>
+                                {title} ({filteredItemsByTab(groupedItems[title]).length})
+                            </TabsTrigger>
+                        ))}
+                    </TabsList>
+
+                    {sortedGroupTitles.map(title => (
+                        <TabsContent key={title} value={title} className='mt-4'>
+                            <DataTable columns={fullColumns} data={filteredItemsByTab(groupedItems[title])} />
+                        </TabsContent>
                     ))}
-                </Accordion>
-                {Object.keys(groupedAndFilteredItems).length === 0 && (
-                     <div className="text-center p-8 text-muted-foreground">Nenhum item para exibir com o filtro de status selecionado.</div>
+                </Tabs>
+                
+                {sortedGroupTitles.length === 0 && (
+                     <div className="text-center p-8 text-muted-foreground">Nenhum item para exibir.</div>
                 )}
             </div>
         </div>
     );
 }
-

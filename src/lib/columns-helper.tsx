@@ -8,7 +8,7 @@ import { Row } from "@tanstack/react-table";
 
 type CustomCellRender<TData> = (row: Row<TData>, id: string) => React.ReactNode;
 
-const columnNameMap: Record<string, string> = {
+export const columnNameMap: Record<string, string> = {
     'Chave de acesso': 'Chave',
     'Número da Nota': 'Nota',
     'CPF/CNPJ do Fornecedor': 'CNPJ Forn.',
