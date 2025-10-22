@@ -56,7 +56,6 @@ const getBaseCfop = (cfop: string): string => {
         return cfop || 'N/A';
     }
     // Agrupa pela operação, ignorando se é estadual, interestadual ou exterior.
-    // Ex: 1128, 2128, 3128 serão todos agrupados pela base '128'.
     return cfop.substring(1);
 };
 
@@ -83,12 +82,10 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
 
     useEffect(() => {
-        // 1. Agrupar todos os itens pela DESCRIÇÃO da operação do CFOP
         const allItemsByDescription: Record<string, CfopValidationData[]> = {};
         items.forEach(item => {
             const cfop = item.Sienge_CFOP || 'N/A';
             const baseCfop = getBaseCfop(cfop);
-            // Pega o equivalente de entrada para ter a descrição base
             const baseCfopKey = parseInt(`1${baseCfop}`, 10);
             const description = cfopDescriptions[baseCfopKey] || `Operação ${baseCfop}`;
 
@@ -98,7 +95,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             allItemsByDescription[description].push(item);
         });
 
-        // 2. Separar em pendentes e validados
         const pending: Record<string, CfopValidationData[]> = {};
         const validated: Record<string, CfopValidationData[]> = {};
 
@@ -174,7 +170,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     );
 
     const actionColumn: any = {
-        id: 'actions',
+        id: 'Ações',
         header: 'Ações',
         cell: ({ row }: any) => {
             const item = row.original;

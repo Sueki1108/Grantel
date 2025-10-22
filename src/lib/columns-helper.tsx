@@ -1,3 +1,4 @@
+
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
@@ -9,7 +10,7 @@ type CustomCellRender<TData> = (row: Row<TData>, id: string) => React.ReactNode;
 
 const columnNameMap: Record<string, string> = {
     'Chave de acesso': 'Chave',
-    'Número da Nota': 'N° Nota',
+    'Número da Nota': 'Nota',
     'CPF/CNPJ do Fornecedor': 'CNPJ Forn.',
     'CPF/CNPJ do Destinatário': 'CNPJ Dest.',
     'Valor Total': 'Vl. Total',
@@ -17,8 +18,11 @@ const columnNameMap: Record<string, string> = {
     'Valor Unitário': 'Vl. Unit.',
     'Descricao CFOP': 'Desc. CFOP',
     'Chave Unica': 'Chave Única',
-    'Sienge_Descrição': 'Sienge Desc.',
-    'Sienge_CFOP': 'Sienge CFOP',
+    'Sienge_Descrição': 'Descrição Sienge',
+    'Sienge_CFOP': 'CFOP Sienge',
+    'Descrição': 'Descrição XML',
+    'CFOP': 'CFOP XML',
+    'CST do ICMS': 'CST XML',
     'Correção Sugerida': 'Sugestão',
     'Resumo das Divergências': 'Divergências',
     'Nome do Emissor': 'Emissor',
