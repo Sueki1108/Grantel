@@ -64,6 +64,14 @@ type DetailedData = {
     susp702: NfseData[];
     susp703: NfseData[];
     pending: NfseData[];
+    retention: {
+        iss: NfseData[];
+        ir: NfseData[];
+        inss: NfseData[];
+        csll: NfseData[];
+        pis: NfseData[];
+        cofins: NfseData[];
+    }
 };
 
 type AnalysisResults = {
@@ -235,7 +243,8 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
 
         const detailedData: DetailedData = {
             all: filteredData, service702: [], service703: [],
-            susp702: [], susp703: [], pending: []
+            susp702: [], susp703: [], pending: [],
+            retention: { iss: [], ir: [], inss: [], csll: [], pis: [], cofins: [] }
         };
 
         let summary702: ServiceItemSummary = { 'Soma Total Item': 0, 'Total Suspensão': 0, 'Soma Líquida Item': 0, 'Retenções': { 'Retenção ISS': 0, 'Retenção IR': 0, 'Retenção INSS': 0, 'Retenção CSLL': 0, 'Retenção PIS': 0, 'Retenção COFINS': 0 } };
@@ -247,6 +256,14 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
 
         for (const nf of filteredData) {
             totalNotasGeral += nf.valor_total;
+            
+            // Populate detailed retention arrays
+            if (nf.valor_issrf > 0) detailedData.retention.iss.push(nf);
+            if (nf.valor_ir > 0) detailedData.retention.ir.push(nf);
+            if (nf.valor_inss > 0) detailedData.retention.inss.push(nf);
+            if (nf.valor_contribuicao_social > 0) detailedData.retention.csll.push(nf);
+            if (nf.valor_pis > 0) detailedData.retention.pis.push(nf);
+            if (nf.valor_cofins > 0) detailedData.retention.cofins.push(nf);
             
             const normalizedDescritivo = normalizeText(nf.descritivo);
             const isSuspended = Array.from(selectedSuspensionPhrases).some(phrase => normalizedDescritivo.includes(phrase));
@@ -364,6 +381,12 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
         addSheet(analysisResults.detailedData.service703, "Itens 703");
         addSheet(analysisResults.detailedData.susp703, "Suspensão 703");
         addSheet(analysisResults.detailedData.pending, "Pendentes (Suspensão Genérica)");
+        addSheet(analysisResults.detailedData.retention.iss, "Retenção ISS");
+        addSheet(analysisResults.detailedData.retention.ir, "Retenção IR");
+        addSheet(analysisResults.detailedData.retention.inss, "Retenção INSS");
+        addSheet(analysisResults.detailedData.retention.csll, "Retenção CSLL");
+        addSheet(analysisResults.detailedData.retention.pis, "Retenção PIS");
+        addSheet(analysisResults.detailedData.retention.cofins, "Retenção COFINS");
     
         XLSX.writeFile(wb, "Analise_Completa_NFS-e.xlsx");
         toast({ title: "Download Iniciado", description: "A planilha completa está a ser descarregada." });
@@ -423,6 +446,12 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
             { label: `Suspensão 702 (${analysisResults.detailedData.susp702.length})`, data: analysisResults.detailedData.susp702, sheetName: "Suspensao_702" },
             { label: `Itens 703 (${analysisResults.detailedData.service703.length})`, data: analysisResults.detailedData.service703, sheetName: "Itens_703" },
             { label: `Suspensão 703 (${analysisResults.detailedData.susp703.length})`, data: analysisResults.detailedData.susp703, sheetName: "Suspensao_703" },
+            { label: `Ret. ISS (${analysisResults.detailedData.retention.iss.length})`, data: analysisResults.detailedData.retention.iss, sheetName: "Retencao_ISS" },
+            { label: `Ret. IR (${analysisResults.detailedData.retention.ir.length})`, data: analysisResults.detailedData.retention.ir, sheetName: "Retencao_IR" },
+            { label: `Ret. INSS (${analysisResults.detailedData.retention.inss.length})`, data: analysisResults.detailedData.retention.inss, sheetName: "Retencao_INSS" },
+            { label: `Ret. CSLL (${analysisResults.detailedData.retention.csll.length})`, data: analysisResults.detailedData.retention.csll, sheetName: "Retencao_CSLL" },
+            { label: `Ret. PIS (${analysisResults.detailedData.retention.pis.length})`, data: analysisResults.detailedData.retention.pis, sheetName: "Retencao_PIS" },
+            { label: `Ret. COFINS (${analysisResults.detailedData.retention.cofins.length})`, data: analysisResults.detailedData.retention.cofins, sheetName: "Retencao_COFINS" },
             { label: `Pendentes (${analysisResults.detailedData.pending.length})`, data: analysisResults.detailedData.pending, sheetName: "Pendentes_Suspensao_Generica" }
         ].filter(tab => tab.data.length > 0);
 
@@ -436,18 +465,15 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
 
                 <TabsContent value="summary" className="mt-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <Card className="lg:col-span-3">
-                            <CardHeader><CardTitle>Resultados Gerais</CardTitle></CardHeader>
-                            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-                                <div className="space-y-2">
-                                    <SummaryLine label="Soma Total das Notas" value={analysisResults.financialSummary['Soma Total das Notas']} />
-                                    <SummaryLine label="Total de Notas (únicas)" value={analysisResults.financialSummary['Total de Notas (únicas)']} />
-                                </div>
-                                <div className="space-y-2">
-                                     {Object.entries(analysisResults.totalRetentionSummary).map(([key, value]) => (
-                                        <SummaryLine key={key} label={key} value={value} />
-                                    ))}
-                                </div>
+                        <Card className="lg:col-span-1">
+                             <CardHeader><CardTitle>Resultados Gerais</CardTitle></CardHeader>
+                             <CardContent className="space-y-2">
+                                <SummaryLine label="Soma Total das Notas" value={analysisResults.financialSummary['Soma Total das Notas']} />
+                                <SummaryLine label="Total de Notas (únicas)" value={analysisResults.financialSummary['Total de Notas (únicas)']} />
+                                <div className="pt-2 mt-2 border-t" />
+                                {Object.entries(analysisResults.totalRetentionSummary).map(([key, value]) => (
+                                    <SummaryLine key={key} label={key} value={value} />
+                                ))}
                             </CardContent>
                         </Card>
                         <Card>
@@ -641,3 +667,5 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
         </Card>
     );
 }
+
+    
