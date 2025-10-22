@@ -39,10 +39,10 @@ type FinancialSummary = {
     'Soma Total das Notas': number;
     'Total de Notas (únicas)': number;
     'Soma Total Item 702': number;
-    'Total Suspenso (Item 702)': number;
+    'Total Suspensão (Item 702)': number;
     'Soma Líquida Item 702': number;
     'Soma Total Item 703': number;
-    'Total Suspenso (Item 703)': number;
+    'Total Suspensão (Item 703)': number;
     'Soma Líquida Item 703': number;
 };
 
@@ -151,7 +151,7 @@ const highlightText = (text: string, phrase: string) => {
   }
   const regex = new RegExp(`(${phrase})`, 'gi');
   return text.split(regex).map((part, index) =>
-    part.toLowerCase() === phrase.toLowerCase() ? <strong key={index}>{part}</strong> : part
+    part.toLowerCase() === phrase.toLowerCase() ? <strong key={index} className="bg-yellow-200 dark:bg-yellow-700">{part}</strong> : part
   );
 };
 
@@ -290,10 +290,10 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
             'Soma Total das Notas': totalNotasGeral,
             'Total de Notas (únicas)': new Set(filteredData.map(d => d.numero_nfse)).size,
             'Soma Total Item 702': total702,
-            'Total Suspenso (Item 702)': suspended702,
+            'Total Suspensão (Item 702)': suspended702,
             'Soma Líquida Item 702': total702 - suspended702,
             'Soma Total Item 703': total703,
-            'Total Suspenso (Item 703)': suspended703,
+            'Total Suspensão (Item 703)': suspended703,
             'Soma Líquida Item 703': total703 - suspended703,
         };
 
@@ -369,29 +369,19 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
         toast({ title: "Download Iniciado", description: "A planilha completa está a ser descarregada." });
     };
 
-    const SummaryCard = ({ title, data }: { title: string, data: Record<string, string | number> | null }) => (
-        <Card>
-            <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
-            <CardContent>
-                {data ? (
-                    <div className="space-y-2">
-                        {Object.entries(data).map(([key, value]) => (
-                            <div key={key} className="flex justify-between items-center text-sm border-b pb-1">
-                                <span className="text-muted-foreground">{key}</span>
-                                <span className="font-medium">
-                                    {typeof value === 'number' ? (
-                                        key.includes("Total de Notas") 
-                                            ? value.toLocaleString('pt-BR') 
-                                            : value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                                    ) : value}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                ) : ( <div className="text-center text-muted-foreground py-8">Aguardando dados...</div> )}
-            </CardContent>
-        </Card>
+    const SummaryLine = ({ label, value }: { label: string, value: number | string }) => (
+         <div className="flex justify-between items-center text-sm border-b pb-1">
+            <span className="text-muted-foreground">{label}</span>
+            <span className="font-medium">
+                {typeof value === 'number' ? (
+                    label.includes("Total de Notas") 
+                        ? value.toLocaleString('pt-BR') 
+                        : value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                ) : value}
+            </span>
+        </div>
     );
+    
 
     const getNotesForPhrase = (phrase: string): NfseData[] => {
         if (!analysisResults) return [];
@@ -417,7 +407,7 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                 </div>
             );
         }
-        if (!analysisResults) {
+        if (!analysisResults || !analysisResults.financialSummary) {
              return (
                  <div className="flex flex-col items-center justify-center min-h-[400px] text-muted-foreground">
                     <FileSearch className="h-16 w-16 mb-4" />
@@ -451,9 +441,41 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                 </TabsList>
 
                 <TabsContent value="summary" className="mt-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <SummaryCard title="Resultados Financeiros" data={analysisResults.financialSummary} />
-                        <SummaryCard title="Totais de Retenção" data={analysisResults.retentionSummary} />
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <Card className="lg:col-span-2">
+                            <CardHeader><CardTitle>Resultados Gerais</CardTitle></CardHeader>
+                            <CardContent className="space-y-2">
+                                <SummaryLine label="Soma Total das Notas" value={analysisResults.financialSummary['Soma Total das Notas']} />
+                                <SummaryLine label="Total de Notas (únicas)" value={analysisResults.financialSummary['Total de Notas (únicas)']} />
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader><CardTitle>Análise Item 702</CardTitle></CardHeader>
+                            <CardContent className="space-y-2">
+                                 <SummaryLine label="Soma Total Item 702" value={analysisResults.financialSummary['Soma Total Item 702']} />
+                                 <SummaryLine label="Total Suspensão (Item 702)" value={analysisResults.financialSummary['Total Suspensão (Item 702)']} />
+                                 <SummaryLine label="Soma Líquida Item 702" value={analysisResults.financialSummary['Soma Líquida Item 702']} />
+                            </CardContent>
+                        </Card>
+                         <Card>
+                            <CardHeader><CardTitle>Análise Item 703</CardTitle></CardHeader>
+                            <CardContent className="space-y-2">
+                                <SummaryLine label="Soma Total Item 703" value={analysisResults.financialSummary['Soma Total Item 703']} />
+                                <SummaryLine label="Total Suspensão (Item 703)" value={analysisResults.financialSummary['Total Suspensão (Item 703)']} />
+                                <SummaryLine label="Soma Líquida Item 703" value={analysisResults.financialSummary['Soma Líquida Item 703']} />
+                            </CardContent>
+                        </Card>
+                        <Card className="lg:col-span-4">
+                            <CardHeader><CardTitle>Totais de Retenção</CardTitle></CardHeader>
+                            <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-2">
+                                {analysisResults.retentionSummary && Object.entries(analysisResults.retentionSummary).map(([key, value]) => (
+                                    <div key={key} className="flex flex-col">
+                                        <span className="text-sm text-muted-foreground">{key}</span>
+                                        <span className="font-semibold text-lg">{value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    </div>
+                                ))}
+                            </CardContent>
+                        </Card>
                     </div>
                      {analysisResults.pendingNotes.length > 0 && (
                         <Card className="mt-6">
@@ -564,7 +586,7 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                                                         </div>
                                                         <Dialog>
                                                             <DialogTrigger asChild>
-                                                                <Button variant="ghost" size="icon" className="h-7 w-7" disabled={notesForPhrase.length === 0}>
+                                                                <Button variant="ghost" size="icon" className="h-7 w-7" disabled={notesForPhrase.length === 0} title={`Ver ${notesForPhrase.length} notas`}>
                                                                     <Eye className="h-4 w-4" />
                                                                 </Button>
                                                             </DialogTrigger>
