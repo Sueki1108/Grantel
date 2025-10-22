@@ -10,6 +10,7 @@ import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/comp
 import { Badge } from '../ui/badge';
 import type { AllClassifications } from './imobilizado-analysis';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
+import { cfopDescriptions } from '@/lib/cfop'; // Importar descrições
 
 
 // Tipos
@@ -48,7 +49,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const [validationStatus, setValidationStatus] = useState<Record<string, ValidationStatus>>({});
     const [activeFilter, setActiveFilter] = useState<ValidationStatus | 'all'>('unvalidated');
 
-     const columnNameMap: Record<string, string> = {
+    const columnNameMap: Record<string, string> = {
         'Fornecedor': 'Fornecedor',
         'Número da Nota': 'Nota',
         'Descrição': 'Descrição XML',
@@ -125,7 +126,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             }
             return <div>{String(value ?? '')}</div>;
         }
-    ).map(col => ({...col, header: columnNameMap[col.id as string] || col.id})), [items]);
+    ).map(col => ({...col, header: col.id ? (columnNameMap[col.id as string] || col.id) : col.header})), [items]);
 
     const actionColumn: any = {
         id: 'Ações',
@@ -207,11 +208,17 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                         ))}
                     </TabsList>
 
-                    {sortedGroupTitles.map(title => (
-                        <TabsContent key={title} value={title} className='mt-4'>
-                            <DataTable columns={fullColumns} data={filteredItemsByTab(groupedItems[title])} />
-                        </TabsContent>
-                    ))}
+                    {sortedGroupTitles.map(title => {
+                         const description = cfopDescriptions[parseInt(title, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+                        return (
+                            <TabsContent key={title} value={title} className='mt-4'>
+                                 <div className='mb-4 p-3 border rounded-md bg-muted/50'>
+                                    <h3 className="text-lg font-semibold">CFOP {title}: <span className="font-normal">{description}</span></h3>
+                                </div>
+                                <DataTable columns={fullColumns} data={filteredItemsByTab(groupedItems[title])} />
+                            </TabsContent>
+                        )
+                    })}
                 </Tabs>
                 
                 {sortedGroupTitles.length === 0 && (
