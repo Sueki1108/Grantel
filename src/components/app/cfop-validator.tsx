@@ -49,7 +49,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const [validationStatus, setValidationStatus] = useState<Record<string, ValidationStatus>>({});
     const [activeFilter, setActiveFilter] = useState<ValidationStatus | 'all'>('unvalidated');
 
-    const columnNameMap: Record<string, string> = {
+     const columnNameMap: Record<string, string> = {
         'Fornecedor': 'Fornecedor',
         'Número da Nota': 'Nota',
         'Descrição': 'Descrição XML',
@@ -198,7 +198,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                 </TabsList>
             </Tabs>
              
-             <div className="flex-grow overflow-hidden">
+             <div className="flex-grow overflow-y-auto">
                 <Tabs defaultValue={sortedGroupTitles[0]} className="w-full">
                     <TabsList className="h-auto flex-wrap justify-start">
                          {sortedGroupTitles.map(title => (
