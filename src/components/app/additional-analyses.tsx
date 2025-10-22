@@ -639,16 +639,8 @@ function useReconciliation(processedData: ProcessedData | null) {
     const siengeData = processedData?.siengeSheetData;
     
     // Use only items from valid entry notes and CTEs for reconciliation
-    const notasValidas = processedData?.sheets?.['Notas Válidas'] || [];
-    const ctesValidos = processedData?.sheets?.['CTEs Válidos'] || [];
-    const allItems = processedData?.sheets?.['Itens'] || [];
-
-    const chavesEntradaValidas = new Set([
-        ...notasValidas.map(n => n['Chave de acesso']),
-        ...ctesValidos.map(c => c['Chave de acesso'])
-    ]);
-
-    const xmlItems = allItems.filter(item => chavesEntradaValidas.has(item['Chave de acesso']));
+    const allItems = processedData?.sheets?.['Itens Válidos'] || [];
+    const xmlItems = allItems;
     
     if (!siengeData || !xmlItems) {
         return { reconciliationResults: null, error: null };
@@ -979,3 +971,4 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
          </Card>
     );
 }
+
