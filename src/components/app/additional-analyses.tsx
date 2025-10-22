@@ -178,7 +178,7 @@ export function AdditionalAnalyses({
             pis: findHeader(siengeSheetData, ['pis', 'valor pis', 'vlr pis']),
             cofins: findHeader(siengeSheetData, ['cofins', 'valor cofins', 'vlr cofins']), 
             ipi: findHeader(siengeSheetData, ['ipi', 'valor ipi', 'vlr ipi']),
-            icmsSt: findHeader(siengeSheetData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
+            icmsSt: findHeader(siengeSheetData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms subst']),
             numero: findHeader(siengeSheetData, ['número', 'numero', 'numero da nota', 'nota fiscal']), 
             fornecedor: findHeader(siengeSheetData, ['credor', 'fornecedor', 'nome do fornecedor']),
             cpfCnpj: findHeader(siengeSheetData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
@@ -632,223 +632,94 @@ function useReconciliation(processedData: ProcessedData | null) {
     const xmlNFe = processedData?.sheets?.['Notas Válidas'] || [];
     const xmlItems = processedData?.sheets?.['Itens Válidos'] || [];
 
-    const xmlNFeMap = useMemo(() => new Map(xmlNFe.map(n => [n['Chave Unica'], n])), [xmlNFe]);
-    
-    if (!siengeData || !xmlItems) {
-        return { reconciliationResults: null, error: null };
-    }
-
-    try {
-        const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
-            if (!data || data.length === 0 || !data[0]) return undefined;
-            const headers = Object.keys(data[0]);
-            const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
-            for (const name of possibleNames) {
-                const normalizedName = normalizeKey(name);
-                const found = normalizedHeaders.find(h => h.normalized === normalizedName);
-                if (found) return found.original;
-            }
-            return undefined;
-        };
-
-        const espHeader = findHeader(siengeData, ['esp']);
-        if (!espHeader) {
-            throw new Error("Não foi possível encontrar a coluna 'Esp' na planilha Sienge para filtragem.");
+    return useMemo(() => {
+        if (!siengeData || !xmlItems || xmlItems.length === 0) {
+            return { reconciliationResults: null, error: null };
         }
 
-        const filteredSiengeData = siengeData.filter(row => {
-            const espValue = row[espHeader] ? String(row[espHeader]).trim().toUpperCase() : '';
-            return espValue === 'NFE' || espValue === 'NFSR' || espValue === 'CTE';
-        });
-
-
-        const h = {
-            cnpj: findHeader(filteredSiengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
-            numero: findHeader(filteredSiengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
-            valorTotal: findHeader(filteredSiengeData, ['valor total', 'valor', 'vlr total']),
-            cfop: findHeader(siengeData, ['cfop']),
-            siengeDesc: findHeader(siengeData, ['descrição', 'descrição do item', 'produto fiscal']),
-            icmsOutras: findHeader(filteredSiengeData, ['icms outras', 'icmsoutras']),
-            desconto: findHeader(filteredSiengeData, ['desconto']),
-            frete: findHeader(filteredSiengeData, ['frete']),
-            ipiDespesas: findHeader(filteredSiengeData, ['ipi despesas', 'ipidespesas']),
-            icmsSt: findHeader(filteredSiengeData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
-            despesasAcessorias: findHeader(filteredSiengeData, ['despesas acessórias', 'despesasacessorias', 'voutro']),
-            precoUnitario: findHeader(filteredSiengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
-            produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
-            esp: espHeader,
-        };
-        
-
-        if (!h.cnpj || !h.numero || !h.valorTotal) {
-            throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge.");
-        }
-
-        const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
-            const cleanNumero = cleanAndToStr(numero);
-            const cleanCnpj = String(cnpj).replace(/\D/g, '');
-            const cleanValor = parseFloat(String(valor || '0').replace(',', '.')).toFixed(2);
-            if (!cleanNumero || !cleanCnpj || cleanValor === 'NaN') return null;
-            return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
-        };
-
-        const reconciled: CfopValidationData[] = [];
-        let remainingXmlItems = [...xmlItems];
-        let remainingSiengeItems = [...filteredSiengeData];
-
-        const reconciliationPass = (
-            siengeItems: any[],
-            xmlItemsList: any[],
-            getSiengeKey: (item: any) => string | null,
-            getXmlKey: (item: any) => string | null,
-        ) => {
-            const matchedInPass: any[] = [];
-            const stillUnmatchedSienge: any[] = [];
-            const xmlMap = new Map<string, any[]>();
-
-            xmlItemsList.forEach(item => {
-                const key = getXmlKey(item);
-                if (key) {
-                    if (!xmlMap.has(key)) xmlMap.set(key, []);
-                    xmlMap.get(key)!.push(item);
+        try {
+            const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
+                if (!data || data.length === 0 || !data[0]) return undefined;
+                const headers = Object.keys(data[0]);
+                const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
+                for (const name of possibleNames) {
+                    const normalizedName = normalizeKey(name);
+                    const found = normalizedHeaders.find(h => h.normalized === normalizedName);
+                    if (found) return found.original;
                 }
-            });
-
-            siengeItems.forEach(siengeItem => {
-                const key = getSiengeKey(siengeItem);
-                if (key && xmlMap.has(key)) {
-                    const matchedXmlItems = xmlMap.get(key)!;
-                    if (matchedXmlItems.length > 0) {
-                        const matchedXmlItem = matchedXmlItems.shift(); 
-                        if (matchedXmlItems.length === 0) xmlMap.delete(key);
-                        
-                        const notaOriginal = xmlNFeMap.get(matchedXmlItem['Chave Unica']);
-
-                        const mergedItem: CfopValidationData = {
-                            ...matchedXmlItem,
-                            'Fornecedor': notaOriginal?.Fornecedor || matchedXmlItem.Fornecedor || 'N/A', // Prioritize from original note
-                            'Sienge_CFOP': siengeItem[h.cfop as string] || 'N/A',
-                            'Sienge_Descrição': siengeItem[h.siengeDesc as string] || 'N/A',
-                            'Sienge_Esp': siengeItem[h.esp as string] || 'N/A',
-                        };
-
-                        matchedInPass.push(mergedItem);
-                        return;
-                    }
-                }
-                stillUnmatchedSienge.push(siengeItem);
-            });
-            
-            const stillUnmatchedXml = Array.from(xmlMap.values()).flat();
-            return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
-        };
-
-        const runPass = (getSiengeKey: (item: any) => string | null, getXmlKey: (item: any) => string | null) => {
-            const result = reconciliationPass(remainingSiengeItems, remainingXmlItems, getSiengeKey, getXmlKey);
-            reconciled.push(...result.matched);
-            remainingSiengeItems = result.remainingSienge;
-            remainingXmlItems = result.remainingXml;
-        };
-
-        // Pass 1: Valor Total
-        runPass(
-            (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]),
-            (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
-        );
-        
-        const passes = [
-            h.icmsOutras ? {
-                sKey: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.icmsOutras!]),
-                xKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
-            } : null,
-            h.desconto ? {
-                sKey: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto!] || '0').replace(',', '.'))),
-                xKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
-            } : null,
-             h.frete ? {
-                sKey: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.frete!] || '0').replace(',', '.'))),
-                xKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
-            } : null,
-            h.ipiDespesas || h.icmsSt ? {
-                sKey: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0) - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)),
-                xKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
-            } : null,
-            (h.frete || h.ipiDespesas) ? {
-                sKey: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0)),
-                xKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
-            } : null,
-            (h.desconto || h.frete) ? {
-                sKey: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + (h.desconto ? parseFloat(String(item[h.desconto] || '0').replace(',', '.')) : 0) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0)),
-                xKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
-            } : null,
-            h.despesasAcessorias ? {
-                sKey: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.despesasAcessorias!] || '0').replace(',', '.'))),
-                xKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
-            } : null,
-            h.precoUnitario ? {
-                sKey: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.precoUnitario!]),
-                xKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Unitário'])
-            } : null,
-        ].filter(Boolean);
-
-        for (const pass of passes) {
-            runPass(pass!.sKey, pass!.xKey);
-        }
-
-        // Pass 10: Agregação por Produto Fiscal
-        if (h.produtoFiscal && h.valorTotal) {
-            const groupAndSum = (items: any[], notaKey: string, cnpjKey: string, productKey: string, valueKey: string) => {
-                const grouped = new Map<string, { items: any[], sum: number }>();
-                items.forEach(item => {
-                    if (!item[notaKey] || !item[cnpjKey] || !item[productKey]) return;
-                    const key = `${item[notaKey]}-${item[cnpjKey]}-${item[productKey]}`;
-                    if (!grouped.has(key)) {
-                        grouped.set(key, { items: [], sum: 0 });
-                    }
-                    const group = grouped.get(key)!;
-                    group.items.push(item);
-                    group.sum += parseFloat(String(item[valueKey] || '0').replace(',', '.'));
-                });
-                return grouped;
+                return undefined;
             };
 
-            const siengeGrouped = groupAndSum(remainingSiengeItems, h.numero!, h.cnpj!, h.produtoFiscal!, h.valorTotal!);
-            const xmlGrouped = groupAndSum(remainingXmlItems, 'Número da Nota', 'CPF/CNPJ do Emitente', 'Descrição', 'Valor Total');
+            const espHeader = findHeader(siengeData, ['esp']);
+            if (!espHeader) {
+                throw new Error("Não foi possível encontrar a coluna 'Esp' na planilha Sienge para filtragem.");
+            }
 
-            const stillUnmatchedSienge = new Set(remainingSiengeItems);
-            const stillUnmatchedXml = new Set(remainingXmlItems);
+            const filteredSiengeData = siengeData.filter(row => {
+                const espValue = row[espHeader] ? String(row[espHeader]).trim().toUpperCase() : '';
+                return ['NFE', 'NFSR', 'CTE'].includes(espValue);
+            });
 
-            siengeGrouped.forEach((siengeGroup, key) => {
-                const xmlGroup = xmlGrouped.get(key);
-                if (xmlGroup && Math.abs(siengeGroup.sum - xmlGroup.sum) < 0.01) {
-                    const aggregatedSienge = siengeGroup.items.reduce((acc, item) => ({...acc, ...item}), {});
-                    const aggregatedXml = xmlGroup.items.reduce((acc, item) => ({...acc, ...item}), {});
-                    
-                     const notaOriginal = xmlNFeMap.get(aggregatedXml['Chave Unica']);
+            const h = {
+                cnpj: findHeader(filteredSiengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
+                numero: findHeader(filteredSiengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
+                valorTotal: findHeader(filteredSiengeData, ['valor total', 'valor', 'vlr total']),
+                cfop: findHeader(siengeData, ['cfop']),
+                siengeDesc: findHeader(siengeData, ['descrição', 'descrição do item', 'produto fiscal']),
+                esp: espHeader,
+            };
 
-                    const reconciledRow: CfopValidationData = {
-                        ...aggregatedXml,
+            if (!h.cnpj || !h.numero || !h.valorTotal) {
+                throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge.");
+            }
+            
+            const xmlNFeMap = new Map(xmlNFe.map(n => [n['Chave Unica'], n]));
+
+            const getComparisonKey = (numero: any, cnpj: any, valor: any): string => {
+                const cleanNumero = cleanAndToStr(numero);
+                const cleanCnpj = String(cnpj).replace(/\D/g, '');
+                const cleanValor = parseFloat(String(valor || '0').replace(',', '.')).toFixed(2);
+                return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
+            };
+            
+            const xmlItemsMap = new Map<string, any[]>();
+            xmlItems.forEach(item => {
+                const key = getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']);
+                if (!xmlItemsMap.has(key)) xmlItemsMap.set(key, []);
+                xmlItemsMap.get(key)!.push(item);
+            });
+
+            const reconciled: CfopValidationData[] = [];
+            const onlyInSienge: any[] = [];
+
+            filteredSiengeData.forEach(siengeItem => {
+                const key = getComparisonKey(siengeItem[h.numero!], siengeItem[h.cnpj!], siengeItem[h.valorTotal!]);
+                const matchedXmlItems = xmlItemsMap.get(key);
+
+                if (matchedXmlItems && matchedXmlItems.length > 0) {
+                    const matchedXmlItem = matchedXmlItems.shift(); // Take one match
+                    const notaOriginal = xmlNFeMap.get(matchedXmlItem['Chave Unica']);
+                    const mergedItem: CfopValidationData = {
+                        ...matchedXmlItem,
                         'Fornecedor': notaOriginal?.Fornecedor || 'N/A',
-                        'Sienge_CFOP': aggregatedSienge[h.cfop as string] || 'N/A',
-                        'Sienge_Descrição': aggregatedSienge[h.siengeDesc as string] || 'N/A',
-                        'Sienge_Esp': aggregatedSienge[h.esp as string] || 'N/A',
-                        'Observações': `Conciliado por Agregação de Produto (${siengeGroup.items.length} itens)`,
+                        'Sienge_CFOP': siengeItem[h.cfop as string] || 'N/A',
+                        'Sienge_Descrição': siengeItem[h.siengeDesc as string] || 'N/A',
+                        'Sienge_Esp': siengeItem[h.esp as string] || 'N/A',
                     };
-                    reconciled.push(reconciledRow);
-
-                    siengeGroup.items.forEach(item => stillUnmatchedSienge.delete(item));
-                    xmlGroup.items.forEach(item => stillUnmatchedXml.delete(item));
+                    reconciled.push(mergedItem);
+                } else {
+                    onlyInSienge.push(siengeItem);
                 }
             });
 
-            remainingSiengeItems = Array.from(stillUnmatchedSienge);
-            remainingXmlItems = Array.from(stillUnmatchedXml);
-        }
+            const onlyInXml = Array.from(xmlItemsMap.values()).flat();
 
-        return { reconciliationResults: { reconciled, onlyInSienge: remainingSiengeItems, onlyInXml: remainingXmlItems }, error: null };
-    } catch (err: any) {
-        return { reconciliationResults: null, error: err.message };
-    }
+            return { reconciliationResults: { reconciled, onlyInSienge, onlyInXml }, error: null };
+        } catch (err: any) {
+            console.error("Reconciliation Error:", err);
+            return { reconciliationResults: null, error: err.message };
+        }
+    }, [siengeData, xmlItems, xmlNFe]);
 }
 
 
@@ -968,4 +839,3 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
          </Card>
     );
 }
-
