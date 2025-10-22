@@ -92,20 +92,26 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         toast({ title: 'Validações Guardadas', description: 'As suas validações de CFOP foram guardadas.' });
     };
 
-    const { pendingItems, validatedItems } = useMemo(() => {
-        const pending: CfopValidationData[] = [];
-        const validated: CfopValidationData[] = [];
+    const groupedItems = useMemo(() => {
+        const pending: Record<string, CfopValidationData[]> = {};
+        const validated: Record<string, CfopValidationData[]> = {};
+        
         items.forEach(item => {
             const status = validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated';
             const itemWithStatus = { ...item, validationStatus: status };
+            const cfop = item.Sienge_CFOP || 'N/A';
+
             if (status === 'unvalidated') {
-                pending.push(itemWithStatus);
+                if (!pending[cfop]) pending[cfop] = [];
+                pending[cfop].push(itemWithStatus);
             } else {
-                validated.push(itemWithStatus);
+                 if (!validated[cfop]) validated[cfop] = [];
+                validated[cfop].push(itemWithStatus);
             }
         });
-        return { pendingItems: pending, validatedItems: validated };
+        return { pending, validated };
     }, [items, validationStatus]);
+
 
     const columns = getColumnsWithCustomRender(
         items,
@@ -158,6 +164,31 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         }
     };
 
+    const renderGroupedTabs = (data: Record<string, CfopValidationData[]>, baseColumns: ColumnDef<CfopValidationData, any>[]) => {
+        const cfopKeys = Object.keys(data).sort();
+        if (cfopKeys.length === 0) {
+            return <div className="text-center p-8 text-muted-foreground">Nenhum item para exibir.</div>;
+        }
+
+        return (
+             <Tabs defaultValue={cfopKeys[0]} className="w-full">
+                <TabsList className="h-auto flex-wrap justify-start">
+                    {cfopKeys.map(cfop => (
+                        <TabsTrigger key={cfop} value={cfop}>
+                            CFOP {cfop} ({data[cfop].length})
+                        </TabsTrigger>
+                    ))}
+                </TabsList>
+                {cfopKeys.map(cfop => (
+                    <TabsContent key={cfop} value={cfop} className="mt-4">
+                        <DataTable columns={baseColumns} data={data[cfop]} />
+                    </TabsContent>
+                ))}
+            </Tabs>
+        )
+    };
+
+
     return (
         <div className="space-y-4 h-full flex flex-col">
             <div className="flex justify-end">
@@ -168,15 +199,15 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             <div className="flex-grow overflow-hidden">
                  <Tabs defaultValue="pending" className="w-full h-full flex flex-col">
                     <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="pending">Pendentes de Validação ({pendingItems.length})</TabsTrigger>
-                        <TabsTrigger value="validated">Validados ({validatedItems.length})</TabsTrigger>
+                        <TabsTrigger value="pending">Pendentes de Validação ({items.filter(it => (validationStatus[it['Chave de acesso'] + it.Item] || 'unvalidated') === 'unvalidated').length})</TabsTrigger>
+                        <TabsTrigger value="validated">Validados ({items.filter(it => (validationStatus[it['Chave de acesso'] + it.Item] || 'unvalidated') !== 'unvalidated').length})</TabsTrigger>
                     </TabsList>
-                    <ScrollArea className="flex-grow mt-4">
+                     <ScrollArea className="flex-grow mt-4">
                         <TabsContent value="pending">
-                            <DataTable columns={[...columns, actionColumn]} data={pendingItems} />
+                            {renderGroupedTabs(groupedItems.pending, [...columns, actionColumn])}
                         </TabsContent>
                         <TabsContent value="validated">
-                            <DataTable columns={[...columns, statusColumn, actionColumn]} data={validatedItems} />
+                             {renderGroupedTabs(groupedItems.validated, [...columns, statusColumn, actionColumn])}
                         </TabsContent>
                     </ScrollArea>
                 </Tabs>
@@ -184,3 +215,5 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         </div>
     );
 }
+
+  
