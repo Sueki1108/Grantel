@@ -4,13 +4,15 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search } from "lucide-react";
+import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, Factory, Wrench, HardHat } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from '../ui/badge';
 import type { AllClassifications } from './imobilizado-analysis';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { cfopDescriptions } from '@/lib/cfop'; // Importar descrições
+import { RowSelectionState } from '@tanstack/react-table';
+import { Checkbox } from '../ui/checkbox';
 
 
 // Tipos
@@ -48,6 +50,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const { toast } = useToast();
     const [validationStatus, setValidationStatus] = useState<Record<string, ValidationStatus>>({});
     const [activeFilter, setActiveFilter] = useState<ValidationStatus | 'all'>('unvalidated');
+    const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
      const columnNameMap: Record<string, string> = {
         'Fornecedor': 'Fornecedor',
@@ -73,60 +76,100 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     }, [items, allPersistedClassifications]);
 
 
-    const handleValidationChange = (item: CfopValidationData, newStatus: ValidationStatus) => {
-        const uniqueProductKey = getUniqueProductKey(item);
-        
-        // Propaga a classificação para todos os itens com a mesma chave de produto
+    const handleValidationChange = (itemsToUpdate: CfopValidationData[], newStatus: ValidationStatus) => {
+        const uniqueProductKeys = new Set(itemsToUpdate.map(getUniqueProductKey));
+
+        // Propaga a classificação para todos os itens com as mesmas chaves de produto únicas
         const newValidationStatus = { ...validationStatus };
-        const itemsToUpdate = items.filter(i => getUniqueProductKey(i) === uniqueProductKey);
-        itemsToUpdate.forEach(i => {
+        const itemsToUpdateGlobally = items.filter(i => uniqueProductKeys.has(getUniqueProductKey(i)));
+        
+        itemsToUpdateGlobally.forEach(i => {
             newValidationStatus[i['Chave de acesso'] + i.Item] = newStatus;
         });
         setValidationStatus(newValidationStatus);
 
-        // Persiste a alteração automaticamente
+        // Persiste a alteração automaticamente para cada chave de produto única
         const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedClassifications || {}));
         if (!updatedPersistedData['cfopValidations']) {
             updatedPersistedData['cfopValidations'] = { classifications: {}, accountCodes: {} };
         }
         
-        if (newStatus !== 'unvalidated') {
-             updatedPersistedData['cfopValidations'].classifications[uniqueProductKey] = { classification: newStatus };
-        } else {
-            delete updatedPersistedData['cfopValidations'].classifications[uniqueProductKey];
-        }
+        uniqueProductKeys.forEach(uniqueProductKey => {
+            if (newStatus !== 'unvalidated') {
+                updatedPersistedData['cfopValidations'].classifications[uniqueProductKey] = { classification: newStatus };
+            } else {
+                delete updatedPersistedData['cfopValidations'].classifications[uniqueProductKey];
+            }
+        });
 
         onPersistAllClassifications(updatedPersistedData);
         
         toast({
-            title: `Item(ns) classificado(s) como "${newStatus}"`,
+            title: `${itemsToUpdate.length} item(ns) classificado(s) como "${newStatus}"`,
             description: "A sua alteração foi guardada automaticamente."
         });
     };
     
-    // Colunas da Tabela
-    const columns = useMemo(() => getColumnsWithCustomRender(
-        items,
-        ['Fornecedor', 'Número da Nota', 'Descrição', 'Sienge_Descrição', 'CFOP', 'CST do ICMS', 'Sienge_CFOP'],
-        (row: any, id: string) => {
-             const value = row.original[id];
-            
-             if (id === 'Fornecedor') {
-                return (
-                    <div className="max-w-[200px] truncate" title={value}>
-                        <p>{value}</p>
-                    </div>
-                );
-            }
-             if (id === 'Descrição' || id === 'Sienge_Descrição') {
-                return <div className="max-w-xs truncate" title={String(value ?? '')}>{String(value ?? '')}</div>;
-            }
-            if (id === 'Número da Nota') {
-                 return <div className="text-center">{String(value ?? '')}</div>;
-            }
-            return <div>{String(value ?? '')}</div>;
+    const handleBulkClassification = (newStatus: ValidationStatus) => {
+        const selectedItemIndices = Object.keys(rowSelection).map(Number);
+        const selectedItems = items.filter((_, index) => selectedItemIndices.includes(index));
+        
+        if (selectedItems.length > 0) {
+            handleValidationChange(selectedItems, newStatus);
         }
-    ).map(col => ({...col, header: col.id ? (columnNameMap[col.id as string] || col.id) : col.header})), [items]);
+        
+        setRowSelection({}); // Limpa a seleção após a ação
+    };
+
+    // Colunas da Tabela
+    const columns = useMemo(() => {
+        const baseColumns = getColumnsWithCustomRender(
+            items,
+            ['Fornecedor', 'Número da Nota', 'Descrição', 'Sienge_Descrição', 'CFOP', 'CST do ICMS', 'Sienge_CFOP'],
+            (row: any, id: string) => {
+                 const value = row.original[id];
+                
+                 if (id === 'Fornecedor') {
+                    return (
+                        <div className="max-w-[200px] truncate" title={value}>
+                            <p>{value}</p>
+                        </div>
+                    );
+                }
+                 if (id === 'Descrição' || id === 'Sienge_Descrição') {
+                    return <div className="max-w-xs truncate" title={String(value ?? '')}>{String(value ?? '')}</div>;
+                }
+                if (id === 'Número da Nota') {
+                     return <div className="text-center">{String(value ?? '')}</div>;
+                }
+                return <div>{String(value ?? '')}</div>;
+            }
+        ).map(col => ({...col, header: col.id ? (columnNameMap[col.id as string] || col.id) : col.header}));
+
+         baseColumns.unshift({
+            id: 'select',
+            header: ({ table }) => (
+                <Checkbox
+                    checked={table.getIsAllPageRowsSelected()}
+                    onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                    aria-label="Selecionar todas"
+                />
+            ),
+            cell: ({ row }) => (
+                <Checkbox
+                    checked={row.getIsSelected()}
+                    onCheckedChange={(value) => row.toggleSelected(!!value)}
+                    aria-label="Selecionar linha"
+                    onClick={(e) => e.stopPropagation()}
+                />
+            ),
+            enableSorting: false,
+            enableHiding: false,
+        });
+
+        return baseColumns;
+
+    }, [items]);
 
     const actionColumn: any = {
         id: 'Ações',
@@ -137,11 +180,11 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             return (
                 <TooltipProvider>
                     <div className="flex gap-2 justify-center">
-                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'correct' ? 'default' : 'ghost'} className="h-8 w-8" onClick={() => handleValidationChange(item, 'correct')}><ThumbsUp className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Correto</p></TooltipContent></Tooltip>
-                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'incorrect' ? 'destructive' : 'ghost'} className="h-8 w-8" onClick={() => handleValidationChange(item, 'incorrect')}><ThumbsDown className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Incorreto</p></TooltipContent></Tooltip>
-                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'verify' ? 'secondary' : 'ghost'} className="h-8 w-8" onClick={() => handleValidationChange(item, 'verify')}><Search className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificar</p></TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'correct' ? 'default' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'correct')}}><ThumbsUp className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Correto</p></TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'incorrect' ? 'destructive' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'incorrect')}}><ThumbsDown className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Incorreto</p></TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'verify' ? 'secondary' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'verify')}}><Search className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificar</p></TooltipContent></Tooltip>
                         {currentStatus !== 'unvalidated' && (
-                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleValidationChange(item, 'unvalidated')}><RotateCcw className="h-5 w-5 text-muted-foreground" /></Button></TooltipTrigger><TooltipContent><p>Reverter para Pendente</p></TooltipContent></Tooltip>
+                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'unvalidated')}}><RotateCcw className="h-5 w-5 text-muted-foreground" /></Button></TooltipTrigger><TooltipContent><p>Reverter para Pendente</p></TooltipContent></Tooltip>
                         )}
                     </div>
                 </TooltipProvider>
@@ -186,8 +229,24 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
     const sortedGroupTitles = useMemo(() => Object.keys(groupedItems).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)), [groupedItems]);
 
+    const numSelected = Object.keys(rowSelection).length;
+
     return (
-        <div className="space-y-4 h-full flex flex-col">
+        <div className="space-y-4 h-full flex flex-col relative">
+             {numSelected > 0 && (
+                <div className="sticky bottom-4 z-20 w-full flex justify-center">
+                    <Card className="flex items-center gap-4 p-3 shadow-2xl animate-in fade-in-0 slide-in-from-bottom-5">
+                         <span className="text-sm font-medium pl-2">{numSelected} item(ns) selecionado(s)</span>
+                        <div className="h-6 border-l" />
+                         <span className="text-sm font-medium">Classificar como:</span>
+                         <div className="flex gap-2">
+                             <Button size="sm" onClick={() => handleBulkClassification('correct')}><ThumbsUp className="mr-2 h-4 w-4" /> Correto</Button>
+                             <Button size="sm" variant="destructive" onClick={() => handleBulkClassification('incorrect')}><ThumbsDown className="mr-2 h-4 w-4" /> Incorreto</Button>
+                             <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('verify')}><Search className="mr-2 h-4 w-4" /> Verificar</Button>
+                         </div>
+                    </Card>
+                </div>
+            )}
             <Tabs defaultValue="unvalidated" value={activeFilter} onValueChange={(value) => setActiveFilter(value as any)} className="w-full">
                 <TabsList className="grid w-full grid-cols-5">
                     <TabsTrigger value="all">Todos</TabsTrigger>
@@ -215,7 +274,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                                  <div className='mb-4 p-3 border rounded-md bg-muted/50'>
                                     <h3 className="text-lg font-semibold">CFOP {title}: <span className="font-normal">{description}</span></h3>
                                 </div>
-                                <DataTable columns={fullColumns} data={filteredItemsByTab(groupedItems[title])} />
+                                <DataTable columns={fullColumns} data={filteredItemsByTab(groupedItems[title])} rowSelection={rowSelection} setRowSelection={setRowSelection} />
                             </TabsContent>
                         )
                     })}
