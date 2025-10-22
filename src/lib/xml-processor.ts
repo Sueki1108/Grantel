@@ -80,6 +80,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const total = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'total')[0];
     const detList = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'det');
     const protNFe = nfeProc.getElementsByTagNameNS(NFE_NAMESPACE, 'protNFe')[0];
+    const infCpl = getTagValue(infNFe, 'infCpl');
     
     const infProt = protNFe?.getElementsByTagNameNS(NFE_NAMESPACE, 'infProt')[0];
 
@@ -121,6 +122,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'Total': parseFloat(vNF) || 0,
         'Status': status,
         'finNFe': getTagValue(ide, 'finNFe'), // Adicionando finNFe
+        'infCpl': infCpl,
     };
     
     if (isSaida) {
@@ -145,13 +147,14 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         const det = detList[i];
         if (!det) continue;
         const prod = det.getElementsByTagNameNS(NFE_NAMESPACE, 'prod')[0];
+        const imposto = det.getElementsByTagNameNS(NFE_NAMESPACE, 'imposto')[0];
         if (!prod) continue;
         
-        itens.push({
+        let item: any = {
             'Chave Unica': chaveUnica,
             'Item': getAttributeValue(det, 'nItem'),
             'Chave de acesso': chaveAcesso,
-            'Número da Nota': notaFiscal['Número'],
+            'Número da Nota': nNF,
             'CPF/CNPJ do Emitente': emitCNPJ,
             'Código': getTagValue(prod, 'cProd'),
             'Descrição': getTagValue(prod, 'xProd'),
@@ -161,7 +164,19 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
             'Quantidade': parseFloat(getTagValue(prod, 'qCom')) || 0,
             'Valor Unitário': parseFloat(getTagValue(prod, 'vUnCom')) || 0,
             'Valor Total': parseFloat(getTagValue(prod, 'vProd')) || 0,
-        });
+        };
+
+        if (imposto) {
+            const icmsGroup = imposto.getElementsByTagNameNS(NFE_NAMESPACE, 'ICMS')[0];
+            if (icmsGroup && icmsGroup.firstElementChild) {
+                const cstTag = icmsGroup.firstElementChild.getElementsByTagNameNS(NFE_NAMESPACE, 'CST')[0];
+                if (cstTag && cstTag.textContent) {
+                    item['CST do ICMS'] = cstTag.textContent;
+                }
+            }
+        }
+
+        itens.push(item);
     }
     
     if (isSaida) {

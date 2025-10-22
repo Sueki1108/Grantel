@@ -25,6 +25,7 @@ export interface CfopValidationData extends Record<string, any> {
     'Fornecedor': string; // Nome do fornecedor do XML
     'Descrição': string; // Descrição do item no XML
     'CFOP': string; // CFOP do XML
+    'CST do ICMS'?: string; // CST do ICMS do XML
 }
 
 type ValidationStatus = 'unvalidated' | 'correct' | 'incorrect';
@@ -115,7 +116,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
     const columns = getColumnsWithCustomRender(
         items,
-        ['Número da Nota', 'Fornecedor', 'Descrição', 'Sienge_Descrição', 'CFOP', 'Sienge_CFOP'],
+        ['Número da Nota', 'Fornecedor', 'Descrição', 'Sienge_Descrição', 'CFOP', 'CST do ICMS', 'Sienge_CFOP'],
         (row: any, id: string) => {
              if (id === 'Fornecedor') {
                 return (
@@ -202,14 +203,16 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                         <TabsTrigger value="pending">Pendentes de Validação ({items.filter(it => (validationStatus[it['Chave de acesso'] + it.Item] || 'unvalidated') === 'unvalidated').length})</TabsTrigger>
                         <TabsTrigger value="validated">Validados ({items.filter(it => (validationStatus[it['Chave de acesso'] + it.Item] || 'unvalidated') !== 'unvalidated').length})</TabsTrigger>
                     </TabsList>
-                     <ScrollArea className="flex-grow mt-4">
-                        <TabsContent value="pending">
-                            {renderGroupedTabs(groupedItems.pending, [...columns, actionColumn])}
-                        </TabsContent>
-                        <TabsContent value="validated">
-                             {renderGroupedTabs(groupedItems.validated, [...columns, statusColumn, actionColumn])}
-                        </TabsContent>
-                    </ScrollArea>
+                     <div className='flex-grow overflow-hidden mt-4'>
+                        <ScrollArea className="h-full">
+                            <TabsContent value="pending">
+                                {renderGroupedTabs(groupedItems.pending, [...columns, actionColumn])}
+                            </TabsContent>
+                            <TabsContent value="validated">
+                                {renderGroupedTabs(groupedItems.validated, [...columns, statusColumn, actionColumn])}
+                            </TabsContent>
+                        </ScrollArea>
+                    </div>
                 </Tabs>
             </div>
         </div>
