@@ -151,6 +151,14 @@ export function AdditionalAnalyses({
             return { inconsistentCfopRows: [], taxConferences: { icms: [], pis: [], cofins: [], ipi: [], icmsSt: [] } };
         }
     
+        const getCfopDescription = (cfopCode: number): string => {
+            const fullDescription = cfopDescriptions[cfopCode];
+            if (fullDescription) {
+                 return fullDescription.split(' ').slice(0, 3).join(' ');
+            }
+            return 'N/A';
+        };
+
         const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
              if (!data || data.length === 0 || !data[0]) return undefined;
              const headers = Object.keys(data[0]);
@@ -911,3 +919,4 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
          </Card>
     );
 }
+
