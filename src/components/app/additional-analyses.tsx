@@ -691,6 +691,7 @@ function useReconciliation(processedData: ProcessedData | null) {
             icmsSt: findHeader(filteredSiengeData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
             despesasAcessorias: findHeader(filteredSiengeData, ['despesas acessórias', 'despesasacessorias', 'voutro']),
             precoUnitario: findHeader(filteredSiengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
+            produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
             esp: espHeader,
         };
         
@@ -785,6 +786,18 @@ function useReconciliation(processedData: ProcessedData | null) {
                 sKey: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0) - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)),
                 xKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
             } : null,
+            (h.frete || h.ipiDespesas) ? {
+                sKey: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0)),
+                xKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
+            } : null,
+            (h.desconto || h.frete) ? {
+                sKey: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + (h.desconto ? parseFloat(String(item[h.desconto] || '0').replace(',', '.')) : 0) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0)),
+                xKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
+            } : null,
+            h.despesasAcessorias ? {
+                sKey: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.despesasAcessorias!] || '0').replace(',', '.'))),
+                xKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
+            } : null,
             h.precoUnitario ? {
                 sKey: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.precoUnitario!]),
                 xKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Unitário'])
@@ -793,6 +806,53 @@ function useReconciliation(processedData: ProcessedData | null) {
 
         for (const pass of passes) {
             runPass(pass!.sKey, pass!.xKey);
+        }
+
+        // Pass 10: Agregação por Produto Fiscal
+        if (h.produtoFiscal && h.valorTotal) {
+            const groupAndSum = (items: any[], notaKey: string, cnpjKey: string, productKey: string, valueKey: string) => {
+                const grouped = new Map<string, { items: any[], sum: number }>();
+                items.forEach(item => {
+                    if (!item[notaKey] || !item[cnpjKey] || !item[productKey]) return;
+                    const key = `${item[notaKey]}-${item[cnpjKey]}-${item[productKey]}`;
+                    if (!grouped.has(key)) {
+                        grouped.set(key, { items: [], sum: 0 });
+                    }
+                    const group = grouped.get(key)!;
+                    group.items.push(item);
+                    group.sum += parseFloat(String(item[valueKey] || '0').replace(',', '.'));
+                });
+                return grouped;
+            };
+
+            const siengeGrouped = groupAndSum(remainingSiengeItems, h.numero!, h.cnpj!, h.produtoFiscal!, h.valorTotal!);
+            const xmlGrouped = groupAndSum(remainingXmlItems, 'Número da Nota', 'CPF/CNPJ do Emitente', 'Descrição', 'Valor Total');
+
+            const stillUnmatchedSienge = new Set(remainingSiengeItems);
+            const stillUnmatchedXml = new Set(remainingXmlItems);
+
+            siengeGrouped.forEach((siengeGroup, key) => {
+                const xmlGroup = xmlGrouped.get(key);
+                if (xmlGroup && Math.abs(siengeGroup.sum - xmlGroup.sum) < 0.01) {
+                    const aggregatedSienge = siengeGroup.items.reduce((acc, item) => ({...acc, ...item}), {});
+                    const aggregatedXml = xmlGroup.items.reduce((acc, item) => ({...acc, ...item}), {});
+
+                    const reconciledRow: CfopValidationData = {
+                        ...aggregatedXml,
+                        'Sienge_CFOP': aggregatedSienge[h.cfop as string] || 'N/A',
+                        'Sienge_Descrição': aggregatedSienge[h.siengeDesc as string] || 'N/A',
+                        'Sienge_Esp': aggregatedSienge[h.esp as string] || 'N/A',
+                        'Observações': `Conciliado por Agregação de Produto (${siengeGroup.items.length} itens)`,
+                    };
+                    reconciled.push(reconciledRow);
+
+                    siengeGroup.items.forEach(item => stillUnmatchedSienge.delete(item));
+                    xmlGroup.items.forEach(item => stillUnmatchedXml.delete(item));
+                }
+            });
+
+            remainingSiengeItems = Array.from(stillUnmatchedSienge);
+            remainingXmlItems = Array.from(stillUnmatchedXml);
         }
 
         return { reconciliationResults: { reconciled, onlyInSienge: remainingSiengeItems, onlyInXml: remainingXmlItems }, error: null };
