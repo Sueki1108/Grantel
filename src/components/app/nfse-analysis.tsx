@@ -38,10 +38,12 @@ type NfseData = {
 type FinancialSummary = {
     'Soma Total das Notas': number;
     'Total de Notas (únicas)': number;
-    'Soma Líquida Item 702': number;
-    'Soma Líquida Item 703': number;
+    'Soma Total Item 702': number;
     'Total Suspenso (Item 702)': number;
+    'Soma Líquida Item 702': number;
+    'Soma Total Item 703': number;
     'Total Suspenso (Item 703)': number;
+    'Soma Líquida Item 703': number;
 };
 
 type RetentionSummary = {
@@ -229,8 +231,11 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
             'Retenção CSLL': 0, 'Retenção PIS': 0, 'Retenção COFINS': 0
         };
         const pendingNotes: NfseData[] = [];
+        let totalNotasGeral = 0;
+
 
         for (const nf of filteredData) {
+            totalNotasGeral += nf.valor_total;
             retentionSummary['Retenção ISS'] += nf.valor_issrf;
             retentionSummary['Retenção IR'] += nf.valor_ir;
             retentionSummary['Retenção INSS'] += nf.valor_inss;
@@ -272,12 +277,14 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
         }
         
         const financialSummary: FinancialSummary = {
-            'Soma Total das Notas': total702 + total703,
+            'Soma Total das Notas': totalNotasGeral,
             'Total de Notas (únicas)': new Set(filteredData.map(d => d.numero_nfse)).size,
-            'Soma Líquida Item 702': total702 - suspended702,
-            'Soma Líquida Item 703': total703 - suspended703,
+            'Soma Total Item 702': total702,
             'Total Suspenso (Item 702)': suspended702,
+            'Soma Líquida Item 702': total702 - suspended702,
+            'Soma Total Item 703': total703,
             'Total Suspenso (Item 703)': suspended703,
+            'Soma Líquida Item 703': total703 - suspended703,
         };
 
         return { financialSummary, retentionSummary, pendingNotes, detailedData };
@@ -362,7 +369,11 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                             <div key={key} className="flex justify-between items-center text-sm border-b pb-1">
                                 <span className="text-muted-foreground">{key}</span>
                                 <span className="font-medium">
-                                    {typeof value === 'number' ? value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : value}
+                                    {typeof value === 'number' ? (
+                                        key.includes("Total de Notas") 
+                                            ? value.toLocaleString('pt-BR') 
+                                            : value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                    ) : value}
                                 </span>
                             </div>
                         ))}
