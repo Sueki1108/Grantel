@@ -41,6 +41,19 @@ const getUniqueProductKey = (item: CfopValidationData): string => {
     return `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
 };
 
+const getBaseCfop = (cfop: string): string => {
+    if (!cfop || cfop.length !== 4) return cfop;
+    const firstDigit = cfop.charAt(0);
+    const rest = cfop.substring(1);
+    if (['2', '3'].includes(firstDigit)) {
+        return `1${rest}`;
+    }
+    if (['6', '7'].includes(firstDigit)) {
+        return `5${rest}`;
+    }
+    return cfop;
+}
+
 
 export function CfopValidator({ items, allPersistedClassifications, onPersistAllClassifications }: CfopValidatorProps) {
     const { toast } = useToast();
@@ -100,14 +113,15 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         items.forEach(item => {
             const status = validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated';
             const itemWithStatus = { ...item, validationStatus: status };
-            const cfop = item.Sienge_CFOP || 'N/A';
+            const siengeCfop = item.Sienge_CFOP || 'N/A';
+            const baseCfop = getBaseCfop(siengeCfop);
 
             if (status === 'unvalidated') {
-                if (!pending[cfop]) pending[cfop] = [];
-                pending[cfop].push(itemWithStatus);
+                if (!pending[baseCfop]) pending[baseCfop] = [];
+                pending[baseCfop].push(itemWithStatus);
             } else {
-                 if (!validated[cfop]) validated[cfop] = [];
-                validated[cfop].push(itemWithStatus);
+                 if (!validated[baseCfop]) validated[baseCfop] = [];
+                validated[baseCfop].push(itemWithStatus);
             }
         });
         return { pending, validated };
@@ -205,10 +219,10 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                     </TabsList>
                      <div className='flex-grow overflow-hidden mt-4'>
                         <ScrollArea className="h-full">
-                            <TabsContent value="pending">
+                            <TabsContent value="pending" className="mt-0">
                                 {renderGroupedTabs(groupedItems.pending, [...columns, actionColumn])}
                             </TabsContent>
-                            <TabsContent value="validated">
+                            <TabsContent value="validated" className="mt-0">
                                 {renderGroupedTabs(groupedItems.validated, [...columns, statusColumn, actionColumn])}
                             </TabsContent>
                         </ScrollArea>
