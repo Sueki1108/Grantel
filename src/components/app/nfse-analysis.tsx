@@ -145,6 +145,16 @@ const getTagValue = (element: Element | undefined, query: string): string => {
     return tag?.textContent ?? '';
 };
 
+const highlightText = (text: string, phrase: string) => {
+  if (!phrase || !text) {
+    return text;
+  }
+  const regex = new RegExp(`(${phrase})`, 'gi');
+  return text.split(regex).map((part, index) =>
+    part.toLowerCase() === phrase.toLowerCase() ? <strong key={index}>{part}</strong> : part
+  );
+};
+
 
 // ===============================================================
 // Main Component
@@ -560,14 +570,21 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                                                             </DialogTrigger>
                                                             <DialogContent className="max-w-4xl">
                                                                 <DialogHeader>
-                                                                    <DialogTitle>Notas com "{phrase}"</DialogTitle>
-                                                                    <DialogDescription>
-                                                                        Lista de notas que contêm a frase de suspensão selecionada.
-                                                                    </DialogDescription>
+                                                                    <div className="flex justify-between items-center">
+                                                                        <div>
+                                                                            <DialogTitle>Notas com "{phrase}"</DialogTitle>
+                                                                            <DialogDescription>
+                                                                                Lista de notas que contêm a frase de suspensão selecionada.
+                                                                            </DialogDescription>
+                                                                        </div>
+                                                                         <Button onClick={() => handleDownloadExcel(notesForPhrase, `Suspensao_${phrase.replace(/\s/g, '_')}`)} variant="outline" size="sm" disabled={notesForPhrase.length === 0}>
+                                                                            <Download className="mr-2 h-4 w-4" /> Baixar
+                                                                        </Button>
+                                                                    </div>
                                                                 </DialogHeader>
                                                                 <div className="max-h-[60vh] overflow-y-auto">
                                                                     <table className="w-full text-sm">
-                                                                        <thead>
+                                                                        <thead className='sticky top-0 bg-secondary'>
                                                                             <tr className='text-left border-b'>
                                                                                 <th className="p-2 font-medium">Nº da Nota</th>
                                                                                 <th className="p-2 font-medium">Descrição Completa</th>
@@ -577,7 +594,7 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                                                                             {notesForPhrase.map(note => (
                                                                                 <tr key={note.numero_nfse} className="border-b">
                                                                                     <td className="p-2 align-top">{note.numero_nfse}</td>
-                                                                                    <td className="p-2 whitespace-pre-wrap break-words">{note.descritivo}</td>
+                                                                                    <td className="p-2 whitespace-pre-wrap break-words">{highlightText(note.descritivo, phrase)}</td>
                                                                                 </tr>
                                                                             ))}
                                                                         </tbody>
