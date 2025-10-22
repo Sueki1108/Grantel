@@ -629,9 +629,26 @@ interface ReconciliationAnalysisProps {
 
 function useReconciliation(processedData: ProcessedData | null) {
     return useMemo(() => {
-        const siengeData = processedData?.siengeSheetData;
-        const xmlItems = processedData?.sheets?.['Itens Válidos'];
-        if (!siengeData || !xmlItems) {
+        if (!processedData) return { reconciliationResults: null, error: null };
+
+        const siengeData = processedData.siengeSheetData;
+        const nfeItems = processedData.sheets['Itens Válidos'];
+        const cteItems = processedData.sheets['CTEs Válidos'];
+
+        // Combine NFe items and CTe items into a single list for reconciliation
+        const allXmlItems = [
+            ...(nfeItems || []),
+            ...(cteItems || []).map(cte => ({ // Adapt CTe data to look like NFe item data
+                ...cte,
+                'Número da Nota': cte['Número'],
+                'CPF/CNPJ do Emitente': cte['CPF/CNPJ do Fornecedor'],
+                'Valor Total': cte['Valor da Prestação'],
+                'Descrição': `Frete referente ao CTe N° ${cte['Número']}`,
+                'CFOP': cte['CFOP'],
+            }))
+        ];
+
+        if (!siengeData || allXmlItems.length === 0) {
             return { reconciliationResults: null, error: null };
         }
 
@@ -690,7 +707,7 @@ function useReconciliation(processedData: ProcessedData | null) {
             };
 
             const reconciled: CfopValidationData[] = [];
-            let remainingXmlItems = [...xmlItems];
+            let remainingXmlItems = [...allXmlItems];
             let remainingSiengeItems = [...filteredSiengeData];
 
             const reconciliationPass = (
@@ -724,7 +741,7 @@ function useReconciliation(processedData: ProcessedData | null) {
                              const notaOriginal = xmlNFeMap.get(matchedXmlItem['Chave Unica']);
                             matchedInPass.push({
                                 ...matchedXmlItem,
-                                'Fornecedor': notaOriginal?.Fornecedor || 'N/A',
+                                'Fornecedor': notaOriginal?.Fornecedor || matchedXmlItem?.Fornecedor || 'N/A',
                                 'Sienge_CFOP': siengeItem[h.siengeCfop as string] || 'N/A',
                                 'Sienge_Descrição': siengeItem[h.siengeDesc as string] || 'N/A',
                                 'Sienge_Esp': siengeItem[h.esp as string] || 'N/A',
@@ -741,10 +758,13 @@ function useReconciliation(processedData: ProcessedData | null) {
             };
             
             const runAllPasses = () => {
+                const xmlItemValueKey = 'Valor Total';
+                const siengeValueKey = h.valorTotal!;
+
                 // Pass 1: Valor Total
                 let result = reconciliationPass(remainingSiengeItems, remainingXmlItems, 
-                    (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]),
-                    (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
+                    (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[siengeValueKey]),
+                    (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item[xmlItemValueKey]),
                     "Valor Total"
                 );
                 reconciled.push(...result.matched);
@@ -755,7 +775,7 @@ function useReconciliation(processedData: ProcessedData | null) {
                 if (h.icmsOutras) {
                      result = reconciliationPass(remainingSiengeItems, remainingXmlItems, 
                         (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.icmsOutras!]),
-                         (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
+                         (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item[xmlItemValueKey]),
                         "ICMS Outras"
                     );
                     reconciled.push(...result.matched);
@@ -769,9 +789,9 @@ function useReconciliation(processedData: ProcessedData | null) {
                         (item) => getComparisonKey(
                             item[h.numero!], 
                             item[h.cnpj!], 
-                            parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto!] || '0').replace(',', '.'))
+                            parseFloat(String(item[siengeValueKey] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto!] || '0').replace(',', '.'))
                         ),
-                        (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
+                        (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item[xmlItemValueKey]),
                         "Valor Total + Desconto"
                     );
                     reconciled.push(...result.matched);
@@ -785,9 +805,9 @@ function useReconciliation(processedData: ProcessedData | null) {
                         (item) => getComparisonKey(
                             item[h.numero!], 
                             item[h.cnpj!], 
-                            parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.frete!] || '0').replace(',', '.'))
+                            parseFloat(String(item[siengeValueKey] || '0').replace(',', '.')) - parseFloat(String(item[h.frete!] || '0').replace(',', '.'))
                         ),
-                        (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
+                        (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item[xmlItemValueKey]),
                         "Valor Total - Frete"
                     );
                     reconciled.push(...result.matched);
@@ -801,11 +821,11 @@ function useReconciliation(processedData: ProcessedData | null) {
                         (item) => getComparisonKey(
                             item[h.numero!], 
                             item[h.cnpj!], 
-                            parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) 
+                            parseFloat(String(item[siengeValueKey] || '0').replace(',', '.')) 
                             - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0)
                             - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)
                         ),
-                        (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
+                        (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item[xmlItemValueKey]),
                         "Valor Total - IPI/ICMS ST"
                     );
                     reconciled.push(...result.matched);
@@ -819,11 +839,11 @@ function useReconciliation(processedData: ProcessedData | null) {
                         (item) => getComparisonKey(
                             item[h.numero!], 
                             item[h.cnpj!], 
-                            parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) 
+                            parseFloat(String(item[siengeValueKey] || '0').replace(',', '.')) 
                             - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0)
                             - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0)
                         ),
-                        (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
+                        (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item[xmlItemValueKey]),
                         "Valor Total - Frete/IPI"
                     );
                     reconciled.push(...result.matched);
@@ -837,11 +857,11 @@ function useReconciliation(processedData: ProcessedData | null) {
                         (item) => getComparisonKey(
                             item[h.numero!], 
                             item[h.cnpj!], 
-                            parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) 
+                            parseFloat(String(item[siengeValueKey] || '0').replace(',', '.')) 
                             + (h.desconto ? parseFloat(String(item[h.desconto] || '0').replace(',', '.')) : 0)
                             - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0)
                         ),
-                        (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
+                        (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item[xmlItemValueKey]),
                         "Valor Total + Desc - Frete"
                     );
                     reconciled.push(...result.matched);
@@ -855,9 +875,9 @@ function useReconciliation(processedData: ProcessedData | null) {
                         (item) => getComparisonKey(
                             item[h.numero!], 
                             item[h.cnpj!], 
-                            parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.despesasAcessorias!] || '0').replace(',', '.'))
+                            parseFloat(String(item[siengeValueKey] || '0').replace(',', '.')) - parseFloat(String(item[h.despesasAcessorias!] || '0').replace(',', '.'))
                         ),
-                        (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
+                        (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item[xmlItemValueKey]),
                         "Valor Total - Desp. Acess."
                     );
                     reconciled.push(...result.matched);
@@ -893,8 +913,8 @@ function useReconciliation(processedData: ProcessedData | null) {
                         return grouped;
                     };
 
-                    const siengeGrouped = groupAndSum(remainingSiengeItems, h.numero!, h.cnpj!, h.produtoFiscal!, h.valorTotal!);
-                    const xmlGrouped = groupAndSum(remainingXmlItems, 'Número da Nota', 'CPF/CNPJ do Emitente', 'Descrição', 'Valor Total');
+                    const siengeGrouped = groupAndSum(remainingSiengeItems, h.numero!, h.cnpj!, h.produtoFiscal!, siengeValueKey);
+                    const xmlGrouped = groupAndSum(remainingXmlItems, 'Número da Nota', 'CPF/CNPJ do Emitente', 'Descrição', xmlItemValueKey);
 
                     const stillUnmatchedSienge = new Set(remainingSiengeItems);
                     const stillUnmatchedXml = new Set(remainingXmlItems);
@@ -929,7 +949,7 @@ function useReconciliation(processedData: ProcessedData | null) {
             console.error("Reconciliation Error:", err);
             return { reconciliationResults: null, error: err.message };
         }
-    }, [processedData?.siengeSheetData, processedData?.sheets]);
+    }, [processedData]);
 }
 
 
@@ -973,12 +993,12 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                     onFileChange={onSiengeFileChange}
                     onClearFile={onClearSiengeFile}
                 />
-                {!processedData.sheets['Itens Válidos'] && (
+                {(!processedData.sheets['Itens Válidos'] && !processedData.sheets['CTEs Válidos']) && (
                      <Alert variant="destructive">
                         <AlertTriangle className="h-4 w-4" />
                         <AlertTitle>Dados XML em falta</AlertTitle>
                         <AlertDescription>
-                            Processe os XMLs de entrada na primeira aba para habilitar a conciliação.
+                            Processe os XMLs de entrada (NF-e ou CT-e) na primeira aba para habilitar a conciliação.
                         </AlertDescription>
                     </Alert>
                 )}
@@ -1039,7 +1059,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                         </AlertDescription>
                     </Alert>
                 )}
-                 {!siengeFile && processedData.sheets['Itens Válidos'] && (
+                 {!siengeFile && (processedData.sheets['Itens Válidos'] || processedData.sheets['CTEs Válidos']) && (
                      <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
                         <Loader2 className="h-12 w-12 animate-spin text-primary" />
                         <p className="mt-4 text-center">Aguardando o ficheiro "Itens do Sienge" para executar a conciliação automaticamente...</p>
@@ -1049,4 +1069,3 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
          </Card>
     );
 }
-
