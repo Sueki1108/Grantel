@@ -32,9 +32,9 @@ export interface CfopValidationData extends Record<string, any> {
 type ValidationStatus = 'unvalidated' | 'correct' | 'incorrect';
 
 interface GroupedItems {
-    pending: Record<string, CfopValidationData[]>;
-    validated: Record<string, CfopValidationData[]>;
+  [description: string]: CfopValidationData[];
 }
+
 
 interface CfopValidatorProps {
     items: CfopValidationData[];
@@ -65,7 +65,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const [validationStatus, setValidationStatus] = useState<Record<string, ValidationStatus>>({});
     const [hasChanges, setHasChanges] = useState(false);
     
-    const [groupedItems, setGroupedItems] = useState<GroupedItems>({ pending: {}, validated: {} });
+    const [groupedItems, setGroupedItems] = useState<GroupedItems>({});
 
     useEffect(() => {
         const persistedValidations = (allPersistedClassifications && allPersistedClassifications['cfopValidations']?.classifications) || {};
@@ -87,32 +87,30 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             const cfop = item.Sienge_CFOP || 'N/A';
             const baseCfop = getBaseCfop(cfop);
             const baseCfopKey = parseInt(`1${baseCfop}`, 10);
-            const description = cfopDescriptions[baseCfopKey] || `Operação ${baseCfop}`;
-
-            if (!allItemsByDescription[description]) {
-                allItemsByDescription[description] = [];
-            }
-            allItemsByDescription[description].push(item);
-        });
-
-        const pending: Record<string, CfopValidationData[]> = {};
-        const validated: Record<string, CfopValidationData[]> = {};
-
-        Object.entries(allItemsByDescription).forEach(([description, itemsInGroup]) => {
-            itemsInGroup.forEach(item => {
-                const status = validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated';
-                const itemWithStatus = { ...item, validationStatus: status };
-
-                const groupToUpdate = status === 'unvalidated' ? pending : validated;
-                
-                if (!groupToUpdate[description]) {
-                    groupToUpdate[description] = [];
+            
+            const uniqueCfopsInGroup = new Set<string>();
+            items.forEach(i => {
+                if (getBaseCfop(i.Sienge_CFOP) === baseCfop) {
+                    uniqueCfopsInGroup.add(i.Sienge_CFOP);
                 }
-                groupToUpdate[description].push(itemWithStatus);
             });
+            const groupTitle = Array.from(uniqueCfopsInGroup).sort().join(' / ');
+            
+            if (!allItemsByDescription[groupTitle]) {
+                allItemsByDescription[groupTitle] = [];
+            }
+            allItemsByDescription[groupTitle].push(item);
         });
 
-        setGroupedItems({ pending, validated });
+        const finalGroups: GroupedItems = {};
+        Object.entries(allItemsByDescription).forEach(([title, itemsInGroup]) => {
+            finalGroups[title] = itemsInGroup.map(item => ({
+                ...item,
+                validationStatus: validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated'
+            }));
+        });
+
+        setGroupedItems(finalGroups);
     }, [items, validationStatus]);
 
 
@@ -154,6 +152,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         items,
         ['Fornecedor', 'Número da Nota', 'Descrição', 'Sienge_Descrição', 'CFOP', 'CST do ICMS', 'Sienge_CFOP'],
         (row: any, id: string) => {
+            const value = row.getValue(id);
              if (id === 'Fornecedor') {
                 return (
                     <div className="max-w-xs truncate" title={row.original.Fornecedor}>
@@ -163,9 +162,9 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                 );
             }
              if (id === 'Descrição' || id === 'Sienge_Descrição') {
-                return <div className="max-w-xs truncate" title={row.getValue(id)}>{String(row.getValue(id) ?? '')}</div>;
+                return <div className="max-w-xs truncate" title={String(value ?? '')}>{String(value ?? '')}</div>;
             }
-            return <div>{String(row.getValue(id) ?? '')}</div>;
+            return <div>{String(value ?? '')}</div>;
         }
     );
 
@@ -201,35 +200,31 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         }
     };
 
-    const renderGroupedContent = (dataGroups: Record<string, CfopValidationData[]>, isPendingTab: boolean) => {
-        const descriptionKeys = Object.keys(dataGroups).sort();
+    const renderGroupedContent = () => {
+        const descriptionKeys = Object.keys(groupedItems).sort();
 
         if (descriptionKeys.length === 0) {
             return <div className="text-center p-8 text-muted-foreground">Nenhum item para exibir.</div>;
         }
 
-        const columnsToRender = isPendingTab ? [...columns, actionColumn] : [...columns, statusColumn, actionColumn];
+        const columnsToRender = [...columns, statusColumn, actionColumn];
 
         return (
              <ScrollArea className="h-full pr-4">
                  <Tabs defaultValue={descriptionKeys[0]} orientation="vertical">
                     <TabsList>
-                        {descriptionKeys.map(description => {
-                            const itemsInGroup = dataGroups[description];
-                             const uniqueCfops = Array.from(new Set(itemsInGroup.map(i => i.Sienge_CFOP))).sort().join(' / ');
-                            return (
-                                <TabsTrigger key={description} value={description} className="w-full justify-start text-left h-auto py-2">
-                                     <div>
-                                        <p className="font-semibold">{uniqueCfops}</p>
-                                    </div>
-                                </TabsTrigger>
-                            )
-                        })}
+                        {descriptionKeys.map(title => (
+                            <TabsTrigger key={title} value={title} className="w-full justify-start text-left h-auto py-2">
+                                <div>
+                                    <p className="font-semibold">{title}</p>
+                                </div>
+                            </TabsTrigger>
+                        ))}
                     </TabsList>
-                     {descriptionKeys.map(description => {
-                        const itemsInGroup = dataGroups[description];
+                     {descriptionKeys.map(title => {
+                        const itemsInGroup = groupedItems[title];
                         return (
-                             <TabsContent key={description} value={description} className="mt-0 pl-4">
+                             <TabsContent key={title} value={title} className="mt-0 pl-4">
                                 <DataTable columns={columnsToRender} data={itemsInGroup} />
                             </TabsContent>
                         )
@@ -248,20 +243,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                 </Button>
             </div>
             <div className="flex-grow overflow-hidden">
-                 <Tabs defaultValue="pending" className="w-full h-full flex flex-col">
-                    <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="pending">Pendentes de Validação ({Object.values(groupedItems.pending).flat().length})</TabsTrigger>
-                        <TabsTrigger value="validated">Validados ({Object.values(groupedItems.validated).flat().length})</TabsTrigger>
-                    </TabsList>
-                     <div className='flex-grow overflow-hidden mt-4'>
-                        <TabsContent value="pending" className="mt-0 h-full">
-                            {renderGroupedContent(groupedItems.pending, true)}
-                        </TabsContent>
-                        <TabsContent value="validated" className="mt-0 h-full">
-                            {renderGroupedContent(groupedItems.validated, false)}
-                        </TabsContent>
-                    </div>
-                </Tabs>
+                {renderGroupedContent()}
             </div>
         </div>
     );
