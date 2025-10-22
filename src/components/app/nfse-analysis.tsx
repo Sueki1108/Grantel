@@ -151,7 +151,7 @@ const highlightText = (text: string, phrase: string) => {
   }
   const regex = new RegExp(`(${phrase})`, 'gi');
   return text.split(regex).map((part, index) =>
-    part.toLowerCase() === phrase.toLowerCase() ? <strong key={index} className="bg-yellow-200 dark:bg-yellow-700">{part}</strong> : part
+    part.toLowerCase() === phrase.toLowerCase() ? <strong key={index}>{part}</strong> : part
   );
 };
 
