@@ -18,6 +18,15 @@ const nextConfig = {
       },
     ],
   },
+  webpack: (config, { isServer }) => {
+    // Adicionado para garantir que o 'xlsx' funcione no lado do servidor.
+    if (isServer) {
+      config.externals.push({
+        'xlsx': 'commonjs xlsx'
+      });
+    }
+    return config;
+  },
 };
 
 module.exports = nextConfig;
