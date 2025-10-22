@@ -13,7 +13,6 @@ import type { AllClassifications } from './imobilizado-analysis';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ScrollArea } from '../ui/scroll-area';
 import { cfopDescriptions } from '@/lib/cfop';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card';
 
 
@@ -45,25 +44,19 @@ interface CfopValidatorProps {
 }
 
 const getUniqueProductKey = (item: CfopValidationData): string => {
-    // Retorna uma chave consistente para um produto de um fornecedor específico
     return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}`;
 };
 
 
-const getBaseCfop = (cfop: string): string => {
+/**
+ * Agrupa CFOPs pela sua operação base, ignorando o primeiro dígito.
+ * Ex: 1128, 2128, 3128 -> '128'
+ */
+const getBaseCfopOperation = (cfop: string): string => {
     if (!cfop || typeof cfop !== 'string' || cfop.length !== 4) {
         return cfop || 'N/A';
     }
-    const firstDigit = cfop.charAt(0);
-    const rest = cfop.substring(1);
-
-    if (['1', '2', '3'].includes(firstDigit)) {
-        return `1${rest}`;
-    }
-    if (['5', '6', '7'].includes(firstDigit)) {
-        return `5${rest}`;
-    }
-    return cfop;
+    return cfop.substring(1);
 };
 
 
@@ -89,31 +82,31 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
 
     useEffect(() => {
-        // 1. Agrupar todos os itens pelo CFOP base
+        // 1. Agrupar todos os itens pela operação base do CFOP (últimos 3 dígitos)
         const allItemsByBaseCfop: Record<string, CfopValidationData[]> = {};
         items.forEach(item => {
-            const baseCfop = getBaseCfop(item.Sienge_CFOP || 'N/A');
-            if (!allItemsByBaseCfop[baseCfop]) {
-                allItemsByBaseCfop[baseCfop] = [];
+            const baseCfopOperation = getBaseCfopOperation(item.Sienge_CFOP || 'N/A');
+            if (!allItemsByBaseCfop[baseCfopOperation]) {
+                allItemsByBaseCfop[baseCfopOperation] = [];
             }
-            allItemsByBaseCfop[baseCfop].push(item);
+            allItemsByBaseCfop[baseCfopOperation].push(item);
         });
 
         // 2. Separar em pendentes e validados
         const pending: Record<string, CfopValidationData[]> = {};
         const validated: Record<string, CfopValidationData[]> = {};
 
-        Object.entries(allItemsByBaseCfop).forEach(([baseCfop, itemsInGroup]) => {
+        Object.entries(allItemsByBaseCfop).forEach(([baseCfopOperation, itemsInGroup]) => {
             itemsInGroup.forEach(item => {
                 const status = validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated';
                 const itemWithStatus = { ...item, validationStatus: status };
 
                 const groupToUpdate = status === 'unvalidated' ? pending : validated;
                 
-                if (!groupToUpdate[baseCfop]) {
-                    groupToUpdate[baseCfop] = [];
+                if (!groupToUpdate[baseCfopOperation]) {
+                    groupToUpdate[baseCfopOperation] = [];
                 }
-                groupToUpdate[baseCfop].push(itemWithStatus);
+                groupToUpdate[baseCfopOperation].push(itemWithStatus);
             });
         });
 
@@ -207,9 +200,9 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     };
 
     const renderGroupedContent = (dataGroups: Record<string, CfopValidationData[]>, isPendingTab: boolean) => {
-        const cfopKeys = Object.keys(dataGroups).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+        const cfopOperationKeys = Object.keys(dataGroups).sort();
 
-        if (cfopKeys.length === 0) {
+        if (cfopOperationKeys.length === 0) {
             return <div className="text-center p-8 text-muted-foreground">Nenhum item para exibir.</div>;
         }
 
@@ -218,19 +211,27 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         return (
             <ScrollArea className="h-full pr-4">
                  <div className="space-y-4">
-                    {cfopKeys.map(baseCfop => (
-                        <Card key={baseCfop}>
-                            <CardHeader>
-                                <CardTitle>CFOP {baseCfop} - {cfopDescriptions[parseInt(baseCfop, 10) as keyof typeof cfopDescriptions] || 'Descrição não encontrada'}</CardTitle>
-                                <CardDescription>
-                                    Agrupamento de itens para a operação base {baseCfop}. Itens: {dataGroups[baseCfop].length}
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <DataTable columns={columnsToRender} data={dataGroups[baseCfop]} />
-                            </CardContent>
-                        </Card>
-                    ))}
+                    {cfopOperationKeys.map(baseOperation => {
+                        const itemsInGroup = dataGroups[baseOperation];
+                        const uniqueCfopsInGroup = Array.from(new Set(itemsInGroup.map(item => item.Sienge_CFOP))).sort();
+                        const firstCfop = parseInt(uniqueCfopsInGroup[0], 10);
+                        const groupTitle = `CFOP ${uniqueCfopsInGroup.join(' / ')}`;
+                        const groupDescription = cfopDescriptions[firstCfop] || 'Descrição não encontrada';
+
+                        return (
+                            <Card key={baseOperation}>
+                                <CardHeader>
+                                    <CardTitle>{groupTitle}</CardTitle>
+                                    <CardDescription>
+                                        {groupDescription} ({itemsInGroup.length} itens)
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <DataTable columns={columnsToRender} data={itemsInGroup} />
+                                </CardContent>
+                            </Card>
+                        )
+                    })}
                 </div>
             </ScrollArea>
         )
