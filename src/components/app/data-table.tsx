@@ -28,6 +28,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -50,7 +51,7 @@ function Filter({
 
   const columnFilterValue = column.getFilterValue()
 
-  const isCfopColumn = column.id.toUpperCase().includes('CFOP');
+  const isCfopColumn = (column.id.toUpperCase().includes('CFOP') || column.id.toUpperCase().includes('CST'));
 
   return typeof firstValue === 'number' && !isCfopColumn ? (
     <div className="flex space-x-2">
@@ -125,6 +126,24 @@ export function DataTable<TData, TValue>({
       rowSelection,
     },
   })
+  
+  // This is a workaround to make sure the header for the select column is rendered correctly
+  // when row selection is enabled.
+   React.useEffect(() => {
+    if (isRowSelectionEnabled) {
+      const selectHeader = table.getHeaderGroups()[0]?.headers.find(h => h.id === 'select');
+      if (selectHeader) {
+        selectHeader.column.columnDef.header = ({ table }) => (
+          <Checkbox
+            checked={table.getIsAllRowsSelected()}
+            onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
+            aria-label="Selecionar todas"
+          />
+        );
+      }
+    }
+  }, [table, isRowSelectionEnabled]);
+
 
   return (
     <div>
@@ -177,7 +196,7 @@ export function DataTable<TData, TValue>({
                 table.getRowModel().rows.map((row) => (
                   <TableRow
                     key={row.id}
-                    data-state={isRowSelectionEnabled && row.getIsSelected() && "selected"}
+                    data-state={isRowSelectionEnabled && row.getIsSelected() ? "selected" : undefined}
                     onClick={isRowSelectionEnabled ? () => row.toggleSelected() : undefined}
                     className={isRowSelectionEnabled ? 'cursor-pointer' : ''}
                   >

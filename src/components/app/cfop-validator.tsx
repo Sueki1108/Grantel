@@ -145,14 +145,28 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                 }
                 return <div>{String(value ?? '')}</div>;
             }
-        ).map(col => ({...col, header: col.id ? (columnNameMap[col.id as string] || col.id) : col.header}));
+        ).map(col => ({
+            ...col, 
+            header: ({ column }: any) => {
+                const displayName = columnNameMap[col.id as string] || col.id;
+                return (
+                    <div 
+                        className="flex items-center text-left w-full cursor-pointer"
+                        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                    >
+                        <span>{displayName}</span>
+                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </div>
+                );
+            }
+        }));
 
          baseColumns.unshift({
             id: 'select',
             header: ({ table }) => (
                 <Checkbox
-                    checked={table.getIsAllPageRowsSelected()}
-                    onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                    checked={table.getIsAllRowsSelected()}
+                    onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
                     aria-label="Selecionar todas"
                 />
             ),
@@ -180,7 +194,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             const currentStatus = validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated';
             return (
                 <TooltipProvider>
-                    <div className="flex gap-2 justify-center">
+                    <div className="flex gap-2 justify-center" onClick={(e) => e.stopPropagation()}>
                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'correct' ? 'default' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'correct')}}><ThumbsUp className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Correto</p></TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'incorrect' ? 'destructive' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'incorrect')}}><ThumbsDown className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Incorreto</p></TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'verify' ? 'secondary' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'verify')}}><Search className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificar</p></TooltipContent></Tooltip>
