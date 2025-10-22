@@ -30,7 +30,7 @@ export interface CfopValidationData extends Record<string, any> {
 type ValidationStatus = 'unvalidated' | 'correct' | 'incorrect';
 
 interface GroupedItems {
-  [description: string]: CfopValidationData[];
+  [groupTitle: string]: CfopValidationData[];
 }
 
 
@@ -43,7 +43,6 @@ interface CfopValidatorProps {
 const getUniqueProductKey = (item: CfopValidationData): string => {
     return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}`;
 };
-
 
 const getBaseCfop = (cfop: string): string => {
     if (!cfop || typeof cfop !== 'string' || cfop.length < 4) {
@@ -143,9 +142,8 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             const value = row.getValue(id);
              if (id === 'Fornecedor') {
                 return (
-                    <div className="max-w-xs truncate" title={row.original.Fornecedor}>
+                    <div className="max-w-[200px] truncate" title={row.original.Fornecedor}>
                         <p>{row.original.Fornecedor}</p>
-                        <p className="text-xs text-muted-foreground">{row.original['CPF/CNPJ do Emitente']}</p>
                     </div>
                 );
             }

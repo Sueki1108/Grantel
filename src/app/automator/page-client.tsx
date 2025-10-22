@@ -632,7 +632,7 @@ export function AutomatorClientPage() {
             </header>
 
             <main className="container mx-auto p-4 md:p-8">
-                <div className={cn("mx-auto space-y-8", isWideMode ? "max-w-full" : "max-w-screen-2xl")}>
+                <div className={cn("mx-auto space-y-8 max-w-screen-2xl", isWideMode && "max-w-full")}>
                     <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
                         <TabsList className="h-auto flex flex-wrap justify-start">
                              <TabsTrigger value="history" className="flex items-center gap-2">
