@@ -79,32 +79,23 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
     const handleValidationChange = (itemsToUpdate: CfopValidationData[], newStatus: ValidationStatus) => {
         const newValidationStatus = { ...validationStatus };
-    
-        // 1. Get all unique product keys from the explicitly selected items
-        const uniqueProductKeys = new Set(itemsToUpdate.map(getUniqueProductKey));
-    
-        // 2. Find all items in the full dataset that match these product keys
-        const itemsToUpdateGlobally = items.filter(i => uniqueProductKeys.has(getUniqueProductKey(i)));
-    
-        // 3. Update the status for all these related items
-        itemsToUpdateGlobally.forEach(i => {
+        const uniqueProductKeysToUpdate = new Set<string>();
+
+        // 1. Update the local state for all selected items.
+        itemsToUpdate.forEach(i => {
             newValidationStatus[i['Chave de acesso'] + i.Item] = newStatus;
+            uniqueProductKeysToUpdate.add(getUniqueProductKey(i));
         });
 
-        // 4. Also ensure explicitly selected items are updated, in case they weren't caught by product key logic
-        itemsToUpdate.forEach(i => {
-             newValidationStatus[i['Chave de acesso'] + i.Item] = newStatus;
-        });
-        
         setValidationStatus(newValidationStatus);
     
-        // Persist the change for each unique product key
+        // 2. Persist the change for each unique product key involved.
         const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedClassifications || {}));
         if (!updatedPersistedData['cfopValidations']) {
             updatedPersistedData['cfopValidations'] = { classifications: {}, accountCodes: {} };
         }
         
-        uniqueProductKeys.forEach(uniqueProductKey => {
+        uniqueProductKeysToUpdate.forEach(uniqueProductKey => {
             if (newStatus !== 'unvalidated') {
                 updatedPersistedData['cfopValidations'].classifications[uniqueProductKey] = { classification: newStatus };
             } else {
@@ -231,10 +222,12 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     };
     
      const filteredAndGroupedItems = useMemo((): GroupedItems => {
+        // First, filter items based on the active tab's status
         const filteredItems = activeFilter === 'all'
             ? items
             : items.filter(item => (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter);
         
+        // Then, group the filtered items by CFOP
         const groups: GroupedItems = {};
         filteredItems.forEach(item => {
             const cfop = item.Sienge_CFOP;
