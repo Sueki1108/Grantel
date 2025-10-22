@@ -78,6 +78,7 @@ type AnalysisResults = {
     financialSummary: FinancialSummary;
     summary702: ServiceItemSummary;
     summary703: ServiceItemSummary;
+    totalRetentionSummary: RetentionSummary;
     pendingNotes: NfseData[];
     detailedData: DetailedData;
 };
@@ -287,8 +288,17 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
             'Soma Total das Notas': totalNotasGeral,
             'Total de Notas (únicas)': new Set(filteredData.map(d => d.numero_nfse)).size,
         };
+        
+        const totalRetentionSummary: RetentionSummary = {
+            'Retenção ISS': summary702.Retenções['Retenção ISS'] + summary703.Retenções['Retenção ISS'],
+            'Retenção IR': summary702.Retenções['Retenção IR'] + summary703.Retenções['Retenção IR'],
+            'Retenção INSS': summary702.Retenções['Retenção INSS'] + summary703.Retenções['Retenção INSS'],
+            'Retenção CSLL': summary702.Retenções['Retenção CSLL'] + summary703.Retenções['Retenção CSLL'],
+            'Retenção PIS': summary702.Retenções['Retenção PIS'] + summary703.Retenções['Retenção PIS'],
+            'Retenção COFINS': summary702.Retenções['Retenção COFINS'] + summary703.Retenções['Retenção COFINS'],
+        };
 
-        return { financialSummary, summary702, summary703, pendingNotes, detailedData };
+        return { financialSummary, summary702, summary703, totalRetentionSummary, pendingNotes, detailedData };
     }, [allExtractedData, disregardedNotes, selectedSuspensionPhrases]);
 
     const handleDisregardNote = () => {
@@ -422,10 +432,10 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                 </TabsList>
 
                 <TabsContent value="summary" className="mt-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <Card className="md:col-span-1">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <Card className="lg:col-span-3">
                             <CardHeader><CardTitle>Resultados Gerais</CardTitle></CardHeader>
-                            <CardContent className="space-y-2">
+                            <CardContent className="grid grid-cols-2 gap-x-8">
                                 <SummaryLine label="Soma Total das Notas" value={analysisResults.financialSummary['Soma Total das Notas']} />
                                 <SummaryLine label="Total de Notas (únicas)" value={analysisResults.financialSummary['Total de Notas (únicas)']} />
                             </CardContent>
@@ -456,6 +466,14 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                                          <SummaryLine key={key} label={key} value={value} />
                                      ))}
                                  </div>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader><CardTitle>Retenções Totais (Agregado)</CardTitle></CardHeader>
+                            <CardContent className="space-y-2">
+                                {Object.entries(analysisResults.totalRetentionSummary).map(([key, value]) => (
+                                    <SummaryLine key={key} label={key} value={value} />
+                                ))}
                             </CardContent>
                         </Card>
                     </div>
