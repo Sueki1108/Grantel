@@ -14,6 +14,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ScrollArea } from '../ui/scroll-area';
 import { cfopDescriptions } from '@/lib/cfop';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card';
+
 
 // Tipos
 export interface CfopValidationData extends Record<string, any> {
@@ -47,21 +49,21 @@ const getUniqueProductKey = (item: CfopValidationData): string => {
     return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}`;
 };
 
+
 const getBaseCfop = (cfop: string): string => {
-    if (!cfop || typeof cfop !== 'string' || cfop.length !== 4) return cfop;
+    if (!cfop || typeof cfop !== 'string' || cfop.length !== 4) {
+        return cfop || 'N/A';
+    }
     const firstDigit = cfop.charAt(0);
     const rest = cfop.substring(1);
 
-    switch (firstDigit) {
-        case '2':
-        case '3':
-            return `1${rest}`;
-        case '6':
-        case '7':
-            return `5${rest}`;
-        default:
-            return cfop;
+    if (['1', '2', '3'].includes(firstDigit)) {
+        return `1${rest}`;
     }
+    if (['5', '6', '7'].includes(firstDigit)) {
+        return `5${rest}`;
+    }
+    return cfop;
 };
 
 
@@ -215,21 +217,21 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
         return (
             <ScrollArea className="h-full pr-4">
-                <Accordion type="single" collapsible className="w-full space-y-4">
+                 <div className="space-y-4">
                     {cfopKeys.map(baseCfop => (
-                        <AccordionItem value={baseCfop} key={baseCfop} className="border rounded-lg">
-                            <AccordionTrigger className="px-6 py-4 text-lg font-medium hover:no-underline">
-                                <div className='text-left'>
-                                    <h3 className="font-bold">CFOP {baseCfop} / {parseInt(baseCfop, 10) + 1000} <Badge variant="outline">{dataGroups[baseCfop].length} itens</Badge></h3>
-                                    <p className="text-sm font-normal text-muted-foreground">{cfopDescriptions[parseInt(baseCfop, 10) as keyof typeof cfopDescriptions] || 'Descrição não encontrada'}</p>
-                                </div>
-                            </AccordionTrigger>
-                            <AccordionContent className="px-6 pb-4">
+                        <Card key={baseCfop}>
+                            <CardHeader>
+                                <CardTitle>CFOP {baseCfop} - {cfopDescriptions[parseInt(baseCfop, 10) as keyof typeof cfopDescriptions] || 'Descrição não encontrada'}</CardTitle>
+                                <CardDescription>
+                                    Agrupamento de itens para a operação base {baseCfop}. Itens: {dataGroups[baseCfop].length}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
                                 <DataTable columns={columnsToRender} data={dataGroups[baseCfop]} />
-                            </AccordionContent>
-                        </AccordionItem>
+                            </CardContent>
+                        </Card>
                     ))}
-                </Accordion>
+                </div>
             </ScrollArea>
         )
     };
@@ -261,5 +263,3 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         </div>
     );
 }
-
-    
