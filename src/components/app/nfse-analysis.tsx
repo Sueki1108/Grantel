@@ -84,12 +84,20 @@ interface NfseAnalysisProps {
 
 
 // ===============================================================
-// Helper Functions
+// Helper Functions & Constants
 // ===============================================================
 const parseCurrency = (value: string | null | undefined): number => {
     if (!value) return 0;
     return parseFloat(value.replace(/\./g, '').replace(',', '.')) || 0;
 };
+
+const SUSPENSION_PHRASES = [
+    "suspensao da exigibilidade", 
+    "suspensao da exigencia", 
+    "suspensao da contribuicao",
+    "suspensao por decisao judicial" // Adicionada uma quarta frase comum.
+];
+
 
 const normalizeText = (text: string | null | undefined): string => {
     if (!text) return "";
@@ -142,23 +150,19 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
     const [isLoading, setIsLoading] = useState(false);
     const [allExtractedData, setAllExtractedData] = useState<NfseData[]>([]);
     const [noteInput, setNoteInput] = useState('');
-    const [foundSuspensionPhrases, setFoundSuspensionPhrases] = useState<string[]>([]);
-    const [selectedSuspensionPhrases, setSelectedSuspensionPhrases] = useState<Set<string>>(new Set());
+    const [selectedSuspensionPhrases, setSelectedSuspensionPhrases] = useState<Set<string>>(new Set(SUSPENSION_PHRASES));
     
     const { toast } = useToast();
 
-    // Extract raw data and find all potential suspension phrases
+    // STEP 1: Extract raw data from XMLs whenever files change
     useEffect(() => {
-        const extract = async () => {
+        const extractData = async () => {
             if (nfseFiles.length === 0) {
                 setAllExtractedData([]);
-                setFoundSuspensionPhrases([]);
-                setSelectedSuspensionPhrases(new Set());
                 return;
             }
             setIsLoading(true);
             const extractedData: NfseData[] = [];
-            const uniquePhrases = new Set<string>();
             const parser = new DOMParser();
 
             for (const file of nfseFiles) {
@@ -166,18 +170,15 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                     const xmlText = await readFileAsText(file);
                     const xmlDoc = parser.parseFromString(xmlText, "application/xml");
                     
+                    const errorNode = xmlDoc.querySelector("parsererror");
+                    if (errorNode) {
+                        console.error("Erro de Análise de XML em", file.name, errorNode.textContent);
+                        continue;
+                    }
+                    
                     const nfNode = xmlDoc.querySelector('nf');
                     const listaNode = xmlDoc.querySelector('itens > lista');
                     if (!nfNode || !listaNode) continue;
-                    
-                    const descritivo = getTagValue(listaNode, 'descritivo');
-                    const normalizedDescritivo = normalizeText(descritivo);
-
-                    if (normalizedDescritivo.includes("suspensao")) {
-                        // Extract sentence containing "suspensao"
-                        const sentences = normalizedDescritivo.split('.').filter(s => s.includes("suspensao"));
-                        sentences.forEach(s => uniquePhrases.add(s.trim()));
-                    }
                     
                     const data: NfseData = {
                         fileName: file.name,
@@ -191,7 +192,7 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                         valor_cofins: parseCurrency(getTagValue(nfNode, 'valor_cofins')),
                         tomador_razao_social: xmlDoc.querySelector('tomador > nome_razao_social')?.textContent ?? '',
                         codigo_item_lista_servico: getTagValue(listaNode, 'codigo_item_lista_servico'),
-                        descritivo: descritivo,
+                        descritivo: getTagValue(listaNode, 'descritivo'),
                         valor_issrf: parseCurrency(getTagValue(listaNode, 'valor_issrf')),
                     };
                     extractedData.push(data);
@@ -199,14 +200,10 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                      console.error(`Error processing file ${file.name}:`, e);
                 }
             }
-            
-            const phrasesArray = Array.from(uniquePhrases);
             setAllExtractedData(extractedData);
-            setFoundSuspensionPhrases(phrasesArray);
-            setSelectedSuspensionPhrases(new Set(phrasesArray)); // Select all by default
             setIsLoading(false);
         };
-        extract();
+        extractData();
     }, [nfseFiles]);
     
     // Perform analysis based on selected phrases
@@ -440,7 +437,7 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                             </CardHeader>
                             <CardContent>
                                 <p className="text-sm text-muted-foreground mb-2">
-                                    As seguintes notas contêm a palavra "suspensão", mas não uma das frases específicas de exigibilidade, e requerem verificação manual:
+                                    As seguintes notas contêm a palavra "suspensão", mas não uma das frases específicas selecionadas no filtro, e requerem verificação manual:
                                 </p>
                                 <p className="text-sm font-medium break-words">{analysisResults.pendingNotes.map(n => n.numero_nfse).join(', ')}</p>
                             </CardContent>
@@ -528,18 +525,14 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                                  <Card className="bg-muted/50">
                                     <CardHeader className='pb-2'><CardTitle className="text-lg">Frases de Suspensão Ativas</CardTitle></CardHeader>
                                     <CardContent>
-                                        {foundSuspensionPhrases.length > 0 ? (
-                                            <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                                                {foundSuspensionPhrases.map(phrase => (
-                                                    <div key={phrase} className="flex items-center space-x-2">
-                                                        <Checkbox id={`phrase-${phrase}`} checked={selectedSuspensionPhrases.has(phrase)} onCheckedChange={(checked) => handleSuspensionPhraseToggle(phrase, !!checked)} />
-                                                        <Label htmlFor={`phrase-${phrase}`} className="text-sm font-light leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{phrase}</Label>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <p className="text-sm text-muted-foreground italic">Nenhuma frase com "suspensão" encontrada nos XMLs.</p>
-                                        )}
+                                        <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                                            {SUSPENSION_PHRASES.map(phrase => (
+                                                <div key={phrase} className="flex items-center space-x-2">
+                                                    <Checkbox id={`phrase-${phrase}`} checked={selectedSuspensionPhrases.has(phrase)} onCheckedChange={(checked) => handleSuspensionPhraseToggle(phrase, !!checked)} />
+                                                    <Label htmlFor={`phrase-${phrase}`} className="text-sm font-light leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{phrase}</Label>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </CardContent>
                                 </Card>
                             </div>
