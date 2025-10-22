@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -13,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { RowSelectionState } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
+import * as React from 'react';
 
 
 // Tipos
@@ -160,7 +162,11 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         };
 
         initialItems.forEach(item => {
-            const classification = sessionClassifications[item.id] || 'unclassified';
+            let classification = sessionClassifications[item.id] || 'unclassified';
+            // Safety check: if a classification from localStorage is somehow invalid, default to unclassified.
+            if (!categories[classification]) {
+                classification = 'unclassified';
+            }
             categories[classification].push(item);
         });
 
@@ -216,7 +222,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             header: ({ table }) => (
                 <Checkbox
                     checked={table.getIsAllPageRowsSelected()}
-                    onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                    onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
                     aria-label="Selecionar todas"
                 />
             ),
@@ -376,3 +382,4 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         </div>
     );
 }
+
