@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX } from "lucide-react";
+import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX, Copy } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from '../ui/badge';
@@ -55,6 +55,7 @@ interface CfopValidatorProps {
 }
 
 const getUniqueProductKey = (item: CfopValidationData): string => {
+    // A chave agora inclui o CFOP do Sienge para diferenciar o mesmo produto lançado com CFOPs diferentes.
     return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
 };
 
@@ -123,6 +124,15 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         const code = parseInt(String(cfopCode), 10);
         return cfopDescriptions[code as keyof typeof cfopDescriptions] || "Descrição não encontrada";
     };
+    
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text).then(() => {
+            toast({ title: "Copiado", description: `"${text}" copiado para a área de transferência.` });
+        }).catch(() => {
+            toast({ variant: 'destructive', title: `Falha ao copiar` });
+        });
+    };
+
 
     // Colunas da Tabela
     const columns = useMemo(() => {
@@ -148,14 +158,16 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                     )
                 }
                 
-                if (id === 'Fornecedor') {
+                if (id === 'Fornecedor' || id === 'Descrição') {
                     return (
-                        <div className="max-w-[200px] truncate" title={value}>
-                            <p>{value}</p>
+                        <div className="flex items-center gap-1 group">
+                            <p className="truncate max-w-[200px]" title={value}>{value}</p>
+                            <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => copyToClipboard(value)}><Copy className="h-3 w-3" /></Button>
                         </div>
                     );
                 }
-                 if (id === 'Descrição' || id === 'Sienge_Descrição') {
+
+                 if (id === 'Sienge_Descrição') {
                     return <div className="max-w-xs truncate" title={String(value ?? '')}>{String(value ?? '')}</div>;
                 }
                 if (id === 'Número da Nota') {
