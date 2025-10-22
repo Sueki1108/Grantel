@@ -8,7 +8,7 @@
       }
     ],
     "predeploy": [
-      "npm --prefix \"$RESOURCE_DIR\" run build"
+      "npm --prefix . run build"
     ]
   },
   "functions": {
