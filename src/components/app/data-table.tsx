@@ -2,6 +2,8 @@
 
 import * as React from "react"
 import {
+  Column,
+  Table as ReactTable,
   ColumnDef,
   ColumnFiltersState,
   SortingState,
@@ -35,6 +37,57 @@ interface DataTableProps<TData, TValue> {
   setRowSelection?: React.Dispatch<React.SetStateAction<RowSelectionState>>;
 }
 
+function Filter({
+  column,
+  table,
+}: {
+  column: Column<any, any>
+  table: ReactTable<any>
+}) {
+  const firstValue = table
+    .getPreFilteredRowModel()
+    .flatRows[0]?.getValue(column.id)
+
+  const columnFilterValue = column.getFilterValue()
+
+  return typeof firstValue === 'number' ? (
+    <div className="flex space-x-2">
+      <Input
+        type="number"
+        value={(columnFilterValue as [number, number])?.[0] ?? ''}
+        onChange={e =>
+          column.setFilterValue((old: [number, number]) => [
+            e.target.value,
+            old?.[1],
+          ])
+        }
+        placeholder={`Min`}
+        className="w-24 border-slate-200 h-8"
+      />
+      <Input
+        type="number"
+        value={(columnFilterValue as [number, number])?.[1] ?? ''}
+        onChange={e =>
+          column.setFilterValue((old: [number, number]) => [
+            old?.[0],
+            e.target.value,
+          ])
+        }
+        placeholder={`Max`}
+        className="w-24 border-slate-200 h-8"
+      />
+    </div>
+  ) : (
+    <Input
+      type="text"
+      value={(columnFilterValue ?? '') as string}
+      onChange={e => column.setFilterValue(e.target.value)}
+      placeholder={`Filtrar...`}
+      className="w-full border-slate-200 h-8"
+    />
+  )
+}
+
 export function DataTable<TData, TValue>({
   columns,
   data,
@@ -57,7 +110,7 @@ export function DataTable<TData, TValue>({
     onGlobalFilterChange: setGlobalFilter,
     getFilteredRowModel: getFilteredRowModel(),
     onRowSelectionChange: setRowSelection,
-    enableRowSelection: !!setRowSelection, // Habilita a seleção de linha apenas se a função for passada
+    enableRowSelection: !!setRowSelection, 
     state: {
       sorting,
       columnFilters,
@@ -72,7 +125,7 @@ export function DataTable<TData, TValue>({
     <div>
         <div className="flex items-center justify-between py-4">
             <Input
-            placeholder="Filtrar todos os dados..."
+            placeholder="Filtrar todos os dados (filtro global)..."
             value={globalFilter ?? ''}
             onChange={(event) =>
                 setGlobalFilter(String(event.target.value))
@@ -93,13 +146,20 @@ export function DataTable<TData, TValue>({
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   return (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
+                    <TableHead key={header.id} className='p-2'>
+                        {header.isPlaceholder ? null : (
+                            <>
+                                {flexRender(
+                                    header.column.columnDef.header,
+                                    header.getContext()
+                                )}
+                                {header.column.getCanFilter() ? (
+                                    <div className="mt-1">
+                                        <Filter column={header.column} table={table} />
+                                    </div>
+                                ) : null}
+                            </>
+                        )}
                     </TableHead>
                   )
                 })}
