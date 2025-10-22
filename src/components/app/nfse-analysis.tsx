@@ -64,14 +64,6 @@ type DetailedData = {
     susp702: NfseData[];
     susp703: NfseData[];
     pending: NfseData[];
-    retention: {
-        iss: NfseData[];
-        ir: NfseData[];
-        inss: NfseData[];
-        csll: NfseData[];
-        pis: NfseData[];
-        cofins: NfseData[];
-    }
 };
 
 type AnalysisResults = {
@@ -231,8 +223,7 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
 
         const detailedData: DetailedData = {
             all: filteredData, service702: [], service703: [],
-            susp702: [], susp703: [], pending: [],
-            retention: { iss: [], ir: [], inss: [], csll: [], pis: [], cofins: [] }
+            susp702: [], susp703: [], pending: []
         };
 
         let summary702: ServiceItemSummary = { 'Soma Total Item': 0, 'Total Suspensão': 0, 'Soma Líquida Item': 0, 'Retenções': { 'Retenção ISS': 0, 'Retenção IR': 0, 'Retenção INSS': 0, 'Retenção CSLL': 0, 'Retenção PIS': 0, 'Retenção COFINS': 0 } };
@@ -435,9 +426,17 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         <Card className="lg:col-span-3">
                             <CardHeader><CardTitle>Resultados Gerais</CardTitle></CardHeader>
-                            <CardContent className="grid grid-cols-2 gap-x-8">
-                                <SummaryLine label="Soma Total das Notas" value={analysisResults.financialSummary['Soma Total das Notas']} />
-                                <SummaryLine label="Total de Notas (únicas)" value={analysisResults.financialSummary['Total de Notas (únicas)']} />
+                            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                                <div className='space-y-2'>
+                                    <SummaryLine label="Soma Total das Notas" value={analysisResults.financialSummary['Soma Total das Notas']} />
+                                    <SummaryLine label="Total de Notas (únicas)" value={analysisResults.financialSummary['Total de Notas (únicas)']} />
+                                </div>
+                                <div className="space-y-2">
+                                     <h4 className='font-medium text-sm mb-2 pt-2 border-t md:border-t-0'>Retenções Totais (Agregado)</h4>
+                                     {Object.entries(analysisResults.totalRetentionSummary).map(([key, value]) => (
+                                        <SummaryLine key={key} label={key} value={value} />
+                                    ))}
+                                </div>
                             </CardContent>
                         </Card>
                         <Card>
@@ -466,14 +465,6 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                                          <SummaryLine key={key} label={key} value={value} />
                                      ))}
                                  </div>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader><CardTitle>Retenções Totais (Agregado)</CardTitle></CardHeader>
-                            <CardContent className="space-y-2">
-                                {Object.entries(analysisResults.totalRetentionSummary).map(([key, value]) => (
-                                    <SummaryLine key={key} label={key} value={value} />
-                                ))}
                             </CardContent>
                         </Card>
                     </div>
