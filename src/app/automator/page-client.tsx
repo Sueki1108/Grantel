@@ -636,7 +636,7 @@ export function AutomatorClientPage() {
                     <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
                         <TabsList className="h-auto flex flex-wrap justify-start">
                              <TabsTrigger value="history" className="flex items-center gap-2">
-                                <History className="h-5 w-5" /> Histórico
+                                <History className="h-5 w-5" />Histórico
                             </TabsTrigger>
                              <TabsTrigger value="nf-stock" className="flex items-center gap-2">
                                 1. Validação
