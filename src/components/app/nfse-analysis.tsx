@@ -63,6 +63,8 @@ type DetailedData = {
     service703: NfseData[];
     susp702: NfseData[];
     susp703: NfseData[];
+    liquid702: NfseData[];
+    liquid703: NfseData[];
     pending: NfseData[];
     retention: {
         iss: NfseData[];
@@ -243,7 +245,7 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
 
         const detailedData: DetailedData = {
             all: filteredData, service702: [], service703: [],
-            susp702: [], susp703: [], pending: [],
+            susp702: [], susp703: [], liquid702: [], liquid703: [], pending: [],
             retention: { iss: [], ir: [], inss: [], csll: [], pis: [], cofins: [] }
         };
 
@@ -284,6 +286,8 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                 if (isSuspended) {
                     summary702['Total Suspensão'] += nf.valor_total;
                     detailedData.susp702.push(nf);
+                } else {
+                    detailedData.liquid702.push(nf);
                 }
             } else if (nf.codigo_item_lista_servico === '703') {
                 summary703['Soma Total Item'] += nf.valor_total;
@@ -292,6 +296,8 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                  if (isSuspended) {
                     summary703['Total Suspensão'] += nf.valor_total;
                     detailedData.susp703.push(nf);
+                } else {
+                    detailedData.liquid703.push(nf);
                 }
             }
             
@@ -378,8 +384,10 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
         addSheet(analysisResults.detailedData.all, "Dados Completos");
         addSheet(analysisResults.detailedData.service702, "Itens 702");
         addSheet(analysisResults.detailedData.susp702, "Suspensão 702");
+        addSheet(analysisResults.detailedData.liquid702, "Líquido 702");
         addSheet(analysisResults.detailedData.service703, "Itens 703");
         addSheet(analysisResults.detailedData.susp703, "Suspensão 703");
+        addSheet(analysisResults.detailedData.liquid703, "Líquido 703");
         addSheet(analysisResults.detailedData.pending, "Pendentes (Suspensão Genérica)");
         addSheet(analysisResults.detailedData.retention.iss, "Retenção ISS");
         addSheet(analysisResults.detailedData.retention.ir, "Retenção IR");
@@ -444,8 +452,10 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
             { label: `Todas (${analysisResults.detailedData.all.length})`, data: analysisResults.detailedData.all, sheetName: "Dados_Completos" },
             { label: `Itens 702 (${analysisResults.detailedData.service702.length})`, data: analysisResults.detailedData.service702, sheetName: "Itens_702" },
             { label: `Suspensão 702 (${analysisResults.detailedData.susp702.length})`, data: analysisResults.detailedData.susp702, sheetName: "Suspensao_702" },
+            { label: `Líquido 702 (${analysisResults.detailedData.liquid702.length})`, data: analysisResults.detailedData.liquid702, sheetName: "Liquido_702" },
             { label: `Itens 703 (${analysisResults.detailedData.service703.length})`, data: analysisResults.detailedData.service703, sheetName: "Itens_703" },
             { label: `Suspensão 703 (${analysisResults.detailedData.susp703.length})`, data: analysisResults.detailedData.susp703, sheetName: "Suspensao_703" },
+            { label: `Líquido 703 (${analysisResults.detailedData.liquid703.length})`, data: analysisResults.detailedData.liquid703, sheetName: "Liquido_703" },
             { label: `Ret. ISS (${analysisResults.detailedData.retention.iss.length})`, data: analysisResults.detailedData.retention.iss, sheetName: "Retencao_ISS" },
             { label: `Ret. IR (${analysisResults.detailedData.retention.ir.length})`, data: analysisResults.detailedData.retention.ir, sheetName: "Retencao_IR" },
             { label: `Ret. INSS (${analysisResults.detailedData.retention.inss.length})`, data: analysisResults.detailedData.retention.inss, sheetName: "Retencao_INSS" },
