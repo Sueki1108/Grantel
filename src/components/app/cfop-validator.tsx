@@ -47,11 +47,17 @@ const getBaseCfop = (cfop: string): string => {
     if (!cfop || cfop.length !== 4) return cfop;
     const firstDigit = cfop.charAt(0);
     const rest = cfop.substring(1);
-    if (['2', '3', '6', '7'].includes(firstDigit)) {
-        const baseFirstDigit = firstDigit === '2' || firstDigit === '3' ? '1' : '5';
-        return `${baseFirstDigit}${rest}`;
+
+    switch (firstDigit) {
+        case '2':
+        case '3':
+            return `1${rest}`;
+        case '6':
+        case '7':
+            return `5${rest}`;
+        default:
+            return cfop;
     }
-    return cfop;
 }
 
 
