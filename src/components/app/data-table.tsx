@@ -129,9 +129,11 @@ export function DataTable<TData, TValue>({
     },
   })
   
-  if (tableRef) {
+  React.useEffect(() => {
+    if (tableRef) {
       tableRef.current = table;
-  }
+    }
+  }, [table, tableRef]);
 
 
   return (

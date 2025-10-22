@@ -5,14 +5,14 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown } from "lucide-react";
+import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from '../ui/badge';
 import type { AllClassifications } from './imobilizado-analysis';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { cfopDescriptions } from '@/lib/cfop';
-import { RowSelectionState } from '@tanstack/react-table';
+import { RowSelectionState, Table as ReactTable } from '@tanstack/react-table';
 import { Card } from '../ui/card';
 import { Checkbox } from '../ui/checkbox';
 
@@ -111,12 +111,17 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         const table = tableRef.current;
         if (!table) return;
 
-        const selectedItems = table.getSelectedRowModel().rows.map(row => row.original);
+        const selectedItems = table.getFilteredSelectedRowModel().rows.map(row => row.original);
         if (selectedItems.length > 0) {
             handleValidationChange(selectedItems, newStatus);
         }
         
         setRowSelection({}); // Limpa a seleção após a ação
+    };
+
+    const getFullCfopDescription = (cfopCode: string | number): string => {
+        const code = parseInt(String(cfopCode), 10);
+        return cfopDescriptions[code as keyof typeof cfopDescriptions] || "Descrição não encontrada";
     };
 
     // Colunas da Tabela
@@ -125,9 +130,25 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             items,
             ['Fornecedor', 'Número da Nota', 'Descrição', 'Sienge_Descrição', 'CFOP', 'CST do ICMS', 'Sienge_CFOP'],
             (row: any, id: string) => {
-                 const value = row.original[id];
+                const value = row.original[id];
+                 const isCfopColumn = id === 'CFOP' || id === 'Sienge_CFOP';
+
+                if (isCfopColumn) {
+                    return (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <span className="cursor-help underline decoration-dotted">{value}</span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>{getFullCfopDescription(value)}</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )
+                }
                 
-                 if (id === 'Fornecedor') {
+                if (id === 'Fornecedor') {
                     return (
                         <div className="max-w-[200px] truncate" title={value}>
                             <p>{value}</p>
@@ -238,7 +259,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     }, [items, validationStatus, activeFilter]);
     
     const [activeTabGroup, setActiveTabGroup] = useState<string>('');
-    const tableRef = React.useRef<any>(null);
+    const tableRef = React.useRef<ReactTable<CfopValidationData> | null>(null);
 
     const fullColumns = useMemo(() => [ ...columns, statusColumn, actionColumn], [columns, validationStatus]);
 
@@ -253,6 +274,13 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     }, [sortedGroupTitles, activeTabGroup]);
 
     const numSelected = Object.keys(rowSelection).length;
+    
+    const handleClearFilters = () => {
+        if (tableRef.current) {
+            tableRef.current.resetColumnFilters();
+            tableRef.current.setGlobalFilter('');
+        }
+    };
 
     return (
         <div className="space-y-4 h-full flex flex-col relative">
@@ -270,15 +298,21 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                     </Card>
                 </div>
             )}
-            <Tabs defaultValue="unvalidated" value={activeFilter} onValueChange={(value) => setActiveFilter(value as any)} className="w-full">
-                <TabsList className="grid w-full grid-cols-5">
-                    <TabsTrigger value="all">Todos</TabsTrigger>
-                    <TabsTrigger value="unvalidated">Pendentes</TabsTrigger>
-                    <TabsTrigger value="correct">Corretos</TabsTrigger>
-                    <TabsTrigger value="incorrect">Incorretos</TabsTrigger>
-                    <TabsTrigger value="verify">A Verificar</TabsTrigger>
-                </TabsList>
-            </Tabs>
+            <div className='flex items-center gap-4'>
+                <Tabs defaultValue="unvalidated" value={activeFilter} onValueChange={(value) => setActiveFilter(value as any)} className="w-full">
+                    <TabsList className="grid w-full grid-cols-5">
+                        <TabsTrigger value="all">Todos</TabsTrigger>
+                        <TabsTrigger value="unvalidated">Pendentes</TabsTrigger>
+                        <TabsTrigger value="correct">Corretos</TabsTrigger>
+                        <TabsTrigger value="incorrect">Incorretos</TabsTrigger>
+                        <TabsTrigger value="verify">A Verificar</TabsTrigger>
+                    </TabsList>
+                </Tabs>
+                <Button variant="outline" onClick={handleClearFilters} className='shrink-0'>
+                    <FilterX className="mr-2 h-4 w-4" />
+                    Limpar Filtros
+                </Button>
+            </div>
              
              <div className="flex-grow overflow-y-auto">
                 <Tabs value={activeTabGroup} onValueChange={setActiveTabGroup} className="w-full">
