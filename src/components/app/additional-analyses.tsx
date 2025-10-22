@@ -629,8 +629,10 @@ interface ReconciliationAnalysisProps {
 
 function useReconciliation(processedData: ProcessedData | null) {
     const siengeData = processedData?.siengeSheetData;
-    
+    const xmlNFe = processedData?.sheets?.['Notas Válidas'] || [];
     const xmlItems = processedData?.sheets?.['Itens Válidos'] || [];
+
+    const xmlNFeMap = useMemo(() => new Map(xmlNFe.map(n => [n['Chave Unica'], n])), [xmlNFe]);
     
     if (!siengeData || !xmlItems) {
         return { reconciliationResults: null, error: null };
@@ -720,8 +722,11 @@ function useReconciliation(processedData: ProcessedData | null) {
                         const matchedXmlItem = matchedXmlItems.shift(); 
                         if (matchedXmlItems.length === 0) xmlMap.delete(key);
                         
+                        const notaOriginal = xmlNFeMap.get(matchedXmlItem['Chave Unica']);
+
                         const mergedItem: CfopValidationData = {
                             ...matchedXmlItem,
+                            'Fornecedor': notaOriginal?.Fornecedor || matchedXmlItem.Fornecedor || 'N/A', // Prioritize from original note
                             'Sienge_CFOP': siengeItem[h.cfop as string] || 'N/A',
                             'Sienge_Descrição': siengeItem[h.siengeDesc as string] || 'N/A',
                             'Sienge_Esp': siengeItem[h.esp as string] || 'N/A',
@@ -818,9 +823,12 @@ function useReconciliation(processedData: ProcessedData | null) {
                 if (xmlGroup && Math.abs(siengeGroup.sum - xmlGroup.sum) < 0.01) {
                     const aggregatedSienge = siengeGroup.items.reduce((acc, item) => ({...acc, ...item}), {});
                     const aggregatedXml = xmlGroup.items.reduce((acc, item) => ({...acc, ...item}), {});
+                    
+                     const notaOriginal = xmlNFeMap.get(aggregatedXml['Chave Unica']);
 
                     const reconciledRow: CfopValidationData = {
                         ...aggregatedXml,
+                        'Fornecedor': notaOriginal?.Fornecedor || 'N/A',
                         'Sienge_CFOP': aggregatedSienge[h.cfop as string] || 'N/A',
                         'Sienge_Descrição': aggregatedSienge[h.siengeDesc as string] || 'N/A',
                         'Sienge_Esp': aggregatedSienge[h.esp as string] || 'N/A',
