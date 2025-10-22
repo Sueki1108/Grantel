@@ -14,7 +14,7 @@ import { cleanAndToStr } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ScrollArea } from '../ui/scroll-area';
 import { cfopDescriptions } from '@/lib/cfop';
-import { CardDescription } from '../ui/card';
+import { CardDescription, Card, CardHeader, CardTitle } from '../ui/card';
 
 // Tipos
 export interface CfopValidationData extends Record<string, any> {
@@ -39,7 +39,6 @@ interface CfopValidatorProps {
 }
 
 const getUniqueProductKey = (item: CfopValidationData): string => {
-    // Usa o Código do produto do XML e o CNPJ do emitente
     return `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
 };
 
@@ -64,8 +63,44 @@ const getBaseCfop = (cfop: string): string => {
 export function CfopValidator({ items, allPersistedClassifications, onPersistAllClassifications }: CfopValidatorProps) {
     const { toast } = useToast();
     const [validationStatus, setValidationStatus] = useState<Record<string, ValidationStatus>>({});
-    const [groupedItems, setGroupedItems] = useState<{ pending: Record<string, CfopValidationData[]>, validated: Record<string, CfopValidationData[]> }>({ pending: {}, validated: {} });
     const [hasChanges, setHasChanges] = useState(false);
+    
+    // Group all items by their base CFOP first.
+    const allItemsByBaseCfop = useMemo(() => {
+        const grouped: Record<string, CfopValidationData[]> = {};
+        items.forEach(item => {
+            const baseCfop = getBaseCfop(item.Sienge_CFOP || 'N/A');
+            if (!grouped[baseCfop]) {
+                grouped[baseCfop] = [];
+            }
+            grouped[baseCfop].push(item);
+        });
+        return grouped;
+    }, [items]);
+
+    // This state now derives from the main grouping.
+    const { pendingGroups, validatedGroups } = useMemo(() => {
+        const pending: Record<string, CfopValidationData[]> = {};
+        const validated: Record<string, CfopValidationData[]> = {};
+        
+        Object.entries(allItemsByBaseCfop).forEach(([baseCfop, itemsInGroup]) => {
+            itemsInGroup.forEach(item => {
+                const status = validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated';
+                const itemWithStatus = { ...item, validationStatus: status };
+
+                if (status === 'unvalidated') {
+                    if (!pending[baseCfop]) pending[baseCfop] = [];
+                    pending[baseCfop].push(itemWithStatus);
+                } else {
+                    if (!validated[baseCfop]) validated[baseCfop] = [];
+                    validated[baseCfop].push(itemWithStatus);
+                }
+            });
+        });
+
+        return { pendingGroups: pending, validatedGroups: validated };
+    }, [allItemsByBaseCfop, validationStatus]);
+
 
     useEffect(() => {
         const initialStatus: Record<string, ValidationStatus> = {};
@@ -79,34 +114,12 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         setHasChanges(false);
     }, [items, allPersistedClassifications]);
 
-    useEffect(() => {
-        const pending: Record<string, CfopValidationData[]> = {};
-        const validated: Record<string, CfopValidationData[]> = {};
-        
-        items.forEach(item => {
-            const status = validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated';
-            const itemWithStatus = { ...item, validationStatus: status };
-            const siengeCfop = item.Sienge_CFOP || 'N/A';
-            const baseCfop = getBaseCfop(siengeCfop);
-
-            if (status === 'unvalidated') {
-                if (!pending[baseCfop]) pending[baseCfop] = [];
-                pending[baseCfop].push(itemWithStatus);
-            } else {
-                 if (!validated[baseCfop]) validated[baseCfop] = [];
-                validated[baseCfop].push(itemWithStatus);
-            }
-        });
-        setGroupedItems({ pending, validated });
-    }, [items, validationStatus]);
-
 
     const handleValidationChange = (item: CfopValidationData, newStatus: ValidationStatus) => {
         const uniqueProductKey = getUniqueProductKey(item);
         
         const newValidationStatus = { ...validationStatus };
         
-        // Propagate the change to all items with the same product key
         const itemsToUpdate = items.filter(i => getUniqueProductKey(i) === uniqueProductKey);
         itemsToUpdate.forEach(i => {
             newValidationStatus[i['Chave de acesso'] + i.Item] = newStatus;
@@ -187,31 +200,39 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         }
     };
 
-    const renderGroupedTabs = (data: Record<string, CfopValidationData[]>, baseColumns: ColumnDef<CfopValidationData, any>[]) => {
-        const cfopKeys = Object.keys(data).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    const renderGroupedTabs = (dataGroups: Record<string, CfopValidationData[]>, baseColumns: ColumnDef<CfopValidationData, any>[]) => {
+        const cfopKeys = Object.keys(dataGroups).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
 
         if (cfopKeys.length === 0) {
             return <div className="text-center p-8 text-muted-foreground">Nenhum item para exibir.</div>;
         }
 
         return (
-             <Tabs defaultValue={cfopKeys[0]} className="w-full">
-                <TabsList className="h-auto flex-wrap justify-start">
+             <Tabs defaultValue={cfopKeys[0]} className="h-full w-full grid grid-cols-[250px_1fr] gap-6" orientation="vertical">
+                <ScrollArea className="h-full">
+                    <TabsList className="h-auto flex-col items-stretch p-2">
+                        {cfopKeys.map(baseCfop => (
+                            <TabsTrigger key={baseCfop} value={baseCfop} className="justify-start">
+                                CFOP {baseCfop} ({dataGroups[baseCfop].length})
+                            </TabsTrigger>
+                        ))}
+                    </TabsList>
+                </ScrollArea>
+                <div className='overflow-hidden'>
                     {cfopKeys.map(baseCfop => (
-                        <TabsTrigger key={baseCfop} value={baseCfop}>
-                            CFOP {baseCfop} ({data[baseCfop].length})
-                        </TabsTrigger>
+                        <TabsContent key={baseCfop} value={baseCfop} className="mt-0 h-full">
+                           <Card className="h-full flex flex-col">
+                               <CardHeader>
+                                   <CardTitle>CFOP {baseCfop}</CardTitle>
+                                   <CardDescription>{cfopDescriptions[parseInt(baseCfop, 10) as keyof typeof cfopDescriptions] || 'Descrição não encontrada'}</CardDescription>
+                               </CardHeader>
+                               <CardContent className='flex-grow overflow-hidden'>
+                                   <DataTable columns={baseColumns} data={dataGroups[baseCfop]} />
+                               </CardContent>
+                           </Card>
+                        </TabsContent>
                     ))}
-                </TabsList>
-                {cfopKeys.map(baseCfop => (
-                    <TabsContent key={baseCfop} value={baseCfop} className="mt-4">
-                        <div className='mb-4 p-2 border-l-4 border-primary bg-muted/50'>
-                             <h3 className="text-lg font-semibold">CFOP {baseCfop}</h3>
-                             <CardDescription>{cfopDescriptions[parseInt(baseCfop, 10) as keyof typeof cfopDescriptions] || 'Descrição não encontrada'}</CardDescription>
-                        </div>
-                        <DataTable columns={baseColumns} data={data[baseCfop]} />
-                    </TabsContent>
-                ))}
+                </div>
             </Tabs>
         )
     };
@@ -231,14 +252,12 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                         <TabsTrigger value="validated">Validados ({items.filter(it => (validationStatus[it['Chave de acesso'] + it.Item] || 'unvalidated') !== 'unvalidated').length})</TabsTrigger>
                     </TabsList>
                      <div className='flex-grow overflow-hidden mt-4'>
-                        <ScrollArea className="h-full pr-4">
-                            <TabsContent value="pending" className="mt-0">
-                                {renderGroupedTabs(groupedItems.pending, [...columns, actionColumn])}
-                            </TabsContent>
-                            <TabsContent value="validated" className="mt-0">
-                                {renderGroupedTabs(groupedItems.validated, [...columns, statusColumn, actionColumn])}
-                            </TabsContent>
-                        </ScrollArea>
+                        <TabsContent value="pending" className="mt-0 h-full">
+                            {renderGroupedTabs(pendingGroups, [...columns, actionColumn])}
+                        </TabsContent>
+                        <TabsContent value="validated" className="mt-0 h-full">
+                            {renderGroupedTabs(validatedGroups, [...columns, statusColumn, actionColumn])}
+                        </TabsContent>
                     </div>
                 </Tabs>
             </div>
