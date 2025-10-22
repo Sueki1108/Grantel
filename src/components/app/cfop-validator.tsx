@@ -13,7 +13,6 @@ import type { AllClassifications } from './imobilizado-analysis';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ScrollArea } from '../ui/scroll-area';
 import { cfopDescriptions } from '@/lib/cfop';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card';
 
 
 // Tipos
@@ -52,10 +51,12 @@ const getUniqueProductKey = (item: CfopValidationData): string => {
  * Agrupa CFOPs pela sua operação base, ignorando o primeiro dígito.
  * Ex: 1128, 2128 -> '128'
  */
-const getBaseCfopOperation = (cfop: string): string => {
-    if (!cfop || typeof cfop !== 'string' || cfop.length !== 4) {
+const getBaseCfop = (cfop: string): string => {
+    if (!cfop || typeof cfop !== 'string' || cfop.length < 4) {
         return cfop || 'N/A';
     }
+    // Agrupa pela operação, ignorando se é estadual, interestadual ou exterior.
+    // Ex: 1128, 2128, 3128 serão todos agrupados pela base '128'.
     return cfop.substring(1);
 };
 
@@ -86,7 +87,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         const allItemsByDescription: Record<string, CfopValidationData[]> = {};
         items.forEach(item => {
             const cfop = item.Sienge_CFOP || 'N/A';
-            const baseCfop = getBaseCfopOperation(cfop);
+            const baseCfop = getBaseCfop(cfop);
             // Pega o equivalente de entrada para ter a descrição base
             const baseCfopKey = parseInt(`1${baseCfop}`, 10);
             const description = cfopDescriptions[baseCfopKey] || `Operação ${baseCfop}`;
@@ -224,7 +225,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                                 <TabsTrigger key={description} value={description} className="w-full justify-start text-left h-auto py-2">
                                      <div>
                                         <p className="font-semibold">{uniqueCfops}</p>
-                                        <p className="text-xs text-muted-foreground font-normal">{description}</p>
                                     </div>
                                 </TabsTrigger>
                             )
@@ -270,6 +270,3 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         </div>
     );
 }
-
-
-    
