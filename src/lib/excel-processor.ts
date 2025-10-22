@@ -133,7 +133,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     
     log("Identificando notas de remessa, retorno e outras operações que não são compras...");
     const chavesRemessaRetorno = new Set<string>();
-    const remessaCfopPrefixes = ['155', '255', '190', '191', '192', '194', '290', '291', '292', '294'];
+    const remessaCfopPrefixes = ['190', '191', '192', '194', '290', '291', '292', '294', '590', '591', '592', '594', '690', '691', '692', '694'];
     itens.forEach(item => {
         if (!item || !item.CFOP) return;
         const cfop = cleanAndToStr(item.CFOP);
@@ -202,12 +202,18 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     log(`- ${itensValidosSaidas.length} itens de saída válidos correspondentes.`);
     
     log("Identificando itens para análise de imobilizado...");
+    const remessaConsertoCfopPrefixes = ['1915', '2915', '1916', '2916', '5915', '6915', '5916', '6916'];
     const itensParaImobilizado = itensValidos.filter(item => {
         if (!item || !item['Valor Unitário']) return false;
+        
+        const cfop = cleanAndToStr(item.CFOP);
+        // Verifica se o CFOP NÃO é de remessa/retorno/conserto
+        const isRemessaConserto = remessaConsertoCfopPrefixes.some(prefix => cfop.startsWith(prefix));
+
         const valorUnitario = parseFloat(String(item['Valor Unitário']));
-        return valorUnitario > 1200;
+        return valorUnitario > 1200 && !isRemessaConserto;
     });
-    log(`- ${itensParaImobilizado.length} itens com valor unitário acima de R$ 1.200 encontrados para análise de imobilizado.`);
+    log(`- ${itensParaImobilizado.length} itens com valor unitário > R$ 1.200 (e não são remessas/conserto) encontrados para análise.`);
 
     const imobilizados = itensParaImobilizado.map((item) => {
         const uniqueItemId = `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
