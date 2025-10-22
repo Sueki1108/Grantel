@@ -10,7 +10,7 @@ import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/comp
 import { Badge } from '../ui/badge';
 import type { AllClassifications } from './imobilizado-analysis';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
-import { cfopDescriptions } from '@/lib/cfop'; // Importar descrições
+import { cfopDescriptions } from '@/lib/cfop';
 import { RowSelectionState } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
 import { Card } from '../ui/card';
@@ -35,6 +35,16 @@ type ValidationStatus = 'unvalidated' | 'correct' | 'incorrect' | 'verify';
 interface GroupedItems {
   [cfop: string]: CfopValidationData[];
 }
+
+const columnNameMap: Record<string, string> = {
+    'Fornecedor': 'Fornecedor',
+    'Número da Nota': 'Nota',
+    'Descrição': 'Descrição XML',
+    'Sienge_Descrição': 'Descrição Sienge',
+    'CFOP': 'CFOP XML',
+    'CST do ICMS': 'CST XML',
+    'Sienge_CFOP': 'CFOP Sienge',
+};
 
 
 interface CfopValidatorProps {
@@ -112,15 +122,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         setRowSelection({}); // Limpa a seleção após a ação
     };
 
-    const columnNameMap: Record<string, string> = {
-        'Fornecedor': 'Fornecedor',
-        'Número da Nota': 'Nota',
-        'Descrição': 'Descrição XML',
-        'Sienge_Descrição': 'Descrição Sienge',
-        'CFOP': 'CFOP XML',
-        'CST do ICMS': 'CST XML',
-        'Sienge_CFOP': 'CFOP Sienge',
-    };
     // Colunas da Tabela
     const columns = useMemo(() => {
         const baseColumns = getColumnsWithCustomRender(
@@ -205,11 +206,14 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             }
         }
     };
-
-    const groupedItems = useMemo((): GroupedItems => {
-        const groups: GroupedItems = {};
+    
+    const filteredAndGroupedItems = useMemo((): GroupedItems => {
+        const filteredItems = activeFilter === 'all'
+            ? items
+            : items.filter(item => (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter);
         
-        items.forEach(item => {
+        const groups: GroupedItems = {};
+        filteredItems.forEach(item => {
             const cfop = item.Sienge_CFOP;
             if (!groups[cfop]) {
                 groups[cfop] = [];
@@ -218,16 +222,12 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         });
 
         return groups;
-    }, [items]);
+    }, [items, validationStatus, activeFilter]);
     
-    const filteredItemsByTab = (tabItems: CfopValidationData[]) => {
-        if (activeFilter === 'all') return tabItems;
-        return tabItems.filter(item => (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter);
-    };
 
     const fullColumns = useMemo(() => [ ...columns, statusColumn, actionColumn], [columns, validationStatus]);
 
-    const sortedGroupTitles = useMemo(() => Object.keys(groupedItems).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)), [groupedItems]);
+    const sortedGroupTitles = useMemo(() => Object.keys(filteredAndGroupedItems).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)), [filteredAndGroupedItems]);
 
     const numSelected = Object.keys(rowSelection).length;
 
@@ -262,7 +262,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                     <TabsList className="h-auto flex-wrap justify-start">
                          {sortedGroupTitles.map(title => (
                             <TabsTrigger key={title} value={title}>
-                                {title} ({filteredItemsByTab(groupedItems[title]).length})
+                                {title} ({filteredAndGroupedItems[title].length})
                             </TabsTrigger>
                         ))}
                     </TabsList>
@@ -274,14 +274,18 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                                  <div className='mb-4 p-3 border rounded-md bg-muted/50'>
                                     <h3 className="text-lg font-semibold">CFOP {title}: <span className="font-normal">{description}</span></h3>
                                 </div>
-                                <DataTable columns={fullColumns} data={filteredItemsByTab(groupedItems[title])} rowSelection={rowSelection} setRowSelection={setRowSelection} />
+                                <DataTable columns={fullColumns} data={filteredAndGroupedItems[title]} rowSelection={rowSelection} setRowSelection={setRowSelection} />
                             </TabsContent>
                         )
                     })}
                 </Tabs>
                 
                 {sortedGroupTitles.length === 0 && (
-                     <div className="text-center p-8 text-muted-foreground">Nenhum item para exibir.</div>
+                     <div className="text-center p-8 text-muted-foreground">
+                        <FileWarning className="mx-auto h-12 w-12 mb-4" />
+                        <h3 className="text-xl font-semibold">Nenhum item encontrado</h3>
+                        <p>Não há itens com o status "{activeFilter}" para exibir.</p>
+                     </div>
                 )}
             </div>
         </div>
