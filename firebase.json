@@ -1,13 +1,13 @@
 {
   "hosting": {
-    "public": "out",
+    "source": ".",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
     ],
-    "predeploy": [
-      "npm run build"
-    ]
+    "frameworksBackend": {
+      "region": "us-central1"
+    }
   }
 }
