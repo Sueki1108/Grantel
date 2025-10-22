@@ -13,6 +13,8 @@ import type { AllClassifications } from './imobilizado-analysis';
 import { cleanAndToStr } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ScrollArea } from '../ui/scroll-area';
+import { cfopDescriptions } from '@/lib/cfop';
+import { CardDescription } from '../ui/card';
 
 // Tipos
 export interface CfopValidationData extends Record<string, any> {
@@ -196,6 +198,10 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                 </TabsList>
                 {cfopKeys.map(cfop => (
                     <TabsContent key={cfop} value={cfop} className="mt-4">
+                        <div className='mb-4 p-2 border-l-4 border-primary bg-muted/50'>
+                             <h3 className="text-lg font-semibold">CFOP {cfop}</h3>
+                             <CardDescription>{cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || 'Descrição não encontrada'}</CardDescription>
+                        </div>
                         <DataTable columns={baseColumns} data={data[cfop]} />
                     </TabsContent>
                 ))}
@@ -218,7 +224,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                         <TabsTrigger value="validated">Validados ({items.filter(it => (validationStatus[it['Chave de acesso'] + it.Item] || 'unvalidated') !== 'unvalidated').length})</TabsTrigger>
                     </TabsList>
                      <div className='flex-grow overflow-hidden mt-4'>
-                        <ScrollArea className="h-full">
+                        <ScrollArea className="h-full pr-4">
                             <TabsContent value="pending" className="mt-0">
                                 {renderGroupedTabs(groupedItems.pending, [...columns, actionColumn])}
                             </TabsContent>
@@ -234,3 +240,5 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 }
 
   
+
+    
