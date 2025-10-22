@@ -50,7 +50,7 @@ const getUniqueProductKey = (item: CfopValidationData): string => {
 
 /**
  * Agrupa CFOPs pela sua operação base, ignorando o primeiro dígito.
- * Ex: 1128, 2128, 3128 -> '128'
+ * Ex: 1128, 2128 -> '128'
  */
 const getBaseCfopOperation = (cfop: string): string => {
     if (!cfop || typeof cfop !== 'string' || cfop.length !== 4) {
@@ -82,31 +82,36 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
 
     useEffect(() => {
-        // 1. Agrupar todos os itens pela operação base do CFOP (últimos 3 dígitos)
-        const allItemsByBaseCfop: Record<string, CfopValidationData[]> = {};
+        // 1. Agrupar todos os itens pela DESCRIÇÃO da operação do CFOP
+        const allItemsByDescription: Record<string, CfopValidationData[]> = {};
         items.forEach(item => {
-            const baseCfopOperation = getBaseCfopOperation(item.Sienge_CFOP || 'N/A');
-            if (!allItemsByBaseCfop[baseCfopOperation]) {
-                allItemsByBaseCfop[baseCfopOperation] = [];
+            const cfop = item.Sienge_CFOP || 'N/A';
+            const baseCfop = getBaseCfopOperation(cfop);
+            // Pega o equivalente de entrada para ter a descrição base
+            const baseCfopKey = parseInt(`1${baseCfop}`, 10);
+            const description = cfopDescriptions[baseCfopKey] || `Operação ${baseCfop}`;
+
+            if (!allItemsByDescription[description]) {
+                allItemsByDescription[description] = [];
             }
-            allItemsByBaseCfop[baseCfopOperation].push(item);
+            allItemsByDescription[description].push(item);
         });
 
         // 2. Separar em pendentes e validados
         const pending: Record<string, CfopValidationData[]> = {};
         const validated: Record<string, CfopValidationData[]> = {};
 
-        Object.entries(allItemsByBaseCfop).forEach(([baseCfopOperation, itemsInGroup]) => {
+        Object.entries(allItemsByDescription).forEach(([description, itemsInGroup]) => {
             itemsInGroup.forEach(item => {
                 const status = validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated';
                 const itemWithStatus = { ...item, validationStatus: status };
 
                 const groupToUpdate = status === 'unvalidated' ? pending : validated;
                 
-                if (!groupToUpdate[baseCfopOperation]) {
-                    groupToUpdate[baseCfopOperation] = [];
+                if (!groupToUpdate[description]) {
+                    groupToUpdate[description] = [];
                 }
-                groupToUpdate[baseCfopOperation].push(itemWithStatus);
+                groupToUpdate[description].push(itemWithStatus);
             });
         });
 
@@ -150,7 +155,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
     const columns = getColumnsWithCustomRender(
         items,
-        ['Número da Nota', 'Fornecedor', 'Descrição', 'Sienge_Descrição', 'CFOP', 'CST do ICMS', 'Sienge_CFOP'],
+        ['Fornecedor', 'Número da Nota', 'Descrição', 'Sienge_Descrição', 'CFOP', 'CST do ICMS', 'Sienge_CFOP'],
         (row: any, id: string) => {
              if (id === 'Fornecedor') {
                 return (
@@ -200,39 +205,40 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     };
 
     const renderGroupedContent = (dataGroups: Record<string, CfopValidationData[]>, isPendingTab: boolean) => {
-        const cfopOperationKeys = Object.keys(dataGroups).sort();
+        const descriptionKeys = Object.keys(dataGroups).sort();
 
-        if (cfopOperationKeys.length === 0) {
+        if (descriptionKeys.length === 0) {
             return <div className="text-center p-8 text-muted-foreground">Nenhum item para exibir.</div>;
         }
 
         const columnsToRender = isPendingTab ? [...columns, actionColumn] : [...columns, statusColumn, actionColumn];
 
         return (
-            <ScrollArea className="h-full pr-4">
-                 <div className="space-y-4">
-                    {cfopOperationKeys.map(baseOperation => {
-                        const itemsInGroup = dataGroups[baseOperation];
-                        const uniqueCfopsInGroup = Array.from(new Set(itemsInGroup.map(item => item.Sienge_CFOP))).sort();
-                        const firstCfop = parseInt(uniqueCfopsInGroup[0], 10);
-                        const groupTitle = `CFOP ${uniqueCfopsInGroup.join(' / ')}`;
-                        const groupDescription = cfopDescriptions[firstCfop] || 'Descrição não encontrada';
-
+             <ScrollArea className="h-full pr-4">
+                 <Tabs defaultValue={descriptionKeys[0]} orientation="vertical">
+                    <TabsList>
+                        {descriptionKeys.map(description => {
+                            const itemsInGroup = dataGroups[description];
+                             const uniqueCfops = Array.from(new Set(itemsInGroup.map(i => i.Sienge_CFOP))).sort().join(' / ');
+                            return (
+                                <TabsTrigger key={description} value={description} className="w-full justify-start text-left h-auto py-2">
+                                     <div>
+                                        <p className="font-semibold">{uniqueCfops}</p>
+                                        <p className="text-xs text-muted-foreground font-normal">{description}</p>
+                                    </div>
+                                </TabsTrigger>
+                            )
+                        })}
+                    </TabsList>
+                     {descriptionKeys.map(description => {
+                        const itemsInGroup = dataGroups[description];
                         return (
-                            <Card key={baseOperation}>
-                                <CardHeader>
-                                    <CardTitle>{groupTitle}</CardTitle>
-                                    <CardDescription>
-                                        {groupDescription} ({itemsInGroup.length} itens)
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <DataTable columns={columnsToRender} data={itemsInGroup} />
-                                </CardContent>
-                            </Card>
+                             <TabsContent key={description} value={description} className="mt-0 pl-4">
+                                <DataTable columns={columnsToRender} data={itemsInGroup} />
+                            </TabsContent>
                         )
                     })}
-                </div>
+                </Tabs>
             </ScrollArea>
         )
     };
@@ -264,3 +270,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         </div>
     );
 }
+
+
+    
