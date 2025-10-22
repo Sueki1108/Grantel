@@ -1,7 +1,7 @@
 /**
  * Import function triggers from their respective submodules:
  *
- * const {onCall} = require("firebase-functions/v2/https");
+ * const {onCall} = require("firebase-functions/v2/hhttps");
  * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
  *
  * See a full list of supported triggers at https://firebase.google.com/docs/functions
@@ -19,7 +19,7 @@ const logger = require("firebase-functions/logger");
 // });
 
 const {https} = require('firebase-functions');
-const {default: next} = require('next');
+const next = require('next');
 
 const isDev = process.env.NODE_ENV !== 'production';
 
