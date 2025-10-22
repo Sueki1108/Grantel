@@ -36,6 +36,7 @@ interface DataTableProps<TData, TValue> {
   footer?: Record<string, string>;
   rowSelection?: RowSelectionState;
   setRowSelection?: React.Dispatch<React.SetStateAction<RowSelectionState>>;
+  tableRef?: React.MutableRefObject<ReactTable<TData> | null>;
 }
 
 function Filter({
@@ -100,6 +101,7 @@ export function DataTable<TData, TValue>({
   footer,
   rowSelection,
   setRowSelection,
+  tableRef,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -127,22 +129,9 @@ export function DataTable<TData, TValue>({
     },
   })
   
-  // This is a workaround to make sure the header for the select column is rendered correctly
-  // when row selection is enabled.
-   React.useEffect(() => {
-    if (isRowSelectionEnabled) {
-      const selectHeader = table.getHeaderGroups()[0]?.headers.find(h => h.id === 'select');
-      if (selectHeader) {
-        selectHeader.column.columnDef.header = ({ table }) => (
-          <Checkbox
-            checked={table.getIsAllRowsSelected()}
-            onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
-            aria-label="Selecionar todas"
-          />
-        );
-      }
-    }
-  }, [table, isRowSelectionEnabled]);
+  if (tableRef) {
+      tableRef.current = table;
+  }
 
 
   return (

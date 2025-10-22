@@ -54,7 +54,7 @@ interface CfopValidatorProps {
 }
 
 const getUniqueProductKey = (item: CfopValidationData): string => {
-    return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}`;
+    return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
 };
 
 export function CfopValidator({ items, allPersistedClassifications, onPersistAllClassifications }: CfopValidatorProps) {
@@ -81,7 +81,8 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         const newValidationStatus = { ...validationStatus };
         
         itemsToUpdate.forEach(item => {
-            newValidationStatus[item['Chave de acesso'] + item.Item] = newStatus;
+            const itemKey = item['Chave de acesso'] + item.Item;
+            newValidationStatus[itemKey] = newStatus;
         });
 
         setValidationStatus(newValidationStatus);
@@ -110,11 +111,10 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     };
     
     const handleBulkClassification = (newStatus: ValidationStatus) => {
-        // Get the original items from the selected row indices
-        const selectedItems = Object.keys(rowSelection)
-            .map(index => filteredAndGroupedItems[activeTabGroup]?.find((_, i) => i === Number(index)))
-            .filter((item): item is CfopValidationData => !!item);
+        const table = tableRef.current;
+        if (!table) return;
 
+        const selectedItems = table.getSelectedRowModel().rows.map(row => row.original);
         if (selectedItems.length > 0) {
             handleValidationChange(selectedItems, newStatus);
         }
@@ -241,6 +241,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     }, [items, validationStatus, activeFilter]);
     
     const [activeTabGroup, setActiveTabGroup] = useState<string>('');
+    const tableRef = React.useRef<any>(null);
 
     const fullColumns = useMemo(() => [ ...columns, statusColumn, actionColumn], [columns, validationStatus]);
 
@@ -299,7 +300,13 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                                  <div className='mb-4 p-3 border rounded-md bg-muted/50'>
                                     <h3 className="text-lg font-semibold">CFOP {title}: <span className="font-normal">{description}</span></h3>
                                 </div>
-                                <DataTable columns={fullColumns} data={filteredAndGroupedItems[title]} rowSelection={rowSelection} setRowSelection={setRowSelection} />
+                                <DataTable
+                                    columns={fullColumns}
+                                    data={filteredAndGroupedItems[title]}
+                                    rowSelection={rowSelection}
+                                    setRowSelection={setRowSelection}
+                                    tableRef={tableRef}
+                                />
                             </TabsContent>
                         )
                     })}
