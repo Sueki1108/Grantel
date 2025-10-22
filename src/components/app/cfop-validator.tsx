@@ -13,7 +13,6 @@ import type { AllClassifications } from './imobilizado-analysis';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ScrollArea } from '../ui/scroll-area';
 import { cfopDescriptions } from '@/lib/cfop';
-import { CardDescription, Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 
 // Tipos
@@ -221,7 +220,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                         <AccordionItem value={baseCfop} key={baseCfop} className="border rounded-lg">
                             <AccordionTrigger className="px-6 py-4 text-lg font-medium hover:no-underline">
                                 <div className='text-left'>
-                                    <h3 className="font-bold">CFOP {baseCfop} <Badge variant="outline">{dataGroups[baseCfop].length} itens</Badge></h3>
+                                    <h3 className="font-bold">CFOP {baseCfop} / {parseInt(baseCfop, 10) + 1000} <Badge variant="outline">{dataGroups[baseCfop].length} itens</Badge></h3>
                                     <p className="text-sm font-normal text-muted-foreground">{cfopDescriptions[parseInt(baseCfop, 10) as keyof typeof cfopDescriptions] || 'Descrição não encontrada'}</p>
                                 </div>
                             </AccordionTrigger>
