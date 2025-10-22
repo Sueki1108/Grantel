@@ -1,3 +1,4 @@
+
 "use client";
 
 // Types
@@ -172,6 +173,11 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
                 const cstTag = icmsGroup.firstElementChild.getElementsByTagNameNS(NFE_NAMESPACE, 'CST')[0];
                 if (cstTag && cstTag.textContent) {
                     item['CST do ICMS'] = cstTag.textContent;
+                } else {
+                    const csosnTag = icmsGroup.firstElementChild.getElementsByTagNameNS(NFE_NAMESPACE, 'CSOSN')[0];
+                    if (csosnTag && csosnTag.textContent) {
+                         item['CST do ICMS'] = csosnTag.textContent;
+                    }
                 }
             }
         }
