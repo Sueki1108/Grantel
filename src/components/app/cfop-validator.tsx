@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, Factory, Wrench, HardHat } from "lucide-react";
+import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from '../ui/badge';
@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { cfopDescriptions } from '@/lib/cfop'; // Importar descrições
 import { RowSelectionState } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
+import { Card } from '../ui/card';
 
 
 // Tipos
@@ -51,16 +52,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const [validationStatus, setValidationStatus] = useState<Record<string, ValidationStatus>>({});
     const [activeFilter, setActiveFilter] = useState<ValidationStatus | 'all'>('unvalidated');
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-
-     const columnNameMap: Record<string, string> = {
-        'Fornecedor': 'Fornecedor',
-        'Número da Nota': 'Nota',
-        'Descrição': 'Descrição XML',
-        'Sienge_Descrição': 'Descrição Sienge',
-        'CFOP': 'CFOP XML',
-        'CST do ICMS': 'CST XML',
-        'Sienge_CFOP': 'CFOP Sienge',
-    };
 
     // Carrega o estado persistido na inicialização
     useEffect(() => {
@@ -121,6 +112,15 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         setRowSelection({}); // Limpa a seleção após a ação
     };
 
+    const columnNameMap: Record<string, string> = {
+        'Fornecedor': 'Fornecedor',
+        'Número da Nota': 'Nota',
+        'Descrição': 'Descrição XML',
+        'Sienge_Descrição': 'Descrição Sienge',
+        'CFOP': 'CFOP XML',
+        'CST do ICMS': 'CST XML',
+        'Sienge_CFOP': 'CFOP Sienge',
+    };
     // Colunas da Tabela
     const columns = useMemo(() => {
         const baseColumns = getColumnsWithCustomRender(
