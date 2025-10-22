@@ -50,7 +50,9 @@ function Filter({
 
   const columnFilterValue = column.getFilterValue()
 
-  return typeof firstValue === 'number' ? (
+  const isCfopColumn = column.id.toUpperCase() === 'CFOP';
+
+  return typeof firstValue === 'number' && !isCfopColumn ? (
     <div className="flex space-x-2">
       <Input
         type="number"
@@ -63,6 +65,7 @@ function Filter({
         }
         placeholder={`Min`}
         className="w-24 border-slate-200 h-8"
+        onClick={(e) => e.stopPropagation()}
       />
       <Input
         type="number"
@@ -75,6 +78,7 @@ function Filter({
         }
         placeholder={`Max`}
         className="w-24 border-slate-200 h-8"
+        onClick={(e) => e.stopPropagation()}
       />
     </div>
   ) : (
@@ -84,6 +88,7 @@ function Filter({
       onChange={e => column.setFilterValue(e.target.value)}
       placeholder={`Filtrar...`}
       className="w-full border-slate-200 h-8"
+      onClick={(e) => e.stopPropagation()}
     />
   )
 }
