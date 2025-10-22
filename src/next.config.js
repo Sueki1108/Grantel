@@ -18,6 +18,11 @@ const nextConfig = {
       },
     ],
   },
+  devIndicators: {
+    allowedDevOrigins: [
+      '*.cluster-kc2r6y3mtba5mswcmol45orivs.cloudworkstations.dev',
+    ],
+  },
   webpack: (config, { isServer, dev }) => {
     // Adicionado para garantir que o 'xlsx' funcione no lado do servidor em produção.
     if (isServer && !dev) {
