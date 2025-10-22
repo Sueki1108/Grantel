@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumns } from "@/lib/columns-helper";
-import { FileSearch, Loader2, Download, FilePieChart, AlertTriangle, FilterX, X, RotateCcw } from 'lucide-react';
+import { FileSearch, Loader2, Download, FilePieChart, AlertTriangle, FilterX, X, RotateCcw, ListFilter } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 // ===============================================================
 // Types
@@ -35,10 +37,10 @@ type NfseData = {
 type FinancialSummary = {
     'Soma Total das Notas': number;
     'Total de Notas (únicas)': number;
-    'Soma Item de Serviço 702': number;
-    'Soma Item de Serviço 703': number;
-    'Susp. (Item 702)': number;
-    'Susp. (Item 703)': number;
+    'Soma Líquida Item 702': number;
+    'Soma Líquida Item 703': number;
+    'Total Suspenso (Item 702)': number;
+    'Total Suspenso (Item 703)': number;
 };
 
 type RetentionSummary = {
@@ -88,10 +90,6 @@ const parseCurrency = (value: string | null | undefined): number => {
     if (!value) return 0;
     return parseFloat(value.replace(/\./g, '').replace(',', '.')) || 0;
 };
-
-const suspensionPhrases = [
-    "suspensao da exigibilidade", "suspensao da exigencia", "suspensao da contribuicao"
-];
 
 const normalizeText = (text: string | null | undefined): string => {
     if (!text) return "";
@@ -144,17 +142,23 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
     const [isLoading, setIsLoading] = useState(false);
     const [allExtractedData, setAllExtractedData] = useState<NfseData[]>([]);
     const [noteInput, setNoteInput] = useState('');
+    const [foundSuspensionPhrases, setFoundSuspensionPhrases] = useState<string[]>([]);
+    const [selectedSuspensionPhrases, setSelectedSuspensionPhrases] = useState<Set<string>>(new Set());
+    
     const { toast } = useToast();
 
-    // STEP 1: Extract raw data from XMLs whenever files change
+    // Extract raw data and find all potential suspension phrases
     useEffect(() => {
-        const extractData = async () => {
+        const extract = async () => {
             if (nfseFiles.length === 0) {
                 setAllExtractedData([]);
+                setFoundSuspensionPhrases([]);
+                setSelectedSuspensionPhrases(new Set());
                 return;
             }
             setIsLoading(true);
             const extractedData: NfseData[] = [];
+            const uniquePhrases = new Set<string>();
             const parser = new DOMParser();
 
             for (const file of nfseFiles) {
@@ -162,15 +166,18 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                     const xmlText = await readFileAsText(file);
                     const xmlDoc = parser.parseFromString(xmlText, "application/xml");
                     
-                    const errorNode = xmlDoc.querySelector("parsererror");
-                    if (errorNode) {
-                        console.error("Erro de Análise de XML em", file.name, errorNode.textContent);
-                        continue;
-                    }
-                    
                     const nfNode = xmlDoc.querySelector('nf');
                     const listaNode = xmlDoc.querySelector('itens > lista');
                     if (!nfNode || !listaNode) continue;
+                    
+                    const descritivo = getTagValue(listaNode, 'descritivo');
+                    const normalizedDescritivo = normalizeText(descritivo);
+
+                    if (normalizedDescritivo.includes("suspensao")) {
+                        // Extract sentence containing "suspensao"
+                        const sentences = normalizedDescritivo.split('.').filter(s => s.includes("suspensao"));
+                        sentences.forEach(s => uniquePhrases.add(s.trim()));
+                    }
                     
                     const data: NfseData = {
                         fileName: file.name,
@@ -184,7 +191,7 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                         valor_cofins: parseCurrency(getTagValue(nfNode, 'valor_cofins')),
                         tomador_razao_social: xmlDoc.querySelector('tomador > nome_razao_social')?.textContent ?? '',
                         codigo_item_lista_servico: getTagValue(listaNode, 'codigo_item_lista_servico'),
-                        descritivo: getTagValue(listaNode, 'descritivo'),
+                        descritivo: descritivo,
                         valor_issrf: parseCurrency(getTagValue(listaNode, 'valor_issrf')),
                     };
                     extractedData.push(data);
@@ -192,12 +199,17 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                      console.error(`Error processing file ${file.name}:`, e);
                 }
             }
+            
+            const phrasesArray = Array.from(uniquePhrases);
             setAllExtractedData(extractedData);
+            setFoundSuspensionPhrases(phrasesArray);
+            setSelectedSuspensionPhrases(new Set(phrasesArray)); // Select all by default
             setIsLoading(false);
         };
-        extractData();
+        extract();
     }, [nfseFiles]);
     
+    // Perform analysis based on selected phrases
     const analysisResults = useMemo((): AnalysisResults | null => {
         if (allExtractedData.length === 0) return null;
 
@@ -209,11 +221,11 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
             retention: { iss: [], ir: [], inss: [], csll: [], pis: [], cofins: [] }
         };
 
-        const financialSummary: FinancialSummary = {
-            'Soma Total das Notas': 0, 'Total de Notas (únicas)': new Set(filteredData.map(d => d.numero_nfse)).size,
-            'Soma Item de Serviço 702': 0, 'Soma Item de Serviço 703': 0,
-            'Susp. (Item 702)': 0, 'Susp. (Item 703)': 0,
-        };
+        let total702 = 0;
+        let total703 = 0;
+        let suspended702 = 0;
+        let suspended703 = 0;
+
         const retentionSummary: RetentionSummary = {
             'Retenção ISS': 0, 'Retenção IR': 0, 'Retenção INSS': 0,
             'Retenção CSLL': 0, 'Retenção PIS': 0, 'Retenção COFINS': 0
@@ -221,7 +233,6 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
         const pendingNotes: NfseData[] = [];
 
         for (const nf of filteredData) {
-            financialSummary['Soma Total das Notas'] += nf.valor_total;
             retentionSummary['Retenção ISS'] += nf.valor_issrf;
             retentionSummary['Retenção IR'] += nf.valor_ir;
             retentionSummary['Retenção INSS'] += nf.valor_inss;
@@ -238,22 +249,22 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
 
             const serviceCode = nf.codigo_item_lista_servico;
             if (serviceCode === '702') {
-                financialSummary['Soma Item de Serviço 702'] += nf.valor_total;
+                total702 += nf.valor_total;
                 detailedData.service702.push(nf);
             } else if (serviceCode === '703') {
-                financialSummary['Soma Item de Serviço 703'] += nf.valor_total;
+                total703 += nf.valor_total;
                 detailedData.service703.push(nf);
             }
 
             const normalizedDescritivo = normalizeText(nf.descritivo);
-            const hasExactSuspensionPhrase = suspensionPhrases.some(phrase => normalizedDescritivo.includes(phrase));
+            const isSuspended = Array.from(selectedSuspensionPhrases).some(phrase => normalizedDescritivo.includes(phrase));
             
-            if (hasExactSuspensionPhrase) {
+            if (isSuspended) {
                  if (serviceCode === '702') {
-                    financialSummary['Susp. (Item 702)'] += nf.valor_total;
+                    suspended702 += nf.valor_total;
                     detailedData.susp702.push(nf);
                 } else if (serviceCode === '703') {
-                    financialSummary['Susp. (Item 703)'] += nf.valor_total;
+                    suspended703 += nf.valor_total;
                     detailedData.susp703.push(nf);
                 }
             } else if (normalizedDescritivo.includes('suspensao')) {
@@ -261,8 +272,18 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                  detailedData.pending.push(nf);
             }
         }
+        
+        const financialSummary: FinancialSummary = {
+            'Soma Total das Notas': total702 + total703,
+            'Total de Notas (únicas)': new Set(filteredData.map(d => d.numero_nfse)).size,
+            'Soma Líquida Item 702': total702 - suspended702,
+            'Soma Líquida Item 703': total703 - suspended703,
+            'Total Suspenso (Item 702)': suspended702,
+            'Total Suspenso (Item 703)': suspended703,
+        };
+
         return { financialSummary, retentionSummary, pendingNotes, detailedData };
-    }, [allExtractedData, disregardedNotes]);
+    }, [allExtractedData, disregardedNotes, selectedSuspensionPhrases]);
 
     const handleDisregardNote = () => {
         if (!noteInput.trim()) return;
@@ -281,6 +302,16 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
         newNotes.delete(noteNumber);
         onDisregardedNotesChange(newNotes);
         toast({ title: 'Nota revertida', description: `A nota ${noteNumber} foi incluída novamente na análise.` });
+    };
+    
+    const handleSuspensionPhraseToggle = (phrase: string, checked: boolean) => {
+        const newSet = new Set(selectedSuspensionPhrases);
+        if (checked) {
+            newSet.add(phrase);
+        } else {
+            newSet.delete(phrase);
+        }
+        setSelectedSuspensionPhrases(newSet);
     };
 
     const handleDownloadExcel = (data: any[] | null, sheetName: string) => {
@@ -458,42 +489,63 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                 </div>
             </CardHeader>
             <CardContent>
-                 <Card className="mb-6 bg-muted/50">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-lg"><FilterX /> Desconsiderar Notas</CardTitle>
-                         <CardDescription>Digite o número da nota e clique no botão para a desconsiderar da análise. Os totais serão recalculados.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex gap-4 items-end">
-                            <div className="flex-grow">
-                                <Label htmlFor="disregarded-notes-input">Número da NFS-e</Label>
-                                <Input
-                                    id="disregarded-notes-input"
-                                    placeholder="Ex: 3673"
-                                    value={noteInput}
-                                    onChange={(e) => setNoteInput(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleDisregardNote()}
-                                />
+                 <Accordion type="single" collapsible className="w-full mb-6">
+                    <AccordionItem value="filters">
+                        <AccordionTrigger>
+                            <div className='flex items-center gap-2 text-base'>
+                                <ListFilter className="h-5 w-5" /> Filtros e Opções de Análise
                             </div>
-                            <Button onClick={handleDisregardNote}>Desconsiderar Nota</Button>
-                        </div>
-                        {disregardedNotes.size > 0 && (
-                            <div className="mt-4">
-                                <h4 className="text-sm font-medium mb-2">Notas desconsideradas:</h4>
-                                <div className="flex flex-wrap gap-2">
-                                    {Array.from(disregardedNotes).map(note => (
-                                        <div key={note} className="flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-sm">
-                                            <span>{note}</span>
-                                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-full" onClick={() => handleRevertNote(note)} title="Reverter">
-                                                <RotateCcw className="h-3 w-3" />
-                                            </Button>
+                        </AccordionTrigger>
+                        <AccordionContent className='pt-4'>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <Card className="bg-muted/50">
+                                    <CardHeader className='pb-2'><CardTitle className="text-lg">Desconsiderar Notas</CardTitle></CardHeader>
+                                    <CardContent>
+                                        <div className="flex gap-4 items-end">
+                                            <div className="flex-grow">
+                                                <Label htmlFor="disregarded-notes-input">Número(s) da NFS-e</Label>
+                                                <Input id="disregarded-notes-input" placeholder="Ex: 3673, 3674" value={noteInput} onChange={(e) => setNoteInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleDisregardNote()} />
+                                            </div>
+                                            <Button onClick={handleDisregardNote}><FilterX className='h-4 w-4 mr-2'/>Desconsiderar</Button>
                                         </div>
-                                    ))}
-                                </div>
+                                        {disregardedNotes.size > 0 && (
+                                            <div className="mt-4">
+                                                <h4 className="text-sm font-medium mb-2">Notas desconsideradas:</h4>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {Array.from(disregardedNotes).map(note => (
+                                                        <div key={note} className="flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-sm">
+                                                            <span>{note}</span>
+                                                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-full" onClick={() => handleRevertNote(note)} title="Reverter">
+                                                                <RotateCcw className="h-3 w-3" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                                 <Card className="bg-muted/50">
+                                    <CardHeader className='pb-2'><CardTitle className="text-lg">Frases de Suspensão Ativas</CardTitle></CardHeader>
+                                    <CardContent>
+                                        {foundSuspensionPhrases.length > 0 ? (
+                                            <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                                                {foundSuspensionPhrases.map(phrase => (
+                                                    <div key={phrase} className="flex items-center space-x-2">
+                                                        <Checkbox id={`phrase-${phrase}`} checked={selectedSuspensionPhrases.has(phrase)} onCheckedChange={(checked) => handleSuspensionPhraseToggle(phrase, !!checked)} />
+                                                        <Label htmlFor={`phrase-${phrase}`} className="text-sm font-light leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{phrase}</Label>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground italic">Nenhuma frase com "suspensão" encontrada nos XMLs.</p>
+                                        )}
+                                    </CardContent>
+                                </Card>
                             </div>
-                        )}
-                    </CardContent>
-                </Card>
+                        </AccordionContent>
+                    </AccordionItem>
+                </Accordion>
                 {renderContent()}
             </CardContent>
         </Card>
