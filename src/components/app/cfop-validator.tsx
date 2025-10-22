@@ -12,6 +12,7 @@ import { Badge } from '../ui/badge';
 import type { AllClassifications } from './imobilizado-analysis';
 import { cleanAndToStr } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { ScrollArea } from '../ui/scroll-area';
 
 // Tipos
 export interface CfopValidationData extends Record<string, any> {
@@ -164,18 +165,20 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                     <Save className="mr-2 h-4 w-4" /> Guardar Validações
                 </Button>
             </div>
-            <div className="flex-grow overflow-auto">
-                 <Tabs defaultValue="pending" className="w-full">
+            <div className="flex-grow overflow-hidden">
+                 <Tabs defaultValue="pending" className="w-full h-full flex flex-col">
                     <TabsList className="grid w-full grid-cols-2">
                         <TabsTrigger value="pending">Pendentes de Validação ({pendingItems.length})</TabsTrigger>
                         <TabsTrigger value="validated">Validados ({validatedItems.length})</TabsTrigger>
                     </TabsList>
-                    <TabsContent value="pending" className="mt-4">
-                        <DataTable columns={[...columns, actionColumn]} data={pendingItems} />
-                    </TabsContent>
-                    <TabsContent value="validated" className="mt-4">
-                        <DataTable columns={[...columns, statusColumn, actionColumn]} data={validatedItems} />
-                    </TabsContent>
+                    <ScrollArea className="flex-grow mt-4">
+                        <TabsContent value="pending">
+                            <DataTable columns={[...columns, actionColumn]} data={pendingItems} />
+                        </TabsContent>
+                        <TabsContent value="validated">
+                            <DataTable columns={[...columns, statusColumn, actionColumn]} data={validatedItems} />
+                        </TabsContent>
+                    </ScrollArea>
                 </Tabs>
             </div>
         </div>

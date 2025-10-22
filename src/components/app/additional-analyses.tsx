@@ -147,6 +147,14 @@ export function AdditionalAnalyses({
     };
     
     const taxAndReconciliationAnalyses = useMemo(() => {
+        const getCfopDescription = (cfopCode: number): string => {
+            const fullDescription = cfopDescriptions[cfopCode];
+            if (fullDescription) {
+                 return fullDescription.split(' ').slice(0, 3).join(' ');
+            }
+            return 'N/A';
+        };
+
         if (!siengeSheetData || siengeSheetData.length === 0) {
             return { inconsistentCfopRows: [], taxConferences: { icms: [], pis: [], cofins: [], ipi: [], icmsSt: [] } };
         }
@@ -189,14 +197,6 @@ export function AdditionalAnalyses({
             return { [taxName]: formatCurrency(total) };
         }
     
-        const getCfopDescription = (cfopCode: number): string => {
-            const fullDescription = cfopDescriptions[cfopCode];
-            if (fullDescription) {
-                 return fullDescription.split(' ').slice(0, 3).join(' ');
-            }
-            return 'N/A';
-        };
-
         const getRelevantData = (row: any, taxKey: string | undefined, taxName: string) => {
             if (!taxKey || !row || typeof row !== 'object' || !h.cfop) return null;
             const relevantRow: Record<string, any> = {};
@@ -912,7 +912,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                                     Validar CFOP
                                                 </Button>
                                             </DialogTrigger>
-                                            <DialogContent className="max-w-[95vw] h-[90vh]">
+                                            <DialogContent className="max-w-[95vw] h-[90vh] flex flex-col">
                                                 <DialogHeader>
                                                     <DialogTitle>Validação de CFOP dos Itens Conciliados</DialogTitle>
                                                     <DialogDescription>
@@ -960,3 +960,4 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
          </Card>
     );
 }
+
