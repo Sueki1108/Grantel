@@ -5,15 +5,13 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { ThumbsDown, ThumbsUp, RotateCcw, Save, AlertTriangle, CheckCircle, FileWarning } from "lucide-react";
+import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from '../ui/badge';
 import type { AllClassifications } from './imobilizado-analysis';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ScrollArea } from '../ui/scroll-area';
-import { cfopDescriptions } from '@/lib/cfop';
-
 
 // Tipos
 export interface CfopValidationData extends Record<string, any> {
@@ -47,15 +45,10 @@ const getUniqueProductKey = (item: CfopValidationData): string => {
 };
 
 
-/**
- * Agrupa CFOPs pela sua operação base, ignorando o primeiro dígito.
- * Ex: 1128, 2128 -> '128'
- */
 const getBaseCfop = (cfop: string): string => {
     if (!cfop || typeof cfop !== 'string' || cfop.length < 4) {
         return cfop || 'N/A';
     }
-    // Agrupa pela operação, ignorando se é estadual, interestadual ou exterior.
     return cfop.substring(1);
 };
 
@@ -63,7 +56,6 @@ const getBaseCfop = (cfop: string): string => {
 export function CfopValidator({ items, allPersistedClassifications, onPersistAllClassifications }: CfopValidatorProps) {
     const { toast } = useToast();
     const [validationStatus, setValidationStatus] = useState<Record<string, ValidationStatus>>({});
-    const [hasChanges, setHasChanges] = useState(false);
     
     const [groupedItems, setGroupedItems] = useState<GroupedItems>({});
 
@@ -77,7 +69,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         });
 
         setValidationStatus(initialStatus);
-        setHasChanges(false);
     }, [items, allPersistedClassifications]);
 
 
@@ -86,7 +77,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         items.forEach(item => {
             const cfop = item.Sienge_CFOP || 'N/A';
             const baseCfop = getBaseCfop(cfop);
-            const baseCfopKey = parseInt(`1${baseCfop}`, 10);
             
             const uniqueCfopsInGroup = new Set<string>();
             items.forEach(i => {
@@ -117,37 +107,35 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const handleValidationChange = (item: CfopValidationData, newStatus: ValidationStatus) => {
         const uniqueProductKey = getUniqueProductKey(item);
         
+        // Update local UI state immediately
         const newValidationStatus = { ...validationStatus };
-        
         const itemsToUpdate = items.filter(i => getUniqueProductKey(i) === uniqueProductKey);
         itemsToUpdate.forEach(i => {
             newValidationStatus[i['Chave de acesso'] + i.Item] = newStatus;
         });
-
         setValidationStatus(newValidationStatus);
-        setHasChanges(true);
-    };
 
-    const handleSaveChanges = () => {
+        // Persist the change automatically
         const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedClassifications || {}));
         if (!updatedPersistedData['cfopValidations']) {
             updatedPersistedData['cfopValidations'] = { classifications: {}, accountCodes: {} };
         }
-
-        Object.entries(validationStatus).forEach(([itemKey, status]) => {
-            const item = items.find(i => (i['Chave de acesso'] + i.Item) === itemKey);
-            if (item && status !== 'unvalidated') {
-                const uniqueProductKey = getUniqueProductKey(item);
-                updatedPersistedData['cfopValidations'].classifications[uniqueProductKey] = { classification: status };
-            }
-        });
+        
+        if (newStatus !== 'unvalidated') {
+             updatedPersistedData['cfopValidations'].classifications[uniqueProductKey] = { classification: newStatus };
+        } else {
+            // If reverting to unvalidated, remove it from persisted data
+            delete updatedPersistedData['cfopValidations'].classifications[uniqueProductKey];
+        }
 
         onPersistAllClassifications(updatedPersistedData);
-        setHasChanges(false);
-        toast({ title: 'Validações Guardadas', description: 'As suas validações de CFOP foram guardadas.' });
+        
+        toast({
+            title: `Item classificado como "${newStatus}"`,
+            description: "A sua alteração foi guardada automaticamente."
+        });
     };
-
-
+    
     const columns = getColumnsWithCustomRender(
         items,
         ['Fornecedor', 'Número da Nota', 'Descrição', 'Sienge_Descrição', 'CFOP', 'CST do ICMS', 'Sienge_CFOP'],
@@ -163,6 +151,9 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             }
              if (id === 'Descrição' || id === 'Sienge_Descrição') {
                 return <div className="max-w-xs truncate" title={String(value ?? '')}>{String(value ?? '')}</div>;
+            }
+            if (id === 'Número da Nota') {
+                 return <div className="text-center">{String(value ?? '')}</div>;
             }
             return <div>{String(value ?? '')}</div>;
         }
@@ -215,9 +206,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                     <TabsList>
                         {descriptionKeys.map(title => (
                             <TabsTrigger key={title} value={title} className="w-full justify-start text-left h-auto py-2">
-                                <div>
-                                    <p className="font-semibold">{title}</p>
-                                </div>
+                                <p className="font-semibold">{title}</p>
                             </TabsTrigger>
                         ))}
                     </TabsList>
@@ -237,14 +226,10 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
     return (
         <div className="space-y-4 h-full flex flex-col">
-            <div className="flex justify-end">
-                <Button onClick={handleSaveChanges} disabled={!hasChanges}>
-                    <Save className="mr-2 h-4 w-4" /> Guardar Validações
-                </Button>
-            </div>
             <div className="flex-grow overflow-hidden">
                 {renderGroupedContent()}
             </div>
         </div>
     );
 }
+
