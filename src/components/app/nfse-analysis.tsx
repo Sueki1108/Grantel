@@ -146,8 +146,20 @@ const highlightText = (text: string, phrase: string) => {
     return text;
   }
   const regex = new RegExp(`(${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-  return text.split(regex).map((part, index) =>
-    regex.test(part) ? <span key={index} className="font-bold text-red-600 dark:text-red-400">{part}</span> : part
+  const parts = text.split(regex);
+  
+  return (
+    <>
+      {parts.map((part, index) =>
+        regex.test(part) ? (
+          <span key={index} className="font-bold text-red-600 dark:text-red-400">
+            {part}
+          </span>
+        ) : (
+          part
+        )
+      )}
+    </>
   );
 };
 
@@ -391,7 +403,7 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
             return (
                 <div className="flex flex-col items-center justify-center min-h-[400px] text-muted-foreground">
                     <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
-                    <h3 className="text-xl font-semibold">A extrair dados de ${"{"}nfseFiles.length{"}"} ficheiros...</h3>
+                    <h3 className="text-xl font-semibold">A extrair dados de {nfseFiles.length} ficheiros...</h3>
                 </div>
             );
         }
@@ -406,12 +418,12 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
         }
 
         const dataTabs = [
-            { label: `Todas (${"{"}analysisResults.detailedData.all.length{"}"})`, data: analysisResults.detailedData.all, sheetName: "Dados_Completos" },
-            { label: `Itens 702 (${"{"}analysisResults.detailedData.service702.length{"}"})`, data: analysisResults.detailedData.service702, sheetName: "Itens_702" },
-            { label: `Suspensão 702 (${"{"}analysisResults.detailedData.susp702.length{"}"})`, data: analysisResults.detailedData.susp702, sheetName: "Suspensao_702" },
-            { label: `Itens 703 (${"{"}analysisResults.detailedData.service703.length{"}"})`, data: analysisResults.detailedData.service703, sheetName: "Itens_703" },
-            { label: `Suspensão 703 (${"{"}analysisResults.detailedData.susp703.length{"}"})`, data: analysisResults.detailedData.susp703, sheetName: "Suspensao_703" },
-            { label: `Pendentes (${"{"}analysisResults.detailedData.pending.length{"}"})`, data: analysisResults.detailedData.pending, sheetName: "Pendentes_Suspensao_Generica" }
+            { label: `Todas (${analysisResults.detailedData.all.length})`, data: analysisResults.detailedData.all, sheetName: "Dados_Completos" },
+            { label: `Itens 702 (${analysisResults.detailedData.service702.length})`, data: analysisResults.detailedData.service702, sheetName: "Itens_702" },
+            { label: `Suspensão 702 (${analysisResults.detailedData.susp702.length})`, data: analysisResults.detailedData.susp702, sheetName: "Suspensao_702" },
+            { label: `Itens 703 (${analysisResults.detailedData.service703.length})`, data: analysisResults.detailedData.service703, sheetName: "Itens_703" },
+            { label: `Suspensão 703 (${analysisResults.detailedData.susp703.length})`, data: analysisResults.detailedData.susp703, sheetName: "Suspensao_703" },
+            { label: `Pendentes (${analysisResults.detailedData.pending.length})`, data: analysisResults.detailedData.pending, sheetName: "Pendentes_Suspensao_Generica" }
         ].filter(tab => tab.data.length > 0);
 
 
@@ -576,7 +588,7 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                                                         </div>
                                                         <Dialog>
                                                             <DialogTrigger asChild>
-                                                                <Button variant="ghost" size="icon" className="h-7 w-7" disabled={notesForPhrase.length === 0} title={`Ver ${"{"}notesForPhrase.length{"}"} notas`}>
+                                                                <Button variant="ghost" size="icon" className="h-7 w-7" disabled={notesForPhrase.length === 0} title={`Ver ${notesForPhrase.length} notas`}>
                                                                     <Eye className="h-4 w-4" />
                                                                 </Button>
                                                             </DialogTrigger>
@@ -589,7 +601,7 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                                                                                 Lista de notas que contêm a frase de suspensão selecionada.
                                                                             </DialogDescription>
                                                                         </div>
-                                                                         <Button onClick={() => handleDownloadExcel(notesForPhrase, `Suspensao_${"{"}phrase.replace(/\\s/g, '_'){"}"}`)} variant="outline" size="sm" disabled={notesForPhrase.length === 0}>
+                                                                         <Button onClick={() => handleDownloadExcel(notesForPhrase, `Suspensao_${phrase.replace(/\s/g, '_')}`)} variant="outline" size="sm" disabled={notesForPhrase.length === 0}>
                                                                             <Download className="mr-2 h-4 w-4" /> Baixar
                                                                         </Button>
                                                                     </div>
@@ -629,5 +641,3 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
         </Card>
     );
 }
-
-    
