@@ -12,8 +12,8 @@ import type { AllClassifications } from './imobilizado-analysis';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { cfopDescriptions } from '@/lib/cfop';
 import { RowSelectionState } from '@tanstack/react-table';
-import { Checkbox } from '../ui/checkbox';
 import { Card } from '../ui/card';
+import { Checkbox } from '../ui/checkbox';
 
 
 // Tipos
@@ -78,18 +78,27 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
 
     const handleValidationChange = (itemsToUpdate: CfopValidationData[], newStatus: ValidationStatus) => {
-        const uniqueProductKeys = new Set(itemsToUpdate.map(getUniqueProductKey));
-
-        // Propaga a classificação para todos os itens com as mesmas chaves de produto únicas
         const newValidationStatus = { ...validationStatus };
+    
+        // 1. Get all unique product keys from the explicitly selected items
+        const uniqueProductKeys = new Set(itemsToUpdate.map(getUniqueProductKey));
+    
+        // 2. Find all items in the full dataset that match these product keys
         const itemsToUpdateGlobally = items.filter(i => uniqueProductKeys.has(getUniqueProductKey(i)));
-        
+    
+        // 3. Update the status for all these related items
         itemsToUpdateGlobally.forEach(i => {
             newValidationStatus[i['Chave de acesso'] + i.Item] = newStatus;
         });
-        setValidationStatus(newValidationStatus);
 
-        // Persiste a alteração automaticamente para cada chave de produto única
+        // 4. Also ensure explicitly selected items are updated, in case they weren't caught by product key logic
+        itemsToUpdate.forEach(i => {
+             newValidationStatus[i['Chave de acesso'] + i.Item] = newStatus;
+        });
+        
+        setValidationStatus(newValidationStatus);
+    
+        // Persist the change for each unique product key
         const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedClassifications || {}));
         if (!updatedPersistedData['cfopValidations']) {
             updatedPersistedData['cfopValidations'] = { classifications: {}, accountCodes: {} };
@@ -102,7 +111,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                 delete updatedPersistedData['cfopValidations'].classifications[uniqueProductKey];
             }
         });
-
+    
         onPersistAllClassifications(updatedPersistedData);
         
         toast({
@@ -221,7 +230,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         }
     };
     
-    const filteredAndGroupedItems = useMemo((): GroupedItems => {
+     const filteredAndGroupedItems = useMemo((): GroupedItems => {
         const filteredItems = activeFilter === 'all'
             ? items
             : items.filter(item => (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter);
