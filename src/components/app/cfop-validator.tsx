@@ -79,23 +79,21 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
     const handleValidationChange = (itemsToUpdate: CfopValidationData[], newStatus: ValidationStatus) => {
         const newValidationStatus = { ...validationStatus };
-        const uniqueProductKeysToUpdate = new Set<string>();
-
-        // 1. Update the local state for all selected items.
-        itemsToUpdate.forEach(i => {
-            newValidationStatus[i['Chave de acesso'] + i.Item] = newStatus;
-            uniqueProductKeysToUpdate.add(getUniqueProductKey(i));
+        
+        itemsToUpdate.forEach(item => {
+            newValidationStatus[item['Chave de acesso'] + item.Item] = newStatus;
         });
 
         setValidationStatus(newValidationStatus);
     
-        // 2. Persist the change for each unique product key involved.
+        // Persist the change for each unique product key involved.
         const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedClassifications || {}));
         if (!updatedPersistedData['cfopValidations']) {
             updatedPersistedData['cfopValidations'] = { classifications: {}, accountCodes: {} };
         }
         
-        uniqueProductKeysToUpdate.forEach(uniqueProductKey => {
+        itemsToUpdate.forEach(item => {
+            const uniqueProductKey = getUniqueProductKey(item);
             if (newStatus !== 'unvalidated') {
                 updatedPersistedData['cfopValidations'].classifications[uniqueProductKey] = { classification: newStatus };
             } else {
@@ -112,9 +110,11 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     };
     
     const handleBulkClassification = (newStatus: ValidationStatus) => {
-        const selectedItemIndices = Object.keys(rowSelection).map(Number);
-        const selectedItems = items.filter((_, index) => selectedItemIndices.includes(index));
-        
+        // Get the original items from the selected row indices
+        const selectedItems = Object.keys(rowSelection)
+            .map(index => filteredAndGroupedItems[activeTabGroup]?.find((_, i) => i === Number(index)))
+            .filter((item): item is CfopValidationData => !!item);
+
         if (selectedItems.length > 0) {
             handleValidationChange(selectedItems, newStatus);
         }
@@ -240,10 +240,19 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         return groups;
     }, [items, validationStatus, activeFilter]);
     
+    const [activeTabGroup, setActiveTabGroup] = useState<string>('');
 
     const fullColumns = useMemo(() => [ ...columns, statusColumn, actionColumn], [columns, validationStatus]);
 
     const sortedGroupTitles = useMemo(() => Object.keys(filteredAndGroupedItems).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)), [filteredAndGroupedItems]);
+
+    useEffect(() => {
+        if (sortedGroupTitles.length > 0 && !sortedGroupTitles.includes(activeTabGroup)) {
+            setActiveTabGroup(sortedGroupTitles[0]);
+        } else if (sortedGroupTitles.length === 0) {
+            setActiveTabGroup('');
+        }
+    }, [sortedGroupTitles, activeTabGroup]);
 
     const numSelected = Object.keys(rowSelection).length;
 
@@ -274,7 +283,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             </Tabs>
              
              <div className="flex-grow overflow-y-auto">
-                <Tabs defaultValue={sortedGroupTitles[0]} className="w-full">
+                <Tabs value={activeTabGroup} onValueChange={setActiveTabGroup} className="w-full">
                     <TabsList className="h-auto flex-wrap justify-start">
                          {sortedGroupTitles.map(title => (
                             <TabsTrigger key={title} value={title}>
