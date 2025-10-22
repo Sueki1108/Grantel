@@ -52,9 +52,9 @@ function Filter({
 
   const columnFilterValue = column.getFilterValue()
 
-  const isCfopColumn = (column.id.toUpperCase().includes('CFOP') || column.id.toUpperCase().includes('CST'));
+  const isSpecialNumberColumn = (column.id.toUpperCase().includes('CFOP') || column.id.toUpperCase().includes('CST'));
 
-  return typeof firstValue === 'number' && !isCfopColumn ? (
+  return typeof firstValue === 'number' && !isSpecialNumberColumn ? (
     <div className="flex space-x-2">
       <Input
         type="number"
