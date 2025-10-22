@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
@@ -77,31 +78,27 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     }, [items, allPersistedClassifications]);
 
 
-    const handleValidationChange = (itemsToUpdate: CfopValidationData[], newStatus: ValidationStatus) => {
+     const handleValidationChange = (itemsToUpdate: CfopValidationData[], newStatus: ValidationStatus) => {
         const newValidationStatus = { ...validationStatus };
-        
-        itemsToUpdate.forEach(item => {
-            const itemKey = item['Chave de acesso'] + item.Item;
-            newValidationStatus[itemKey] = newStatus;
-        });
-
-        setValidationStatus(newValidationStatus);
-    
-        // Persist the change for each unique product key involved.
         const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedClassifications || {}));
         if (!updatedPersistedData['cfopValidations']) {
             updatedPersistedData['cfopValidations'] = { classifications: {}, accountCodes: {} };
         }
         
         itemsToUpdate.forEach(item => {
+            const itemKey = item['Chave de acesso'] + item.Item;
+            newValidationStatus[itemKey] = newStatus;
+            
+            // Persiste a mudança para a chave de produto única.
             const uniqueProductKey = getUniqueProductKey(item);
-            if (newStatus !== 'unvalidated') {
+             if (newStatus !== 'unvalidated') {
                 updatedPersistedData['cfopValidations'].classifications[uniqueProductKey] = { classification: newStatus };
             } else {
                 delete updatedPersistedData['cfopValidations'].classifications[uniqueProductKey];
             }
         });
-    
+
+        setValidationStatus(newValidationStatus);
         onPersistAllClassifications(updatedPersistedData);
         
         toast({
