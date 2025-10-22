@@ -58,7 +58,7 @@ const getBaseCfop = (cfop: string): string => {
         default:
             return cfop;
     }
-}
+};
 
 
 export function CfopValidator({ items, allPersistedClassifications, onPersistAllClassifications }: CfopValidatorProps) {
@@ -188,7 +188,8 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     };
 
     const renderGroupedTabs = (data: Record<string, CfopValidationData[]>, baseColumns: ColumnDef<CfopValidationData, any>[]) => {
-        const cfopKeys = Object.keys(data).sort();
+        const cfopKeys = Object.keys(data).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
         if (cfopKeys.length === 0) {
             return <div className="text-center p-8 text-muted-foreground">Nenhum item para exibir.</div>;
         }
@@ -196,19 +197,19 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         return (
              <Tabs defaultValue={cfopKeys[0]} className="w-full">
                 <TabsList className="h-auto flex-wrap justify-start">
-                    {cfopKeys.map(cfop => (
-                        <TabsTrigger key={cfop} value={cfop}>
-                            CFOP {cfop} ({data[cfop].length})
+                    {cfopKeys.map(baseCfop => (
+                        <TabsTrigger key={baseCfop} value={baseCfop}>
+                            CFOP {baseCfop} ({data[baseCfop].length})
                         </TabsTrigger>
                     ))}
                 </TabsList>
-                {cfopKeys.map(cfop => (
-                    <TabsContent key={cfop} value={cfop} className="mt-4">
+                {cfopKeys.map(baseCfop => (
+                    <TabsContent key={baseCfop} value={baseCfop} className="mt-4">
                         <div className='mb-4 p-2 border-l-4 border-primary bg-muted/50'>
-                             <h3 className="text-lg font-semibold">CFOP {cfop}</h3>
-                             <CardDescription>{cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || 'Descrição não encontrada'}</CardDescription>
+                             <h3 className="text-lg font-semibold">CFOP {baseCfop}</h3>
+                             <CardDescription>{cfopDescriptions[parseInt(baseCfop, 10) as keyof typeof cfopDescriptions] || 'Descrição não encontrada'}</CardDescription>
                         </div>
-                        <DataTable columns={baseColumns} data={data[cfop]} />
+                        <DataTable columns={baseColumns} data={data[baseCfop]} />
                     </TabsContent>
                 ))}
             </Tabs>
