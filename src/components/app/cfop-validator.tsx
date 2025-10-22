@@ -14,7 +14,7 @@ import { cleanAndToStr } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ScrollArea } from '../ui/scroll-area';
 import { cfopDescriptions } from '@/lib/cfop';
-import { CardDescription, Card, CardHeader, CardTitle } from '../ui/card';
+import { CardDescription, Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 
 // Tipos
 export interface CfopValidationData extends Record<string, any> {
@@ -65,54 +65,50 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const [validationStatus, setValidationStatus] = useState<Record<string, ValidationStatus>>({});
     const [hasChanges, setHasChanges] = useState(false);
     
-    // Group all items by their base CFOP first.
-    const allItemsByBaseCfop = useMemo(() => {
-        const grouped: Record<string, CfopValidationData[]> = {};
-        items.forEach(item => {
-            const baseCfop = getBaseCfop(item.Sienge_CFOP || 'N/A');
-            if (!grouped[baseCfop]) {
-                grouped[baseCfop] = [];
-            }
-            grouped[baseCfop].push(item);
-        });
-        return grouped;
-    }, [items]);
-
-    // This state now derives from the main grouping.
-    const { pendingGroups, validatedGroups } = useMemo(() => {
-        const pending: Record<string, CfopValidationData[]> = {};
-        const validated: Record<string, CfopValidationData[]> = {};
-        
-        Object.entries(allItemsByBaseCfop).forEach(([baseCfop, itemsInGroup]) => {
-            itemsInGroup.forEach(item => {
-                const status = validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated';
-                const itemWithStatus = { ...item, validationStatus: status };
-
-                if (status === 'unvalidated') {
-                    if (!pending[baseCfop]) pending[baseCfop] = [];
-                    pending[baseCfop].push(itemWithStatus);
-                } else {
-                    if (!validated[baseCfop]) validated[baseCfop] = [];
-                    validated[baseCfop].push(itemWithStatus);
-                }
-            });
-        });
-
-        return { pendingGroups: pending, validatedGroups: validated };
-    }, [allItemsByBaseCfop, validationStatus]);
-
+    const [groupedItems, setGroupedItems] = useState<{ pending: Record<string, CfopValidationData[]>, validated: Record<string, CfopValidationData[]> }>({ pending: {}, validated: {} });
 
     useEffect(() => {
-        const initialStatus: Record<string, ValidationStatus> = {};
         const persistedValidations = (allPersistedClassifications && allPersistedClassifications['cfopValidations']?.classifications) || {};
+        const initialStatus: Record<string, ValidationStatus> = {};
 
         items.forEach(item => {
             const uniqueProductKey = getUniqueProductKey(item);
             initialStatus[item['Chave de acesso'] + item.Item] = persistedValidations[uniqueProductKey]?.classification as ValidationStatus || 'unvalidated';
         });
+
         setValidationStatus(initialStatus);
         setHasChanges(false);
     }, [items, allPersistedClassifications]);
+
+
+    useEffect(() => {
+        const baseCfopGroups: Record<string, CfopValidationData[]> = {};
+        items.forEach(item => {
+            const baseCfop = getBaseCfop(item.Sienge_CFOP || 'N/A');
+            if (!baseCfopGroups[baseCfop]) {
+                baseCfopGroups[baseCfop] = [];
+            }
+            baseCfopGroups[baseCfop].push(item);
+        });
+
+        const pending: Record<string, CfopValidationData[]> = {};
+        const validated: Record<string, CfopValidationData[]> = {};
+
+        Object.entries(baseCfopGroups).forEach(([baseCfop, itemsInGroup]) => {
+            itemsInGroup.forEach(item => {
+                const status = validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated';
+                const itemWithStatus = { ...item, validationStatus: status };
+
+                const groupToUpdate = status === 'unvalidated' ? pending : validated;
+                if (!groupToUpdate[baseCfop]) {
+                    groupToUpdate[baseCfop] = [];
+                }
+                groupToUpdate[baseCfop].push(itemWithStatus);
+            });
+        });
+
+        setGroupedItems({ pending, validated });
+    }, [items, validationStatus]);
 
 
     const handleValidationChange = (item: CfopValidationData, newStatus: ValidationStatus) => {
@@ -253,10 +249,10 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                     </TabsList>
                      <div className='flex-grow overflow-hidden mt-4'>
                         <TabsContent value="pending" className="mt-0 h-full">
-                            {renderGroupedTabs(pendingGroups, [...columns, actionColumn])}
+                            {renderGroupedTabs(groupedItems.pending, [...columns, actionColumn])}
                         </TabsContent>
                         <TabsContent value="validated" className="mt-0 h-full">
-                            {renderGroupedTabs(validatedGroups, [...columns, statusColumn, actionColumn])}
+                            {renderGroupedTabs(groupedItems.validated, [...columns, statusColumn, actionColumn])}
                         </TabsContent>
                     </div>
                 </Tabs>
