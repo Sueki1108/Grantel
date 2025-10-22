@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -153,7 +154,7 @@ const highlightText = (text: string, phrase: string) => {
   }
   const regex = new RegExp(`(${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
   return text.split(regex).map((part, index) =>
-    regex.test(part) ? <strong key={index}>{part}</strong> : part
+    regex.test(part) ? <span key={index} className="font-bold text-red-600 dark:text-red-400">{part}</span> : part
   );
 };
 
