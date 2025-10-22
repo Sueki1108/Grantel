@@ -44,7 +44,7 @@ const getUniqueProductKey = (item: CfopValidationData): string => {
 };
 
 const getBaseCfop = (cfop: string): string => {
-    if (!cfop || cfop.length !== 4) return cfop;
+    if (!cfop || typeof cfop !== 'string' || cfop.length !== 4) return cfop;
     const firstDigit = cfop.charAt(0);
     const rest = cfop.substring(1);
 
@@ -64,6 +64,7 @@ const getBaseCfop = (cfop: string): string => {
 export function CfopValidator({ items, allPersistedClassifications, onPersistAllClassifications }: CfopValidatorProps) {
     const { toast } = useToast();
     const [validationStatus, setValidationStatus] = useState<Record<string, ValidationStatus>>({});
+    const [groupedItems, setGroupedItems] = useState<{ pending: Record<string, CfopValidationData[]>, validated: Record<string, CfopValidationData[]> }>({ pending: {}, validated: {} });
     const [hasChanges, setHasChanges] = useState(false);
 
     useEffect(() => {
@@ -77,6 +78,28 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         setValidationStatus(initialStatus);
         setHasChanges(false);
     }, [items, allPersistedClassifications]);
+
+    useEffect(() => {
+        const pending: Record<string, CfopValidationData[]> = {};
+        const validated: Record<string, CfopValidationData[]> = {};
+        
+        items.forEach(item => {
+            const status = validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated';
+            const itemWithStatus = { ...item, validationStatus: status };
+            const siengeCfop = item.Sienge_CFOP || 'N/A';
+            const baseCfop = getBaseCfop(siengeCfop);
+
+            if (status === 'unvalidated') {
+                if (!pending[baseCfop]) pending[baseCfop] = [];
+                pending[baseCfop].push(itemWithStatus);
+            } else {
+                 if (!validated[baseCfop]) validated[baseCfop] = [];
+                validated[baseCfop].push(itemWithStatus);
+            }
+        });
+        setGroupedItems({ pending, validated });
+    }, [items, validationStatus]);
+
 
     const handleValidationChange = (item: CfopValidationData, newStatus: ValidationStatus) => {
         const uniqueProductKey = getUniqueProductKey(item);
@@ -111,27 +134,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         setHasChanges(false);
         toast({ title: 'Validações Guardadas', description: 'As suas validações de CFOP foram guardadas.' });
     };
-
-    const groupedItems = useMemo(() => {
-        const pending: Record<string, CfopValidationData[]> = {};
-        const validated: Record<string, CfopValidationData[]> = {};
-        
-        items.forEach(item => {
-            const status = validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated';
-            const itemWithStatus = { ...item, validationStatus: status };
-            const siengeCfop = item.Sienge_CFOP || 'N/A';
-            const baseCfop = getBaseCfop(siengeCfop);
-
-            if (status === 'unvalidated') {
-                if (!pending[baseCfop]) pending[baseCfop] = [];
-                pending[baseCfop].push(itemWithStatus);
-            } else {
-                 if (!validated[baseCfop]) validated[baseCfop] = [];
-                validated[baseCfop].push(itemWithStatus);
-            }
-        });
-        return { pending, validated };
-    }, [items, validationStatus]);
 
 
     const columns = getColumnsWithCustomRender(
