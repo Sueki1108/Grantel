@@ -7,6 +7,47 @@ import { Row } from "@tanstack/react-table";
 
 type CustomCellRender<TData> = (row: Row<TData>, id: string) => React.ReactNode;
 
+const columnNameMap: Record<string, string> = {
+    'Chave de acesso': 'Chave',
+    'Número da Nota': 'N° Nota',
+    'CPF/CNPJ do Fornecedor': 'CNPJ Forn.',
+    'CPF/CNPJ do Destinatário': 'CNPJ Dest.',
+    'Valor Total': 'Vl. Total',
+    'Valor da Prestação': 'Vl. Prest.',
+    'Valor Unitário': 'Vl. Unit.',
+    'Descricao CFOP': 'Desc. CFOP',
+    'Chave Unica': 'Chave Única',
+    'Sienge_Descrição': 'Sienge Desc.',
+    'Sienge_CFOP': 'Sienge CFOP',
+    'Correção Sugerida': 'Sugestão',
+    'Resumo das Divergências': 'Divergências',
+    'Nome do Emissor': 'Emissor',
+    'CNPJ do Emissor': 'CNPJ Emissor',
+    'Data de Emissão': 'Emissão',
+    'Data Emissão XML': 'Emissão XML',
+    'Data Emissão SPED': 'Emissão SPED',
+    'Data Entrada/Saída SPED': 'Entrada/Saída SPED',
+    'Valor XML': 'Vl. XML',
+    'Valor SPED': 'Vl. SPED',
+    'UF no XML': 'UF XML',
+    'IE no XML': 'IE XML',
+};
+
+
+const renderHeader = (column: any, columnId: string) => {
+    const displayName = columnNameMap[columnId] || columnId;
+    return (
+        <div 
+            className="flex items-center text-left w-full cursor-pointer"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+            <span>{displayName}</span>
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+        </div>
+    );
+};
+
+
 export function getColumns<TData extends Record<string, any>>(data: TData[]): ColumnDef<TData>[] {
   if (!data || data.length === 0) {
     return []
@@ -19,17 +60,7 @@ export function getColumns<TData extends Record<string, any>>(data: TData[]): Co
       return {
         id: columnId,
         accessorKey: columnId,
-        header: ({ column }) => {
-          return (
-            <Button
-              variant="ghost"
-              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            >
-              {columnId}
-              <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
-          )
-        },
+        header: ({ column }) => renderHeader(column, columnId),
         cell: ({ row }) => {
             const value = row.getValue(columnId);
             if (value === null || typeof value === 'undefined') {
@@ -56,17 +87,9 @@ export function getColumnsWithCustomRender<TData extends Record<string, any>>(
     return columnsToRender.map((key) => {
         const columnId = String(key);
         return {
-            id: columnId, // Explicitly set the ID
-            accessorKey: columnId, // And the accessorKey
-            header: ({ column }) => (
-                <Button
-                    variant="ghost"
-                    onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                >
-                    {columnId}
-                    <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-            ),
+            id: columnId, 
+            accessorKey: columnId, 
+            header: ({ column }) => renderHeader(column, columnId),
             cell: ({ row }) => customCellRender ? customCellRender(row, columnId) : (
                 <div>{String(row.getValue(columnId) ?? '')}</div>
             ),
