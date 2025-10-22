@@ -151,15 +151,7 @@ export function AdditionalAnalyses({
             return { inconsistentCfopRows: [], taxConferences: { icms: [], pis: [], cofins: [], ipi: [], icmsSt: [] } };
         }
     
-        const getCfopDescription = (cfopCode: number): string => {
-            const fullDescription = cfopDescriptions[cfopCode];
-            if (fullDescription) {
-                 return fullDescription.split(' ').slice(0, 3).join(' ');
-            }
-            return 'N/A';
-        };
-
-        const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
+         const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
              if (!data || data.length === 0 || !data[0]) return undefined;
              const headers = Object.keys(data[0]);
              const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
@@ -197,6 +189,14 @@ export function AdditionalAnalyses({
             return { [taxName]: formatCurrency(total) };
         }
     
+        const getCfopDescription = (cfopCode: number): string => {
+            const fullDescription = cfopDescriptions[cfopCode];
+            if (fullDescription) {
+                 return fullDescription.split(' ').slice(0, 3).join(' ');
+            }
+            return 'N/A';
+        };
+
         const getRelevantData = (row: any, taxKey: string | undefined, taxName: string) => {
             if (!taxKey || !row || typeof row !== 'object' || !h.cfop) return null;
             const relevantRow: Record<string, any> = {};
@@ -284,14 +284,6 @@ export function AdditionalAnalyses({
         }, 0);
         return { [taxName]: formatCurrency(total) };
     }
-    
-    const getCfopDescription = (cfopCode: number): string => {
-        const fullDescription = cfopDescriptions[cfopCode];
-        if (fullDescription) {
-             return fullDescription.split(' ').slice(0, 3).join(' ');
-        }
-        return 'N/A';
-    };
 
     const handleAnalyzeResale = useCallback(async () => {
         if (!siengeFile) {
@@ -638,9 +630,7 @@ interface ReconciliationAnalysisProps {
 function useReconciliation(processedData: ProcessedData | null) {
     const siengeData = processedData?.siengeSheetData;
     
-    // Use only items from valid entry notes and CTEs for reconciliation
-    const allItems = processedData?.sheets?.['Itens Válidos'] || [];
-    const xmlItems = allItems;
+    const xmlItems = processedData?.sheets?.['Itens Válidos'] || [];
     
     if (!siengeData || !xmlItems) {
         return { reconciliationResults: null, error: null };
@@ -907,38 +897,37 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                 {reconciliationResults && (
                     <div className="mt-6">
                         <Tabs defaultValue="reconciled">
-                            <TabsList className="grid w-full grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+                            <TabsList className="grid w-full grid-cols-1 md:grid-cols-3">
                                 <TabsTrigger value="reconciled">Conciliados ({reconciliationResults.reconciled.length})</TabsTrigger>
-                                <TabsTrigger value="validate_cfop" disabled={reconciliationResults.reconciled.length === 0}>Validar CFOP</TabsTrigger>
                                 <TabsTrigger value="onlyInSienge">Apenas no Sienge ({reconciliationResults.onlyInSienge.length})</TabsTrigger>
                                 <TabsTrigger value="onlyInXml">Apenas no XML ({reconciliationResults.onlyInXml.length})</TabsTrigger>
                             </TabsList>
                             <div className="mt-4">
                                 <TabsContent value="reconciled">
-                                    <Button onClick={() => handleDownload(reconciliationResults.reconciled, 'Itens_Conciliados')} size="sm" className="mb-4" disabled={reconciliationResults.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                    <div className="flex gap-2 mb-4">
+                                        <Button onClick={() => handleDownload(reconciliationResults.reconciled, 'Itens_Conciliados')} size="sm" disabled={reconciliationResults.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                         <Dialog>
+                                            <DialogTrigger asChild>
+                                                 <Button variant="outline" disabled={!reconciliationResults || reconciliationResults.reconciled.length === 0}>
+                                                    Validar CFOP
+                                                </Button>
+                                            </DialogTrigger>
+                                            <DialogContent className="max-w-[95vw] h-[90vh]">
+                                                <DialogHeader>
+                                                    <DialogTitle>Validação de CFOP dos Itens Conciliados</DialogTitle>
+                                                    <DialogDescription>
+                                                        Classifique os itens e verifique se o CFOP lançado no Sienge está correto. As suas validações são guardadas automaticamente.
+                                                    </DialogDescription>
+                                                </DialogHeader>
+                                                 <CfopValidator 
+                                                    items={reconciliationResults.reconciled}
+                                                    allPersistedClassifications={allPersistedClassifications}
+                                                    onPersistAllClassifications={onPersistAllClassifications}
+                                                />
+                                            </DialogContent>
+                                        </Dialog>
+                                    </div>
                                     <DataTable columns={getColumns(reconciliationResults.reconciled)} data={reconciliationResults.reconciled} />
-                                </TabsContent>
-                                 <TabsContent value="validate_cfop">
-                                     <Dialog>
-                                        <DialogTrigger asChild>
-                                             <Button disabled={!reconciliationResults || reconciliationResults.reconciled.length === 0}>
-                                                Abrir Validador de CFOP
-                                            </Button>
-                                        </DialogTrigger>
-                                        <DialogContent className="max-w-[95vw] h-[90vh]">
-                                            <DialogHeader>
-                                                <DialogTitle>Validação de CFOP dos Itens Conciliados</DialogTitle>
-                                                <DialogDescription>
-                                                    Classifique os itens e verifique se o CFOP lançado no Sienge está correto. As suas validações são guardadas automaticamente.
-                                                </DialogDescription>
-                                            </DialogHeader>
-                                             <CfopValidator 
-                                                items={reconciliationResults.reconciled}
-                                                allPersistedClassifications={allPersistedClassifications}
-                                                onPersistAllClassifications={onPersistAllClassifications}
-                                            />
-                                        </DialogContent>
-                                    </Dialog>
                                 </TabsContent>
                                 <TabsContent value="onlyInSienge">
                                     <Button onClick={() => handleDownload(reconciliationResults.onlyInSienge, 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
@@ -971,4 +960,3 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
          </Card>
     );
 }
-
