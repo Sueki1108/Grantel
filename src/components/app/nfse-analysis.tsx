@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumns } from "@/lib/columns-helper";
-import { FileSearch, Loader2, Download, FilePieChart, AlertTriangle, FilterX, X, RotateCcw, ListFilter } from 'lucide-react';
+import { FileSearch, Loader2, Download, FilePieChart, AlertTriangle, FilterX, X, RotateCcw, ListFilter, Eye } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 // ===============================================================
 // Types
@@ -95,7 +96,7 @@ const SUSPENSION_PHRASES = [
     "suspensao da exigibilidade", 
     "suspensao da exigencia", 
     "suspensao da contribuicao",
-    "suspensao por decisao judicial" // Adicionada uma quarta frase comum.
+    "suspensao por decisao judicial"
 ];
 
 
@@ -371,6 +372,12 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
         </Card>
     );
 
+    const getNotesForPhrase = (phrase: string): NfseData[] => {
+        if (!analysisResults) return [];
+        return analysisResults.detailedData.all.filter(nf => normalizeText(nf.descritivo).includes(phrase));
+    };
+
+
     const renderContent = () => {
         if (nfseFiles.length === 0) {
             return (
@@ -525,13 +532,51 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                                  <Card className="bg-muted/50">
                                     <CardHeader className='pb-2'><CardTitle className="text-lg">Frases de Suspensão Ativas</CardTitle></CardHeader>
                                     <CardContent>
-                                        <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                                            {SUSPENSION_PHRASES.map(phrase => (
-                                                <div key={phrase} className="flex items-center space-x-2">
-                                                    <Checkbox id={`phrase-${phrase}`} checked={selectedSuspensionPhrases.has(phrase)} onCheckedChange={(checked) => handleSuspensionPhraseToggle(phrase, !!checked)} />
-                                                    <Label htmlFor={`phrase-${phrase}`} className="text-sm font-light leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{phrase}</Label>
-                                                </div>
-                                            ))}
+                                        <div className="space-y-2">
+                                            {SUSPENSION_PHRASES.map(phrase => {
+                                                const notesForPhrase = getNotesForPhrase(phrase);
+                                                return (
+                                                    <div key={phrase} className="flex items-center justify-between">
+                                                        <div className='flex items-center space-x-2'>
+                                                            <Checkbox id={`phrase-${phrase}`} checked={selectedSuspensionPhrases.has(phrase)} onCheckedChange={(checked) => handleSuspensionPhraseToggle(phrase, !!checked)} />
+                                                            <Label htmlFor={`phrase-${phrase}`} className="text-sm font-light leading-none">{phrase}</Label>
+                                                        </div>
+                                                        <Dialog>
+                                                            <DialogTrigger asChild>
+                                                                <Button variant="ghost" size="icon" className="h-7 w-7" disabled={notesForPhrase.length === 0}>
+                                                                    <Eye className="h-4 w-4" />
+                                                                </Button>
+                                                            </DialogTrigger>
+                                                            <DialogContent className="max-w-4xl">
+                                                                <DialogHeader>
+                                                                    <DialogTitle>Notas com "{phrase}"</DialogTitle>
+                                                                    <DialogDescription>
+                                                                        Lista de notas que contêm a frase de suspensão selecionada.
+                                                                    </DialogDescription>
+                                                                </DialogHeader>
+                                                                <div className="max-h-[60vh] overflow-y-auto">
+                                                                    <table className="w-full text-sm">
+                                                                        <thead>
+                                                                            <tr className='text-left border-b'>
+                                                                                <th className="p-2 font-medium">Nº da Nota</th>
+                                                                                <th className="p-2 font-medium">Descrição Completa</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {notesForPhrase.map(note => (
+                                                                                <tr key={note.numero_nfse} className="border-b">
+                                                                                    <td className="p-2 align-top">{note.numero_nfse}</td>
+                                                                                    <td className="p-2 whitespace-pre-wrap break-words">{note.descritivo}</td>
+                                                                                </tr>
+                                                                            ))}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            </DialogContent>
+                                                        </Dialog>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </CardContent>
                                 </Card>
