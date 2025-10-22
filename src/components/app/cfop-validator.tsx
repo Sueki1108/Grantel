@@ -29,7 +29,7 @@ export interface CfopValidationData extends Record<string, any> {
 type ValidationStatus = 'unvalidated' | 'correct' | 'incorrect' | 'verify';
 
 interface GroupedItems {
-  [groupTitle: string]: CfopValidationData[];
+  [cfop: string]: CfopValidationData[];
 }
 
 
@@ -43,20 +43,12 @@ const getUniqueProductKey = (item: CfopValidationData): string => {
     return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}`;
 };
 
-const getBaseCfop = (cfop: string): string => {
-    if (!cfop || typeof cfop !== 'string' || cfop.length < 4) {
-        return 'Outros';
-    }
-    return cfop.substring(1);
-};
-
-
 export function CfopValidator({ items, allPersistedClassifications, onPersistAllClassifications }: CfopValidatorProps) {
     const { toast } = useToast();
     const [validationStatus, setValidationStatus] = useState<Record<string, ValidationStatus>>({});
     const [activeFilter, setActiveFilter] = useState<ValidationStatus | 'all'>('unvalidated');
 
-    const columnNameMap: Record<string, string> = {
+     const columnNameMap: Record<string, string> = {
         'Fornecedor': 'Fornecedor',
         'Número da Nota': 'Nota',
         'Descrição': 'Descrição XML',
@@ -133,7 +125,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             }
             return <div>{String(value ?? '')}</div>;
         }
-    ), [items]);
+    ).map(col => ({...col, header: columnNameMap[col.id as string] || col.id})), [items]);
 
     const actionColumn: any = {
         id: 'Ações',
@@ -174,26 +166,14 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         const groups: GroupedItems = {};
         
         items.forEach(item => {
-            const baseCfop = getBaseCfop(item.Sienge_CFOP);
-            const key = baseCfop;
-
-             if (!groups[key]) {
-                groups[key] = [];
+            const cfop = item.Sienge_CFOP;
+            if (!groups[cfop]) {
+                groups[cfop] = [];
             }
-            groups[key].push(item);
+            groups[cfop].push(item);
         });
 
-        const finalGroups: GroupedItems = {};
-         for (const key in groups) {
-            const itemsInGroup = groups[key];
-            if (itemsInGroup.length > 0) {
-                 const uniqueCfopsInGroup = Array.from(new Set(itemsInGroup.map(i => i.Sienge_CFOP))).sort();
-                 const groupTitle = uniqueCfopsInGroup.join(' / ');
-                 finalGroups[groupTitle] = itemsInGroup;
-            }
-        }
-
-        return finalGroups;
+        return groups;
     }, [items]);
     
     const filteredItemsByTab = (tabItems: CfopValidationData[]) => {
@@ -201,13 +181,9 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         return tabItems.filter(item => (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter);
     };
 
-    const fullColumns = useMemo(() => [ ...columns.map(c => ({...c, header: columnNameMap[c.id as string] || c.id})), statusColumn, actionColumn], [columns, validationStatus]);
+    const fullColumns = useMemo(() => [ ...columns, statusColumn, actionColumn], [columns, validationStatus]);
 
-    const sortedGroupTitles = useMemo(() => Object.keys(groupedItems).sort((a, b) => {
-        const firstNumA = parseInt(a.split(' ')[0], 10);
-        const firstNumB = parseInt(b.split(' ')[0], 10);
-        return firstNumA - firstNumB;
-    }), [groupedItems]);
+    const sortedGroupTitles = useMemo(() => Object.keys(groupedItems).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)), [groupedItems]);
 
     return (
         <div className="space-y-4 h-full flex flex-col">
