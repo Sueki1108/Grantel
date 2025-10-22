@@ -634,7 +634,7 @@ export function AutomatorClientPage() {
             <main className="container mx-auto p-4 md:p-8">
                 <div className={cn("mx-auto space-y-8", isWideMode ? "max-w-full" : "max-w-screen-2xl")}>
                     <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
-                        <TabsList className="grid w-full grid-cols-1 md:grid-cols-7">
+                        <TabsList className="h-auto flex flex-wrap justify-start">
                              <TabsTrigger value="history" className="flex items-center gap-2">
                                 <History className="h-5 w-5" /> Histórico
                             </TabsTrigger>
