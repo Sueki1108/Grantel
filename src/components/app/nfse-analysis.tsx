@@ -38,12 +38,6 @@ type NfseData = {
 type FinancialSummary = {
     'Soma Total das Notas': number;
     'Total de Notas (únicas)': number;
-    'Soma Total Item 702': number;
-    'Total Suspensão (Item 702)': number;
-    'Soma Líquida Item 702': number;
-    'Soma Total Item 703': number;
-    'Total Suspensão (Item 703)': number;
-    'Soma Líquida Item 703': number;
 };
 
 type RetentionSummary = {
@@ -53,6 +47,13 @@ type RetentionSummary = {
     'Retenção CSLL': number;
     'Retenção PIS': number;
     'Retenção COFINS': number;
+};
+
+type ServiceItemSummary = {
+    'Soma Total Item': number;
+    'Total Suspensão': number;
+    'Soma Líquida Item': number;
+    'Retenções': RetentionSummary;
 };
 
 type DetailedData = {
@@ -73,8 +74,9 @@ type DetailedData = {
 };
 
 type AnalysisResults = {
-    financialSummary: FinancialSummary | null;
-    retentionSummary: RetentionSummary | null;
+    financialSummary: FinancialSummary;
+    summary702: ServiceItemSummary;
+    summary703: ServiceItemSummary;
     pendingNotes: NfseData[];
     detailedData: DetailedData;
 };
@@ -149,9 +151,9 @@ const highlightText = (text: string, phrase: string) => {
   if (!phrase || !text) {
     return text;
   }
-  const regex = new RegExp(`(${phrase})`, 'gi');
+  const regex = new RegExp(`(${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
   return text.split(regex).map((part, index) =>
-    part.toLowerCase() === phrase.toLowerCase() ? <strong key={index}>{part}</strong> : part
+    regex.test(part) ? <strong key={index}>{part}</strong> : part
   );
 };
 
@@ -231,73 +233,61 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
             retention: { iss: [], ir: [], inss: [], csll: [], pis: [], cofins: [] }
         };
 
-        let total702 = 0;
-        let total703 = 0;
-        let suspended702 = 0;
-        let suspended703 = 0;
-
-        const retentionSummary: RetentionSummary = {
-            'Retenção ISS': 0, 'Retenção IR': 0, 'Retenção INSS': 0,
-            'Retenção CSLL': 0, 'Retenção PIS': 0, 'Retenção COFINS': 0
-        };
+        let summary702: ServiceItemSummary = { 'Soma Total Item': 0, 'Total Suspensão': 0, 'Soma Líquida Item': 0, 'Retenções': { 'Retenção ISS': 0, 'Retenção IR': 0, 'Retenção INSS': 0, 'Retenção CSLL': 0, 'Retenção PIS': 0, 'Retenção COFINS': 0 } };
+        let summary703: ServiceItemSummary = { 'Soma Total Item': 0, 'Total Suspensão': 0, 'Soma Líquida Item': 0, 'Retenções': { 'Retenção ISS': 0, 'Retenção IR': 0, 'Retenção INSS': 0, 'Retenção CSLL': 0, 'Retenção PIS': 0, 'Retenção COFINS': 0 } };
+        
         const pendingNotes: NfseData[] = [];
         let totalNotasGeral = 0;
 
 
         for (const nf of filteredData) {
             totalNotasGeral += nf.valor_total;
-            retentionSummary['Retenção ISS'] += nf.valor_issrf;
-            retentionSummary['Retenção IR'] += nf.valor_ir;
-            retentionSummary['Retenção INSS'] += nf.valor_inss;
-            retentionSummary['Retenção CSLL'] += nf.valor_contribuicao_social;
-            retentionSummary['Retenção PIS'] += nf.valor_pis;
-            retentionSummary['Retenção COFINS'] += nf.valor_cofins;
-
-            if (nf.valor_issrf > 0) detailedData.retention.iss.push(nf);
-            if (nf.valor_ir > 0) detailedData.retention.ir.push(nf);
-            if (nf.valor_inss > 0) detailedData.retention.inss.push(nf);
-            if (nf.valor_contribuicao_social > 0) detailedData.retention.csll.push(nf);
-            if (nf.valor_pis > 0) detailedData.retention.pis.push(nf);
-            if (nf.valor_cofins > 0) detailedData.retention.cofins.push(nf);
-
-            const serviceCode = nf.codigo_item_lista_servico;
-            if (serviceCode === '702') {
-                total702 += nf.valor_total;
-                detailedData.service702.push(nf);
-            } else if (serviceCode === '703') {
-                total703 += nf.valor_total;
-                detailedData.service703.push(nf);
-            }
-
+            
             const normalizedDescritivo = normalizeText(nf.descritivo);
             const isSuspended = Array.from(selectedSuspensionPhrases).some(phrase => normalizedDescritivo.includes(phrase));
-            
-            if (isSuspended) {
-                 if (serviceCode === '702') {
-                    suspended702 += nf.valor_total;
+
+            const processRetentions = (summary: ServiceItemSummary) => {
+                summary['Retenções']['Retenção ISS'] += nf.valor_issrf;
+                summary['Retenções']['Retenção IR'] += nf.valor_ir;
+                summary['Retenções']['Retenção INSS'] += nf.valor_inss;
+                summary['Retenções']['Retenção CSLL'] += nf.valor_contribuicao_social;
+                summary['Retenções']['Retenção PIS'] += nf.valor_pis;
+                summary['Retenções']['Retenção COFINS'] += nf.valor_cofins;
+            };
+
+            if (nf.codigo_item_lista_servico === '702') {
+                summary702['Soma Total Item'] += nf.valor_total;
+                detailedData.service702.push(nf);
+                processRetentions(summary702);
+                if (isSuspended) {
+                    summary702['Total Suspensão'] += nf.valor_total;
                     detailedData.susp702.push(nf);
-                } else if (serviceCode === '703') {
-                    suspended703 += nf.valor_total;
+                }
+            } else if (nf.codigo_item_lista_servico === '703') {
+                summary703['Soma Total Item'] += nf.valor_total;
+                detailedData.service703.push(nf);
+                processRetentions(summary703);
+                 if (isSuspended) {
+                    summary703['Total Suspensão'] += nf.valor_total;
                     detailedData.susp703.push(nf);
                 }
-            } else if (normalizedDescritivo.includes('suspensao')) {
+            }
+            
+            if (!isSuspended && normalizedDescritivo.includes('suspensao')) {
                  pendingNotes.push(nf);
                  detailedData.pending.push(nf);
             }
         }
         
+        summary702['Soma Líquida Item'] = summary702['Soma Total Item'] - summary702['Total Suspensão'];
+        summary703['Soma Líquida Item'] = summary703['Soma Total Item'] - summary703['Total Suspensão'];
+
         const financialSummary: FinancialSummary = {
             'Soma Total das Notas': totalNotasGeral,
             'Total de Notas (únicas)': new Set(filteredData.map(d => d.numero_nfse)).size,
-            'Soma Total Item 702': total702,
-            'Total Suspensão (Item 702)': suspended702,
-            'Soma Líquida Item 702': total702 - suspended702,
-            'Soma Total Item 703': total703,
-            'Total Suspensão (Item 703)': suspended703,
-            'Soma Líquida Item 703': total703 - suspended703,
         };
 
-        return { financialSummary, retentionSummary, pendingNotes, detailedData };
+        return { financialSummary, summary702, summary703, pendingNotes, detailedData };
     }, [allExtractedData, disregardedNotes, selectedSuspensionPhrases]);
 
     const handleDisregardNote = () => {
@@ -343,26 +333,22 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
     const handleDownloadFullExcel = () => {
         if (!analysisResults) return;
         const wb = XLSX.utils.book_new();
+        
         const addSheet = (data: any[], name: string) => {
             if (data.length > 0) {
                  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), name.substring(0, 31));
             }
         }
     
-        if (analysisResults.financialSummary) addSheet(Object.entries(analysisResults.financialSummary).map(([k, v]) => ({ Descrição: k, Valor: v })), "Resumo Financeiro");
-        if (analysisResults.retentionSummary) addSheet(Object.entries(analysisResults.retentionSummary).map(([k, v]) => ({ Descrição: k, Valor: v })), "Resumo Retenções");
+        if (analysisResults.financialSummary) addSheet([analysisResults.financialSummary], "Resumo Financeiro");
+        if (analysisResults.summary702) addSheet([analysisResults.summary702], "Resumo Item 702");
+        if (analysisResults.summary703) addSheet([analysisResults.summary703], "Resumo Item 703");
         
         addSheet(analysisResults.detailedData.all, "Dados Completos");
         addSheet(analysisResults.detailedData.service702, "Itens 702");
         addSheet(analysisResults.detailedData.susp702, "Suspensão 702");
         addSheet(analysisResults.detailedData.service703, "Itens 703");
         addSheet(analysisResults.detailedData.susp703, "Suspensão 703");
-        addSheet(analysisResults.detailedData.retention.iss, "Retenção ISS");
-        addSheet(analysisResults.detailedData.retention.ir, "Retenção IR");
-        addSheet(analysisResults.detailedData.retention.inss, "Retenção INSS");
-        addSheet(analysisResults.detailedData.retention.csll, "Retenção CSLL");
-        addSheet(analysisResults.detailedData.retention.pis, "Retenção PIS");
-        addSheet(analysisResults.detailedData.retention.cofins, "Retenção COFINS");
         addSheet(analysisResults.detailedData.pending, "Pendentes (Suspensão Genérica)");
     
         XLSX.writeFile(wb, "Analise_Completa_NFS-e.xlsx");
@@ -418,17 +404,11 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
         }
 
         const dataTabs = [
-            { label: `Soma Total (${analysisResults.detailedData.all.length})`, data: analysisResults.detailedData.all, sheetName: "Dados_Completos" },
-            { label: `Soma 702 (${analysisResults.detailedData.service702.length})`, data: analysisResults.detailedData.service702, sheetName: "Itens_702" },
-            { label: `Susp. 702 (${analysisResults.detailedData.susp702.length})`, data: analysisResults.detailedData.susp702, sheetName: "Suspensao_702" },
-            { label: `Soma 703 (${analysisResults.detailedData.service703.length})`, data: analysisResults.detailedData.service703, sheetName: "Itens_703" },
-            { label: `Susp. 703 (${analysisResults.detailedData.susp703.length})`, data: analysisResults.detailedData.susp703, sheetName: "Suspensao_703" },
-            { label: `Ret. ISS (${analysisResults.detailedData.retention.iss.length})`, data: analysisResults.detailedData.retention.iss, sheetName: "Retencao_ISS" },
-            { label: `Ret. IR (${analysisResults.detailedData.retention.ir.length})`, data: analysisResults.detailedData.retention.ir, sheetName: "Retencao_IR" },
-            { label: `Ret. INSS (${analysisResults.detailedData.retention.inss.length})`, data: analysisResults.detailedData.retention.inss, sheetName: "Retencao_INSS" },
-            { label: `Ret. CSLL (${analysisResults.detailedData.retention.csll.length})`, data: analysisResults.detailedData.retention.csll, sheetName: "Retencao_CSLL" },
-            { label: `Ret. PIS (${analysisResults.detailedData.retention.pis.length})`, data: analysisResults.detailedData.retention.pis, sheetName: "Retencao_PIS" },
-            { label: `Ret. COFINS (${analysisResults.detailedData.retention.cofins.length})`, data: analysisResults.detailedData.retention.cofins, sheetName: "Retencao_COFINS" },
+            { label: `Todas (${analysisResults.detailedData.all.length})`, data: analysisResults.detailedData.all, sheetName: "Dados_Completos" },
+            { label: `Itens 702 (${analysisResults.detailedData.service702.length})`, data: analysisResults.detailedData.service702, sheetName: "Itens_702" },
+            { label: `Suspensão 702 (${analysisResults.detailedData.susp702.length})`, data: analysisResults.detailedData.susp702, sheetName: "Suspensao_702" },
+            { label: `Itens 703 (${analysisResults.detailedData.service703.length})`, data: analysisResults.detailedData.service703, sheetName: "Itens_703" },
+            { label: `Suspensão 703 (${analysisResults.detailedData.susp703.length})`, data: analysisResults.detailedData.susp703, sheetName: "Suspensao_703" },
             { label: `Pendentes (${analysisResults.detailedData.pending.length})`, data: analysisResults.detailedData.pending, sheetName: "Pendentes_Suspensao_Generica" }
         ].filter(tab => tab.data.length > 0);
 
@@ -441,8 +421,8 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                 </TabsList>
 
                 <TabsContent value="summary" className="mt-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <Card className="lg:col-span-2">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <Card className="md:col-span-1">
                             <CardHeader><CardTitle>Resultados Gerais</CardTitle></CardHeader>
                             <CardContent className="space-y-2">
                                 <SummaryLine label="Soma Total das Notas" value={analysisResults.financialSummary['Soma Total das Notas']} />
@@ -452,28 +432,29 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                         <Card>
                             <CardHeader><CardTitle>Análise Item 702</CardTitle></CardHeader>
                             <CardContent className="space-y-2">
-                                 <SummaryLine label="Soma Total Item 702" value={analysisResults.financialSummary['Soma Total Item 702']} />
-                                 <SummaryLine label="Total Suspensão (Item 702)" value={analysisResults.financialSummary['Total Suspensão (Item 702)']} />
-                                 <SummaryLine label="Soma Líquida Item 702" value={analysisResults.financialSummary['Soma Líquida Item 702']} />
+                                 <SummaryLine label="Soma Total Item" value={analysisResults.summary702['Soma Total Item']} />
+                                 <SummaryLine label="Total Suspensão" value={analysisResults.summary702['Total Suspensão']} />
+                                 <SummaryLine label="Soma Líquida Item" value={analysisResults.summary702['Soma Líquida Item']} />
+                                 <div className="pt-2 mt-2 border-t">
+                                     <h4 className='font-medium text-sm mb-1'>Retenções (Item 702)</h4>
+                                      {Object.entries(analysisResults.summary702.Retenções).map(([key, value]) => (
+                                         <SummaryLine key={key} label={key} value={value} />
+                                     ))}
+                                 </div>
                             </CardContent>
                         </Card>
                          <Card>
                             <CardHeader><CardTitle>Análise Item 703</CardTitle></CardHeader>
                             <CardContent className="space-y-2">
-                                <SummaryLine label="Soma Total Item 703" value={analysisResults.financialSummary['Soma Total Item 703']} />
-                                <SummaryLine label="Total Suspensão (Item 703)" value={analysisResults.financialSummary['Total Suspensão (Item 703)']} />
-                                <SummaryLine label="Soma Líquida Item 703" value={analysisResults.financialSummary['Soma Líquida Item 703']} />
-                            </CardContent>
-                        </Card>
-                        <Card className="lg:col-span-4">
-                            <CardHeader><CardTitle>Totais de Retenção</CardTitle></CardHeader>
-                            <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-2">
-                                {analysisResults.retentionSummary && Object.entries(analysisResults.retentionSummary).map(([key, value]) => (
-                                    <div key={key} className="flex flex-col">
-                                        <span className="text-sm text-muted-foreground">{key}</span>
-                                        <span className="font-semibold text-lg">{value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                    </div>
-                                ))}
+                                <SummaryLine label="Soma Total Item" value={analysisResults.summary703['Soma Total Item']} />
+                                <SummaryLine label="Total Suspensão" value={analysisResults.summary703['Total Suspensão']} />
+                                <SummaryLine label="Soma Líquida Item" value={analysisResults.summary703['Soma Líquida Item']} />
+                                 <div className="pt-2 mt-2 border-t">
+                                     <h4 className='font-medium text-sm mb-1'>Retenções (Item 703)</h4>
+                                      {Object.entries(analysisResults.summary703.Retenções).map(([key, value]) => (
+                                         <SummaryLine key={key} label={key} value={value} />
+                                     ))}
+                                 </div>
                             </CardContent>
                         </Card>
                     </div>
