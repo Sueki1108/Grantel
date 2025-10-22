@@ -47,7 +47,7 @@ const getBaseCfop = (cfop: string): string => {
     if (!cfop || typeof cfop !== 'string' || cfop.length < 4) {
         return 'Outros';
     }
-    return cfop.substring(1); // Agrupa por 1128/2128 -> 128
+    return cfop.substring(1);
 };
 
 
@@ -55,6 +55,16 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const { toast } = useToast();
     const [validationStatus, setValidationStatus] = useState<Record<string, ValidationStatus>>({});
     const [activeFilter, setActiveFilter] = useState<ValidationStatus | 'all'>('unvalidated');
+
+    const columnNameMap: Record<string, string> = {
+        'Fornecedor': 'Fornecedor',
+        'Número da Nota': 'Nota',
+        'Descrição': 'Descrição XML',
+        'Sienge_Descrição': 'Descrição Sienge',
+        'CFOP': 'CFOP XML',
+        'CST do ICMS': 'CST XML',
+        'Sienge_CFOP': 'CFOP Sienge',
+    };
 
     // Carrega o estado persistido na inicialização
     useEffect(() => {
@@ -106,17 +116,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         items,
         ['Fornecedor', 'Número da Nota', 'Descrição', 'Sienge_Descrição', 'CFOP', 'CST do ICMS', 'Sienge_CFOP'],
         (row: any, id: string) => {
-             const customIdMap: Record<string, string> = {
-                'Descrição': 'Descrição XML',
-                'Sienge_Descrição': 'Descrição Sienge',
-                'CFOP': 'CFOP XML',
-                'CST do ICMS': 'CST XML',
-                'Sienge_CFOP': 'CFOP Sienge',
-                'Número da Nota': 'Nota',
-            };
-            const displayName = customIdMap[id] || id;
-
-            const value = row.original[id];
+             const value = row.original[id];
             
              if (id === 'Fornecedor') {
                 return (
@@ -133,7 +133,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             }
             return <div>{String(value ?? '')}</div>;
         }
-    ).map(col => ({...col, header: columnNameMap[col.id as string] || col.id})), [items]);
+    ), [items]);
 
     const actionColumn: any = {
         id: 'Ações',
@@ -201,17 +201,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         return tabItems.filter(item => (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter);
     };
 
-    const columnNameMap: Record<string, string> = {
-        'Fornecedor': 'Fornecedor',
-        'Número da Nota': 'Nota',
-        'Descrição': 'Descrição XML',
-        'Sienge_Descrição': 'Descrição Sienge',
-        'CFOP': 'CFOP XML',
-        'CST do ICMS': 'CST XML',
-        'Sienge_CFOP': 'CFOP Sienge',
-    };
-
-    const fullColumns = useMemo(() => [ ...columns.map(c => ({...c, header: columnNameMap[c.id as string] || c.id})), statusColumn, actionColumn], [columns]);
+    const fullColumns = useMemo(() => [ ...columns.map(c => ({...c, header: columnNameMap[c.id as string] || c.id})), statusColumn, actionColumn], [columns, validationStatus]);
 
     const sortedGroupTitles = useMemo(() => Object.keys(groupedItems).sort((a, b) => {
         const firstNumA = parseInt(a.split(' ')[0], 10);
