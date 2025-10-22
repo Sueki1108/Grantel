@@ -50,7 +50,7 @@ function Filter({
 
   const columnFilterValue = column.getFilterValue()
 
-  const isCfopColumn = column.id.toUpperCase() === 'CFOP';
+  const isCfopColumn = column.id.toUpperCase().includes('CFOP');
 
   return typeof firstValue === 'number' && !isCfopColumn ? (
     <div className="flex space-x-2">
@@ -104,6 +104,8 @@ export function DataTable<TData, TValue>({
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = React.useState('')
 
+  const isRowSelectionEnabled = !!rowSelection && !!setRowSelection;
+
   const table = useReactTable({
     data,
     columns,
@@ -115,16 +117,14 @@ export function DataTable<TData, TValue>({
     onGlobalFilterChange: setGlobalFilter,
     getFilteredRowModel: getFilteredRowModel(),
     onRowSelectionChange: setRowSelection,
-    enableRowSelection: !!setRowSelection, 
+    enableRowSelection: isRowSelectionEnabled, 
     state: {
       sorting,
       columnFilters,
       globalFilter,
-      rowSelection: rowSelection || {},
+      rowSelection,
     },
   })
-
-  const showSelectionInfo = !!setRowSelection;
 
   return (
     <div>
@@ -137,7 +137,7 @@ export function DataTable<TData, TValue>({
             }
             className="max-w-sm"
             />
-            {showSelectionInfo && (
+            {isRowSelectionEnabled && (
               <div className="text-sm text-muted-foreground">
                   {table.getFilteredSelectedRowModel().rows.length} de{" "}
                   {table.getFilteredRowModel().rows.length} linha(s) selecionadas.
@@ -145,68 +145,70 @@ export function DataTable<TData, TValue>({
             )}
       </div>
       <ScrollArea className="rounded-md border whitespace-nowrap">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id} className='p-2'>
-                        {header.isPlaceholder ? null : (
-                            <>
-                                {flexRender(
-                                    header.column.columnDef.header,
-                                    header.getContext()
-                                )}
-                                {header.column.getCanFilter() ? (
-                                    <div className="mt-1">
-                                        <Filter column={header.column} table={table} />
-                                    </div>
-                                ) : null}
-                            </>
-                        )}
-                    </TableHead>
-                  )
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={rowSelection && Object.keys(rowSelection).length > 0 && row.getIsSelected() && "selected"}
-                  onClick={row.getCanSelect() ? () => row.toggleSelected() : undefined}
-                  className={row.getCanSelect() ? 'cursor-pointer' : ''}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
+        <div className="relative w-full overflow-auto">
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => {
+                    return (
+                      <TableHead key={header.id} className='p-2'>
+                          {header.isPlaceholder ? null : (
+                              <>
+                                  {flexRender(
+                                      header.column.columnDef.header,
+                                      header.getContext()
+                                  )}
+                                  {header.column.getCanFilter() ? (
+                                      <div className="mt-1">
+                                          <Filter column={header.column} table={table} />
+                                      </div>
+                                  ) : null}
+                              </>
+                          )}
+                      </TableHead>
+                    )
+                  })}
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
-                  Nenhum resultado.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-           {footer && (
-            <TableFooter>
-                <TableRow>
-                    {columns.map((column: any) => (
-                        <TableCell key={column.id} className="font-bold text-base">
-                            {footer[column.id] || ''}
-                        </TableCell>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows?.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    data-state={isRowSelectionEnabled && row.getIsSelected() && "selected"}
+                    onClick={isRowSelectionEnabled ? () => row.toggleSelected() : undefined}
+                    className={isRowSelectionEnabled ? 'cursor-pointer' : ''}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
                     ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="h-24 text-center">
+                    Nenhum resultado.
+                  </TableCell>
                 </TableRow>
-            </TableFooter>
-           )}
-        </Table>
+              )}
+            </TableBody>
+            {footer && (
+              <TableFooter>
+                  <TableRow>
+                      {columns.map((column: any) => (
+                          <TableCell key={column.id} className="font-bold text-base">
+                              {footer[column.id] || ''}
+                          </TableCell>
+                      ))}
+                  </TableRow>
+              </TableFooter>
+            )}
+          </Table>
+        </div>
         <ScrollBar orientation="horizontal" />
       </ScrollArea>
       <div className="flex items-center justify-end space-x-2 py-4">
