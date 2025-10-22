@@ -47,11 +47,9 @@ const getBaseCfop = (cfop: string): string => {
     if (!cfop || cfop.length !== 4) return cfop;
     const firstDigit = cfop.charAt(0);
     const rest = cfop.substring(1);
-    if (['2', '3'].includes(firstDigit)) {
-        return `1${rest}`;
-    }
-    if (['6', '7'].includes(firstDigit)) {
-        return `5${rest}`;
+    if (['2', '3', '6', '7'].includes(firstDigit)) {
+        const baseFirstDigit = firstDigit === '2' || firstDigit === '3' ? '1' : '5';
+        return `${baseFirstDigit}${rest}`;
     }
     return cfop;
 }
@@ -238,7 +236,3 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         </div>
     );
 }
-
-  
-
-    
