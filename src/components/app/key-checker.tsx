@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -9,7 +10,7 @@ import { KeyRound, FileText, Loader2, Download, FileWarning, UploadCloud, Termin
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
 import { LogDisplay } from "@/components/app/log-display";
 import { formatCnpj, cleanAndToStr, parseSpedDate } from "@/lib/utils";
-import type { SpedKeyObject, SpedInfo } from "@/lib/excel-processor";
+import type { SpedKeyObject, SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
 import {
     Dialog,
     DialogContent,
@@ -97,26 +98,6 @@ type RemovedLineLog = {
     line: string;
 };
 
-
-interface SpedCorrectionResult {
-    fileName: string;
-    fileContent?: string;
-    error?: string;
-    linesRead: number;
-    linesModified: number;
-    modifications: {
-        truncation: ModificationLog[];
-        unitStandardization: ModificationLog[];
-        removed0190: RemovedLineLog[];
-        addressSpaces: ModificationLog[];
-        ieCorrection: ModificationLog[];
-        cteSeriesCorrection: ModificationLog[];
-        count9900: ModificationLog[];
-        blockCount: ModificationLog[];
-        totalLineCount: ModificationLog[];
-    };
-    log: string[];
-}
 
 const GRANTEL_CNPJ = "81732042000119";
 const GRANTEL_IE = "9015130668";
@@ -444,7 +425,7 @@ interface KeyCheckerProps {
     chavesValidas: any[];
     spedFiles: File[];
     onFilesChange: (files: File[]) => void;
-    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null) => void;
+    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => void;
     initialSpedInfo: SpedInfo | null;
     initialKeyCheckResults: KeyCheckResult | null;
     nfeEntradaData: any[]; // Pass NFe data for IE correction
@@ -742,7 +723,7 @@ export function KeyChecker({
                 setResults(keyCheckResults);
                 setSpedInfo(spedInfo);
                 
-                onSpedProcessed(spedInfo, keyCheckResults);
+                onSpedProcessed(spedInfo, keyCheckResults, null);
                 
                 toast({ title: "Verificação concluída", description: "As chaves foram comparadas com sucesso. Prossiga para as abas de análise." });
 
@@ -762,7 +743,7 @@ export function KeyChecker({
         setSpedInfo(null);
         
         onFilesChange([]);
-        onSpedProcessed(null, null);
+        onSpedProcessed(null, null, null);
 
         const spedInput = document.getElementById('sped-upload') as HTMLInputElement;
         if (spedInput) spedInput.value = "";
@@ -784,16 +765,19 @@ export function KeyChecker({
                 const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
                 const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData);
                 setCorrectionResult(result);
+                onSpedProcessed(spedInfo, results, result);
                 toast({ title: "Correção Concluída", description: "O arquivo SPED foi analisado." });
             } catch (err: any) {
-                setCorrectionResult({
+                const errorResult: SpedCorrectionResult = {
                     fileName: `erro_sped.txt`,
                     error: err.message,
                     linesRead: 0,
                     linesModified: 0,
                     modifications: { truncation: [], unitStandardization: [], removed0190: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [] },
                     log: [`ERRO FATAL: ${err.message}`]
-                });
+                };
+                setCorrectionResult(errorResult);
+                 onSpedProcessed(spedInfo, results, errorResult);
                 toast({ variant: "destructive", title: "Erro na correção", description: err.message });
             } finally {
                 setIsCorrecting(false);

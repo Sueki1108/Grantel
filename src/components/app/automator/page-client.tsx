@@ -32,7 +32,7 @@ import { cn } from "@/lib/utils";
 import { ImobilizadoAnalysis, type AllClassifications } from "@/components/app/imobilizado-analysis";
 import { HistoryAnalysis, type SessionData } from "@/components/app/history-analysis";
 import { DifalAnalysis } from "@/components/app/difal-analysis";
-import { PendingIssuesReport } from "../pending-issues-report";
+import { PendingIssuesReport } from "@/components/app/pending-issues-report";
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -664,7 +664,7 @@ export function AutomatorClientPage() {
                                 5. Análises Avançadas
                                 {processedData?.keyCheckResults && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
-                             <TabsTrigger value="pending" className="flex items-center gap-2">
+                             <TabsTrigger value="pending">
                                 6. Pendências
                             </TabsTrigger>
                         </TabsList>
@@ -801,4 +801,9 @@ export function AutomatorClientPage() {
 
             <footer className="mt-12 border-t py-6">
                 <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-                    <p>Powered by Firebase Studio. Interface intuitiva para automação de flux
+                    <p>Powered by Firebase Studio. Interface intuitiva para automação de fluxos de trabalho.</p>
+                </div>
+            </footer>
+        </div>
+    );
+}

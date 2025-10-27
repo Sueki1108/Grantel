@@ -87,7 +87,7 @@ interface AdditionalAnalysesProps {
     allXmlFiles: File[];
     spedFiles: File[];
     onSpedFilesChange: (files: File[]) => void;
-    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null) => void;
+    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null, spedCorrections: any | null) => void;
     competence: string | null;
     onExportSession: () => void;
     allPersistedClassifications: AllClassifications;
@@ -130,12 +130,12 @@ export function AdditionalAnalyses({
     }, [siengeFile, siengeSheetData, onSiengeDataProcessed, toast]);
 
     
-    const { reconciliationResults, error: reconciliationError } = useReconciliation(processedData);
+    const reconciliationResults = useReconciliation(processedData);
 
 
     // Estado Exportação XML Revenda
     const [isExporting, setIsExporting] = useState(false);
-    const [resaleAnalysis, setResaleAnalysis] = useState<{ noteKeys: Set<string>; xmls: File[] } | null>(null);
+    
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
 
     const handleSiengeFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -296,7 +296,7 @@ export function AdditionalAnalyses({
         }
     
         setIsAnalyzingResale(true);
-        setResaleAnalysis(null);
+        processedData.resaleAnalysis = null;
     
         setTimeout(async () => {
             try {
@@ -380,32 +380,32 @@ export function AdditionalAnalyses({
                     }
                 }
                 
-                setResaleAnalysis({ noteKeys: resaleNoteKeys, xmls: matchedXmls });
+                processedData.resaleAnalysis = { noteKeys: resaleNoteKeys, xmls: matchedXmls };
                 toast({ title: "Análise de Revenda Concluída", description: `${matchedXmls.length} XMLs correspondentes encontrados.` });
     
             } catch (error: any) {
                 toast({ variant: 'destructive', title: "Erro na Análise de Revenda", description: error.message });
-                setResaleAnalysis(null);
+                processedData.resaleAnalysis = null;
             } finally {
                 setIsAnalyzingResale(false);
             }
         }, 50);
     
-    }, [siengeFile, siengeSheetData, allXmlFiles, toast, onSiengeDataProcessed]);
+    }, [siengeFile, siengeSheetData, allXmlFiles, toast, onSiengeDataProcessed, processedData]);
 
 
     const handleExportResaleXmls = async () => {
-        if (!resaleAnalysis || resaleAnalysis.xmls.length === 0) {
+        if (!processedData.resaleAnalysis || processedData.resaleAnalysis.xmls.length === 0) {
             toast({ title: "Nenhum XML de revenda encontrado", description: "Execute a análise primeiro." });
             return;
         }
 
         setIsExporting(true);
-        toast({ title: "Exportação Iniciada", description: `A compactar ${resaleAnalysis.xmls.length} ficheiros XML. Por favor, aguarde.` });
+        toast({ title: "Exportação Iniciada", description: `A compactar ${processedData.resaleAnalysis.xmls.length} ficheiros XML. Por favor, aguarde.` });
 
         try {
             const zip = new JSZip();
-            for (const file of resaleAnalysis.xmls) {
+            for (const file of processedData.resaleAnalysis.xmls) {
                 const content = await file.text();
                 zip.file(file.name, content);
             }
@@ -459,6 +459,7 @@ export function AdditionalAnalyses({
                         initialKeyCheckResults={processedData.keyCheckResults}
                         nfeEntradaData={processedData.sheets['Notas Válidas'] || []}
                         cteData={processedData.sheets['CTEs Válidos'] || []}
+                        initialSpedCorrections={processedData.spedCorrections?.[0] || null}
                     />
                 </TabsContent>
                 
@@ -468,8 +469,8 @@ export function AdditionalAnalyses({
                         onSiengeFileChange={handleSiengeFileChange}
                         onClearSiengeFile={onClearSiengeFile}
                         processedData={processedData}
-                        reconciliationResults={reconciliationResults}
-                        error={reconciliationError}
+                        reconciliationResults={reconciliationResults.reconciliationResults}
+                        error={reconciliationResults.error}
                         allPersistedClassifications={allPersistedClassifications}
                         onPersistAllClassifications={onPersistAllClassifications}
                         competence={competence}
@@ -578,16 +579,16 @@ export function AdditionalAnalyses({
                                                 {isAnalyzingResale ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Analisando...</> : "Analisar XMLs para Revenda"}
                                             </Button>
 
-                                            {resaleAnalysis && (
+                                            {processedData.resaleAnalysis && (
                                                 <div className="mt-4 w-full">
                                                     <p className="text-sm text-muted-foreground">
-                                                        Foram encontradas <span className="font-bold text-foreground">{resaleAnalysis.noteKeys.size}</span> chaves de revenda no Sienge.
-                                                        Destas, <span className="font-bold text-foreground">{resaleAnalysis.xmls.length}</span> ficheiros XML correspondentes foram encontrados e estão prontos para exportação.
+                                                        Foram encontradas <span className="font-bold text-foreground">{processedData.resaleAnalysis.noteKeys.size}</span> chaves de revenda no Sienge.
+                                                        Destas, <span className="font-bold text-foreground">{processedData.resaleAnalysis.xmls.length}</span> ficheiros XML correspondentes foram encontrados e estão prontos para exportação.
                                                     </p>
-                                                    <Button onClick={handleExportResaleXmls} disabled={isExporting || resaleAnalysis.xmls.length === 0} className="mt-4">
-                                                        {isExporting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A compactar...</> : `Baixar ${resaleAnalysis.xmls.length} XMLs de Revenda`}
+                                                    <Button onClick={handleExportResaleXmls} disabled={isExporting || processedData.resaleAnalysis.xmls.length === 0} className="mt-4">
+                                                        {isExporting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A compactar...</> : `Baixar ${processedData.resaleAnalysis.xmls.length} XMLs de Revenda`}
                                                     </Button>
-                                                    {resaleAnalysis.xmls.length === 0 && resaleAnalysis.noteKeys.size > 0 && (
+                                                    {processedData.resaleAnalysis.xmls.length === 0 && processedData.resaleAnalysis.noteKeys.size > 0 && (
                                                         <Alert variant="destructive" className="mt-4">
                                                             <AlertCircle className="h-4 w-4" />
                                                             <AlertTitle>XMLs não encontrados</AlertTitle>
@@ -614,26 +615,26 @@ export function AdditionalAnalyses({
 // ===============================================================
 // Componente de Análise de Conciliação e Hook
 // ===============================================================
-type ReconciliationResults = {
+export type ReconciliationResults = {
     reconciled: CfopValidationData[];
     onlyInSienge: any[];
     onlyInXml: any[];
     otherSiengeItems: Record<string, any[]>;
-};
+} | null;
 
 interface ReconciliationAnalysisProps {
     siengeFile: File | null;
     processedData: ProcessedData;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
-    reconciliationResults: ReconciliationResults | null;
+    reconciliationResults: ReconciliationResults;
     error: string | null;
     allPersistedClassifications: AllClassifications;
     onPersistAllClassifications: (allData: AllClassifications) => void;
     competence: string | null;
 }
 
-function useReconciliation(processedData: ProcessedData | null): { reconciliationResults: ReconciliationResults | null, error: string | null } {
+function useReconciliation(processedData: ProcessedData | null): { reconciliationResults: ReconciliationResults, error: string | null } {
     return useMemo(() => {
         if (!processedData) return { reconciliationResults: null, error: null };
 
@@ -804,7 +805,7 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
             }
             
             // Pass 10: Agregação por Produto Fiscal
-            if (h.siengeDesc && h.valorTotal) {
+            if (h.siengeDesc && h.valorTotal && h.numero && h.cnpj) {
                 const groupAndSum = (items: any[], notaKey: string, cnpjKey: string, productKey: string, valueKey: string) => {
                     const grouped = new Map<string, { items: any[], sum: number }>();
                     items.forEach(item => {
@@ -819,7 +820,7 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
                     return grouped;
                 };
 
-                const siengeGrouped = groupAndSum(remainingSiengeItems, h.numero!, h.cnpj!, h.siengeDesc!, h.valorTotal!);
+                const siengeGrouped = groupAndSum(remainingSiengeItems, h.numero, h.cnpj, h.siengeDesc, h.valorTotal);
                 const xmlGrouped = groupAndSum(remainingXmlItems, 'Número da Nota', 'CPF/CNPJ do Emitente', 'Descrição', 'Valor Total');
 
                 const stillUnmatchedSienge = new Set(remainingSiengeItems);
@@ -828,7 +829,7 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
                 siengeGrouped.forEach((siengeGroup, key) => {
                     const xmlGroup = xmlGrouped.get(key);
                     if (xmlGroup && Math.abs(siengeGroup.sum - xmlGroup.sum) < 0.01) {
-                        const aggregatedSienge = siengeGroup.items.reduce((acc, item, index) => {
+                         const aggregatedSienge = siengeGroup.items.reduce((acc, item, index) => {
                              if (index === 0) return { ...item };
                              Object.keys(item).forEach(k => {
                                 if (typeof item[k] === 'number') { acc[k] = (acc[k] || 0) + item[k]; }
