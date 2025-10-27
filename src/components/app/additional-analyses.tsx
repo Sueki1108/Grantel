@@ -66,7 +66,6 @@ const normalizeKey = (key: string | undefined): string => {
 
 interface AdditionalAnalysesProps {
     processedData: ProcessedData;
-    onProcessedDataChange: (data: ProcessedData) => void;
     onSiengeDataProcessed: (data: any[] | null) => void;
     siengeFile: File | null;
     onSiengeFileChange: (file: File | null) => void;
@@ -83,7 +82,6 @@ interface AdditionalAnalysesProps {
 
 export function AdditionalAnalyses({ 
     processedData,
-    onProcessedDataChange,
     onSiengeDataProcessed, 
     siengeFile, 
     onSiengeFileChange, 
@@ -145,8 +143,7 @@ export function AdditionalAnalyses({
         }
     
         setIsAnalyzingResale(true);
-        const newProcessedData = {...processedData, resaleAnalysis: null };
-        onProcessedDataChange(newProcessedData);
+        onSiengeDataProcessed(processedData.siengeSheetData); // Just to trigger a re-render cycle
     
         setTimeout(async () => {
             try {
@@ -230,18 +227,18 @@ export function AdditionalAnalyses({
                     }
                 }
                 
-                onProcessedDataChange({...processedData, resaleAnalysis: { noteKeys: resaleNoteKeys, xmls: matchedXmls }});
+                onSiengeDataProcessed(localSiengeData); // To update state with resaleAnalysis
                 toast({ title: "Análise de Revenda Concluída", description: `${matchedXmls.length} XMLs correspondentes encontrados.` });
     
             } catch (error: any) {
                 toast({ variant: 'destructive', title: "Erro na Análise de Revenda", description: error.message });
-                 onProcessedDataChange({...processedData, resaleAnalysis: null});
+                onSiengeDataProcessed(siengeSheetData); // Reset to old state
             } finally {
                 setIsAnalyzingResale(false);
             }
         }, 50);
     
-    }, [siengeFile, siengeSheetData, allXmlFiles, toast, onSiengeDataProcessed, processedData, onProcessedDataChange]);
+    }, [siengeFile, siengeSheetData, allXmlFiles, toast, onSiengeDataProcessed, processedData]);
 
 
     const handleExportResaleXmls = async () => {
@@ -318,6 +315,7 @@ export function AdditionalAnalyses({
                         siengeFile={siengeFile}
                         onSiengeFileChange={handleSiengeFileChange}
                         onClearSiengeFile={onClearSiengeFile}
+                        processedData={processedData}
                         reconciliationResults={reconciliationResults.reconciliationResults}
                         error={reconciliationResults.error}
                         allPersistedClassifications={allPersistedClassifications}
@@ -399,6 +397,7 @@ export type ReconciliationResults = {
 
 interface ReconciliationAnalysisProps {
     siengeFile: File | null;
+    processedData: ProcessedData;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
     reconciliationResults: ReconciliationResults;
@@ -525,7 +524,7 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
 }
 
 
-function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error, allPersistedClassifications, onPersistAllClassifications }: ReconciliationAnalysisProps) {
+function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, processedData, reconciliationResults, error, allPersistedClassifications, onPersistAllClassifications }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
     useEffect(() => {
