@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, type ChangeEvent, useEffect } from 'react';
@@ -125,7 +126,6 @@ export function DifalAnalysis() {
     const [dueDate, setDueDate] = useState<Date | undefined>(new Date());
     const [gnreConfigs, setGnreConfigs] = useState<GnreConfig>(GNRE_DEFAULT_CONFIGS);
     const [savedConfigs, setSavedConfigs] = useState<SavedGnreConfig[]>([]);
-    const [configNameToSave, setConfigNameToSave] = useState('');
 
     const { toast } = useToast();
     
@@ -235,8 +235,9 @@ export function DifalAnalysis() {
     };
 
      const handleSaveConfig = () => {
-        if (!configNameToSave.trim()) {
-            toast({ variant: 'destructive', title: 'Nome inválido', description: 'Por favor, dê um nome à sua configuração.' });
+        const configNameToSave = prompt("Por favor, introduza um nome para esta configuração:", `Config ${new Date().toLocaleDateString()}`);
+        if (!configNameToSave || !configNameToSave.trim()) {
+            toast({ variant: 'destructive', title: 'Operação Cancelada', description: 'É necessário um nome para guardar a configuração.' });
             return;
         }
         
@@ -250,7 +251,6 @@ export function DifalAnalysis() {
         setSavedConfigs(newHistory);
         localStorage.setItem(GNRE_CONFIG_HISTORY_KEY, JSON.stringify(newHistory));
         toast({ title: 'Configuração guardada!', description: `"${configNameToSave}" foi adicionada ao seu histórico.` });
-        setConfigNameToSave('');
     };
 
     const handleLoadConfig = (configId: string) => {
@@ -287,7 +287,7 @@ export function DifalAnalysis() {
                             <DialogTrigger asChild>
                                 <Button variant="outline" size="sm"><Settings className="mr-2 h-4 w-4"/>Configurações Avançadas</Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+                            <DialogContent className="max-w-[90vw] md:max-w-4xl h-[90vh] flex flex-col">
                                 <DialogHeader>
                                     <DialogTitle>Configurações Padrão do Script GNRE</DialogTitle>
                                     <DialogDescription>
@@ -314,52 +314,46 @@ export function DifalAnalysis() {
                                     </TabsContent>
                                      <TabsContent value="history" className="flex-grow overflow-hidden mt-4">
                                          <ScrollArea className="h-full pr-4">
-                                            <div className='space-y-4'>
-                                                <div className="flex gap-2">
-                                                     <Input placeholder="Nome para a configuração atual..." value={configNameToSave} onChange={(e) => setConfigNameToSave(e.target.value)} />
-                                                     <Button onClick={handleSaveConfig}><Save className="mr-2 h-4 w-4"/>Guardar</Button>
-                                                </div>
-                                                <div className="border-t my-4"></div>
-                                                {savedConfigs.length > 0 ? (
-                                                    <div className="space-y-2">
-                                                        {savedConfigs.map(config => (
-                                                            <div key={config.id} className="flex items-center justify-between p-2 border rounded-md">
-                                                                <span className="font-medium text-sm">{config.name}</span>
-                                                                <div className="flex items-center gap-1">
-                                                                    <Button size="sm" variant="outline" onClick={() => handleLoadConfig(config.id)}>Carregar</Button>
-                                                                     <AlertDialog>
-                                                                        <AlertDialogTrigger asChild>
-                                                                            <Button size="icon" variant="destructive" className='h-9 w-9'><Trash2 className="h-4 w-4"/></Button>
-                                                                        </AlertDialogTrigger>
-                                                                        <AlertDialogContent>
-                                                                            <AlertDialogHeader>
-                                                                                <AlertDialogTitle>Tem a certeza?</AlertDialogTitle>
-                                                                                <AlertDialogDescription>
-                                                                                    Esta ação irá remover permanentemente a configuração "{config.name}" do seu histórico.
-                                                                                </AlertDialogDescription>
-                                                                            </AlertDialogHeader>
-                                                                            <AlertDialogFooter>
-                                                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                                                <AlertDialogAction onClick={() => handleDeleteConfig(config.id)}>Remover</AlertDialogAction>
-                                                                            </AlertDialogFooter>
-                                                                        </AlertDialogContent>
-                                                                    </AlertDialog>
-                                                                </div>
+                                            {savedConfigs.length > 0 ? (
+                                                <div className="space-y-2">
+                                                    {savedConfigs.map(config => (
+                                                        <div key={config.id} className="flex items-center justify-between p-2 border rounded-md">
+                                                            <span className="font-medium text-sm">{config.name}</span>
+                                                            <div className="flex items-center gap-1">
+                                                                <Button size="sm" variant="outline" onClick={() => handleLoadConfig(config.id)}>Carregar</Button>
+                                                                    <AlertDialog>
+                                                                    <AlertDialogTrigger asChild>
+                                                                        <Button size="icon" variant="destructive" className='h-9 w-9'><Trash2 className="h-4 w-4"/></Button>
+                                                                    </AlertDialogTrigger>
+                                                                    <AlertDialogContent>
+                                                                        <AlertDialogHeader>
+                                                                            <AlertDialogTitle>Tem a certeza?</AlertDialogTitle>
+                                                                            <AlertDialogDescription>
+                                                                                Esta ação irá remover permanentemente a configuração "{config.name}" do seu histórico.
+                                                                            </AlertDialogDescription>
+                                                                        </AlertDialogHeader>
+                                                                        <AlertDialogFooter>
+                                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                                            <AlertDialogAction onClick={() => handleDeleteConfig(config.id)}>Remover</AlertDialogAction>
+                                                                        </AlertDialogFooter>
+                                                                    </AlertDialogContent>
+                                                                </AlertDialog>
                                                             </div>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <div className="text-center text-muted-foreground py-8">
-                                                        <History className="mx-auto h-10 w-10 mb-2"/>
-                                                        <p>Nenhuma configuração guardada.</p>
-                                                    </div>
-                                                )}
-                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="text-center text-muted-foreground py-8">
+                                                    <History className="mx-auto h-10 w-10 mb-2"/>
+                                                    <p>Nenhuma configuração guardada.</p>
+                                                </div>
+                                            )}
                                          </ScrollArea>
                                     </TabsContent>
                                 </Tabs>
 
-                                <DialogFooter className="pt-4 mt-4 border-t">
+                                <DialogFooter className="pt-4 mt-4 border-t gap-2">
+                                     <Button variant="outline" onClick={handleSaveConfig}><Save className="mr-2 h-4 w-4"/>Salvar Configuração Atual</Button>
                                     <DialogTrigger asChild>
                                         <Button>Fechar</Button>
                                     </DialogTrigger>
