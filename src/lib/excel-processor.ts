@@ -131,9 +131,9 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     });
     log(`- ${chavesDevolucaoFornecedor.size} notas de devolução para fornecedor (finNFe=4) identificadas.`);
     
-    log("Identificando notas de remessa, retorno e outras operações que não são compras...");
+    log("Identificando notas de remessa e retorno...");
     const chavesRemessaRetorno = new Set<string>();
-    const remessaCfopPrefixes = ['190', '191', '192', '194', '290', '291', '292', '294', '590', '591', '592', '594', '690', '691', '692', '694'];
+    const remessaCfopPrefixes = ['190', '191', '192', '290', '291', '292', '590', '591', '592', '690', '691', '692'];
     itens.forEach(item => {
         if (!item || !item.CFOP) return;
         const cfop = cleanAndToStr(item.CFOP);
