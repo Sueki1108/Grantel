@@ -33,7 +33,7 @@ export const GNRE_DEFAULT_CONFIGS: GnreConfig = {
     "RAZAO_SOCIAL_ALVO": "GRANTEL ENGENHARIA LTDA",
     "ENDERECO_ALVO": "RUA PARANAGUA, 78",
     "CEP_ALVO": "83410390",
-    "MUNICIPIO_ALVO_EMITENTE": "4106902", // O código para Curitiba-PR
+    "MUNICIPIO_ALVO_EMITENTE": "06902", // O código para Curitiba-PR
     "TELEFONE_ALVO": "4133386454",
     "RECEITA_ALVO": "100102",
     "CNPJ_DESTINATARIO": "81732042000119",
@@ -207,7 +207,7 @@ def run_automation_for_item(driver, item_data, vencimento, data_pagamento):
         time.sleep(1) # Espera extra para o JS da página reagir
 
         WebDriverWait(driver, TIMEOUT).until(
-            EC.element_to_be_clickable((By.XPATH, f"//select[@id='{ID_DROPDOWN_MUNICIPIO_EMITENTE}']/option[@value='{MUNICIPIO_ALVO_EMITENTE}']"))
+            EC.presence_of_element_located((By.XPATH, f"//select[@id='{ID_DROPDOWN_MUNICIPIO_EMITENTE}']/option[@value='{MUNICIPIO_ALVO_EMITENTE}']"))
         )
         select_municipio_emitente = Select(driver.find_element(By.ID, ID_DROPDOWN_MUNICIPIO_EMITENTE))
         select_municipio_emitente.select_by_value(MUNICIPIO_ALVO_EMITENTE)
@@ -245,7 +245,7 @@ def run_automation_for_item(driver, item_data, vencimento, data_pagamento):
         campo_razao_social_destinatario_element.send_keys(Keys.TAB)
 
         WebDriverWait(driver, TIMEOUT).until(
-            EC.element_to_be_clickable((By.XPATH, f"//select[@id='{ID_DROPDOWN_MUNICIPIO_DESTINATARIO}']/option[@value='{MUNICIPIO_ALVO_DESTINATARIO}']"))
+            EC.presence_of_element_located((By.XPATH, f"//select[@id='{ID_DROPDOWN_MUNICIPIO_DESTINATARIO}']/option[@value='{MUNICIPIO_ALVO_DESTINATARIO}']"))
         )
         select_municipio_destinatario = Select(driver.find_element(By.ID, ID_DROPDOWN_MUNICIPIO_DESTINATARIO))
         select_municipio_destinatario.select_by_value(MUNICIPIO_ALVO_DESTINATARIO)
