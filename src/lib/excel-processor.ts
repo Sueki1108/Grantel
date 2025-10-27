@@ -140,8 +140,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     addManifestoExceptions(desconhecida);
     addManifestoExceptions(desacordo);
     
-    // Adiciona canceladas encontradas nos XMLs/planilhas principais
-     [...nfe, ...cte, ...saidas].forEach(row => {
+    [...nfe, ...cte, ...saidas].forEach(row => {
         if (!row) return;
         const statusVal = row["Status"];
         if (typeof statusVal === 'string' && statusVal.toLowerCase().includes('cancelada')) {
@@ -150,14 +149,13 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         }
     });
 
-    log(`- Total de ${chavesExcecao.size} chaves de exceção coletadas (canceladas, manifesto).`);
+    log(`- Total de ${chavesExcecao.size} chaves de exceção coletadas.`);
 
     log("Filtrando notas e itens válidos...");
     
     const nfeFiltrada = nfe.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
     const cteFiltrado = cte.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
     
-    // Unifica NFE e CTE de entrada para validação
     const todasEntradas = [...nfeFiltrada, ...cteFiltrado];
     
     const notasValidas: any[] = [];
@@ -167,37 +165,34 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         const chaveAcesso = cleanAndToStr(nota['Chave de acesso']);
         const emitenteCnpjLimpo = cleanAndToStr(nota.emitCNPJ || nota['CPF/CNPJ do Fornecedor']);
         const destCnpjLimpo = cleanAndToStr(nota.destCNPJ || nota['CPF/CNPJ do Destinatário']);
-        const finNFe = nota.finNFe;
-
-        // REGRA 1: Ignorar notas canceladas ou manifestadas
+        
         if (chavesExcecao.has(chaveAcesso)) {
-            return; 
-        }
-        // REGRA 2: Ignorar notas de devolução (finNFe=4) ou com emitente sendo a Grantel (dupla checagem)
-        if (finNFe === '4' || emitenteCnpjLimpo === GRANTEL_CNPJ) {
-            devolucoesDeCompra.push(nota);
             return;
         }
-        // REGRA 3: Ignorar transferências Grantel-Grantel
-        if (emitenteCnpjLimpo === GRANTEL_CNPJ && destCnpjLimpo === GRANTEL_CNPJ) {
-            return;
+
+        if (emitenteCnpjLimpo === GRANTEL_CNPJ) {
+             if (destCnpjLimpo !== GRANTEL_CNPJ) {
+                 devolucoesDeCompra.push(nota); // Emissão própria para um terceiro = Devolução
+             }
+             // Se for Grantel para Grantel (transferência), é ignorada e não vai para nenhuma lista.
+             return;
         }
-        // Se passou por todas as regras, é uma nota válida.
+        
+        // Se o emitente NÃO for a Grantel, é uma nota de compra válida.
         notasValidas.push(nota);
     });
 
-    const notasValidasNFe = notasValidas.filter(n => n.destUF); // Heurística para separar NFe de CTe
+    const notasValidasNFe = notasValidas.filter(n => n.destUF);
     const notasValidasCTe = notasValidas.filter(n => !n.destUF);
 
     log(`- Total de ${notasValidasNFe.length} NF-es válidas para conciliação.`);
     log(`- Total de ${notasValidasCTe.length} CT-es válidos para conciliação.`);
-    log(`- Total de ${devolucoesDeCompra.length} devoluções de compra (emissão própria ou finNFe=4) identificadas.`);
+    log(`- Total de ${devolucoesDeCompra.length} devoluções de compra (emissão própria) identificadas.`);
     
     const chavesNotasValidas = new Set(notasValidas.map(row => cleanAndToStr(row["Chave Unica"])));
     let itensValidos = itens.filter(item => chavesNotasValidas.has(cleanAndToStr(item["Chave Unica"])));
     log(`- ${itensValidos.length} itens válidos de entrada correspondentes.`);
 
-    // Lógica para saídas permanece a mesma (filtrar canceladas)
     let saidasValidas = saidas.filter(row => !chavesExcecao.has(cleanAndToStr(row['Chave de acesso'])));
     log(`- ${saidasValidas.length} saídas válidas encontradas.`);
     const chavesSaidasValidas = new Set(saidasValidas.map(row => cleanAndToStr(row["Chave Unica"])));
