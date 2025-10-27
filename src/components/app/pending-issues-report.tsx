@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { ProcessedData } from '@/lib/excel-processor';
 import { ClipboardList, Download, FileQuestion, FileText, File as FileIcon } from 'lucide-react';
 import { getColumns } from '@/lib/columns-helper';
@@ -68,7 +67,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 'Descrição': item['Descrição'],
                 'Fornecedor': item['Fornecedor'],
                 'Valor Total': item['Valor Total'],
-                'Resumo da Pendência': `Classificado como 'Imobilizado'. Código do Ativo: ${accountCode || '(não definido)'}`,
+                'Código do Ativo': accountCode || '(não definido)',
              };
         });
 
@@ -88,7 +87,6 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
              'Tipo': item.type,
              'Fornecedor': item.Fornecedor,
              'Valor': item.Total,
-            'Resumo da Pendência': 'Chave de Acesso válida na planilha, mas não foi encontrada no arquivo SPED.'
         }));
         if (notFoundInSped.length > 0) {
             reportSections.push({
@@ -106,7 +104,6 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             'Tipo': item.type,
             'Fornecedor': item.Fornecedor,
             'Valor': item.Total,
-            'Resumo da Pendência': 'Chave de Acesso encontrada no SPED, mas não na lista de Notas Válidas.'
         }));
         if (notInSheet.length > 0) {
             reportSections.push({
@@ -151,7 +148,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                      return value.map((v: any) => ({
                         'Tipo de Modificação': key,
                         'Linha': v.lineNumber,
-                        'Resumo da Pendência': `Original: ${v.original || v.line} | Corrigido: ${v.corrected || '(linha removida)'}`,
+                        'Detalhe': `Original: ${v.original || v.line} | Corrigido: ${v.corrected || '(linha removida)'}`,
                     }));
                 }
                 return [];
@@ -176,7 +173,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
              const classification = allPersistedClassifications[competenceKey]?.cfopValidations?.classifications[uniqueKey]?.classification;
              return {
                  ...item,
-                 'Resumo da Pendência': `Status da Validação: ${classification}`
+                 'Status Validação': classification,
              }
         }).filter(item => {
              const competenceKey = processedData.competence || 'default';
@@ -191,7 +188,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 'Descrição XML': item['Descrição'],
                 'CFOP XML': item.CFOP,
                 'CFOP Sienge': item.Sienge_CFOP,
-                'Resumo da Pendência': item['Resumo da Pendência']
+                'Status': item['Status Validação'],
             }));
             reportSections.push({
                 id: 'cfop_issues',
@@ -205,7 +202,6 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         // 7. Revenda
         const resaleItems = (processedData.resaleAnalysis?.xmls || []).map(f => ({
             'Ficheiro XML de Revenda': f.name,
-            'Resumo da Pendência': 'Nota fiscal identificada como operação de revenda, com base nos CFOPs encontrados na planilha do Sienge.'
         }));
          if (resaleItems.length > 0) {
             reportSections.push({
@@ -402,7 +398,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                         const selectedCount = Object.keys(rowSelections[section.id] || {}).filter(key => rowSelections[section.id][key]).length;
 
                         return (
-                            <AccordionItem value={section.id} key={section.id} className="border-b-0">
+                            <AccordionItem value={section.id} key={section.id} className="border-b-0 mb-4">
                                 <AccordionTrigger className="p-4 bg-muted/50 rounded-t-lg hover:no-underline">
                                     <div className="flex items-center space-x-3 w-full">
                                         <Checkbox
@@ -462,3 +458,4 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         </Card>
     );
 }
+
