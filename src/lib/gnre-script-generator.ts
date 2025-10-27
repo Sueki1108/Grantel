@@ -72,11 +72,15 @@ except ImportError:
     from webdriver_manager.chrome import ChromeDriverManager
 `;
 
-    let gnreListContent = "GNRE_LISTA_DADOS = [\\n";
-    for (const data of gnreData) {
-        gnreListContent += `    {"chave": "${data.chave_acesso}", "valor_gnre": "${data.valor_principal_gnre}", "valor_real": "${data.valor_principal_calculado.toFixed(2)}"},\n`;
-    }
-    gnreListContent += "]\\n";
+    const gnreItemsString = gnreData.map(data => 
+        `    {"chave": "${data.chave_acesso}", "valor_gnre": "${data.valor_principal_gnre}", "valor_real": "${data.valor_principal_calculado.toFixed(2)}"}`
+    ).join(',\n');
+
+    const gnreListContent = `
+GNRE_LISTA_DADOS = [
+${gnreItemsString}
+]
+`;
 
     const configVars = `
 # VARIÁVEIS DINÂMICAS (Datas inseridas na aplicação)
