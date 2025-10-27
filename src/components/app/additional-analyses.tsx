@@ -66,7 +66,7 @@ const normalizeKey = (key: string | undefined): string => {
 
 interface AdditionalAnalysesProps {
     processedData: ProcessedData;
-    onProcessedDataChange: (data: ProcessedData) => void;
+    onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData) => ProcessedData)) => void;
     onSiengeDataProcessed: (data: any[] | null) => void;
     siengeFile: File | null;
     onSiengeFileChange: (file: File | null) => void;
@@ -117,8 +117,13 @@ export function AdditionalAnalyses({
         process();
     }, [siengeFile, siengeSheetData, onSiengeDataProcessed, toast]);
 
+    const { reconciliationResults, error: reconciliationError } = useReconciliation(processedData);
     
-    const reconciliationResults = useReconciliation(processedData);
+    useEffect(() => {
+        if (reconciliationResults && processedData.reconciliationResults !== reconciliationResults) {
+            onProcessedDataChange(prev => ({...prev, reconciliationResults}));
+        }
+    }, [reconciliationResults, onProcessedDataChange, processedData.reconciliationResults]);
 
 
     // Estado Exportação XML Revenda
@@ -229,18 +234,18 @@ export function AdditionalAnalyses({
                     }
                 }
                 
-                onProcessedDataChange({ ...processedData, siengeSheetData: localSiengeData, resaleAnalysis: { noteKeys: resaleNoteKeys, xmls: matchedXmls } });
+                onProcessedDataChange(prev => ({ ...prev, siengeSheetData: localSiengeData, resaleAnalysis: { noteKeys: resaleNoteKeys, xmls: matchedXmls } }));
                 toast({ title: "Análise de Revenda Concluída", description: `${matchedXmls.length} XMLs correspondentes encontrados.` });
     
             } catch (error: any) {
                 toast({ variant: 'destructive', title: "Erro na Análise de Revenda", description: error.message });
-                onProcessedDataChange({ ...processedData, resaleAnalysis: null });
+                onProcessedDataChange(prev => ({ ...prev, resaleAnalysis: null }));
             } finally {
                 setIsAnalyzingResale(false);
             }
         }, 50);
     
-    }, [siengeFile, siengeSheetData, allXmlFiles, toast, onProcessedDataChange, processedData]);
+    }, [siengeFile, siengeSheetData, allXmlFiles, toast, onProcessedDataChange, onSiengeDataProcessed]);
 
 
     const handleExportResaleXmls = async () => {
@@ -317,8 +322,8 @@ export function AdditionalAnalyses({
                         onSiengeFileChange={handleSiengeFileChange}
                         onClearSiengeFile={onClearSiengeFile}
                         processedData={processedData}
-                        reconciliationResults={reconciliationResults.reconciliationResults}
-                        error={reconciliationResults.error}
+                        reconciliationResults={reconciliationResults}
+                        error={reconciliationError}
                         allPersistedClassifications={allPersistedClassifications}
                         onPersistAllClassifications={onPersistAllClassifications}
                     />
@@ -554,7 +559,7 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
                 return { matched: matchedInPass, remainingSienge: unmatchedSienge, remainingXml: unmatchedXml };
             };
             
-            let passes = [
+            const passes = [
                 {
                     name: "Valor Total",
                     siengeKeyFn: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]),
@@ -565,7 +570,7 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
                     siengeKeyFn: (item: any) => h.precoUnitario ? getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.precoUnitario!]) : null,
                     xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Unitário'])
                 },
-                {
+                 {
                     name: "Valor Total - IPI/ICMS ST",
                     siengeKeyFn: (item: any) => (h.ipiDespesas || h.icmsSt) ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0) - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)) : null,
                     xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
