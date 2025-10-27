@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, type ChangeEvent } from 'react';
@@ -6,7 +5,7 @@ import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown, Calendar as CalendarIcon, Bot } from 'lucide-react';
+import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown, Calendar as CalendarIcon, Bot, Settings } from 'lucide-react';
 import JSZip from 'jszip';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -18,7 +17,10 @@ import { DataTable } from './data-table';
 import { getColumnsWithCustomRender } from '@/lib/columns-helper';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
-import { generateGnreScript } from '@/lib/gnre-script-generator';
+import { generateGnreScript, GNRE_DEFAULT_CONFIGS, GnreConfig } from '@/lib/gnre-script-generator';
+import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogTrigger, DialogFooter } from '../ui/dialog';
+import { Input } from '../ui/input';
+import { ScrollArea } from '../ui/scroll-area';
 
 // ===============================================================
 // Tipos
@@ -29,12 +31,6 @@ type GnreDataItem = {
     chave_acesso: string;
     valor_principal_calculado: number;
     valor_principal_gnre: string;
-};
-
-type IgnoredData = {
-    'Chave de Acesso': string;
-    'Valor da Nota': number;
-    'Motivo da Rejeição': string;
 };
 
 // ===============================================================
@@ -62,8 +58,6 @@ const readFileAsText = (file: File): Promise<string> => {
     });
 };
 
-const NFE_NS = '{http://www.portalfiscal.inf.br/nfe}';
-
 const parseXmlData = (xmlText: string, filename: string): GnreDataItem | null => {
     try {
         const parser = new DOMParser();
@@ -71,7 +65,7 @@ const parseXmlData = (xmlText: string, filename: string): GnreDataItem | null =>
         const root = xmlDoc.documentElement;
 
         let chaveAcesso: string | null = null;
-        const chNFeElement = root.querySelector('chNFe'); // Tenta buscar em protNFe/infProt
+        const chNFeElement = root.querySelector('chNFe'); 
         if (chNFeElement?.textContent) {
             chaveAcesso = chNFeElement.textContent;
         } else {
@@ -120,6 +114,7 @@ export function DifalAnalysis() {
     const [isLoading, setIsLoading] = useState(false);
     const [gnreData, setGnreData] = useState<GnreDataItem[]>([]);
     const [dueDate, setDueDate] = useState<Date | undefined>(new Date());
+    const [gnreConfigs, setGnreConfigs] = useState<GnreConfig>(GNRE_DEFAULT_CONFIGS);
     const { toast } = useToast();
 
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -193,7 +188,7 @@ export function DifalAnalysis() {
 
         try {
             const dataUnica = format(dueDate, 'dd/MM/yyyy');
-            const scriptContent = generateGnreScript(gnreData, dataUnica, dataUnica);
+            const scriptContent = generateGnreScript(gnreData, dataUnica, dataUnica, gnreConfigs);
             
             const blob = new Blob([scriptContent], { type: 'text/python;charset=utf-8' });
             const url = URL.createObjectURL(blob);
@@ -210,19 +205,54 @@ export function DifalAnalysis() {
             toast({ variant: 'destructive', title: 'Erro ao Gerar Script', description: error.message });
         }
     };
+    
+    const handleConfigChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setGnreConfigs(prev => ({ ...prev, [name]: value }));
+    };
 
     return (
         <div className="space-y-6">
             <Card>
                 <CardHeader>
-                    <div className="flex items-center gap-3">
-                         <TicketPercent className="h-8 w-8 text-primary" />
-                        <div>
-                            <CardTitle className="font-headline text-2xl">Gerador de Script para Automação de Guias DIFAL (GNRE)</CardTitle>
-                            <CardDescription>
-                                Carregue os XMLs de devolução, defina a data, e gere um script Python para automatizar o preenchimento das guias GNRE no portal de Pernambuco.
-                            </CardDescription>
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <TicketPercent className="h-8 w-8 text-primary" />
+                            <div>
+                                <CardTitle className="font-headline text-2xl">Gerador de Script para Automação de Guias DIFAL (GNRE)</CardTitle>
+                                <CardDescription>
+                                    Carregue os XMLs de devolução, defina a data, e gere um script Python para automatizar o preenchimento das guias GNRE no portal de Pernambuco.
+                                </CardDescription>
+                            </div>
                         </div>
+                         <Dialog>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" size="sm"><Settings className="mr-2 h-4 w-4"/>Configurações Avançadas</Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl">
+                                <DialogHeader>
+                                    <DialogTitle>Configurações Padrão do Script GNRE</DialogTitle>
+                                    <DialogDescription>
+                                        Altere os valores padrão que serão usados no script de automação.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <ScrollArea className="max-h-[60vh] p-1">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+                                        {Object.entries(gnreConfigs).map(([key, value]) => (
+                                            <div key={key} className="space-y-1">
+                                                <Label htmlFor={key} className="text-xs font-semibold capitalize">{key.replace(/_/g, ' ')}</Label>
+                                                <Input id={key} name={key} value={value} onChange={handleConfigChange} className="h-8 text-sm"/>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </ScrollArea>
+                                <DialogFooter>
+                                    <DialogTrigger asChild>
+                                        <Button>Fechar</Button>
+                                    </DialogTrigger>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-8">

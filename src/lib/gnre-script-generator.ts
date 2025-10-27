@@ -1,5 +1,23 @@
 
 
+export type GnreConfig = {
+    URL_SITE: string;
+    UF_ALVO: string;
+    UF_ALVO_EMITENTE: string;
+    CNPJ_ALVO: string;
+    RAZAO_SOCIAL_ALVO: string;
+    ENDERECO_ALVO: string;
+    CEP_ALVO: string;
+    MUNICIPIO_ALVO_EMITENTE: string;
+    TELEFONE_ALVO: string;
+    RECEITA_ALVO: string;
+    CNPJ_DESTINATARIO: string;
+    RAZAO_SOCIAL_DESTINATARIO: string;
+    UF_DESTINATARIO: string;
+    MUNICIPIO_ALVO_DESTINATARIO: string;
+};
+
+
 type GnreDataItem = {
     filename: string;
     chave_acesso: string;
@@ -7,7 +25,7 @@ type GnreDataItem = {
     valor_principal_gnre: string;
 };
 
-const GNRE_CONFIGS = {
+export const GNRE_DEFAULT_CONFIGS: GnreConfig = {
     "URL_SITE": "https://www.gnre.pe.gov.br:444/gnre/v/guia/index",
     "UF_ALVO": "MS",
     "UF_ALVO_EMITENTE": "PR",
@@ -27,7 +45,8 @@ const GNRE_CONFIGS = {
 export function generateGnreScript(
     gnreData: GnreDataItem[],
     vencimentoAlvo: string,
-    dataPagamentoAlvo: string
+    dataPagamentoAlvo: string,
+    gnreConfigs: GnreConfig
 ): string {
 
     const seleniumImports = `
@@ -65,20 +84,20 @@ VENCIMENTO_ALVO = "${vencimentoAlvo}"
 DATA_PAGAMENTO_ALVO = "${dataPagamentoAlvo}"
 
 # VARIÁVEIS FIXAS (Informações do Emitente/Destinatário)
-URL_SITE = "${GNRE_CONFIGS.URL_SITE}"
-UF_ALVO = "${GNRE_CONFIGS.UF_ALVO}"
-UF_ALVO_EMITENTE = "${GNRE_CONFIGS.UF_ALVO_EMITENTE}"
-CNPJ_ALVO = "${GNRE_CONFIGS.CNPJ_ALVO}"
-RAZAO_SOCIAL_ALVO = "${GNRE_CONFIGS.RAZAO_SOCIAL_ALVO}"
-ENDERECO_ALVO = "${GNRE_CONFIGS.ENDERECO_ALVO}"
-CEP_ALVO = "${GNRE_CONFIGS.CEP_ALVO}"
-MUNICIPIO_ALVO_EMITENTE = "${GNRE_CONFIGS.MUNICIPIO_ALVO_EMITENTE}"
-TELEFONE_ALVO = "${GNRE_CONFIGS.TELEFONE_ALVO}"
-RECEITA_ALVO = "${GNRE_CONFIGS.RECEITA_ALVO}"
-CNPJ_DESTINATARIO = "${GNRE_CONFIGS.CNPJ_DESTINATARIO}"
-RAZAO_SOCIAL_DESTINATARIO = "${GNRE_CONFIGS.RAZAO_SOCIAL_DESTINATARIO}"
-UF_DESTINATARIO = "${GNRE_CONFIGS.UF_DESTINATARIO}"
-MUNICIPIO_ALVO_DESTINATARIO = "${GNRE_CONFIGS.MUNICIPIO_ALVO_DESTINATARIO}"
+URL_SITE = "${gnreConfigs.URL_SITE}"
+UF_ALVO = "${gnreConfigs.UF_ALVO}"
+UF_ALVO_EMITENTE = "${gnreConfigs.UF_ALVO_EMITENTE}"
+CNPJ_ALVO = "${gnreConfigs.CNPJ_ALVO}"
+RAZAO_SOCIAL_ALVO = "${gnreConfigs.RAZAO_SOCIAL_ALVO}"
+ENDERECO_ALVO = "${gnreConfigs.ENDERECO_ALVO}"
+CEP_ALVO = "${gnreConfigs.CEP_ALVO}"
+MUNICIPIO_ALVO_EMITENTE = "${gnreConfigs.MUNICIPIO_ALVO_EMITENTE}"
+TELEFONE_ALVO = "${gnreConfigs.TELEFONE_ALVO}"
+RECEITA_ALVO = "${gnreConfigs.RECEITA_ALVO}"
+CNPJ_DESTINATARIO = "${gnreConfigs.CNPJ_DESTINATARIO}"
+RAZAO_SOCIAL_DESTINATARIO = "${gnreConfigs.RAZAO_SOCIAL_DESTINATARIO}"
+UF_DESTINATARIO = "${gnreConfigs.UF_DESTINATARIO}"
+MUNICIPIO_ALVO_DESTINATARIO = "${gnreConfigs.MUNICIPIO_ALVO_DESTINATARIO}"
 `;
 
     const automationFunction = `
