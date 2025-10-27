@@ -249,7 +249,7 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     return { cte: [notaCte] };
 };
 
-const parseCancelEvent = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | null => {
+const parseEvent = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | null => {
     const eventoList = xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'evento');
     if (eventoList.length === 0 || !eventoList[0]) return null;
 
@@ -257,15 +257,18 @@ const parseCancelEvent = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlDat
     if (!infEvento) return null;
     
     const tpEvento = getTagValue(infEvento, 'tpEvento');
-    const descEvento = getTagValue(infEvento, 'descEvento');
-
-    if (tpEvento === '110111' || descEvento.toLowerCase() === 'cancelamento') {
+    
+    // Evento de Cancelamento: 110111
+    if (tpEvento === '110111') {
         const chNFe = getTagValue(infEvento, 'chNFe');
         if (chNFe) {
             log(`INFO: Evento de cancelamento detectado para a chave: ${chNFe}`);
             return { canceledKeys: new Set([chNFe]) };
         }
     }
+    
+    // Outros eventos, como Carta de Correção (110110), são ignorados e não invalidam a nota.
+    // O retorno nulo garante que a chave não seja adicionada ao conjunto de canceladas.
     return null;
 }
 
@@ -366,10 +369,13 @@ export const processUploadedXmls = async (files: File[]): Promise<XmlData> => {
             let parsedResult: Partial<XmlData> | null = null;
             
             if (xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'procEventoNFe').length > 0 || xmlDoc.getElementsByTagName('procEventoCTe').length > 0) {
-                parsedResult = parseCancelEvent(xmlDoc, () => {});
+                // This is an event XML (like cancellation or correction letter)
+                parsedResult = parseEvent(xmlDoc, () => {});
             } else if (xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'nfeProc').length > 0) {
+                // This is a standard NFe
                 parsedResult = parseNFe(xmlDoc, () => {});
             } else if (xmlDoc.getElementsByTagName('cteProc').length > 0) {
+                // This is a standard CTe
                 parsedResult = parseCTe(xmlDoc, () => {});
             }
             
