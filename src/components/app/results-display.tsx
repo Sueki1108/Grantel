@@ -61,7 +61,7 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
             {orderedSheetNames.map(sheetName => (
                 results[sheetName] && results[sheetName].length > 0 && (
                     <TabsContent key={sheetName} value={sheetName} className="mt-4">
-                        <ScrollArea className="whitespace-nowrap rounded-lg">
+                        <ScrollArea className="whitespace-nowrap rounded-lg border">
                             <DataTable columns={getColumns(results[sheetName])} data={results[sheetName]} />
                              <ScrollBar orientation="horizontal" />
                         </ScrollArea>
