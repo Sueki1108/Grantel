@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useMemo, type ChangeEvent } from 'react';
+import { useState, useMemo, type ChangeEvent, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown, Calendar as CalendarIcon, Bot, Settings } from 'lucide-react';
+import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown, Calendar as CalendarIcon, Bot, Settings, Save, History, Trash2, Library } from 'lucide-react';
 import JSZip from 'jszip';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -21,6 +21,8 @@ import { generateGnreScript, GNRE_DEFAULT_CONFIGS, GnreConfig } from '@/lib/gnre
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogTrigger, DialogFooter } from '../ui/dialog';
 import { Input } from '../ui/input';
 import { ScrollArea } from '../ui/scroll-area';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
+
 
 // ===============================================================
 // Tipos
@@ -32,6 +34,13 @@ type GnreDataItem = {
     valor_principal_calculado: number;
     valor_principal_gnre: string;
 };
+
+type SavedGnreConfig = GnreConfig & {
+    id: string;
+    name: string;
+}
+
+const GNRE_CONFIG_HISTORY_KEY = 'gnreConfigHistory';
 
 // ===============================================================
 // Helper Functions
@@ -115,7 +124,21 @@ export function DifalAnalysis() {
     const [gnreData, setGnreData] = useState<GnreDataItem[]>([]);
     const [dueDate, setDueDate] = useState<Date | undefined>(new Date());
     const [gnreConfigs, setGnreConfigs] = useState<GnreConfig>(GNRE_DEFAULT_CONFIGS);
+    const [savedConfigs, setSavedConfigs] = useState<SavedGnreConfig[]>([]);
+    const [configNameToSave, setConfigNameToSave] = useState('');
+
     const { toast } = useToast();
+    
+    useEffect(() => {
+        try {
+            const storedHistory = localStorage.getItem(GNRE_CONFIG_HISTORY_KEY);
+            if(storedHistory) {
+                setSavedConfigs(JSON.parse(storedHistory));
+            }
+        } catch (e) {
+            console.error("Failed to load GNRE config history:", e);
+        }
+    }, []);
 
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const selectedFiles = e.target.files;
@@ -211,6 +234,41 @@ export function DifalAnalysis() {
         setGnreConfigs(prev => ({ ...prev, [name]: value }));
     };
 
+     const handleSaveConfig = () => {
+        if (!configNameToSave.trim()) {
+            toast({ variant: 'destructive', title: 'Nome inválido', description: 'Por favor, dê um nome à sua configuração.' });
+            return;
+        }
+        
+        const newSavedConfig: SavedGnreConfig = {
+            id: new Date().toISOString(),
+            name: configNameToSave,
+            ...gnreConfigs
+        };
+
+        const newHistory = [...savedConfigs, newSavedConfig];
+        setSavedConfigs(newHistory);
+        localStorage.setItem(GNRE_CONFIG_HISTORY_KEY, JSON.stringify(newHistory));
+        toast({ title: 'Configuração guardada!', description: `"${configNameToSave}" foi adicionada ao seu histórico.` });
+        setConfigNameToSave('');
+    };
+
+    const handleLoadConfig = (configId: string) => {
+        const configToLoad = savedConfigs.find(c => c.id === configId);
+        if (configToLoad) {
+            const { id, name, ...loadedConfig } = configToLoad;
+            setGnreConfigs(loadedConfig);
+            toast({ title: 'Configuração Carregada', description: `As configurações de "${name}" foram aplicadas.` });
+        }
+    };
+
+    const handleDeleteConfig = (configId: string) => {
+        const newHistory = savedConfigs.filter(c => c.id !== configId);
+        setSavedConfigs(newHistory);
+        localStorage.setItem(GNRE_CONFIG_HISTORY_KEY, JSON.stringify(newHistory));
+        toast({ title: 'Configuração Removida', description: 'A configuração foi removida do seu histórico.' });
+    };
+
     return (
         <div className="space-y-6">
             <Card>
@@ -229,24 +287,79 @@ export function DifalAnalysis() {
                             <DialogTrigger asChild>
                                 <Button variant="outline" size="sm"><Settings className="mr-2 h-4 w-4"/>Configurações Avançadas</Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-2xl">
+                            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
                                 <DialogHeader>
                                     <DialogTitle>Configurações Padrão do Script GNRE</DialogTitle>
                                     <DialogDescription>
-                                        Altere os valores padrão que serão usados no script de automação.
+                                        Altere os valores padrão que serão usados no script, ou guarde/carregue configurações do seu histórico.
                                     </DialogDescription>
                                 </DialogHeader>
-                                <ScrollArea className="max-h-[60vh] p-1">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-                                        {Object.entries(gnreConfigs).map(([key, value]) => (
-                                            <div key={key} className="space-y-1">
-                                                <Label htmlFor={key} className="text-xs font-semibold capitalize">{key.replace(/_/g, ' ')}</Label>
-                                                <Input id={key} name={key} value={value} onChange={handleConfigChange} className="h-8 text-sm"/>
+                                
+                                <Tabs defaultValue="current" className="flex-grow flex flex-col overflow-hidden">
+                                    <TabsList className="grid w-full grid-cols-2">
+                                        <TabsTrigger value="current">Configuração Atual</TabsTrigger>
+                                        <TabsTrigger value="history">Histórico de Configurações</TabsTrigger>
+                                    </TabsList>
+                                    <TabsContent value="current" className="flex-grow overflow-hidden mt-4">
+                                         <ScrollArea className="h-full pr-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {Object.entries(gnreConfigs).map(([key, value]) => (
+                                                    <div key={key} className="space-y-1">
+                                                        <Label htmlFor={key} className="text-xs font-semibold capitalize">{key.replace(/_/g, ' ')}</Label>
+                                                        <Input id={key} name={key} value={value} onChange={handleConfigChange} className="h-8 text-sm"/>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        ))}
-                                    </div>
-                                </ScrollArea>
-                                <DialogFooter>
+                                        </ScrollArea>
+                                    </TabsContent>
+                                     <TabsContent value="history" className="flex-grow overflow-hidden mt-4">
+                                         <ScrollArea className="h-full pr-4">
+                                            <div className='space-y-4'>
+                                                <div className="flex gap-2">
+                                                     <Input placeholder="Nome para a configuração atual..." value={configNameToSave} onChange={(e) => setConfigNameToSave(e.target.value)} />
+                                                     <Button onClick={handleSaveConfig}><Save className="mr-2 h-4 w-4"/>Guardar</Button>
+                                                </div>
+                                                <div className="border-t my-4"></div>
+                                                {savedConfigs.length > 0 ? (
+                                                    <div className="space-y-2">
+                                                        {savedConfigs.map(config => (
+                                                            <div key={config.id} className="flex items-center justify-between p-2 border rounded-md">
+                                                                <span className="font-medium text-sm">{config.name}</span>
+                                                                <div className="flex items-center gap-1">
+                                                                    <Button size="sm" variant="outline" onClick={() => handleLoadConfig(config.id)}>Carregar</Button>
+                                                                     <AlertDialog>
+                                                                        <AlertDialogTrigger asChild>
+                                                                            <Button size="icon" variant="destructive" className='h-9 w-9'><Trash2 className="h-4 w-4"/></Button>
+                                                                        </AlertDialogTrigger>
+                                                                        <AlertDialogContent>
+                                                                            <AlertDialogHeader>
+                                                                                <AlertDialogTitle>Tem a certeza?</AlertDialogTitle>
+                                                                                <AlertDialogDescription>
+                                                                                    Esta ação irá remover permanentemente a configuração "{config.name}" do seu histórico.
+                                                                                </AlertDialogDescription>
+                                                                            </AlertDialogHeader>
+                                                                            <AlertDialogFooter>
+                                                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                                                <AlertDialogAction onClick={() => handleDeleteConfig(config.id)}>Remover</AlertDialogAction>
+                                                                            </AlertDialogFooter>
+                                                                        </AlertDialogContent>
+                                                                    </AlertDialog>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-center text-muted-foreground py-8">
+                                                        <History className="mx-auto h-10 w-10 mb-2"/>
+                                                        <p>Nenhuma configuração guardada.</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                         </ScrollArea>
+                                    </TabsContent>
+                                </Tabs>
+
+                                <DialogFooter className="pt-4 mt-4 border-t">
                                     <DialogTrigger asChild>
                                         <Button>Fechar</Button>
                                     </DialogTrigger>
