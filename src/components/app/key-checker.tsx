@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -806,7 +805,7 @@ export function KeyChecker({
     };
 
     const ModificationDisplay = ({ logs }: { logs: ModificationLog[] }) => (
-        <ScrollArea className="h-[calc(80vh-250px)] pr-4">
+        <ScrollArea className="h-full pr-4">
             <div className="text-sm font-mono whitespace-pre-wrap space-y-4">
                 {logs.map((log, index) => (
                     <div key={index} className="p-2 rounded-md border">
@@ -820,7 +819,7 @@ export function KeyChecker({
     );
 
     const RemovedLinesDisplay = ({ logs }: { logs: RemovedLineLog[] }) => (
-        <ScrollArea className="h-[calc(80vh-250px)] pr-4">
+        <ScrollArea className="h-full pr-4">
             <div className="text-sm font-mono whitespace-pre-wrap space-y-2">
                 {logs.map((log, index) => (
                     <div key={index} className="p-2 rounded-md border bg-yellow-100 dark:bg-yellow-900/30">
@@ -903,7 +902,7 @@ export function KeyChecker({
                                     {isCorrecting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Corrigindo...</> : 'Corrigir e Baixar Arquivo SPED'}
                                 </Button>
                             </DialogTrigger>
-                           <DialogContent className="max-w-[95vw] h-[90vh] flex flex-col">
+                           <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
                                 <DialogHeader>
                                     <DialogTitle>Correção do Arquivo SPED</DialogTitle>
                                     <DialogDescription>
@@ -1082,3 +1081,4 @@ export function KeyChecker({
 }
 
     
+
