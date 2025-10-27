@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -51,7 +50,38 @@ function Filter({
 
   const columnFilterValue = column.getFilterValue()
 
-  return (
+  const isSpecialNumberColumn = (column.id.toUpperCase().includes('CFOP') || column.id.toUpperCase().includes('CST'));
+
+  return typeof firstValue === 'number' && !isSpecialNumberColumn ? (
+    <div className="flex space-x-2">
+      <Input
+        type="number"
+        value={(columnFilterValue as [number, number])?.[0] ?? ''}
+        onChange={e =>
+          column.setFilterValue((old: [number, number]) => [
+            e.target.value,
+            old?.[1],
+          ])
+        }
+        placeholder={`Min`}
+        className="w-24 border-slate-200 h-8"
+        onClick={(e) => e.stopPropagation()}
+      />
+      <Input
+        type="number"
+        value={(columnFilterValue as [number, number])?.[1] ?? ''}
+        onChange={e =>
+          column.setFilterValue((old: [number, number]) => [
+            old?.[0],
+            e.target.value,
+          ])
+        }
+        placeholder={`Max`}
+        className="w-24 border-slate-200 h-8"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  ) : (
     <Input
       type="text"
       value={(columnFilterValue ?? '') as string}
@@ -122,7 +152,7 @@ export function DataTable<TData, TValue>({
               </div>
             )}
       </div>
-      <ScrollArea className="rounded-md border whitespace-nowrap">
+      <div className="rounded-md border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -185,8 +215,7 @@ export function DataTable<TData, TValue>({
             </TableFooter>
            )}
         </Table>
-        <ScrollBar orientation="horizontal" />
-      </ScrollArea>
+      </div>
       <div className="flex items-center justify-end space-x-2 py-4">
         <Button
           variant="outline"
