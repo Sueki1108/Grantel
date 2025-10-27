@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -56,7 +57,6 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
              const accountCode = persistedForCompetence?.accountCodes?.[item.id]?.accountCode;
             
              return {
-                'Resumo da Pendência': 'Item classificado como imobilizado para futura depreciação.',
                 'Número da Nota': item['Número da Nota'],
                 'Descrição': item['Descrição'],
                 'Fornecedor': item['Fornecedor'],
@@ -77,7 +77,6 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
 
         // 2. SPED - Não encontrados
         const notFoundInSped = (processedData.keyCheckResults?.keysNotFoundInTxt || []).map(item => ({
-             'Resumo da Pendência': 'Chave válida encontrada nos XMLs/planilhas, mas ausente no arquivo SPED.',
              'Chave de Acesso': item.key,
              'Tipo': item.type,
              'Fornecedor': item.Fornecedor,
@@ -95,7 +94,6 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
 
         // 3. SPED - Não na planilha
         const notInSheet = (processedData.keyCheckResults?.keysInTxtNotInSheet || []).map(item => ({
-            'Resumo da Pendência': 'Chave encontrada no SPED, mas não pertence às notas válidas (pode ser cancelada, devolução, etc.).',
             'Chave de Acesso': item.key,
             'Tipo': item.type,
             'Fornecedor': item.Fornecedor,
@@ -116,10 +114,10 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         
         if ((ufDivergences?.length || 0) > 0 || (ieDivergences?.length || 0) > 0 || (dateDivergences?.length || 0) > 0 || (valueDivergences?.length || 0) > 0) {
             const subSections = [
-                { id: 'uf', title: 'UF', data: (ufDivergences || []).map(d => ({'Resumo da Pendência': `UF do destinatário no XML (${d['UF no XML']}) diverge do padrão.`, ...d})), columns: getColumns(ufDivergences || []) },
-                { id: 'ie', title: 'IE', data: (ieDivergences || []).map(d => ({'Resumo da Pendência': `IE do destinatário no XML (${d['IE no XML']}) diverge do padrão.`, ...d})), columns: getColumns(ieDivergences || []) },
-                { id: 'date', title: 'Data', data: (dateDivergences || []).map(d => ({'Resumo da Pendência': `Data de emissão entre XML (${d['Data Emissão XML']}) e SPED (${d['Data Emissão SPED']}) diverge.`, ...d})), columns: getColumns(dateDivergences || []) },
-                { id: 'value', title: 'Valor', data: (valueDivergences || []).map(d => ({'Resumo da Pendência': `Valor total entre XML (${d['Valor XML']}) e SPED (${d['Valor SPED']}) diverge.`, ...d})), columns: getColumns(valueDivergences || []) },
+                { id: 'uf', title: 'UF', data: (ufDivergences || []), columns: getColumns(ufDivergences || []) },
+                { id: 'ie', title: 'IE', data: (ieDivergences || []), columns: getColumns(ieDivergences || []) },
+                { id: 'date', title: 'Data', data: (dateDivergences || []), columns: getColumns(dateDivergences || []) },
+                { id: 'value', title: 'Valor', data: (valueDivergences || []), columns: getColumns(valueDivergences || []) },
             ].filter(sub => sub.data.length > 0);
 
             reportSections.push({
@@ -138,7 +136,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             const modifications = Object.entries(spedCorrections[0].modifications).flatMap(([key, value]) => {
                 if(Array.isArray(value) && value.length > 0) {
                      return value.map((v: any) => ({
-                        'Resumo da Pendência': `Correção automática aplicada (Tipo: ${key})`,
+                        'Tipo de Correção': key,
                         'Linha': v.lineNumber,
                         'Detalhe': `Original: ${v.original || v.line} | Corrigido: ${v.corrected || '(removida)'}`,
                     }));
@@ -158,15 +156,15 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
 
         // 6. CFOP Incorreto/A Verificar
         const cfopValidationItems = processedData.reconciliationResults?.reconciled || [];
-        const cfopIncorrectItems = cfopValidationItems.filter(item => {
+        const cfopIncorrectOrVerifyItems = cfopValidationItems.filter(item => {
              const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
              const classification = allPersistedClassifications[competenceKey]?.cfopValidations?.classifications[uniqueKey]?.classification;
              return classification === 'incorrect' || classification === 'verify';
         });
 
-         if (cfopIncorrectItems.length > 0) {
-             const cfopReportData = cfopIncorrectItems.map(item => ({
-                'Resumo da Pendência': `CFOP do Sienge classificado como '${allPersistedClassifications[competenceKey]?.cfopValidations?.classifications[`${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`]?.classification || ''}'`,
+         if (cfopIncorrectOrVerifyItems.length > 0) {
+             const cfopReportData = cfopIncorrectOrVerifyItems.map(item => ({
+                'Status': allPersistedClassifications[competenceKey]?.cfopValidations?.classifications[`${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`]?.classification || '',
                 'Fornecedor': item.Fornecedor,
                 'Número da Nota': item['Número da Nota'],
                 'Descrição XML': item['Descrição'],
@@ -184,7 +182,6 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         
         // 7. Revenda
         const resaleItems = (processedData.resaleAnalysis?.xmls || []).map(f => ({
-            'Resumo da Pendência': 'Nota fiscal identificada como operação de revenda, com base no CFOP do Sienge.',
             'Ficheiro XML de Revenda': f.name,
         }));
          if (resaleItems.length > 0) {
@@ -257,7 +254,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                     theme: 'striped',
                     headStyles: { fillColor: [41, 128, 185], cellPadding: 2, halign: 'center' },
                     styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak' },
-                    columnStyles: { 0: { cellWidth: 'wrap' } }
+                    columnStyles: { 0: { cellWidth: 'auto' } }
                 });
                 
                 isFirstPage = false;
