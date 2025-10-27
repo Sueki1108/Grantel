@@ -65,18 +65,21 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const [activeFilter, setActiveFilter] = useState<ValidationStatus | 'all'>('unvalidated');
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
+    const reconciledItems = useMemo(() => items.filter(item => item.Observações?.startsWith('Conciliado')), [items]);
+
+
     // Carrega o estado persistido na inicialização
     useEffect(() => {
         const persistedValidations = (allPersistedClassifications && allPersistedClassifications['cfopValidations']?.classifications) || {};
         const initialStatus: Record<string, ValidationStatus> = {};
 
-        items.forEach(item => {
+        reconciledItems.forEach(item => {
             const uniqueProductKey = getUniqueProductKey(item);
             initialStatus[item['Chave de acesso'] + item.Item] = persistedValidations[uniqueProductKey]?.classification as ValidationStatus || 'unvalidated';
         });
 
         setValidationStatus(initialStatus);
-    }, [items, allPersistedClassifications]);
+    }, [reconciledItems, allPersistedClassifications]);
 
 
      const handleValidationChange = (itemsToUpdate: CfopValidationData[], newStatus: ValidationStatus) => {
@@ -137,7 +140,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     // Colunas da Tabela
     const columns = useMemo(() => {
         const baseColumns = getColumnsWithCustomRender(
-            items,
+            reconciledItems,
             ['Fornecedor', 'Número da Nota', 'Descrição', 'Sienge_Descrição', 'CFOP', 'CST do ICMS', 'Sienge_CFOP'],
             (row: any, id: string) => {
                 const value = row.original[id];
@@ -214,7 +217,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
         return baseColumns;
 
-    }, [items]);
+    }, [reconciledItems]);
 
     const actionColumn: any = {
         id: 'Ações',
@@ -254,8 +257,8 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
      const filteredAndGroupedItems = useMemo((): GroupedItems => {
         // First, filter items based on the active tab's status
         const filteredItems = activeFilter === 'all'
-            ? items
-            : items.filter(item => (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter);
+            ? reconciledItems
+            : reconciledItems.filter(item => (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter);
         
         // Then, group the filtered items by CFOP
         const groups: GroupedItems = {};
@@ -268,7 +271,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         });
 
         return groups;
-    }, [items, validationStatus, activeFilter]);
+    }, [reconciledItems, validationStatus, activeFilter]);
     
     const [activeTabGroup, setActiveTabGroup] = useState<string>('');
     const tableRef = React.useRef<ReactTable<CfopValidationData> | null>(null);
