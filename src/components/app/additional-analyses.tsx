@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FileSearch, Sheet, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Building, Save, Database, FileJson } from "lucide-react";
+import { FileSearch, Sheet, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Building, Save, Database, FileJson, MinusCircle } from "lucide-react";
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -614,20 +614,26 @@ export function AdditionalAnalyses({
 // ===============================================================
 // Componente de Análise de Conciliação e Hook
 // ===============================================================
+type ReconciliationResults = {
+    reconciled: CfopValidationData[];
+    onlyInSienge: any[];
+    onlyInXml: any[];
+    otherSiengeItems: Record<string, any[]>;
+};
 
 interface ReconciliationAnalysisProps {
     siengeFile: File | null;
     processedData: ProcessedData;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
-    reconciliationResults: { reconciled: CfopValidationData[], onlyInSienge: any[], onlyInXml: any[] } | null;
+    reconciliationResults: ReconciliationResults | null;
     error: string | null;
     allPersistedClassifications: AllClassifications;
     onPersistAllClassifications: (allData: AllClassifications) => void;
     competence: string | null;
 }
 
-function useReconciliation(processedData: ProcessedData | null) {
+function useReconciliation(processedData: ProcessedData | null): { reconciliationResults: ReconciliationResults | null, error: string | null } {
     return useMemo(() => {
         if (!processedData) return { reconciliationResults: null, error: null };
 
@@ -644,14 +650,26 @@ function useReconciliation(processedData: ProcessedData | null) {
             }))
         ];
 
+        const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
+            if (!data || data.length === 0 || !data[0]) return undefined;
+            const headers = Object.keys(data[0]);
+            const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
+            for (const name of possibleNames) {
+                const normalizedName = normalizeKey(name);
+                const found = normalizedHeaders.find(h => h.normalized === normalizedName);
+                if (found) return found.original;
+            }
+            return undefined;
+        };
+
         if (!siengeSheetData) {
             if (allXmlItems.length > 0) {
-                // If only XMLs are loaded, show them in the 'Only in XML' tab.
                 return { 
                     reconciliationResults: { 
                         reconciled: [], 
                         onlyInSienge: [], 
-                        onlyInXml: allXmlItems 
+                        onlyInXml: allXmlItems,
+                        otherSiengeItems: {},
                     }, 
                     error: null 
                 };
@@ -660,39 +678,45 @@ function useReconciliation(processedData: ProcessedData | null) {
         }
         
         try {
-            const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
-                if (!data || data.length === 0 || !data[0]) return undefined;
-                const headers = Object.keys(data[0]);
-                const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
-                for (const name of possibleNames) {
-                    const normalizedName = normalizeKey(name);
-                    const found = normalizedHeaders.find(h => h.normalized === normalizedName);
-                    if (found) return found.original;
+            const espHeader = findHeader(siengeSheetData, ['esp']);
+            if (!espHeader) throw new Error("Não foi possível encontrar a coluna 'Esp' na planilha Sienge para filtragem.");
+            
+            const filteredSiengeDataForReconciliation: any[] = [];
+            const otherSiengeItems: Record<string, any[]> = {};
+
+            siengeSheetData.forEach(row => {
+                const espValue = row[espHeader] ? String(row[espHeader]).trim().toUpperCase() : 'SEM ESP';
+                if (espValue === 'NFE' || espValue === 'NFSR') {
+                    filteredSiengeDataForReconciliation.push(row);
+                } else {
+                    if (!otherSiengeItems[espValue]) {
+                        otherSiengeItems[espValue] = [];
+                    }
+                    otherSiengeItems[espValue].push(row);
                 }
-                return undefined;
-            };
+            });
 
             const h = {
-                cnpj: findHeader(siengeSheetData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
-                numero: findHeader(siengeSheetData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
-                valorTotal: findHeader(siengeSheetData, ['valor total', 'valor', 'vlr total']),
-                siengeCfop: findHeader(siengeSheetData, ['cfop']),
-                siengeDesc: findHeader(siengeSheetData, ['descrição', 'descrição do item', 'produto fiscal']),
-                icmsOutras: findHeader(siengeSheetData, ['icms outras', 'icmsoutras']),
-                desconto: findHeader(siengeSheetData, ['desconto']),
-                frete: findHeader(siengeSheetData, ['frete']),
-                ipiDespesas: findHeader(siengeSheetData, ['ipi despesas', 'ipidespesas']),
-                icmsSt: findHeader(siengeSheetData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
-                despesasAcessorias: findHeader(siengeSheetData, ['despesas acessórias', 'despesasacessorias', 'voutro']),
-                precoUnitario: findHeader(siengeSheetData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
+                cnpj: findHeader(filteredSiengeDataForReconciliation, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
+                numero: findHeader(filteredSiengeDataForReconciliation, ['número', 'numero', 'numero da nota', 'nota fiscal']),
+                valorTotal: findHeader(filteredSiengeDataForReconciliation, ['valor total', 'valor', 'vlr total']),
+                siengeCfop: findHeader(filteredSiengeDataForReconciliation, ['cfop']),
+                siengeDesc: findHeader(filteredSiengeDataForReconciliation, ['descrição', 'descrição do item', 'produto fiscal']),
+                icmsOutras: findHeader(filteredSiengeDataForReconciliation, ['icms outras', 'icmsoutras']),
+                desconto: findHeader(filteredSiengeDataForReconciliation, ['desconto']),
+                frete: findHeader(filteredSiengeDataForReconciliation, ['frete']),
+                ipiDespesas: findHeader(filteredSiengeDataForReconciliation, ['ipi despesas', 'ipidespesas']),
+                icmsSt: findHeader(filteredSiengeDataForReconciliation, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
+                despesasAcessorias: findHeader(filteredSiengeDataForReconciliation, ['despesas acessórias', 'despesasacessorias', 'voutro']),
+                precoUnitario: findHeader(filteredSiengeDataForReconciliation, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
             };
 
-            if (!h.cnpj || !h.numero || !h.valorTotal) throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge.");
+            if (!h.cnpj || !h.numero || !h.valorTotal) throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge para notas NFE/NFSR.");
             
             const nfeHeaderMap = new Map((sheets?.['Notas Válidas'] || []).map(n => [n['Chave Unica'], n]));
             
             let remainingXmlItems = allXmlItems.map((item, index) => ({...item, originalIndex: index}));
-            let remainingSiengeItems = [...siengeSheetData];
+            let remainingSiengeItems = [...filteredSiengeDataForReconciliation];
             let reconciled: CfopValidationData[] = [];
 
             const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
@@ -703,13 +727,7 @@ function useReconciliation(processedData: ProcessedData | null) {
                 return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
             };
             
-            const reconciliationPass = (
-                siengeItems: any[],
-                xmlItems: any[],
-                getSiengeValue: (item: any) => number | null,
-                getXmlValue: (item: any) => number | null,
-                passName: string
-            ) => {
+            const reconciliationPass = (siengeItems: any[], xmlItems: any[], getSiengeValue: (item: any) => number | null, getXmlValue: (item: any) => number | null, passName: string ) => {
                 const matchedInPass: CfopValidationData[] = [];
                 const stillUnmatchedSienge: any[] = [];
                 const xmlMap = new Map<string, any[]>();
@@ -776,8 +794,8 @@ function useReconciliation(processedData: ProcessedData | null) {
                 const result = reconciliationPass(
                     remainingSiengeItems,
                     remainingXmlItems,
-                    strategy.sienge,
-                    strategy.xml,
+                    (item) => typeof strategy.sienge(item) === 'number' ? strategy.sienge(item) : parseFloat(String(strategy.sienge(item) || '0').replace(',','.')),
+                    (item) => typeof strategy.xml(item) === 'number' ? strategy.xml(item) : parseFloat(String(strategy.xml(item) || '0').replace(',','.')),
                     strategy.name
                 );
                 reconciled.push(...result.matched);
@@ -785,49 +803,9 @@ function useReconciliation(processedData: ProcessedData | null) {
                 remainingXmlItems = result.remainingXml;
             }
 
-            if (h.siengeDesc && remainingSiengeItems.length > 0 && remainingXmlItems.length > 0) {
-                 const groupAndSum = (items: any[], notaKey: string, cnpjKey: string, productKey: string, valueKey: string) => {
-                    const grouped = new Map<string, { items: any[], sum: number }>();
-                    items.forEach(item => {
-                        const key = `${item[notaKey]}-${item[cnpjKey]}-${item[productKey]}`;
-                        if (!grouped.has(key)) grouped.set(key, { items: [], sum: 0 });
-                        const group = grouped.get(key)!;
-                        group.items.push(item);
-                        group.sum += parseFloat(String(item[valueKey] || '0').replace(',', '.'));
-                    });
-                    return grouped;
-                };
-
-                const siengeGrouped = groupAndSum(remainingSiengeItems, h.numero!, h.cnpj!, h.siengeDesc!, h.valorTotal!);
-                const xmlGrouped = groupAndSum(remainingXmlItems, 'Número da Nota', 'CPF/CNPJ do Emitente', 'Descrição', 'Valor Total');
-                
-                const stillUnmatchedSienge = new Set(remainingSiengeItems);
-                const stillUnmatchedXml = new Set(remainingXmlItems);
-
-                siengeGrouped.forEach((siengeGroup, key) => {
-                    const xmlGroup = xmlGrouped.get(key);
-                    if (xmlGroup && Math.abs(siengeGroup.sum - xmlGroup.sum) < 0.01) {
-                         const reconciledRow = {
-                            ...(xmlGroup.items[0]),
-                            'Fornecedor': nfeHeaderMap.get(xmlGroup.items[0]['Chave Unica'])?.Fornecedor || 'N/A',
-                            'Sienge_CFOP': siengeGroup.items[0][h.siengeCfop as string] || 'N/A',
-                            'Sienge_Descrição': siengeGroup.items[0][h.siengeDesc as string] || 'N/A',
-                             'Valor Total': xmlGroup.sum,
-                             'Observações': `Conciliado por Agregação (${xmlGroup.items.length} itens)`,
-                        };
-                        reconciled.push(reconciledRow);
-                        siengeGroup.items.forEach(item => stillUnmatchedSienge.delete(item));
-                        xmlGroup.items.forEach(item => stillUnmatchedXml.delete(item));
-                    }
-                });
-
-                remainingSiengeItems = Array.from(stillUnmatchedSienge);
-                remainingXmlItems = Array.from(stillUnmatchedXml);
-            }
-
             const finalOnlyInXml = remainingXmlItems.filter(item => item.documentType !== 'CTE');
 
-            return { reconciliationResults: { reconciled, onlyInSienge: remainingSiengeItems, onlyInXml: finalOnlyInXml }, error: null };
+            return { reconciliationResults: { reconciled, onlyInSienge: remainingSiengeItems, onlyInXml: finalOnlyInXml, otherSiengeItems }, error: null };
 
         } catch (err: any) {
             console.error("Reconciliation Error:", err);
@@ -860,96 +838,133 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
     };
 
     return (
-         <Card>
-            <CardHeader>
-                <div className="flex items-center gap-3">
-                    <GitCompareArrows className="h-8 w-8 text-primary" />
-                    <div>
-                        <CardTitle className="font-headline text-2xl">Conciliação de Itens (Entradas XML vs Sienge)</CardTitle>
-                        <CardDescription>Carregue a planilha "Itens do Sienge". A comparação será executada automaticamente contra as notas de entrada.</CardDescription>
+        <div className="space-y-6">
+             <Card>
+                <CardHeader>
+                    <div className="flex items-center gap-3">
+                        <GitCompareArrows className="h-8 w-8 text-primary" />
+                        <div>
+                            <CardTitle className="font-headline text-2xl">Conciliação de Itens (Entradas XML vs Sienge)</CardTitle>
+                            <CardDescription>Carregue a planilha "Itens do Sienge". A comparação será executada automaticamente contra as notas de entrada.</CardDescription>
+                        </div>
                     </div>
-                </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <FileUploadForm
-                    requiredFiles={['Itens do Sienge']}
-                    files={{ 'Itens do Sienge': !!siengeFile }}
-                    onFileChange={onSiengeFileChange}
-                    onClearFile={onClearSiengeFile}
-                />
-                {(!processedData.sheets['Itens Válidos'] && !processedData.sheets['CTEs Válidos']) && (
-                     <Alert variant="destructive">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertTitle>Dados XML em falta</AlertTitle>
-                        <AlertDescription>
-                            Processe os XMLs de entrada (NF-e ou CT-e) na primeira aba para habilitar a conciliação.
-                        </AlertDescription>
-                    </Alert>
-                )}
-                
-                {reconciliationResults && (
-                    <div className="mt-6">
-                        <Tabs defaultValue="reconciled">
-                            <TabsList className="grid w-full grid-cols-1 md:grid-cols-3">
-                                <TabsTrigger value="reconciled">Conciliados ({reconciliationResults.reconciled.length})</TabsTrigger>
-                                <TabsTrigger value="onlyInSienge">Apenas no Sienge ({reconciliationResults.onlyInSienge.length})</TabsTrigger>
-                                <TabsTrigger value="onlyInXml">Apenas no XML ({reconciliationResults.onlyInXml.length})</TabsTrigger>
-                            </TabsList>
-                            <div className="mt-4">
-                                <TabsContent value="reconciled">
-                                    <div className="flex gap-2 mb-4">
-                                        <Button onClick={() => handleDownload(reconciliationResults.reconciled, 'Itens_Conciliados')} size="sm" disabled={reconciliationResults.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                         <Dialog>
-                                            <DialogTrigger asChild>
-                                                 <Button variant="outline" disabled={!reconciliationResults || reconciliationResults.reconciled.length === 0}>
-                                                    Validar CFOP
-                                                </Button>
-                                            </DialogTrigger>
-                                            <DialogContent className="max-w-[95vw] h-[90vh] flex flex-col">
-                                                <DialogHeader>
-                                                    <DialogTitle>Validação de CFOP dos Itens Conciliados</DialogTitle>
-                                                    <DialogDescription>
-                                                        Classifique os itens e verifique se o CFOP lançado no Sienge está correto. As suas validações são guardadas automaticamente.
-                                                    </DialogDescription>
-                                                </DialogHeader>
-                                                 <CfopValidator 
-                                                    items={reconciliationResults.reconciled}
-                                                    allPersistedClassifications={allPersistedClassifications}
-                                                    onPersistAllClassifications={onPersistAllClassifications}
-                                                />
-                                            </DialogContent>
-                                        </Dialog>
+                </CardHeader>
+                <CardContent>
+                    <FileUploadForm
+                        requiredFiles={['Itens do Sienge']}
+                        files={{ 'Itens do Sienge': !!siengeFile }}
+                        onFileChange={onSiengeFileChange}
+                        onClearFile={onClearSiengeFile}
+                    />
+                    {(!processedData.sheets['Itens Válidos'] && !processedData.sheets['CTEs Válidos']) && (
+                        <Alert variant="destructive" className="mt-4">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertTitle>Dados XML em falta</AlertTitle>
+                            <AlertDescription>
+                                Processe os XMLs de entrada (NF-e ou CT-e) na primeira aba para habilitar a conciliação.
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                </CardContent>
+            </Card>
+            
+            {reconciliationResults && (
+                <div className="mt-6 space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Resultados da Conciliação</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <Tabs defaultValue="reconciled">
+                                <TabsList className="grid w-full grid-cols-1 md:grid-cols-3">
+                                    <TabsTrigger value="reconciled">Conciliados ({reconciliationResults.reconciled.length})</TabsTrigger>
+                                    <TabsTrigger value="onlyInSienge">Apenas no Sienge ({reconciliationResults.onlyInSienge.length})</TabsTrigger>
+                                    <TabsTrigger value="onlyInXml">Apenas no XML ({reconciliationResults.onlyInXml.length})</TabsTrigger>
+                                </TabsList>
+                                <div className="mt-4">
+                                    <TabsContent value="reconciled">
+                                        <div className="flex gap-2 mb-4">
+                                            <Button onClick={() => handleDownload(reconciliationResults.reconciled, 'Itens_Conciliados')} size="sm" disabled={reconciliationResults.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                            <Dialog>
+                                                <DialogTrigger asChild>
+                                                    <Button variant="outline" disabled={!reconciliationResults || reconciliationResults.reconciled.length === 0}>
+                                                        Validar CFOP
+                                                    </Button>
+                                                </DialogTrigger>
+                                                <DialogContent className="max-w-[95vw] h-[90vh] flex flex-col">
+                                                    <DialogHeader>
+                                                        <DialogTitle>Validação de CFOP dos Itens Conciliados</DialogTitle>
+                                                        <DialogDescription>
+                                                            Classifique os itens e verifique se o CFOP lançado no Sienge está correto. As suas validações são guardadas automaticamente.
+                                                        </DialogDescription>
+                                                    </DialogHeader>
+                                                    <CfopValidator 
+                                                        items={reconciliationResults.reconciled}
+                                                        allPersistedClassifications={allPersistedClassifications}
+                                                        onPersistAllClassifications={onPersistAllClassifications}
+                                                    />
+                                                </DialogContent>
+                                            </Dialog>
+                                        </div>
+                                        <DataTable columns={getColumns(reconciliationResults.reconciled)} data={reconciliationResults.reconciled} />
+                                    </TabsContent>
+                                    <TabsContent value="onlyInSienge">
+                                        <Button onClick={() => handleDownload(reconciliationResults.onlyInSienge, 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                        <DataTable columns={getColumns(reconciliationResults.onlyInSienge)} data={reconciliationResults.onlyInSienge} />
+                                    </TabsContent>
+                                    <TabsContent value="onlyInXml">
+                                        <Button onClick={() => handleDownload(reconciliationResults.onlyInXml, 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                        <DataTable columns={getColumns(reconciliationResults.onlyInXml)} data={reconciliationResults.onlyInXml} />
+                                    </TabsContent>
+                                </div>
+                            </Tabs>
+                        </CardContent>
+                    </Card>
+
+                     {Object.keys(reconciliationResults.otherSiengeItems).length > 0 && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Outros Lançamentos do Sienge</CardTitle>
+                                <CardDescription>Linhas da planilha Sienge que não são NF-e ou NFS-r, agrupadas pela coluna "Esp".</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Tabs defaultValue={Object.keys(reconciliationResults.otherSiengeItems)[0]}>
+                                    <TabsList className="h-auto flex-wrap justify-start">
+                                        {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
+                                            <TabsTrigger key={esp} value={esp}>{esp} ({items.length})</TabsTrigger>
+                                        ))}
+                                    </TabsList>
+                                    <div className="mt-4">
+                                        {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
+                                            <TabsContent key={esp} value={esp}>
+                                                <Button onClick={() => handleDownload(items, `Sienge_Outros_${esp}`)} size="sm" className="mb-4" disabled={items.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
+                                                <DataTable columns={getColumns(items)} data={items} />
+                                            </TabsContent>
+                                        ))}
                                     </div>
-                                    <DataTable columns={getColumns(reconciliationResults.reconciled)} data={reconciliationResults.reconciled} />
-                                </TabsContent>
-                                <TabsContent value="onlyInSienge">
-                                    <Button onClick={() => handleDownload(reconciliationResults.onlyInSienge, 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                    <DataTable columns={getColumns(reconciliationResults.onlyInSienge)} data={reconciliationResults.onlyInSienge} />
-                                </TabsContent>
-                                <TabsContent value="onlyInXml">
-                                    <Button onClick={() => handleDownload(reconciliationResults.onlyInXml, 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                    <DataTable columns={getColumns(reconciliationResults.onlyInXml)} data={reconciliationResults.onlyInXml} />
-                                </TabsContent>
-                            </div>
-                        </Tabs>
-                    </div>
-                )}
-                 {error && (
-                    <Alert variant="destructive">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertTitle>Erro na Análise de Conciliação</AlertTitle>
-                        <AlertDescription>
-                            {error}
-                        </AlertDescription>
-                    </Alert>
-                )}
-                 {!siengeFile && (processedData.sheets['Itens Válidos'] || processedData.sheets['CTEs Válidos']) && !reconciliationResults && (
-                     <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
-                        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                        <p className="mt-4 text-center">Aguardando o ficheiro "Itens do Sienge" para executar a conciliação automaticamente...</p>
-                    </div>
-                 )}
-            </CardContent>
-         </Card>
+                                </Tabs>
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
+            )}
+
+            {error && (
+                <Alert variant="destructive" className="mt-4">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Erro na Análise de Conciliação</AlertTitle>
+                    <AlertDescription>
+                        {error}
+                    </AlertDescription>
+                </Alert>
+            )}
+
+            {!siengeFile && (processedData.sheets['Itens Válidos'] || processedData.sheets['CTEs Válidos']) && !reconciliationResults && (
+                <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8 mt-6">
+                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                    <p className="mt-4 text-center">Aguardando o ficheiro "Itens do Sienge" para executar a conciliação automaticamente...</p>
+                </div>
+            )}
+        </div>
     );
 }
