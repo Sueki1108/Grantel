@@ -117,10 +117,6 @@ const readFileAsTextWithEncoding = (file: File): Promise<string> => {
                 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
                 try {
                     const text = utf8Decoder.decode(buffer);
-                    // Check for replacement characters, which indicate an encoding error
-                    if (text.includes('')) {
-                        throw new Error("UTF-8 decoding resulted in replacement characters.");
-                    }
                     resolve(text);
                 } catch (e) {
                     // If UTF-8 fails, fallback to ISO-8859-1

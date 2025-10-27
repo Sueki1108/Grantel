@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from '@/components/app/data-table';
 import { getColumns } from '@/lib/columns-helper';
-import { ScrollArea, ScrollBar } from '../ui/scroll-area';
 
 interface ResultsDisplayProps {
     results: Record<string, any[]>;
@@ -14,18 +13,19 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
     const [activeTab, setActiveTab] = useState('');
 
     const orderedSheetNames = [
-        "Notas Válidas", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
+        "Notas Válidas", "CTEs Válidos", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
         "Imobilizados",
-        "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes", "Remessas e Retornos",
-        "Notas Canceladas",
+        "Emissão Própria", "Notas Canceladas",
         ...Object.keys(results).filter(name => name.startsWith("Original - "))
     ];
     
     useEffect(() => {
-        // Set to first valid tab when results change
-        const firstValidSheet = orderedSheetNames.find(sheetName => results[sheetName] && results[sheetName].length > 0);
-        setActiveTab(firstValidSheet || '');
-    }, [results]);
+        // We don't use sessionStorage anymore, just set to first valid tab
+        if (orderedSheetNames.length > 0) {
+            const firstValidSheet = orderedSheetNames.find(sheetName => results[sheetName] && results[sheetName].length > 0);
+            setActiveTab(firstValidSheet || '');
+        }
+    }, [results]); // Only depends on results now
 
     const handleTabChange = (value: string) => {
         setActiveTab(value);
@@ -48,23 +48,20 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
 
     return (
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-             <ScrollArea className="w-full whitespace-nowrap rounded-lg">
-                <TabsList className="inline-flex h-auto">
-                    {orderedSheetNames.map(sheetName => (
-                        results[sheetName] && results[sheetName].length > 0 && 
-                        <TabsTrigger key={sheetName} value={sheetName}>{getDisplayName(sheetName)}</TabsTrigger>
-                    ))}
-                </TabsList>
-                <ScrollBar orientation="horizontal" />
-            </ScrollArea>
-
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
+                <div className='flex-grow overflow-x-auto'>
+                    <TabsList className="inline-flex h-auto">
+                        {orderedSheetNames.map(sheetName => (
+                            results[sheetName] && results[sheetName].length > 0 && 
+                            <TabsTrigger key={sheetName} value={sheetName}>{getDisplayName(sheetName)}</TabsTrigger>
+                        ))}
+                    </TabsList>
+                </div>
+            </div>
             {orderedSheetNames.map(sheetName => (
                 results[sheetName] && results[sheetName].length > 0 && (
-                    <TabsContent key={sheetName} value={sheetName} className="mt-4">
-                        <ScrollArea className="whitespace-nowrap rounded-lg border">
-                            <DataTable columns={getColumns(results[sheetName])} data={results[sheetName]} />
-                             <ScrollBar orientation="horizontal" />
-                        </ScrollArea>
+                    <TabsContent key={sheetName} value={sheetName}>
+                        <DataTable columns={getColumns(results[sheetName])} data={results[sheetName]} />
                     </TabsContent>
                 )
             ))}
