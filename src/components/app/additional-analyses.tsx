@@ -802,6 +802,58 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
                 remainingSiengeItems = result.remainingSienge;
                 remainingXmlItems = result.remainingXml;
             }
+            
+            // Pass 10: Agregação por Produto Fiscal
+            if (h.siengeDesc && h.valorTotal) {
+                const groupAndSum = (items: any[], notaKey: string, cnpjKey: string, productKey: string, valueKey: string) => {
+                    const grouped = new Map<string, { items: any[], sum: number }>();
+                    items.forEach(item => {
+                        const key = `${cleanAndToStr(item[notaKey])}-${cleanAndToStr(item[cnpjKey])}-${item[productKey]}`;
+                        if (!grouped.has(key)) {
+                            grouped.set(key, { items: [], sum: 0 });
+                        }
+                        const group = grouped.get(key)!;
+                        group.items.push(item);
+                        group.sum += parseFloat(String(item[valueKey] || '0').replace(',', '.'));
+                    });
+                    return grouped;
+                };
+
+                const siengeGrouped = groupAndSum(remainingSiengeItems, h.numero!, h.cnpj!, h.siengeDesc!, h.valorTotal!);
+                const xmlGrouped = groupAndSum(remainingXmlItems, 'Número da Nota', 'CPF/CNPJ do Emitente', 'Descrição', 'Valor Total');
+
+                const stillUnmatchedSienge = new Set(remainingSiengeItems);
+                const stillUnmatchedXml = new Set(remainingXmlItems);
+
+                siengeGrouped.forEach((siengeGroup, key) => {
+                    const xmlGroup = xmlGrouped.get(key);
+                    if (xmlGroup && Math.abs(siengeGroup.sum - xmlGroup.sum) < 0.01) {
+                        const aggregatedSienge = siengeGroup.items.reduce((acc, item, index) => {
+                             if (index === 0) return { ...item };
+                             Object.keys(item).forEach(k => {
+                                if (typeof item[k] === 'number') { acc[k] = (acc[k] || 0) + item[k]; }
+                             });
+                             return acc;
+                        }, {});
+
+                        const reconciledRow = {
+                            ...xmlGroup.items[0], // Pega o primeiro item do XML como base
+                            'Fornecedor': nfeHeaderMap.get(xmlGroup.items[0]['Chave Unica'])?.Fornecedor || xmlGroup.items[0]?.Fornecedor || 'N/A',
+                            'Sienge_CFOP': aggregatedSienge[h.siengeCfop as string] || 'N/A',
+                            'Sienge_Descrição': aggregatedSienge[h.siengeDesc as string] || 'N/A',
+                            'Observações': `Conciliado por Agregação de Produto (${siengeGroup.items.length} itens no Sienge, ${xmlGroup.items.length} no XML)`,
+                            'Valor Total': xmlGroup.sum, // Usa a soma do grupo
+                        };
+                        reconciled.push(reconciledRow);
+                        
+                        siengeGroup.items.forEach(item => stillUnmatchedSienge.delete(item));
+                        xmlGroup.items.forEach(item => stillUnmatchedXml.delete(item));
+                    }
+                });
+
+                remainingSiengeItems = Array.from(stillUnmatchedSienge);
+                remainingXmlItems = Array.from(stillUnmatchedXml);
+            }
 
             const finalOnlyInXml = remainingXmlItems.filter(item => item.documentType !== 'CTE');
 
