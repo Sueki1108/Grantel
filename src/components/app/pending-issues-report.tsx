@@ -175,9 +175,11 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
 
         // 6. CFOP Incorreto ou a Verificar
         const cfopValidationItems = processedData.reconciliationResults?.reconciled || [];
+        const cfopValidationsForCompetence = allPersistedClassifications[competenceKey]?.cfopValidations?.classifications || {};
+
         const cfopPendingItems = cfopValidationItems.filter(item => {
              const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
-             const classification = allPersistedClassifications[competenceKey]?.cfopValidations?.classifications[uniqueKey]?.classification;
+             const classification = cfopValidationsForCompetence[uniqueKey]?.classification;
              return classification === 'incorrect' || classification === 'verify';
         });
 
@@ -267,15 +269,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             return;
         }
         
-        const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([wbout], { type: 'application/octet-stream' });
-        
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = `${fileName}.xlsx`;
-        link.click();
-        URL.revokeObjectURL(link.href);
-
+        XLSX.writeFile(workbook, `${fileName}.xlsx`);
         toast({ title: 'Relatório Excel Gerado' });
     };
 
@@ -285,23 +279,35 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         let isFirstPage = true;
 
         sectionsToExport.forEach(section => {
-            const processSectionData = (data: any[], columns: any[], title: string) => {
+            const processSectionData = (data: any[], columns: any[], title: string, description: string) => {
                  const exportData = data.filter(item => !ignoredItems.has(item.__itemKey)).map(({__itemKey, ...rest}) => rest);
                  if (exportData.length === 0) return;
 
                 if (!isFirstPage) doc.addPage();
                 isFirstPage = false;
+                
+                autoTable(doc, {
+                    head: [], body: [],
+                    didDrawPage: (data) => {
+                         doc.setFontSize(14);
+                         doc.text(title, data.settings.margin.left, 20);
+                         doc.setFontSize(9);
+                         doc.setTextColor(100);
+                         const splitDescription = doc.splitTextToSize(description, doc.internal.pageSize.getWidth() - data.settings.margin.left - data.settings.margin.right);
+                         doc.text(splitDescription, data.settings.margin.left, 26);
+                    },
+                     startY: 40,
+                });
+                
 
-                doc.setFontSize(14);
-                doc.text(title, 14, 20);
-
-                const tableColumns = columns.map((col: any) => col.accessorKey || col.id).filter((key: any) => !['select', '__itemKey', 'actions'].includes(key));
-                const tableRows = exportData.map(row => tableColumns.map((colName: string) => String(row[colName] ?? '')));
+                const tableColumns = columns.map((col: any) => col.header).filter((header: any) => typeof header === 'string');
+                const tableAccessors = columns.map((col:any) => col.id).filter((id:any) => id !== 'actions');
+                const tableRows = exportData.map(row => tableAccessors.map((acc: string) => String(row[acc] ?? '')));
 
                 autoTable(doc, {
                     head: [tableColumns],
                     body: tableRows,
-                    startY: 28,
+                    startY: (doc as any).lastAutoTable.finalY + 2,
                     theme: 'striped',
                     headStyles: { fillColor: [41, 128, 185], cellPadding: 2, halign: 'center', minCellHeight: 10 },
                     styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak' },
@@ -310,9 +316,9 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             }
 
             if (section.subSections) {
-                 section.subSections.forEach(sub => processSectionData(sub.data, sub.columns, `${section.title}: ${sub.title}`));
+                 section.subSections.forEach(sub => processSectionData(sub.data, sub.columns, `${section.title}: ${sub.title}`, sub.description));
             } else {
-                 processSectionData(section.data, section.columns, section.title);
+                 processSectionData(section.data, section.columns, section.title, section.description);
             }
         });
 
@@ -368,7 +374,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                         <div className="flex gap-2">
                              <Popover>
                                 <PopoverTrigger asChild>
-                                    <Button variant="outline"><Settings className="mr-2 h-4 w-4" />Opções de Exportação</Button>
+                                    <Button variant="outline"><Settings className="mr-2 h-4 w-4" />Opções</Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-80">
                                     <div className="grid gap-4">
@@ -389,8 +395,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                                     </div>
                                 </PopoverContent>
                             </Popover>
-                            <Button onClick={() => handleExportAll('excel')}><Download className="mr-2 h-4 w-4" />Exportar Seleção (Excel)</Button>
-                            <Button onClick={() => handleExportAll('pdf')} variant="outline"><FileText className="mr-2 h-4 w-4" />Exportar Seleção (PDF)</Button>
+                            <Button onClick={() => handleExportAll('excel')}><Download className="mr-2 h-4 w-4" />Exportar Excel</Button>
+                            <Button onClick={() => handleExportAll('pdf')} variant="outline"><FileText className="mr-2 h-4 w-4" />Exportar PDF</Button>
                         </div>
                     </div>
                 </CardHeader>
@@ -406,50 +412,41 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 </Card>
             )}
 
-            <Accordion type="multiple" className="w-full space-y-4">
-                {sections.map(section => (
-                    <AccordionItem value={section.id} key={section.id} className="border-b-0">
-                         <Card className="overflow-hidden">
-                             <AccordionTrigger className="w-full hover:no-underline">
-                                 <CardHeader className="flex-row items-center justify-between w-full pb-0">
-                                    <div>
-                                        <CardTitle className="text-xl">{section.title} ({(section.subSections || [section]).reduce((acc, s) => acc + s.data.length, 0)})</CardTitle>
-                                    </div>
-                                </CardHeader>
-                             </AccordionTrigger>
-                            <AccordionContent>
-                                <CardContent>
-                                     <div className='flex items-center justify-between mb-4'>
-                                        <p className="text-sm text-muted-foreground">{section.description}</p>
-                                        <div className="flex items-center gap-2 shrink-0">
-                                            <TooltipProvider>
-                                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="outline" onClick={() => exportToExcel([section], `Pendencias_${section.id}`)} disabled={(section.subSections || [section]).reduce((acc, s) => acc + s.data.filter(item => !ignoredItems.has(item.__itemKey)).length, 0) === 0}><FileSpreadsheet className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Baixar esta secção (Excel)</p></TooltipContent></Tooltip>
-                                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="outline" onClick={() => exportToPdf([section], `Pendencias_${section.id}`)} disabled={(section.subSections || [section]).reduce((acc, s) => acc + s.data.filter(item => !ignoredItems.has(item.__itemKey)).length, 0) === 0}><FileText className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Baixar esta secção (PDF)</p></TooltipContent></Tooltip>
-                                            </TooltipProvider>
-                                        </div>
-                                    </div>
-                                    
-                                    {section.subSections ? (
-                                        <Tabs defaultValue={section.subSections[0]?.id} className="w-full">
-                                            <TabsList>
-                                                {section.subSections.map(sub => <TabsTrigger key={sub.id} value={sub.id}>{sub.title} ({sub.data.length})</TabsTrigger>)}
-                                            </TabsList>
-                                            {section.subSections.map(sub => (
-                                                <TabsContent key={sub.id} value={sub.id} className="mt-4">
-                                                    {sub.description && <p className="text-sm text-muted-foreground mb-4">{sub.description}</p>}
-                                                    <DataTable columns={[...sub.columns.filter((c:any) => c.id !== '__itemKey'), { id: 'actions', cell: ({row}: any) => { const itemKey = row.original.__itemKey; return <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleIgnoredItem(itemKey)}><TooltipProvider><Tooltip><TooltipTrigger asChild><span>{ignoredItems.has(itemKey) ? <Eye className='h-4 w-4 text-green-600'/> : <EyeOff className='h-4 w-4'/>}</span></TooltipTrigger><TooltipContent><p>{ignoredItems.has(itemKey) ? "Re-incluir na exportação" : "Ignorar na exportação"}</p></TooltipContent></Tooltip></TooltipProvider></Button> }}]} data={sub.data} />
-                                                </TabsContent>
-                                            ))}
-                                        </Tabs>
-                                    ) : (
-                                        <DataTable columns={[...section.columns.filter((c:any) => c.id !== '__itemKey'), { id: 'actions', cell: ({row}: any) => { const itemKey = row.original.__itemKey; return <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleIgnoredItem(itemKey)}><TooltipProvider><Tooltip><TooltipTrigger asChild><span>{ignoredItems.has(itemKey) ? <Eye className='h-4 w-4 text-green-600'/> : <EyeOff className='h-4 w-4'/>}</span></TooltipTrigger><TooltipContent><p>{ignoredItems.has(itemKey) ? "Re-incluir na exportação" : "Ignorar na exportação"}</p></TooltipContent></Tooltip></TooltipProvider></Button> }}]} data={section.data} />
-                                    )}
-                                </CardContent>
-                             </AccordionContent>
-                         </Card>
-                    </AccordionItem>
-                ))}
-            </Accordion>
+            {sections.map(section => (
+                 <Card key={section.id} className="overflow-hidden">
+                     <CardHeader>
+                         <div className='flex items-center justify-between'>
+                            <div>
+                                <CardTitle className="text-xl">{section.title} ({(section.subSections || [section]).reduce((acc, s) => acc + s.data.length, 0)})</CardTitle>
+                                <CardDescription className="mt-1">{section.description}</CardDescription>
+                            </div>
+                             <div className="flex items-center gap-2 shrink-0">
+                                <TooltipProvider>
+                                    <Tooltip><TooltipTrigger asChild><Button size="icon" variant="outline" onClick={() => exportToExcel([section], `Pendencias_${section.id}`)} disabled={(section.subSections || [section]).reduce((acc, s) => acc + s.data.filter(item => !ignoredItems.has(item.__itemKey)).length, 0) === 0}><FileSpreadsheet className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Baixar esta secção (Excel)</p></TooltipContent></Tooltip>
+                                    <Tooltip><TooltipTrigger asChild><Button size="icon" variant="outline" onClick={() => exportToPdf([section], `Pendencias_${section.id}`)} disabled={(section.subSections || [section]).reduce((acc, s) => acc + s.data.filter(item => !ignoredItems.has(item.__itemKey)).length, 0) === 0}><FileText className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Baixar esta secção (PDF)</p></TooltipContent></Tooltip>
+                                </TooltipProvider>
+                            </div>
+                         </div>
+                     </CardHeader>
+                    <CardContent>
+                        {section.subSections ? (
+                            <Tabs defaultValue={section.subSections[0]?.id} className="w-full">
+                                <TabsList>
+                                    {section.subSections.map(sub => <TabsTrigger key={sub.id} value={sub.id}>{sub.title} ({sub.data.length})</TabsTrigger>)}
+                                </TabsList>
+                                {section.subSections.map(sub => (
+                                    <TabsContent key={sub.id} value={sub.id} className="mt-4">
+                                        {sub.description && <p className="text-sm text-muted-foreground mb-4">{sub.description}</p>}
+                                        <DataTable columns={[...sub.columns.filter((c:any) => c.id !== '__itemKey'), { id: 'actions', cell: ({row}: any) => { const itemKey = row.original.__itemKey; return <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleIgnoredItem(itemKey)}><TooltipProvider><Tooltip><TooltipTrigger asChild><span>{ignoredItems.has(itemKey) ? <Eye className='h-4 w-4 text-green-600'/> : <EyeOff className='h-4 w-4'/>}</span></TooltipTrigger><TooltipContent><p>{ignoredItems.has(itemKey) ? "Re-incluir na exportação" : "Ignorar na exportação"}</p></TooltipContent></Tooltip></TooltipProvider></Button> }}]} data={sub.data} />
+                                    </TabsContent>
+                                ))}
+                            </Tabs>
+                        ) : (
+                            <DataTable columns={[...section.columns.filter((c:any) => c.id !== '__itemKey'), { id: 'actions', cell: ({row}: any) => { const itemKey = row.original.__itemKey; return <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleIgnoredItem(itemKey)}><TooltipProvider><Tooltip><TooltipTrigger asChild><span>{ignoredItems.has(itemKey) ? <Eye className='h-4 w-4 text-green-600'/> : <EyeOff className='h-4 w-4'/>}</span></TooltipTrigger><TooltipContent><p>{ignoredItems.has(itemKey) ? "Re-incluir na exportação" : "Ignorar na exportação"}</p></TooltipContent></Tooltip></TooltipProvider></Button> }}]} data={section.data} />
+                        )}
+                    </CardContent>
+                 </Card>
+            ))}
         </div>
     );
 }

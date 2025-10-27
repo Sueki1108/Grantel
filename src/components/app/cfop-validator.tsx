@@ -55,7 +55,6 @@ interface CfopValidatorProps {
 }
 
 const getUniqueProductKey = (item: CfopValidationData): string => {
-    // A chave agora inclui o CFOP do Sienge para diferenciar o mesmo produto lançado com CFOPs diferentes.
     return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
 };
 
@@ -65,7 +64,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const [activeFilter, setActiveFilter] = useState<ValidationStatus | 'all'>('unvalidated');
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
-    const reconciledItems = useMemo(() => items.filter(item => item.Observações?.startsWith('Conciliado')), [items]);
+    const reconciledItems = useMemo(() => items.filter(item => item && item.Observações?.startsWith('Conciliado')), [items]);
 
 
     // Carrega o estado persistido na inicialização
@@ -93,7 +92,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             const itemKey = item['Chave de acesso'] + item.Item;
             newValidationStatus[itemKey] = newStatus;
             
-            // Persiste a mudança para a chave de produto única.
             const uniqueProductKey = getUniqueProductKey(item);
              if (newStatus !== 'unvalidated') {
                 updatedPersistedData['cfopValidations'].classifications[uniqueProductKey] = { classification: newStatus };
@@ -182,15 +180,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             ...col, 
             header: ({ column }: any) => {
                 const displayName = columnNameMap[col.id as string] || col.id;
-                return (
-                    <div 
-                        className="flex items-center text-left w-full cursor-pointer"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                    >
-                        <span>{displayName}</span>
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </div>
-                );
+                return renderHeader(column, displayName);
             }
         }));
 
@@ -295,6 +285,18 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             tableRef.current.resetColumnFilters();
             tableRef.current.setGlobalFilter('');
         }
+    };
+    
+    const renderHeader = (column: any, displayName: string) => {
+        return (
+            <div 
+                className="flex items-center text-left w-full cursor-pointer"
+                onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            >
+                <span>{displayName}</span>
+                <ArrowUpDown className="ml-2 h-4 w-4" />
+            </div>
+        );
     };
 
     return (

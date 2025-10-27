@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, type ChangeEvent, useCallback } from "react";
@@ -25,11 +24,6 @@ import { CfopValidator, CfopValidationData } from "./cfop-validator";
 // ===============================================================
 // Tipos
 // ===============================================================
-type InconsistentRow = { 
-    row: any; 
-    originalIndex: number 
-};
-
 const readFileAsJson = (file: File): Promise<any[]> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -61,14 +55,6 @@ const readFileAsJson = (file: File): Promise<any[]> => {
 // Constantes e Helpers
 // ===============================================================
 
-const inconsistentCfopColumns = ["Número", "Credor", "CPF/CNPJ", "CFOP", "Descricao CFOP", "UF do Fornecedor", "Correção Sugerida"];
-
-const formatCurrency = (value: any) => {
-    const num = parseFloat(String(value).replace(',', '.'));
-    if (isNaN(num)) return String(value ?? '');
-    return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
-
 const normalizeKey = (key: string | undefined): string => {
     if(!key) return '';
     return key.toLowerCase().replace(/[\s-._/]/g, '');
@@ -80,6 +66,7 @@ const normalizeKey = (key: string | undefined): string => {
 
 interface AdditionalAnalysesProps {
     processedData: ProcessedData;
+    onProcessedDataChange: (data: ProcessedData) => void;
     onSiengeDataProcessed: (data: any[] | null) => void;
     siengeFile: File | null;
     onSiengeFileChange: (file: File | null) => void;
@@ -96,6 +83,7 @@ interface AdditionalAnalysesProps {
 
 export function AdditionalAnalyses({ 
     processedData,
+    onProcessedDataChange,
     onSiengeDataProcessed, 
     siengeFile, 
     onSiengeFileChange, 
@@ -146,145 +134,6 @@ export function AdditionalAnalyses({
         }
     };
     
-    const taxAndReconciliationAnalyses = useMemo(() => {
-        const getCfopDescription = (cfopCode: number): string => {
-            const fullDescription = cfopDescriptions[cfopCode];
-            if (fullDescription) {
-                 return fullDescription.split(' ').slice(0, 3).join(' ');
-            }
-            return 'N/A';
-        };
-
-        if (!siengeSheetData || siengeSheetData.length === 0) {
-            return { inconsistentCfopRows: [], taxConferences: { icms: [], pis: [], cofins: [], ipi: [], icmsSt: [] } };
-        }
-    
-         const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
-             if (!data || data.length === 0 || !data[0]) return undefined;
-             const headers = Object.keys(data[0]);
-             const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
-             for (const name of possibleNames) {
-                 const normalizedName = normalizeKey(name);
-                 const found = normalizedHeaders.find(h => h.normalized === normalizedName);
-                 if (found) return found.original;
-             }
-             return undefined;
-        };
-    
-        const h = {
-            uf: findHeader(siengeSheetData, ['uf', 'uf do fornecedor']), 
-            cfop: findHeader(siengeSheetData, ['cfop']),
-            icms: findHeader(siengeSheetData, ['icms', 'valor icms', 'vlr icms']), 
-            pis: findHeader(siengeSheetData, ['pis', 'valor pis', 'vlr pis']),
-            cofins: findHeader(siengeSheetData, ['cofins', 'valor cofins', 'vlr cofins']), 
-            ipi: findHeader(siengeSheetData, ['ipi', 'valor ipi', 'vlr ipi']),
-            icmsSt: findHeader(siengeSheetData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
-            numero: findHeader(siengeSheetData, ['número', 'numero', 'numero da nota', 'nota fiscal']), 
-            fornecedor: findHeader(siengeSheetData, ['credor', 'fornecedor', 'nome do fornecedor']),
-            cpfCnpj: findHeader(siengeSheetData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
-            descricao: findHeader(siengeSheetData, ['descrição', 'descrição do item', 'produto fiscal']),
-        };
-
-        const cfopRows: InconsistentRow[] = [];
-        const icms: any[] = [], pis: any[] = [], cofins: any[] = [], ipi: any[] = [], icmsSt: any[] = [];
-        
-        const getTaxFooter = (data: any[], taxName: string): Record<string, string> | undefined => {
-            if (!data || data.length === 0) return undefined;
-            const total = data.reduce((sum, row) => {
-                const value = parseFloat(String(row?.[taxName] || '0').replace(',', '.'));
-                return sum + (isNaN(value) ? 0 : value);
-            }, 0);
-            return { [taxName]: formatCurrency(total) };
-        }
-    
-        const getRelevantData = (row: any, taxKey: string | undefined, taxName: string) => {
-            if (!taxKey || !row || typeof row !== 'object' || !h.cfop) return null;
-            const relevantRow: Record<string, any> = {};
-            if(h.numero && h.numero in row) relevantRow["Número"] = row[h.numero];
-            if(h.cpfCnpj && h.cpfCnpj in row) relevantRow["CPF/CNPJ"] = row[h.cpfCnpj];
-            if(h.fornecedor && h.fornecedor in row) relevantRow["Credor"] = row[h.fornecedor];
-            const cfopVal = row[h.cfop] ?? row['CFOP'];
-            const cfopCode = parseInt(cleanAndToStr(cfopVal), 10);
-            relevantRow["CFOP"] = cfopCode;
-            relevantRow["Descricao CFOP"] = getCfopDescription(cfopCode);
-            if(taxKey in row) relevantRow[taxName] = row[taxKey];
-            if(h.descricao && h.descricao in row) relevantRow["Descrição"] = row[h.descricao];
-            return relevantRow;
-        }
-    
-        siengeSheetData.forEach((row, index) => {
-            if (!row || typeof row !== 'object') return;
-    
-            if (h.uf && row[h.uf] && h.cfop) {
-                const cfopVal = row[h.cfop] ?? row['CFOP'];
-                if(cfopVal) {
-                    const uf = String(row[h.uf] || '').toUpperCase().trim();
-                    const cfop = String(cfopVal || '').trim();
-                    if (uf && cfop) {
-                        const isInterstate = uf !== 'PR';
-                        const firstDigit = cfop.charAt(0);
-                        const cfopCode = parseInt(cfop, 10);
-                        const baseRow = {
-                            "Número": (h.numero && row[h.numero]) || '', 
-                            "Credor": (h.fornecedor && row[h.fornecedor]) || '', 
-                            "CPF/CNPJ": (h.cpfCnpj && row[h.cpfCnpj]) || '',
-                            "CFOP": cfop,
-                            "Descricao CFOP": getCfopDescription(cfopCode),
-                            "UF do Fornecedor": uf,
-                        };
-                        if (isInterstate && firstDigit !== '2' && !['5', '6', '7'].includes(firstDigit)) {
-                            cfopRows.push({ row: { ...baseRow, "Correção Sugerida": `2${cfop.substring(1)}` }, originalIndex: index });
-                        } else if (!isInterstate && firstDigit !== '1' && !['5', '6', '7'].includes(firstDigit)) {
-                             cfopRows.push({ row: { ...baseRow, "Correção Sugerida": `1${cfop.substring(1)}` }, originalIndex: index });
-                        }
-                    }
-                }
-            }
-    
-            if (h.icms && parseFloat(String(row[h.icms] || '0').replace(',', '.')) > 0) icms.push(getRelevantData(row, h.icms, "Valor ICMS")!);
-            if (h.pis && parseFloat(String(row[h.pis] || '0').replace(',', '.')) > 0) pis.push(getRelevantData(row, h.pis, "Valor PIS")!);
-            if (h.cofins && parseFloat(String(row[h.cofins] || '0').replace(',', '.')) > 0) cofins.push(getRelevantData(row, h.cofins, "Valor COFINS")!);
-            if (h.ipi && parseFloat(String(row[h.ipi] || '0').replace(',', '.')) > 0) ipi.push(getRelevantData(row, h.ipi, "Valor IPI")!);
-            if (h.icmsSt && parseFloat(String(row[h.icmsSt] || '0').replace(',', '.')) > 0) icmsSt.push(getRelevantData(row, h.icmsSt, "Valor ICMS ST")!);
-        });
-        
-        const uniqueCfopRowsMap = new Map<string, InconsistentRow>();
-        cfopRows.forEach(item => {
-            const numero = item.row['Número'];
-            const cnpj = item.row['CPF/CNPJ'];
-            if (numero && cnpj) {
-                const key = `${cleanAndToStr(numero)}-${cleanAndToStr(cnpj)}`;
-                if (!uniqueCfopRowsMap.has(key)) {
-                    uniqueCfopRowsMap.set(key, item);
-                }
-            }
-        });
-    
-        return { inconsistentCfopRows: Array.from(uniqueCfopRowsMap.values()), taxConferences: { icms, pis, cofins, ipi, icmsSt } };
-    }, [siengeSheetData]);
-
-    const handleDownloadConferencia = (data: any[], title: string) => {
-        if (!data || data.length === 0) {
-            toast({ title: "Nenhum dado para exportar", description: `Não há itens na aba "${title}".` });
-            return;
-        }
-        const dataToExport = data.map(item => item.row || item);
-        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, title);
-        const fileName = `Grantel - Conferência ${title}.xlsx`;
-        XLSX.writeFile(workbook, fileName);
-    };
-
-    const getTaxFooter = (data: any[], taxName: string): Record<string, string> | undefined => {
-        if (!data || data.length === 0) return undefined;
-        const total = data.reduce((sum, row) => {
-            const value = parseFloat(String(row?.[taxName] || '0').replace(',', '.'));
-            return sum + (isNaN(value) ? 0 : value);
-        }, 0);
-        return { [taxName]: formatCurrency(total) };
-    }
-
     const handleAnalyzeResale = useCallback(async () => {
         if (!siengeFile) {
             toast({ variant: 'destructive', title: "Dados incompletos", description: "Carregue a planilha Sienge primeiro." });
@@ -296,7 +145,8 @@ export function AdditionalAnalyses({
         }
     
         setIsAnalyzingResale(true);
-        processedData.resaleAnalysis = null;
+        const newProcessedData = {...processedData, resaleAnalysis: null };
+        onProcessedDataChange(newProcessedData);
     
         setTimeout(async () => {
             try {
@@ -380,18 +230,18 @@ export function AdditionalAnalyses({
                     }
                 }
                 
-                processedData.resaleAnalysis = { noteKeys: resaleNoteKeys, xmls: matchedXmls };
+                onProcessedDataChange({...processedData, resaleAnalysis: { noteKeys: resaleNoteKeys, xmls: matchedXmls }});
                 toast({ title: "Análise de Revenda Concluída", description: `${matchedXmls.length} XMLs correspondentes encontrados.` });
     
             } catch (error: any) {
                 toast({ variant: 'destructive', title: "Erro na Análise de Revenda", description: error.message });
-                processedData.resaleAnalysis = null;
+                 onProcessedDataChange({...processedData, resaleAnalysis: null});
             } finally {
                 setIsAnalyzingResale(false);
             }
         }, 50);
     
-    }, [siengeFile, siengeSheetData, allXmlFiles, toast, onSiengeDataProcessed, processedData]);
+    }, [siengeFile, siengeSheetData, allXmlFiles, toast, onSiengeDataProcessed, processedData, onProcessedDataChange]);
 
 
     const handleExportResaleXmls = async () => {
@@ -446,7 +296,7 @@ export function AdditionalAnalyses({
                 <TabsList className="grid w-full grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                     <TabsTrigger value="sped">Verificação SPED</TabsTrigger>
                     <TabsTrigger value="reconciliation">Conciliação Itens (XML vs Sienge)</TabsTrigger>
-                    <TabsTrigger value="conferencias">Conferência e Revenda (Sienge)</TabsTrigger>
+                    <TabsTrigger value="resale_export">Exportação de Revenda (Sienge)</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="sped" className="mt-6">
@@ -468,144 +318,69 @@ export function AdditionalAnalyses({
                         siengeFile={siengeFile}
                         onSiengeFileChange={handleSiengeFileChange}
                         onClearSiengeFile={onClearSiengeFile}
-                        processedData={processedData}
                         reconciliationResults={reconciliationResults.reconciliationResults}
                         error={reconciliationResults.error}
                         allPersistedClassifications={allPersistedClassifications}
                         onPersistAllClassifications={onPersistAllClassifications}
-                        competence={competence}
                     />
                 </TabsContent>
 
-                <TabsContent value="conferencias" className="mt-6 space-y-6">
-                     <Card>
+                 <TabsContent value="resale_export" className="mt-6">
+                    <Card>
                         <CardHeader>
                             <div className="flex items-center gap-3">
-                                <UploadCloud className="h-8 w-8 text-primary" />
+                                <Archive className="h-8 w-8 text-primary" />
                                 <div>
-                                    <CardTitle className="font-headline text-2xl">Carregar Planilha Sienge</CardTitle>
-                                    <CardDescription>Carregue a planilha "Itens do Sienge" para analisar as inconsistências de impostos e identificar notas de revenda.</CardDescription>
+                                    <CardTitle>Exportar XMLs de Revenda</CardTitle>
+                                    <CardDescription>
+                                        Identifique e baixe um arquivo .zip com os XMLs de notas fiscais classificadas com CFOP de revenda no relatório do Sienge.
+                                    </CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                             <FileUploadForm
+                        <CardContent>
+                            <FileUploadForm
                                 requiredFiles={['Itens do Sienge']}
                                 files={{ 'Itens do Sienge': !!siengeFile }}
                                 onFileChange={handleSiengeFileChange}
                                 onClearFile={onClearSiengeFile}
                             />
-                        </CardContent>
-                    </Card>
-                    
-                    <Tabs defaultValue="tax_check" className="w-full">
-                        <TabsList className="grid w-full grid-cols-2">
-                           <TabsTrigger value="tax_check">Conferência de Impostos</TabsTrigger>
-                           <TabsTrigger value="resale_export">Exportação de Revenda</TabsTrigger>
-                        </TabsList>
+                            {!siengeFile ? (
+                                <div className="p-8 text-center text-muted-foreground mt-4">
+                                    <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
+                                    <h3 className="text-xl font-semibold mb-2">Aguardando dados Sienge</h3>
+                                    <p>Carregue a planilha "Itens do Sienge" para identificar as notas de revenda.</p>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-start gap-4 mt-6">
+                                    <Button onClick={handleAnalyzeResale} disabled={isAnalyzingResale || isExporting}>
+                                        {isAnalyzingResale ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Analisando...</> : "Analisar XMLs para Revenda"}
+                                    </Button>
 
-                        <TabsContent value="tax_check" className="mt-6">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Resultados da Conferência de Impostos</CardTitle>
-                                    <CardDescription>Listagem de todos os itens da planilha Sienge que possuem valores nos campos de impostos.</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    {siengeSheetData && siengeSheetData.length > 0 ? (
-                                        <Tabs defaultValue="cfop_uf">
-                                            <TabsList className="h-auto flex-wrap justify-start">
-                                                <TabsTrigger value="cfop_uf">CFOP/UF ({taxAndReconciliationAnalyses.inconsistentCfopRows.length})</TabsTrigger>
-                                                <TabsTrigger value="icms">ICMS ({taxAndReconciliationAnalyses.taxConferences.icms.length})</TabsTrigger>
-                                                <TabsTrigger value="pis">PIS ({taxAndReconciliationAnalyses.taxConferences.pis.length})</TabsTrigger>
-                                                <TabsTrigger value="cofins">COFINS ({taxAndReconciliationAnalyses.taxConferences.cofins.length})</TabsTrigger>
-                                                <TabsTrigger value="ipi">IPI ({taxAndReconciliationAnalyses.taxConferences.ipi.length})</TabsTrigger>
-                                                <TabsTrigger value="icms_st">ICMS ST ({taxAndReconciliationAnalyses.taxConferences.icmsSt.length})</TabsTrigger>
-                                            </TabsList>
-                                            <TabsContent value="cfop_uf" className="mt-4">
-                                                <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.inconsistentCfopRows.map(r => r.row), 'CFOP_UF_Inconsistencias')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.inconsistentCfopRows.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar Inconsistências</Button>
-                                                <DataTable columns={getColumnsWithCustomRender(taxAndReconciliationAnalyses.inconsistentCfopRows.map(r => r.row), inconsistentCfopColumns)} data={taxAndReconciliationAnalyses.inconsistentCfopRows.map(r => r.row)} />
-                                            </TabsContent>
-                                            <TabsContent value="icms" className="mt-4">
-                                                <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.taxConferences.icms, 'ICMS')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.taxConferences.icms.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                                <DataTable columns={getColumns(taxAndReconciliationAnalyses.taxConferences.icms)} data={taxAndReconciliationAnalyses.taxConferences.icms} footer={getTaxFooter(taxAndReconciliationAnalyses.taxConferences.icms, 'Valor ICMS')} />
-                                            </TabsContent>
-                                            <TabsContent value="pis" className="mt-4">
-                                                <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.taxConferences.pis, 'PIS')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.taxConferences.pis.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                                <DataTable columns={getColumns(taxAndReconciliationAnalyses.taxConferences.pis)} data={taxAndReconciliationAnalyses.taxConferences.pis} footer={getTaxFooter(taxAndReconciliationAnalyses.taxConferences.pis, 'Valor PIS')} />
-                                            </TabsContent>
-                                            <TabsContent value="cofins" className="mt-4">
-                                                <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.taxConferences.cofins, 'COFINS')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.taxConferences.cofins.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                                <DataTable columns={getColumns(taxAndReconciliationAnalyses.taxConferences.cofins)} data={taxAndReconciliationAnalyses.taxConferences.cofins} footer={getTaxFooter(taxAndReconciliationAnalyses.taxConferences.cofins, 'Valor COFINS')} />
-                                            </TabsContent>
-                                            <TabsContent value="ipi" className="mt-4">
-                                                <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.taxConferences.ipi, 'IPI')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.taxConferences.ipi.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                                <DataTable columns={getColumns(taxAndReconciliationAnalyses.taxConferences.ipi)} data={taxAndReconciliationAnalyses.taxConferences.ipi} footer={getTaxFooter(taxAndReconciliationAnalyses.taxConferences.ipi, 'Valor IPI')} />
-                                            </TabsContent>
-                                            <TabsContent value="icms_st" className="mt-4">
-                                                <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.taxConferences.icmsSt, 'ICMS_ST')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.taxConferences.icmsSt.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                                <DataTable columns={getColumns(taxAndReconciliationAnalyses.taxConferences.icmsSt)} data={taxAndReconciliationAnalyses.taxConferences.icmsSt} footer={getTaxFooter(taxAndReconciliationAnalyses.taxConferences.icmsSt, 'Valor ICMS ST')} />
-                                            </TabsContent>
-                                        </Tabs>
-                                    ) : (
-                                        <div className="p-8 text-center text-muted-foreground"><AlertTriangle className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Nenhum dado para analisar</h3><p>Carregue la planilha "Itens do Sienge" acima para iniciar a análise de conferências.</p></div>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-
-                         <TabsContent value="resale_export" className="mt-6">
-                            <Card>
-                                <CardHeader>
-                                    <div className="flex items-center gap-3">
-                                        <Archive className="h-8 w-8 text-primary" />
-                                        <div>
-                                            <CardTitle>Exportar XMLs de Revenda</CardTitle>
-                                            <CardDescription>
-                                                Identifique e baixe um arquivo .zip com os XMLs de notas fiscais classificadas com CFOP de revenda no relatório do Sienge.
-                                            </CardDescription>
-                                        </div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent>
-                                    {!siengeSheetData ? (
-                                        <div className="p-8 text-center text-muted-foreground">
-                                            <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
-                                            <h3 className="text-xl font-semibold mb-2">Aguardando dados Sienge</h3>
-                                            <p>Analise a planilha "Itens do Sienge" para identificar as notas de revenda.</p>
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-col items-start gap-4">
-                                            <Button onClick={handleAnalyzeResale} disabled={isAnalyzingResale || isExporting}>
-                                                {isAnalyzingResale ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Analisando...</> : "Analisar XMLs para Revenda"}
+                                    {processedData.resaleAnalysis && (
+                                        <div className="mt-4 w-full">
+                                            <p className="text-sm text-muted-foreground">
+                                                Foram encontradas <span className="font-bold text-foreground">{processedData.resaleAnalysis.noteKeys.size}</span> chaves de revenda no Sienge.
+                                                Destas, <span className="font-bold text-foreground">{processedData.resaleAnalysis.xmls.length}</span> ficheiros XML correspondentes foram encontrados e estão prontos para exportação.
+                                            </p>
+                                            <Button onClick={handleExportResaleXmls} disabled={isExporting || processedData.resaleAnalysis.xmls.length === 0} className="mt-4">
+                                                {isExporting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A compactar...</> : `Baixar ${processedData.resaleAnalysis.xmls.length} XMLs de Revenda`}
                                             </Button>
-
-                                            {processedData.resaleAnalysis && (
-                                                <div className="mt-4 w-full">
-                                                    <p className="text-sm text-muted-foreground">
-                                                        Foram encontradas <span className="font-bold text-foreground">{processedData.resaleAnalysis.noteKeys.size}</span> chaves de revenda no Sienge.
-                                                        Destas, <span className="font-bold text-foreground">{processedData.resaleAnalysis.xmls.length}</span> ficheiros XML correspondentes foram encontrados e estão prontos para exportação.
-                                                    </p>
-                                                    <Button onClick={handleExportResaleXmls} disabled={isExporting || processedData.resaleAnalysis.xmls.length === 0} className="mt-4">
-                                                        {isExporting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A compactar...</> : `Baixar ${processedData.resaleAnalysis.xmls.length} XMLs de Revenda`}
-                                                    </Button>
-                                                    {processedData.resaleAnalysis.xmls.length === 0 && processedData.resaleAnalysis.noteKeys.size > 0 && (
-                                                        <Alert variant="destructive" className="mt-4">
-                                                            <AlertCircle className="h-4 w-4" />
-                                                            <AlertTitle>XMLs não encontrados</AlertTitle>
-                                                            <AlertDescription>
-                                                                Apesar de as notas de revenda terem sido identificadas no Sienge, os ficheiros XML correspondentes não foram encontrados entre os ficheiros carregados. Verifique se o nome dos XMLs contém a chave de 44 dígitos.
-                                                            </AlertDescription>
-                                                        </Alert>
-                                                    )}
-                                                </div>
+                                            {processedData.resaleAnalysis.xmls.length === 0 && processedData.resaleAnalysis.noteKeys.size > 0 && (
+                                                <Alert variant="destructive" className="mt-4">
+                                                    <AlertCircle className="h-4 w-4" />
+                                                    <AlertTitle>XMLs não encontrados</AlertTitle>
+                                                    <AlertDescription>
+                                                        Apesar de as notas de revenda terem sido identificadas no Sienge, os ficheiros XML correspondentes não foram encontrados entre os ficheiros carregados. Verifique se o nome dos XMLs contém a chave de 44 dígitos.
+                                                    </AlertDescription>
+                                                </Alert>
                                             )}
                                         </div>
                                     )}
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-
-                    </Tabs>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
                 </TabsContent>
             </Tabs>
         </div>
@@ -624,14 +399,12 @@ export type ReconciliationResults = {
 
 interface ReconciliationAnalysisProps {
     siengeFile: File | null;
-    processedData: ProcessedData;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
     reconciliationResults: ReconciliationResults;
     error: string | null;
     allPersistedClassifications: AllClassifications;
     onPersistAllClassifications: (allData: AllClassifications) => void;
-    competence: string | null;
 }
 
 function useReconciliation(processedData: ProcessedData | null): { reconciliationResults: ReconciliationResults, error: string | null } {
@@ -703,162 +476,46 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
                 valorTotal: findHeader(filteredSiengeDataForReconciliation, ['valor total', 'valor', 'vlr total']),
                 siengeCfop: findHeader(filteredSiengeDataForReconciliation, ['cfop']),
                 siengeDesc: findHeader(filteredSiengeDataForReconciliation, ['descrição', 'descrição do item', 'produto fiscal']),
-                icmsOutras: findHeader(filteredSiengeDataForReconciliation, ['icms outras', 'icmsoutras']),
-                desconto: findHeader(filteredSiengeDataForReconciliation, ['desconto']),
-                frete: findHeader(filteredSiengeDataForReconciliation, ['frete']),
-                ipiDespesas: findHeader(filteredSiengeDataForReconciliation, ['ipi despesas', 'ipidespesas']),
-                icmsSt: findHeader(filteredSiengeDataForReconciliation, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
-                despesasAcessorias: findHeader(filteredSiengeDataForReconciliation, ['despesas acessórias', 'despesasacessorias', 'voutro']),
-                precoUnitario: findHeader(filteredSiengeDataForReconciliation, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
             };
 
             if (!h.cnpj || !h.numero || !h.valorTotal) throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge para notas NFE/NFSR.");
             
             const nfeHeaderMap = new Map((sheets?.['Notas Válidas'] || []).map(n => [n['Chave Unica'], n]));
             
-            let remainingXmlItems = allXmlItems.map((item, index) => ({...item, originalIndex: index}));
-            let remainingSiengeItems = [...filteredSiengeDataForReconciliation];
-            let reconciled: CfopValidationData[] = [];
+            const xmlItemsMap = new Map<string, any>();
+            allXmlItems.forEach(item => {
+                const key = `${item['Chave Unica']}-${item['Item']}`;
+                xmlItemsMap.set(key, item);
+            });
 
-            const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
-                const cleanNumero = cleanAndToStr(numero);
-                const cleanCnpj = String(cnpj).replace(/\D/g, '');
-                const cleanValor = parseFloat(String(valor || '0').replace(',', '.')).toFixed(2);
-                if (!cleanNumero || !cleanCnpj || isNaN(parseFloat(cleanValor))) return null;
-                return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
-            };
+            const reconciled: CfopValidationData[] = [];
+            const onlyInSienge: any[] = [];
             
-            const reconciliationPass = (siengeItems: any[], xmlItems: any[], getSiengeValue: (item: any) => number | null, getXmlValue: (item: any) => number | null, passName: string ) => {
-                const matchedInPass: CfopValidationData[] = [];
-                const stillUnmatchedSienge: any[] = [];
-                const xmlMap = new Map<string, any[]>();
-    
-                xmlItems.forEach(item => {
-                    const xmlValue = getXmlValue(item);
-                    if (xmlValue === null) return;
-                    const key = getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], xmlValue);
-                    if (key) {
-                        if (!xmlMap.has(key)) xmlMap.set(key, []);
-                        xmlMap.get(key)!.push(item);
+            filteredSiengeDataForReconciliation.forEach(siengeItem => {
+                let matchFound = false;
+                for (const [key, xmlItem] of xmlItemsMap.entries()) {
+                    if (siengeItem[h.numero!] === xmlItem['Número da Nota'] && siengeItem[h.cnpj!] === xmlItem['CPF/CNPJ do Emitente'] && siengeItem[h.siengeDesc!] === xmlItem['Descrição']) {
+                        const notaOriginal = nfeHeaderMap.get(xmlItem['Chave Unica']);
+                        reconciled.push({
+                            ...xmlItem,
+                            'Fornecedor': notaOriginal?.Fornecedor || xmlItem?.Fornecedor || 'N/A',
+                            'Sienge_CFOP': siengeItem[h.siengeCfop as string] || 'N/A',
+                            'Sienge_Descrição': siengeItem[h.siengeDesc as string] || 'N/A',
+                            'Observações': `Conciliado via Descrição/CNPJ/Número`,
+                        });
+                        xmlItemsMap.delete(key);
+                        matchFound = true;
+                        break;
                     }
-                });
-    
-                siengeItems.forEach(siengeItem => {
-                    const siengeValue = getSiengeValue(siengeItem);
-                    if (siengeValue === null) {
-                        stillUnmatchedSienge.push(siengeItem);
-                        return;
-                    }
+                }
+                if (!matchFound) {
+                    onlyInSienge.push(siengeItem);
+                }
+            });
 
-                    const key = getComparisonKey(siengeItem[h.numero!], siengeItem[h.cnpj!], siengeValue);
-                    if (key && xmlMap.has(key)) {
-                        const matchedXmlItems = xmlMap.get(key)!;
-                        if (matchedXmlItems.length > 0) {
-                            const matchedXmlItem = matchedXmlItems.shift(); 
-                            const notaOriginal = nfeHeaderMap.get(matchedXmlItem['Chave Unica']);
-                            
-                            matchedInPass.push({
-                                ...matchedXmlItem,
-                                'Fornecedor': notaOriginal?.Fornecedor || matchedXmlItem?.Fornecedor || 'N/A',
-                                'Sienge_CFOP': siengeItem[h.siengeCfop as string] || 'N/A',
-                                'Sienge_Descrição': siengeItem[h.siengeDesc as string] || 'N/A',
-                                'Observações': `Conciliado via ${passName}`,
-                            });
+            const onlyInXml = Array.from(xmlItemsMap.values());
 
-                            if (matchedXmlItems.length === 0) {
-                                xmlMap.delete(key);
-                            }
-                            return; 
-                        }
-                    }
-                    stillUnmatchedSienge.push(siengeItem);
-                });
-                
-                const stillUnmatchedXml = Array.from(xmlMap.values()).flat();
-                return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
-            };
-
-
-            const strategies = [
-                { name: "Valor Total", sienge: (item: any) => item[h.valorTotal!], xml: (item: any) => item['Valor Total'] },
-                { name: "ICMS Outras", sienge: (item: any) => h.icmsOutras ? item[h.icmsOutras!] : null, xml: (item: any) => item['Valor Total'] },
-                { name: "Valor Total + Desconto", sienge: (item: any) => h.desconto ? parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto] || '0').replace(',', '.')) : null, xml: (item: any) => item['Valor Total'] },
-                { name: "Valor Total - Frete", sienge: (item: any) => h.frete ? parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.frete] || '0').replace(',', '.')) : null, xml: (item: any) => item['Valor Total'] },
-                { name: "Valor Total - IPI/ICMS ST", sienge: (item: any) => (h.ipiDespesas || h.icmsSt) ? parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0) - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0) : null, xml: (item: any) => item['Valor Total'] },
-                { name: "Valor Total - Frete/IPI", sienge: (item: any) => (h.frete || h.ipiDespesas) ? parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0) : null, xml: (item: any) => item['Valor Total'] },
-                { name: "Valor Total + Desc - Frete", sienge: (item: any) => (h.desconto || h.frete) ? parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + (h.desconto ? parseFloat(String(item[h.desconto] || '0').replace(',', '.')) : 0) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0) : null, xml: (item: any) => item['Valor Total'] },
-                { name: "Valor Total - Desp. Acess.", sienge: (item: any) => h.despesasAcessorias ? parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.despesasAcessorias] || '0').replace(',', '.')) : null, xml: (item: any) => item['Valor Total'] },
-                { name: "Preço Unitário", sienge: (item: any) => h.precoUnitario ? item[h.precoUnitario] : null, xml: (item: any) => item['Valor Unitário'] }
-            ];
-
-            for (const strategy of strategies) {
-                const result = reconciliationPass(
-                    remainingSiengeItems,
-                    remainingXmlItems,
-                    (item) => typeof strategy.sienge(item) === 'number' ? strategy.sienge(item) : parseFloat(String(strategy.sienge(item) || '0').replace(',','.')),
-                    (item) => typeof strategy.xml(item) === 'number' ? strategy.xml(item) : parseFloat(String(strategy.xml(item) || '0').replace(',','.')),
-                    strategy.name
-                );
-                reconciled.push(...result.matched);
-                remainingSiengeItems = result.remainingSienge;
-                remainingXmlItems = result.remainingXml;
-            }
-            
-            // Pass 10: Agregação por Produto Fiscal
-            if (h.siengeDesc && h.valorTotal && h.numero && h.cnpj) {
-                const groupAndSum = (items: any[], notaKey: string, cnpjKey: string, productKey: string, valueKey: string) => {
-                    const grouped = new Map<string, { items: any[], sum: number }>();
-                    items.forEach(item => {
-                        const key = `${cleanAndToStr(item[notaKey])}-${cleanAndToStr(item[cnpjKey])}-${item[productKey]}`;
-                        if (!grouped.has(key)) {
-                            grouped.set(key, { items: [], sum: 0 });
-                        }
-                        const group = grouped.get(key)!;
-                        group.items.push(item);
-                        group.sum += parseFloat(String(item[valueKey] || '0').replace(',', '.'));
-                    });
-                    return grouped;
-                };
-
-                const siengeGrouped = groupAndSum(remainingSiengeItems, h.numero, h.cnpj, h.siengeDesc, h.valorTotal);
-                const xmlGrouped = groupAndSum(remainingXmlItems, 'Número da Nota', 'CPF/CNPJ do Emitente', 'Descrição', 'Valor Total');
-
-                const stillUnmatchedSienge = new Set(remainingSiengeItems);
-                const stillUnmatchedXml = new Set(remainingXmlItems);
-
-                siengeGrouped.forEach((siengeGroup, key) => {
-                    const xmlGroup = xmlGrouped.get(key);
-                    if (xmlGroup && Math.abs(siengeGroup.sum - xmlGroup.sum) < 0.01) {
-                         const aggregatedSienge = siengeGroup.items.reduce((acc, item, index) => {
-                             if (index === 0) return { ...item };
-                             Object.keys(item).forEach(k => {
-                                if (typeof item[k] === 'number') { acc[k] = (acc[k] || 0) + item[k]; }
-                             });
-                             return acc;
-                        }, {});
-
-                        const reconciledRow = {
-                            ...xmlGroup.items[0], // Pega o primeiro item do XML como base
-                            'Fornecedor': nfeHeaderMap.get(xmlGroup.items[0]['Chave Unica'])?.Fornecedor || xmlGroup.items[0]?.Fornecedor || 'N/A',
-                            'Sienge_CFOP': aggregatedSienge[h.siengeCfop as string] || 'N/A',
-                            'Sienge_Descrição': aggregatedSienge[h.siengeDesc as string] || 'N/A',
-                            'Observações': `Conciliado por Agregação de Produto (${siengeGroup.items.length} itens no Sienge, ${xmlGroup.items.length} no XML)`,
-                            'Valor Total': xmlGroup.sum, // Usa a soma do grupo
-                        };
-                        reconciled.push(reconciledRow);
-                        
-                        siengeGroup.items.forEach(item => stillUnmatchedSienge.delete(item));
-                        xmlGroup.items.forEach(item => stillUnmatchedXml.delete(item));
-                    }
-                });
-
-                remainingSiengeItems = Array.from(stillUnmatchedSienge);
-                remainingXmlItems = Array.from(stillUnmatchedXml);
-            }
-
-            const finalOnlyInXml = remainingXmlItems.filter(item => item.documentType !== 'CTE');
-
-            return { reconciliationResults: { reconciled, onlyInSienge: remainingSiengeItems, onlyInXml: finalOnlyInXml, otherSiengeItems }, error: null };
+            return { reconciliationResults: { reconciled, onlyInSienge, onlyInXml, otherSiengeItems }, error: null };
 
         } catch (err: any) {
             console.error("Reconciliation Error:", err);
@@ -868,7 +525,7 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
 }
 
 
-function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, processedData, reconciliationResults, error, allPersistedClassifications, onPersistAllClassifications, competence }: ReconciliationAnalysisProps) {
+function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error, allPersistedClassifications, onPersistAllClassifications }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
     useEffect(() => {
@@ -909,15 +566,6 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                         onFileChange={onSiengeFileChange}
                         onClearFile={onClearSiengeFile}
                     />
-                    {(!processedData.sheets['Itens Válidos'] && !processedData.sheets['CTEs Válidos']) && (
-                        <Alert variant="destructive" className="mt-4">
-                            <AlertTriangle className="h-4 w-4" />
-                            <AlertTitle>Dados XML em falta</AlertTitle>
-                            <AlertDescription>
-                                Processe os XMLs de entrada (NF-e ou CT-e) na primeira aba para habilitar a conciliação.
-                            </AlertDescription>
-                        </Alert>
-                    )}
                 </CardContent>
             </Card>
             
