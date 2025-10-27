@@ -194,6 +194,9 @@ def run_automation_for_item(driver, item_data, vencimento, data_pagamento):
         driver.execute_script(f"arguments[0].value = '{TELEFONE_ALVO}';", campo_telefone_element)
         campo_telefone_element.send_keys(Keys.TAB)
 
+        WebDriverWait(driver, TIMEOUT).until(
+            EC.visibility_of_element_located((By.ID, ID_DROPDOWN_UF_EMITENTE))
+        )
         select_uf_emitente = Select(driver.find_element(By.ID, ID_DROPDOWN_UF_EMITENTE))
         select_uf_emitente.select_by_value(UF_ALVO_EMITENTE)
         time.sleep(1)
@@ -345,8 +348,8 @@ def main_loop():
             success = run_automation_for_item(driver, item, VENCIMENTO_ALVO, DATA_PAGAMENTO_ALVO)
             
             if not success and i < total_guias - 1:
-                print(f"AVISO: A automação falhou na Guia {i+1}. O script irá parar. Verifique o erro e tente novamente.")
-                break # Pára o loop em caso de falha
+                print(f"AVISO: A automação falhou na Guia {i+1}. Tentando a próxima guia em 5 segundos...")
+                time.sleep(5)
             elif not success and i == total_guias - 1:
                 print("AVISO: A automação falhou na última Guia. Processo concluído com erros.")
             
