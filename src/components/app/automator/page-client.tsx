@@ -26,7 +26,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { SaidasAnalysis } from "@/components/app/saidas-analysis";
 import { NfseAnalysis } from "@/components/app/nfse-analysis";
 import { KeyCheckResult } from "@/components/app/key-checker";
-import { SettingsDialog } from "@/components/app/settings-dialog";
 import { cn } from "@/lib/utils";
 import { ImobilizadoAnalysis, type AllClassifications } from "@/components/app/imobilizado-analysis";
 import { HistoryAnalysis, type SessionData } from "@/components/app/history-analysis";
@@ -737,8 +736,7 @@ export function AutomatorClientPage() {
                         </TabsContent>
                          
                         <TabsContent value="pending" className="mt-6">
-                             <PendingIssuesReport
-                                key={JSON.stringify(processedData) + JSON.stringify(imobilizadoClassifications)}
+                             <PendingIssuesReport 
                                 processedData={processedData}
                                 allPersistedClassifications={imobilizadoClassifications}
                                 onForceUpdate={() => setProcessedData(prev => prev ? {...prev} : null)}

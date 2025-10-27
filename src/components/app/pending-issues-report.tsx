@@ -113,18 +113,26 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 ]
             });
         }
-
+        
         // 3. SPED - Não na planilha
-        const notInSheet = (processedData.keyCheckResults?.keysInTxtNotInSheet || []).map(item => ({ ...item, '__itemKey': `notinSheet-${item.key}` }));
+        const notInSheet = (processedData.keyCheckResults?.keysInTxtNotInSheet || []);
+        const notInSheetNfe = notInSheet.filter(item => item.type === 'NFE').map(item => ({...item, '__itemKey': `notinSheet-${item.key}`}));
+        const notInSheetCte = notInSheet.filter(item => item.type === 'CTE').map(item => ({...item, '__itemKey': `notinSheet-${item.key}`}));
+
         if (notInSheet.length > 0) {
             reportSections.push({
                 id: 'sped_not_in_sheet',
                 title: 'Chaves no SPED Não Encontradas nas Notas Válidas',
                 description: 'Estas chaves existem no SPED, mas não foram classificadas como válidas no seu controlo. Verifique se são notas canceladas, devolvidas ou escrituradas indevidamente.',
-                data: notInSheet,
-                columns: getColumnsWithCustomRender(notInSheet, Object.keys(notInSheet[0] || {}))
+                data: [],
+                columns: [],
+                subSections: [
+                    { id: 'nfe_not_in_sheet', title: 'NF-e', description: '', data: notInSheetNfe, columns: getColumnsWithCustomRender(notInSheetNfe, Object.keys(notInSheetNfe[0] || {}))},
+                    { id: 'cte_not_in_sheet', title: 'CT-e', description: '', data: notInSheetCte, columns: getColumnsWithCustomRender(notInSheetCte, Object.keys(notInSheetCte[0] || {}))}
+                ]
             });
         }
+
 
         // 4. SPED - Inconformidades (dividido em sub-secções)
         const { ufDivergences, ieDivergences, dateDivergences, valueDivergences } = processedData.keyCheckResults || {};
