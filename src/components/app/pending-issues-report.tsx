@@ -43,20 +43,25 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const reportSections: Section[] = [];
 
         // 1. Imobilizado
-        const imobilizadoItems = (processedData.sheets?.['Imobilizados'] || []).map(item => {
+        const imobilizadoItems = (processedData.sheets?.['Imobilizados'] || [])
+        .filter(item => {
+            const competenceKey = processedData.competence || 'default';
+            const classification = allPersistedClassifications[competenceKey]?.classifications?.[item.uniqueItemId]?.classification;
+            return classification === 'imobilizado';
+        })
+        .map(item => {
              const competenceKey = processedData.competence || 'default';
              const persistedForCompetence = allPersistedClassifications[competenceKey];
              const classification = persistedForCompetence?.classifications?.[item.uniqueItemId]?.classification;
              const accountCode = persistedForCompetence?.accountCodes?.[item.id]?.accountCode;
             
              return {
-                ...item,
-                'Resumo da Pendência': `Classificado como '${classification}'. Código do Ativo: ${accountCode || '(não definido)'}`,
+                'Número da Nota': item['Número da Nota'],
+                'Descrição': item['Descrição'],
+                'Fornecedor': item['Fornecedor'],
+                'Valor Total': item['Valor Total'],
+                'Resumo da Pendência': `Classificado como 'Imobilizado'. Código do Ativo: ${accountCode || '(não definido)'}`,
              };
-        }).filter(item => {
-            const competenceKey = processedData.competence || 'default';
-            const classification = allPersistedClassifications[competenceKey]?.classifications?.[item.uniqueItemId]?.classification;
-            return classification === 'imobilizado';
         });
 
         if (imobilizadoItems.length > 0) {
@@ -70,7 +75,10 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
 
         // 2. SPED - Não encontrados
         const notFoundInSped = (processedData.keyCheckResults?.keysNotFoundInTxt || []).map(item => ({
-            ...item,
+             'Chave de Acesso': item.key,
+             'Tipo': item.type,
+             'Fornecedor': item.Fornecedor,
+             'Valor': item.Total,
             'Resumo da Pendência': 'Chave de Acesso válida na planilha, mas não foi encontrada no arquivo SPED.'
         }));
         if (notFoundInSped.length > 0) {
@@ -84,7 +92,10 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
 
         // 3. SPED - Não na planilha
         const notInSheet = (processedData.keyCheckResults?.keysInTxtNotInSheet || []).map(item => ({
-            ...item,
+            'Chave de Acesso': item.key,
+            'Tipo': item.type,
+            'Fornecedor': item.Fornecedor,
+            'Valor': item.Total,
             'Resumo da Pendência': 'Chave de Acesso encontrada no SPED, mas não na lista de Notas Válidas.'
         }));
         if (notInSheet.length > 0) {
@@ -97,10 +108,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         }
 
         // 4. SPED - Inconformidades
-        const spedDivergences = (processedData.keyCheckResults?.consolidatedDivergences || []).map(item => ({
-            ...item,
-            'Resumo da Pendência': item['Resumo das Divergências']
-        }));
+        const spedDivergences = (processedData.keyCheckResults?.consolidatedDivergences || []);
         if (spedDivergences.length > 0) {
             reportSections.push({
                 id: 'sped_divergences',
@@ -116,8 +124,9 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             const modifications = Object.entries(spedCorrections[0].modifications).flatMap(([key, value]) => {
                 if(Array.isArray(value) && value.length > 0) {
                      return value.map(v => ({
-                        'Resumo da Pendência': `Tipo: ${key}. Linha: ${v.lineNumber}. Original: ${v.original}. Corrigido: ${v.corrected || v.line}`,
-                        ...v
+                        'Tipo de Modificação': key,
+                        'Linha': v.lineNumber,
+                        'Resumo da Pendência': `Original: ${v.original || v.line} | Corrigido: ${v.corrected || '(linha removida)'}`,
                     }));
                 }
                 return [];
@@ -150,11 +159,19 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
              return classification === 'incorrect' || classification === 'verify';
         });
          if (cfopIssues.length > 0) {
+             const cfopReportData = cfopIssues.map(item => ({
+                'Fornecedor': item.Fornecedor,
+                'Número da Nota': item['Número da Nota'],
+                'Descrição XML': item['Descrição'],
+                'CFOP XML': item.CFOP,
+                'CFOP Sienge': item.Sienge_CFOP,
+                'Resumo da Pendência': item['Resumo da Pendência']
+            }));
             reportSections.push({
                 id: 'cfop_issues',
                 title: 'Itens com Validação de CFOP Pendente (Incorreto/A Verificar)',
-                data: cfopIssues,
-                columns: getColumns(cfopIssues)
+                data: cfopReportData,
+                columns: getColumns(cfopReportData)
             });
         }
         
@@ -226,7 +243,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         toast({ title: 'Relatório Excel Gerado' });
     };
 
-    const exportToPdf = (sectionsToExport: Section[]) => {
+    const exportToPdf = (sectionsToExport: Section[], reportTitle: string) => {
         const doc = new jsPDF({
             orientation: 'landscape',
         });
@@ -240,9 +257,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 doc.addPage();
             }
 
-            doc.setFontSize(18);
+            doc.setFontSize(16);
             doc.text(section.title, 14, 20);
-            doc.setFontSize(11);
 
             const tableColumns = section.columns.map(col => col.accessorKey || col.id).filter(key => key !== 'select');
             const tableRows = section.data.map(row => {
@@ -266,7 +282,11 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 body: tableRows,
                 startY: 25,
                 theme: 'striped',
-                headStyles: { fillColor: [41, 128, 185] },
+                headStyles: { fillColor: [41, 128, 185], cellPadding: 2 },
+                styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak' },
+                columnStyles: {
+                    0: { cellWidth: 'auto' },
+                }
             });
             
             isFirstPage = false;
@@ -277,7 +297,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             return;
         }
 
-        doc.save('Relatorio_Pendencias_Fiscais.pdf');
+        doc.save(`${reportTitle}.pdf`);
         toast({ title: 'Relatório PDF Gerado' });
     };
 
@@ -302,7 +322,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         if (format === 'excel') {
             exportToExcel(sectionsToExport);
         } else {
-            exportToPdf(sectionsToExport);
+            exportToPdf(sectionsToExport, 'Relatorio_Pendencias_Fiscais');
         }
     };
     
@@ -336,10 +356,10 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                     </div>
                      <div className="flex gap-2">
                         <Button onClick={() => handleExport('excel')} disabled={totalSelectedItems === 0}>
-                            <Download className="mr-2 h-4 w-4" /> Exportar Excel ({totalSelectedItems})
+                            <Download className="mr-2 h-4 w-4" /> Exportar Seleção (Excel)
                         </Button>
                         <Button onClick={() => handleExport('pdf')} variant="outline" disabled={totalSelectedItems === 0}>
-                            <FileIcon className="mr-2 h-4 w-4" /> Exportar PDF ({totalSelectedItems})
+                            <FileIcon className="mr-2 h-4 w-4" /> Exportar Seleção (PDF)
                         </Button>
                      </div>
                 </div>
@@ -373,7 +393,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                             });
                             
                             return (
-                                <div key={section.id} className="p-4 border rounded-lg">
+                                <div key={section.id} className="p-4 border rounded-lg bg-card shadow-sm">
                                     <div className="flex items-center justify-between mb-4">
                                         <div className="flex items-center space-x-3">
                                             <Checkbox
@@ -387,7 +407,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                                         </div>
                                          <div className="flex gap-2">
                                             <Button variant="outline" size="sm" onClick={() => exportToExcel([section])} disabled={section.data.length === 0}><Download className="mr-2 h-4 w-4"/>Excel</Button>
-                                            <Button variant="outline" size="sm" onClick={() => exportToPdf([section])} disabled={section.data.length === 0}><FileIcon className="mr-2 h-4 w-4"/>PDF</Button>
+                                            <Button variant="outline" size="sm" onClick={() => exportToPdf([section], section.title)} disabled={section.data.length === 0}><FileIcon className="mr-2 h-4 w-4"/>PDF</Button>
                                          </div>
                                     </div>
                                     <div className="pl-8">
