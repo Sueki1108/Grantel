@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -173,37 +174,37 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             }
         }
 
-        // 6. CFOP Incorreto
+        // 6. CFOP Incorreto ou a Verificar
         const cfopValidationItems = processedData.reconciliationResults?.reconciled || [];
-        const cfopIncorrectItems = cfopValidationItems.filter(item => {
+        const cfopPendingItems = cfopValidationItems.filter(item => {
              const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
              const classification = allPersistedClassifications[competenceKey]?.cfopValidations?.classifications[uniqueKey]?.classification;
-             return classification === 'incorrect';
+             return classification === 'incorrect' || classification === 'verify';
         });
 
-        if (cfopIncorrectItems.length > 0) {
-             const groupedByCfop: Record<string, any[]> = cfopIncorrectItems.reduce((acc, item) => {
+        if (cfopPendingItems.length > 0) {
+             const groupedByCfop: Record<string, any[]> = cfopPendingItems.reduce((acc, item) => {
                 const cfop = item.Sienge_CFOP || 'N/A';
                 if (!acc[cfop]) acc[cfop] = [];
                 acc[cfop].push({
                     ...item,
-                    '__itemKey': `cfop-incorrect-${item['Chave de acesso']}-${item.Item}`
+                    '__itemKey': `cfop-pending-${item['Chave de acesso']}-${item.Item}`
                 });
                 return acc;
             }, {} as Record<string, any[]>);
 
             const cfopSubSections = Object.entries(groupedByCfop).map(([cfop, items]) => ({
-                id: `cfop_incorrect_${cfop}`,
+                id: `cfop_pending_${cfop}`,
                 title: `CFOP ${cfop}`,
-                description: `Itens lançados no Sienge com CFOP ${cfop} que foram marcados como incorretos.`,
+                description: `Itens lançados no Sienge com CFOP ${cfop} que foram marcados como incorretos ou a verificar.`,
                 data: items,
                 columns: getColumns(items)
             }));
 
             reportSections.push({
                 id: 'cfop_issues',
-                title: 'Itens com Validação de CFOP Incorreta',
-                description: 'Itens conciliados entre XML e Sienge que foram marcados manualmente como "Incorreto".',
+                title: 'Itens com Validação de CFOP Pendente',
+                description: 'Itens conciliados que foram marcados manualmente como "Incorreto" ou "A Verificar".',
                 data: [],
                 columns: [],
                 subSections: cfopSubSections
@@ -290,6 +291,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                  if (exportData.length === 0) return;
 
                 if (!isFirstPage) doc.addPage();
+                isFirstPage = false;
 
                 doc.setFontSize(14);
                 doc.text(title, 14, 20);
@@ -302,12 +304,10 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                     body: tableRows,
                     startY: 28,
                     theme: 'striped',
-                    headStyles: { fillColor: [41, 128, 185], cellPadding: 2, halign: 'center' },
+                    headStyles: { fillColor: [41, 128, 185], cellPadding: 2, halign: 'center', minCellHeight: 10 },
                     styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak' },
                     columnStyles: { 0: { cellWidth: 'auto' } }
                 });
-                
-                isFirstPage = false;
             }
 
             if (section.subSections) {
