@@ -39,7 +39,7 @@ export const GNRE_DEFAULT_CONFIGS: GnreConfig = {
     "CNPJ_DESTINATARIO": "81732042000119",
     "RAZAO_SOCIAL_DESTINATARIO": "GRANTEL ENGENHARIA LTDA",
     "UF_DESTINATARIO": "MS",
-    "MUNICIPIO_ALVO_DESTINATARIO": "5007906" // O código para Selvíria-MS
+    "MUNICIPIO_ALVO_DESTINATARIO": "5007906"
 };
 
 export function generateGnreScript(
@@ -199,12 +199,11 @@ def run_automation_for_item(driver, item_data, vencimento, data_pagamento):
         )
         select_uf_emitente = Select(driver.find_element(By.ID, ID_DROPDOWN_UF_EMITENTE))
         select_uf_emitente.select_by_value(UF_ALVO_EMITENTE)
-        time.sleep(1)
         
         campo_cep_element = driver.find_element(By.ID, ID_CAMPO_CEP)
         campo_cep_element.send_keys(CEP_ALVO)
-        driver.execute_script("arguments[0].dispatchEvent(new Event('change'));", campo_cep_element)
-        time.sleep(1) # Espera extra para o JS da página reagir
+        campo_cep_element.send_keys(Keys.TAB)
+        time.sleep(1) # Pausa para o JavaScript da página reagir
 
         WebDriverWait(driver, TIMEOUT).until(
             EC.presence_of_element_located((By.XPATH, f"//select[@id='{ID_DROPDOWN_MUNICIPIO_EMITENTE}']/option[@value='{MUNICIPIO_ALVO_EMITENTE}']"))
