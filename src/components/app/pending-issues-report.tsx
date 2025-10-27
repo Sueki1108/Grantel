@@ -91,99 +91,14 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 title: 'Itens Classificados como Ativo Imobilizado',
                 description: 'Itens com valor > R$ 1.200,00 classificados manualmente como Ativo Imobilizado. Verifique se o código do ativo está correto.',
                 data: imobilizadoItems,
-                columns: getColumnsWithCustomRender(imobilizadoItems, Object.keys(imobilizadoItems[0] || {}))
-            });
-        }
-
-        // 2. Notas não Lançadas
-        const notFoundInSped = (processedData.keyCheckResults?.keysNotFoundInTxt || []);
-        const notFoundNfe = notFoundInSped.filter(item => (item.type === 'NFE' || item.type === 'Saída')).map(item => ({...item, '__itemKey': `notfound-${item.key}`}));
-        const notFoundCte = notFoundInSped.filter(item => item.type === 'CTE').map(item => ({...item, '__itemKey': `notfound-${item.key}`}));
-
-        if (notFoundInSped.length > 0) {
-            reportSections.push({
-                id: 'sped_not_found',
-                title: 'Notas não Lançadas',
-                description: 'As chaves abaixo constam como válidas no seu controlo, mas não foram localizadas no arquivo SPED, indicando que podem não ter sido escrituradas.',
-                data: [],
-                columns: [],
-                subSections: [
-                    { id: 'nfe_not_found', title: 'NF-e', description: '', data: notFoundNfe, columns: getColumnsWithCustomRender(notFoundNfe, Object.keys(notFoundNfe[0] || {}))},
-                    { id: 'cte_not_found', title: 'CT-e', description: '', data: notFoundCte, columns: getColumnsWithCustomRender(notFoundCte, Object.keys(notFoundCte[0] || {}))}
-                ]
+                columns: getColumnsWithCustomRender(imobilizadoItems, Object.keys(imobilizadoItems[0] || {}).filter(k => k !== '__itemKey'))
             });
         }
         
-        // 3. SPED - Não na planilha
-        const notInSheet = (processedData.keyCheckResults?.keysInTxtNotInSheet || []);
-        const notInSheetNfe = notInSheet.filter(item => item.type === 'NFE').map(item => ({...item, '__itemKey': `notinSheet-${item.key}`}));
-        const notInSheetCte = notInSheet.filter(item => item.type === 'CTE').map(item => ({...item, '__itemKey': `notinSheet-${item.key}`}));
-
-        if (notInSheet.length > 0) {
-            reportSections.push({
-                id: 'sped_not_in_sheet',
-                title: 'Chaves no SPED Não Encontradas nas Notas Válidas',
-                description: 'Estas chaves existem no SPED, mas não foram classificadas como válidas no seu controlo. Verifique se são notas canceladas, devolvidas ou escrituradas indevidamente.',
-                data: [],
-                columns: [],
-                subSections: [
-                    { id: 'nfe_not_in_sheet', title: 'NF-e', description: '', data: notInSheetNfe, columns: getColumnsWithCustomRender(notInSheetNfe, Object.keys(notInSheetNfe[0] || {}))},
-                    { id: 'cte_not_in_sheet', title: 'CT-e', description: '', data: notInSheetCte, columns: getColumnsWithCustomRender(notInSheetCte, Object.keys(notInSheetCte[0] || {}))}
-                ]
-            });
-        }
-
-
-        // 4. SPED - Inconformidades (dividido em sub-secções)
-        const { ufDivergences, ieDivergences, dateDivergences, valueDivergences } = processedData.keyCheckResults || {};
-        
-        if ((ufDivergences?.length || 0) > 0 || (ieDivergences?.length || 0) > 0 || (dateDivergences?.length || 0) > 0 || (valueDivergences?.length || 0) > 0) {
-            const subSections = [
-                { id: 'uf', title: 'Divergência de UF', description: 'Inconsistência entre a UF do destinatário no XML e o cadastro da empresa.', data: (ufDivergences || []).map(item => ({...item, '__itemKey': `uf-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(ufDivergences || [], Object.keys(ufDivergences?.[0] || {})) },
-                { id: 'ie', title: 'Divergência de IE', description: 'Inconsistência entre a Inscrição Estadual do destinatário no XML e o cadastro da empresa.', data: (ieDivergences || []).map(item => ({...item, '__itemKey': `ie-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(ieDivergences || [], Object.keys(ieDivergences?.[0] || {})) },
-                { id: 'date', title: 'Divergência de Data', description: 'A data de emissão do documento no XML não corresponde à data de emissão escriturada no SPED.', data: (dateDivergences || []).map(item => ({...item, '__itemKey': `date-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(dateDivergences || [], Object.keys(dateDivergences?.[0] || {})) },
-                { id: 'value', title: 'Divergência de Valor', description: 'O valor total do documento no XML não corresponde ao valor total escriturado no SPED.', data: (valueDivergences || []).map(item => ({...item, '__itemKey': `value-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(valueDivergences || [], Object.keys(valueDivergences?.[0] || {})) },
-            ].filter(sub => sub.data.length > 0);
-
-            reportSections.push({
-                id: 'sped_divergences',
-                title: 'Inconformidades Entre XML e SPED',
-                description: 'Divergências nos dados de notas que constam em ambos os locais (XML e SPED), separadas por tipo.',
-                data: [],
-                columns: [],
-                subSections
-            });
-        }
-        
-        // 5. SPED - Modificações
-        const spedCorrections = processedData.spedCorrections || [];
-         if (spedCorrections.length > 0 && spedCorrections[0].linesModified > 0) {
-            const modifications = Object.entries(spedCorrections[0].modifications).flatMap(([key, value]) => {
-                if(Array.isArray(value) && value.length > 0) {
-                     return value.map((v: any, i: number) => ({
-                        'Tipo de Correção': key,
-                        'Linha': v.lineNumber,
-                        'Detalhe': `Original: ${v.original || v.line} | Corrigido: ${v.corrected || '(removida)'}`,
-                        '__itemKey': `spedmod-${key}-${i}`
-                    }));
-                }
-                return [];
-            }).filter(m => m);
-            if(modifications.length > 0) {
-                reportSections.push({
-                    id: 'sped_corrections',
-                    title: 'Modificações Realizadas no Arquivo SPED',
-                    description: 'O corretor automático realizou as seguintes alterações no arquivo SPED para garantir a conformidade.',
-                    data: modifications,
-                    columns: getColumnsWithCustomRender(modifications, Object.keys(modifications[0] || {}))
-                });
-            }
-        }
-
-        // 6. CFOP Incorreto ou a Verificar
+        // 2. CFOP Incorreto ou a Verificar
         const cfopValidationItems = processedData.reconciliationResults?.reconciled || [];
         const cfopValidationsForCompetence = allPersistedClassifications[competenceKey]?.cfopValidations?.classifications || {};
-
+        
         const cfopPendingItems = cfopValidationItems.filter(item => {
              const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
              const classification = cfopValidationsForCompetence[uniqueKey]?.classification;
@@ -206,7 +121,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 title: `CFOP ${cfop}`,
                 description: `Itens lançados no Sienge com CFOP ${cfop} que foram marcados como incorretos ou a verificar.`,
                 data: items,
-                columns: getColumnsWithCustomRender(items, Object.keys(items[0] || {}))
+                columns: getColumnsWithCustomRender(items, Object.keys(items[0] || {}).filter(k => k !== '__itemKey'))
             }));
 
             reportSections.push({
@@ -217,6 +132,92 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 columns: [],
                 subSections: cfopSubSections
             });
+        }
+
+
+        // 3. Notas não Lançadas
+        const notFoundInSped = (processedData.keyCheckResults?.keysNotFoundInTxt || []);
+        const notFoundNfe = notFoundInSped.filter(item => (item.type === 'NFE' || item.type === 'Saída')).map(item => ({...item, '__itemKey': `notfound-${item.key}`}));
+        const notFoundCte = notFoundInSped.filter(item => item.type === 'CTE').map(item => ({...item, '__itemKey': `notfound-${item.key}`}));
+
+        if (notFoundInSped.length > 0) {
+            reportSections.push({
+                id: 'sped_not_found',
+                title: 'Notas não Lançadas',
+                description: 'As chaves abaixo constam como válidas no seu controlo, mas não foram localizadas no arquivo SPED, indicando que podem não ter sido escrituradas.',
+                data: [],
+                columns: [],
+                subSections: [
+                    { id: 'nfe_not_found', title: 'NF-e', description: '', data: notFoundNfe, columns: getColumnsWithCustomRender(notFoundNfe, Object.keys(notFoundNfe[0] || {}).filter(k => k !== '__itemKey'))},
+                    { id: 'cte_not_found', title: 'CT-e', description: '', data: notFoundCte, columns: getColumnsWithCustomRender(notFoundCte, Object.keys(notFoundCte[0] || {}).filter(k => k !== '__itemKey'))}
+                ]
+            });
+        }
+        
+        // 4. SPED - Não na planilha
+        const notInSheet = (processedData.keyCheckResults?.keysInTxtNotInSheet || []);
+        const notInSheetNfe = notInSheet.filter(item => item.type === 'NFE').map(item => ({...item, '__itemKey': `notinSheet-${item.key}`}));
+        const notInSheetCte = notInSheet.filter(item => item.type === 'CTE').map(item => ({...item, '__itemKey': `notinSheet-${item.key}`}));
+
+        if (notInSheet.length > 0) {
+            reportSections.push({
+                id: 'sped_not_in_sheet',
+                title: 'Chaves no SPED Não Encontradas nas Notas Válidas',
+                description: 'Estas chaves existem no SPED, mas não foram classificadas como válidas no seu controlo. Verifique se são notas canceladas, devolvidas ou escrituradas indevidamente.',
+                data: [],
+                columns: [],
+                subSections: [
+                    { id: 'nfe_not_in_sheet', title: 'NF-e', description: '', data: notInSheetNfe, columns: getColumnsWithCustomRender(notInSheetNfe, Object.keys(notInSheetNfe[0] || {}).filter(k => k !== '__itemKey'))},
+                    { id: 'cte_not_in_sheet', title: 'CT-e', description: '', data: notInSheetCte, columns: getColumnsWithCustomRender(notInSheetCte, Object.keys(notInSheetCte[0] || {}).filter(k => k !== '__itemKey'))}
+                ]
+            });
+        }
+
+
+        // 5. SPED - Inconformidades (dividido em sub-secções)
+        const { ufDivergences, ieDivergences, dateDivergences, valueDivergences } = processedData.keyCheckResults || {};
+        
+        if ((ufDivergences?.length || 0) > 0 || (ieDivergences?.length || 0) > 0 || (dateDivergences?.length || 0) > 0 || (valueDivergences?.length || 0) > 0) {
+            const subSections = [
+                { id: 'uf', title: 'Divergência de UF', description: 'Inconsistência entre a UF do destinatário no XML e o cadastro da empresa.', data: (ufDivergences || []).map(item => ({...item, '__itemKey': `uf-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(ufDivergences || [], Object.keys(ufDivergences?.[0] || {}).filter(k => k !== '__itemKey')) },
+                { id: 'ie', title: 'Divergência de IE', description: 'Inconsistência entre a Inscrição Estadual do destinatário no XML e o cadastro da empresa.', data: (ieDivergences || []).map(item => ({...item, '__itemKey': `ie-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(ieDivergences || [], Object.keys(ieDivergences?.[0] || {}).filter(k => k !== '__itemKey')) },
+                { id: 'date', title: 'Divergência de Data', description: 'A data de emissão do documento no XML não corresponde à data de emissão escriturada no SPED.', data: (dateDivergences || []).map(item => ({...item, '__itemKey': `date-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(dateDivergences || [], Object.keys(dateDivergences?.[0] || {}).filter(k => k !== '__itemKey')) },
+                { id: 'value', title: 'Divergência de Valor', description: 'O valor total do documento no XML não corresponde ao valor total escriturado no SPED.', data: (valueDivergences || []).map(item => ({...item, '__itemKey': `value-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(valueDivergences || [], Object.keys(valueDivergences?.[0] || {}).filter(k => k !== '__itemKey')) },
+            ].filter(sub => sub.data.length > 0);
+
+            reportSections.push({
+                id: 'sped_divergences',
+                title: 'Inconformidades Entre XML e SPED',
+                description: 'Divergências nos dados de notas que constam em ambos os locais (XML e SPED), separadas por tipo.',
+                data: [],
+                columns: [],
+                subSections
+            });
+        }
+        
+        // 6. SPED - Modificações
+        const spedCorrections = processedData.spedCorrections || [];
+         if (spedCorrections.length > 0 && spedCorrections[0].linesModified > 0) {
+            const modifications = Object.entries(spedCorrections[0].modifications).flatMap(([key, value]) => {
+                if(Array.isArray(value) && value.length > 0) {
+                     return value.map((v: any, i: number) => ({
+                        'Tipo de Correção': key,
+                        'Linha': v.lineNumber,
+                        'Detalhe': `Original: ${v.original || v.line} | Corrigido: ${v.corrected || '(removida)'}`,
+                        '__itemKey': `spedmod-${key}-${i}`
+                    }));
+                }
+                return [];
+            }).filter(m => m);
+            if(modifications.length > 0) {
+                reportSections.push({
+                    id: 'sped_corrections',
+                    title: 'Modificações Realizadas no Arquivo SPED',
+                    description: 'O corretor automático realizou as seguintes alterações no arquivo SPED para garantir a conformidade.',
+                    data: modifications,
+                    columns: getColumnsWithCustomRender(modifications, Object.keys(modifications[0] || {}).filter(k => k !== '__itemKey'))
+                });
+            }
         }
         
         // 7. Revenda
@@ -230,7 +231,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 title: 'Notas Fiscais de Revenda Identificadas',
                 description: 'Os seguintes XMLs foram identificados como operações de revenda, com base nos CFOPs correspondentes na planilha do Sienge.',
                 data: resaleItems,
-                columns: getColumnsWithCustomRender(resaleItems, Object.keys(resaleItems[0] || {}))
+                columns: getColumnsWithCustomRender(resaleItems, Object.keys(resaleItems[0] || {}).filter(k => k !== '__itemKey'))
             });
         }
 

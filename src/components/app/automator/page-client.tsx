@@ -101,11 +101,11 @@ export function AutomatorClientPage() {
         try {
             localStorage.setItem(IMOBILIZADO_STORAGE_KEY, JSON.stringify(allDataToSave));
             toast({
-                title: "Classificações de Imobilizado Guardadas",
-                description: "As suas classificações e códigos de ativo foram guardados no armazenamento local do navegador."
+                title: "Classificações Guardadas",
+                description: "As suas classificações foram guardadas no armazenamento local do navegador."
             });
         } catch(e) {
-            console.error("Failed to save imobilizado classifications to localStorage", e);
+            console.error("Failed to save classifications to localStorage", e);
             toast({ variant: 'destructive', title: "Erro ao guardar classificações"});
         }
     };
