@@ -3,7 +3,6 @@ import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import { KeyCheckResult } from '@/components/app/key-checker';
 import { type AllClassifications } from '@/components/app/imobilizado-analysis';
-import type { XmlFileContent } from '@/components/app/history-analysis';
 
 // Types
 type DataFrame = any[];
@@ -29,11 +28,14 @@ export interface ProcessedData {
     saidasStatus?: Record<number, 'emitida' | 'cancelada' | 'inutilizada'>;
     lastSaidaNumber?: number;
     imobilizadoClassifications?: AllClassifications;
-    xmlFileContents?: {
-        nfeEntrada: XmlFileContent[];
-        cte: XmlFileContent[];
-        nfeSaida: XmlFileContent[];
-        nfse: XmlFileContent[];
+    fileNames?: {
+        nfeEntrada: string[];
+        cte: string[];
+        nfeSaida: string[];
+        nfse: string[];
+        manifesto: string[];
+        sienge: string | null;
+        sped: string[];
     }
 }
 
