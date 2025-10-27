@@ -130,17 +130,17 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const chavesExcecao = new Set<string>(eventCanceledKeys);
     log(`- ${eventCanceledKeys.size} chaves de cancelamento por evento de XML adicionadas.`);
     
-    const addManifestoExceptions = (df: DataFrame) => {
+    const addExceptionsFromDf = (df: DataFrame, chaveKey: string) => {
         df.forEach(row => {
             if (!row) return;
-            const chave = cleanAndToStr(row['Chave de acesso']);
+            const chave = cleanAndToStr(row[chaveKey]);
             if (chave) chavesExcecao.add(chave);
         });
     };
     
-    addManifestoExceptions(naoRealizada);
-    addManifestoExceptions(desconhecida);
-    addManifestoExceptions(desacordo);
+    addExceptionsFromDf(naoRealizada, "Chave de acesso");
+    addExceptionsFromDf(desconhecida, "Chave de acesso");
+    addExceptionsFromDf(desacordo, "Chave de acesso");
     
     [...nfe, ...cte, ...saidas].forEach(row => {
         if (!row) return;
@@ -155,41 +155,65 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 
     log("Filtrando notas e itens válidos...");
     
-    const nfeFiltrada = nfe.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
-    const cteFiltrado = cte.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
-    
-    const todasEntradas = [...nfeFiltrada, ...cteFiltrado];
-    
+    // Filtro para todas as entradas
+    const todasEntradas = [...nfe, ...cte];
+
     const notasValidas: any[] = [];
     const devolucoesDeCompra: any[] = [];
+    const devolucoesDeClientes: any[] = [];
+
+    // Mapeia Chave Unica para os itens daquela nota, para verificação de CFOP
+    const itensPorChaveUnica = new Map<string, any[]>();
+    itens.forEach(item => {
+        const chaveUnica = cleanAndToStr(item["Chave Unica"]);
+        if (!itensPorChaveUnica.has(chaveUnica)) {
+            itensPorChaveUnica.set(chaveUnica, []);
+        }
+        itensPorChaveUnica.get(chaveUnica)!.push(item);
+    });
 
     todasEntradas.forEach(nota => {
         const chaveAcesso = cleanAndToStr(nota['Chave de acesso']);
+        const chaveUnica = cleanAndToStr(nota['Chave Unica']);
         const emitenteCnpjLimpo = cleanAndToStr(nota.emitCNPJ || nota['CPF/CNPJ do Fornecedor']);
         const destCnpjLimpo = cleanAndToStr(nota.destCNPJ || nota['CPF/CNPJ do Destinatário']);
-        
+
+        // REGRA 1: Ignorar se for cancelada ou manifestada
         if (chavesExcecao.has(chaveAcesso)) {
             return;
         }
 
+        // REGRA 2: Ignorar se for emissão própria da Grantel (Devolução de Compra ou Transferência)
         if (emitenteCnpjLimpo === GRANTEL_CNPJ) {
-             if (destCnpjLimpo !== GRANTEL_CNPJ) {
-                 devolucoesDeCompra.push(nota); // Emissão própria para um terceiro = Devolução
-             }
-             // Se for Grantel para Grantel (transferência), é ignorada e não vai para nenhuma lista.
-             return;
+            devolucoesDeCompra.push(nota);
+            return;
         }
         
-        // Se o emitente NÃO for a Grantel, é uma nota de compra válida.
+        // REGRA 3: Ignorar se for Devolução de Venda de Cliente (CFOP de item inicia com 1 ou 2)
+        const itensDaNota = itensPorChaveUnica.get(chaveUnica);
+        if (itensDaNota) {
+            const isDevolucaoCliente = itensDaNota.some(item => {
+                const cfop = String(item.CFOP || '');
+                return cfop.startsWith('1') || cfop.startsWith('2');
+            });
+            if (isDevolucaoCliente) {
+                devolucoesDeClientes.push(nota);
+                return;
+            }
+        }
+        
+        // Se passar por todas as regras, é uma nota de compra válida
         notasValidas.push(nota);
     });
 
-    const notasValidasNFe = notasValidas.filter(n => n.destUF);
-    const notasValidasCTe = notasValidas.filter(n => !n.destUF);
+
+    const notasValidasNFe = notasValidas.filter(n => n.destUF); // Heurística para separar NFe
+    const notasValidasCTe = notasValidas.filter(n => !n.destUF); // Heurística para separar CTe
 
     log(`- Total de ${notasValidasNFe.length} NF-es válidas para conciliação.`);
     log(`- Total de ${notasValidasCTe.length} CT-es válidos para conciliação.`);
-    log(`- Total de ${devolucoesDeCompra.length} devoluções de compra (emissão própria) identificadas.`);
+    log(`- Total de ${devolucoesDeCompra.length} devoluções de compra/transferências (Grantel emitente) identificadas.`);
+    log(`- Total de ${devolucoesDeClientes.length} devoluções de clientes (CFOP 1xxx/2xxx) identificadas.`);
     
     const chavesNotasValidas = new Set(notasValidas.map(row => cleanAndToStr(row["Chave Unica"])));
     let itensValidos = itens.filter(item => chavesNotasValidas.has(cleanAndToStr(item["Chave Unica"])));
@@ -243,10 +267,13 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const finalResult: DataFrames = {
         "Notas Válidas": notasValidasNFe,
         "CTEs Válidos": notasValidasCTe,
-        "Itens Válidos": itensValidos, "Chaves Válidas": chavesValidas,
-        "Saídas": saidasValidas, "Itens Válidos Saídas": itensValidosSaidas,
+        "Itens Válidos": itensValidos, 
+        "Chaves Válidas": chavesValidas,
+        "Saídas": saidasValidas, 
+        "Itens Válidos Saídas": itensValidosSaidas,
         "Imobilizados": imobilizados,
         "Devoluções de Compra (Fornecedor)": devolucoesDeCompra,
+        "Devoluções de Clientes": devolucoesDeClientes,
         "Notas Canceladas": notasCanceladas,
         ...originalDfs 
     };
@@ -274,13 +301,14 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const finalSheetSet: DataFrames = {};
     const displayOrder = [
         "Notas Válidas", "CTEs Válidos", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
-        "Imobilizados", "Devoluções de Compra (Fornecedor)", "Notas Canceladas", ...Object.keys(originalDfs)
+        "Imobilizados", "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes",
+        "Notas Canceladas", ...Object.keys(originalDfs)
     ];
 
     displayOrder.forEach(name => {
         let sheetData = finalResult[name];
         if (sheetData && sheetData.length > 0) {
-            if (["Itens Válidos", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados", "Devoluções de Compra (Fornecedor)"].includes(name)) {
+            if (["Itens Válidos", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados", "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes"].includes(name)) {
                  sheetData = sheetData.map(addCfopDescriptionToRow);
             }
             finalSheetSet[name] = sheetData;
