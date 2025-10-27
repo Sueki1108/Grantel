@@ -17,13 +17,22 @@ import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { useToast } from '@/hooks/use-toast';
 import { AllClassifications } from './imobilizado-analysis';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 
 interface Section {
     id: string;
     title: string;
+    description: string;
     data: any[];
     columns: any[];
+    subSections?: {
+        id: string;
+        title: string;
+        data: any[];
+        columns: any[];
+    }[]
 }
 
 interface PendingIssuesReportProps {
@@ -52,7 +61,6 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         .map(item => {
              const competenceKey = processedData.competence || 'default';
              const persistedForCompetence = allPersistedClassifications[competenceKey];
-             const classification = persistedForCompetence?.classifications?.[item.uniqueItemId]?.classification;
              const accountCode = persistedForCompetence?.accountCodes?.[item.id]?.accountCode;
             
              return {
@@ -68,6 +76,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             reportSections.push({
                 id: 'imobilizado',
                 title: 'Itens Classificados como Ativo Imobilizado',
+                description: 'Estes são os itens com valor superior a R$ 1.200,00 que foram manualmente classificados como Ativo Imobilizado. Verifique se o código do ativo está correto.',
                 data: imobilizadoItems,
                 columns: getColumns(imobilizadoItems)
             });
@@ -85,6 +94,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             reportSections.push({
                 id: 'sped_not_found',
                 title: 'Notas Válidas Não Encontradas no SPED',
+                description: 'As chaves de acesso abaixo constam como válidas no seu controlo (XMLs e planilhas), mas não foram localizadas no arquivo SPED Fiscal. Isto pode indicar que não foram escrituradas.',
                 data: notFoundInSped,
                 columns: getColumns(notFoundInSped)
             });
@@ -102,19 +112,34 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             reportSections.push({
                 id: 'sped_not_in_sheet',
                 title: 'Chaves no SPED Não Encontradas nas Notas Válidas',
+                description: 'Estas chaves foram encontradas no arquivo SPED, mas não foram classificadas como válidas no seu controlo. Podem ser notas canceladas, devolvidas ou que não deveriam ter sido escrituradas.',
                 data: notInSheet,
                 columns: getColumns(notInSheet)
             });
         }
 
-        // 4. SPED - Inconformidades
-        const spedDivergences = (processedData.keyCheckResults?.consolidatedDivergences || []);
-        if (spedDivergences.length > 0) {
+        // 4. SPED - Inconformidades (dividido em sub-secções)
+        const { ufDivergences, ieDivergences, dateDivergences, valueDivergences } = processedData.keyCheckResults || {};
+        const allDivergences = [
+            ...(ufDivergences || []),
+            ...(ieDivergences || []),
+            ...(dateDivergences || []),
+            ...(valueDivergences || []),
+        ];
+
+        if (allDivergences.length > 0) {
             reportSections.push({
                 id: 'sped_divergences',
-                title: 'Inconformidades Encontradas no SPED',
-                data: spedDivergences,
-                columns: getColumns(spedDivergences)
+                title: 'Inconformidades Entre XML e SPED',
+                description: 'Foram encontradas divergências nos dados de notas que constam em ambos os locais (XML e SPED). As inconsistências estão separadas por tipo abaixo.',
+                data: [], // Os dados estão nas sub-secções
+                columns: [],
+                subSections: [
+                    { id: 'uf', title: 'UF', data: ufDivergences || [], columns: getColumns(ufDivergences || []) },
+                    { id: 'ie', title: 'IE', data: ieDivergences || [], columns: getColumns(ieDivergences || []) },
+                    { id: 'date', title: 'Data', data: dateDivergences || [], columns: getColumns(dateDivergences || []) },
+                    { id: 'value', title: 'Valor', data: valueDivergences || [], columns: getColumns(valueDivergences || []) },
+                ].filter(sub => sub.data.length > 0)
             });
         }
         
@@ -123,7 +148,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
          if (spedCorrections.length > 0 && spedCorrections[0].linesModified > 0) {
             const modifications = Object.entries(spedCorrections[0].modifications).flatMap(([key, value]) => {
                 if(Array.isArray(value) && value.length > 0) {
-                     return value.map(v => ({
+                     return value.map((v: any) => ({
                         'Tipo de Modificação': key,
                         'Linha': v.lineNumber,
                         'Resumo da Pendência': `Original: ${v.original || v.line} | Corrigido: ${v.corrected || '(linha removida)'}`,
@@ -135,6 +160,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 reportSections.push({
                     id: 'sped_corrections',
                     title: 'Modificações Realizadas no Arquivo SPED',
+                    description: 'O corretor automático realizou as seguintes alterações no arquivo SPED para garantir a conformidade com o validador. Verifique se as correções estão de acordo com o esperado.',
                     data: modifications,
                     columns: getColumns(modifications)
                 });
@@ -170,6 +196,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             reportSections.push({
                 id: 'cfop_issues',
                 title: 'Itens com Validação de CFOP Pendente (Incorreto/A Verificar)',
+                description: 'Os itens abaixo, que foram conciliados entre XML e Sienge, foram marcados como tendo um CFOP incorreto ou a necessitar de verificação manual.',
                 data: cfopReportData,
                 columns: getColumns(cfopReportData)
             });
@@ -178,12 +205,13 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         // 7. Revenda
         const resaleItems = (processedData.resaleAnalysis?.xmls || []).map(f => ({
             'Ficheiro XML de Revenda': f.name,
-            'Resumo da Pendência': 'Nota fiscal identificada como operação de revenda.'
+            'Resumo da Pendência': 'Nota fiscal identificada como operação de revenda, com base nos CFOPs encontrados na planilha do Sienge.'
         }));
          if (resaleItems.length > 0) {
             reportSections.push({
                 id: 'resale_items',
                 title: 'Notas Fiscais de Revenda Identificadas',
+                description: 'Os seguintes XMLs foram identificados como operações de revenda, com base nos CFOPs correspondentes na planilha do Sienge.',
                 data: resaleItems,
                 columns: getColumns(resaleItems)
             });
@@ -198,8 +226,9 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const initialItems: Record<string, Record<string, boolean>> = {};
         sections.forEach(section => {
             initialSections[section.id] = true;
+            const dataToSelect = section.data.length > 0 ? section.data : (section.subSections || []).flatMap(s => s.data);
             const selection: Record<string, boolean> = {};
-            section.data.forEach((_, index) => {
+            dataToSelect.forEach((_, index) => {
                 selection[String(index)] = true;
             });
             initialItems[section.id] = selection;
@@ -212,9 +241,10 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         setSelectedSections(prev => ({ ...prev, [sectionId]: isChecked }));
         const section = sections.find(s => s.id === sectionId);
         if (section) {
+            const dataToSelect = section.data.length > 0 ? section.data : (section.subSections || []).flatMap(s => s.data);
             const newSelection: Record<string, boolean> = {};
             if(isChecked) {
-                section.data.forEach((_, index) => {
+                dataToSelect.forEach((_, index) => {
                     newSelection[String(index)] = true;
                 });
             }
@@ -226,8 +256,9 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const workbook = XLSX.utils.book_new();
 
         sectionsToExport.forEach(section => {
-            if (section.data.length > 0) {
-                const worksheet = XLSX.utils.json_to_sheet(section.data);
+            const exportData = section.subSections ? section.subSections.flatMap(s => s.data) : section.data;
+            if (exportData.length > 0) {
+                const worksheet = XLSX.utils.json_to_sheet(exportData);
                 const sheetName = section.title.replace(/[:\\/?*[\]]/g, '').substring(0, 31);
                 XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
             }
@@ -251,7 +282,10 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         let isFirstPage = true;
 
         sectionsToExport.forEach(section => {
-            if (section.data.length === 0) return;
+             const exportData = section.subSections ? section.subSections.flatMap(s => s.data) : section.data;
+             const columns = section.subSections ? section.subSections[0].columns : section.columns;
+
+            if (exportData.length === 0) return;
 
             if (!isFirstPage) {
                 doc.addPage();
@@ -260,19 +294,13 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             doc.setFontSize(16);
             doc.text(section.title, 14, 20);
 
-            const tableColumns = section.columns.map(col => col.accessorKey || col.id).filter(key => key !== 'select');
-            const tableRows = section.data.map(row => {
-                return tableColumns.map(colName => {
+            const tableColumns = columns.map((col: any) => col.accessorKey || col.id).filter((key: any) => key !== 'select');
+            const tableRows = exportData.map(row => {
+                return tableColumns.map((colName: string) => {
                     let value = row[colName];
-                    if (value instanceof Date) {
-                        return value.toLocaleDateString('pt-BR');
-                    }
-                    if (typeof value === 'boolean') {
-                        return value ? 'Sim' : 'Não';
-                    }
-                    if (value === null || value === undefined) {
-                        return '';
-                    }
+                    if (value instanceof Date) return value.toLocaleDateString('pt-BR');
+                    if (typeof value === 'boolean') return value ? 'Sim' : 'Não';
+                    if (value === null || value === undefined) return '';
                     return String(value);
                 });
             });
@@ -280,13 +308,14 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             autoTable(doc, {
                 head: [tableColumns],
                 body: tableRows,
-                startY: 25,
+                startY: 28,
                 theme: 'striped',
-                headStyles: { fillColor: [41, 128, 185], cellPadding: 2 },
-                styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak' },
-                columnStyles: {
-                    0: { cellWidth: 'auto' },
-                }
+                headStyles: { fillColor: [41, 128, 185], cellPadding: 2, halign: 'center' },
+                styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak' },
+                columnStyles: tableColumns.reduce((acc: any, col: any) => {
+                    acc[col] = { cellWidth: 'auto' };
+                    return acc;
+                }, {})
             });
             
             isFirstPage = false;
@@ -307,10 +336,11 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             const selectedItemsCount = Object.keys(rowSelections[section.id] || {}).filter(key => rowSelections[section.id][key]).length;
             return isSectionSelected && selectedItemsCount > 0;
         }).map(section => {
+            const allItems = section.data.length > 0 ? section.data : (section.subSections || []).flatMap(s => s.data);
             const selectedIndices = Object.keys(rowSelections[section.id] || {}).filter(key => rowSelections[section.id][key]).map(Number);
             return {
                 ...section,
-                data: section.data.filter((_, index) => selectedIndices.includes(index)),
+                data: allItems.filter((_, index) => selectedIndices.includes(index)),
             };
         });
 
@@ -365,54 +395,44 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 </div>
             </CardHeader>
             <CardContent>
-                <ScrollArea className="h-[70vh] p-4 border rounded-md">
-                    <div className="space-y-6">
-                        {sections.map(section => {
-                            const isSectionChecked = selectedSections[section.id] || false;
-                            const selectedCount = Object.keys(rowSelections[section.id] || {}).filter(key => rowSelections[section.id][key]).length;
+                <Accordion type="multiple" defaultValue={sections.map(s => s.id)} className="w-full">
+                    {sections.map(section => {
+                        const isSectionChecked = selectedSections[section.id] || false;
+                        const dataForSelection = section.data.length > 0 ? section.data : (section.subSections || []).flatMap(s => s.data);
+                        const selectedCount = Object.keys(rowSelections[section.id] || {}).filter(key => rowSelections[section.id][key]).length;
 
-                            const tableColumns = [...section.columns];
-                            tableColumns.unshift({
-                                id: 'select',
-                                header: ({ table }: any) => (
-                                    <Checkbox
-                                        checked={table.getIsAllRowsSelected()}
-                                        onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
-                                        aria-label="Selecionar todas as linhas"
-                                    />
-                                ),
-                                cell: ({ row }: any) => (
-                                    <Checkbox
-                                        checked={row.getIsSelected()}
-                                        onCheckedChange={(value) => row.toggleSelected(!!value)}
-                                        aria-label="Selecionar linha"
-                                    />
-                                ),
-                                enableSorting: false,
-                                enableHiding: false,
-                            });
-                            
-                            return (
-                                <div key={section.id} className="p-4 border rounded-lg bg-card shadow-sm">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div className="flex items-center space-x-3">
-                                            <Checkbox
-                                                id={`section-${section.id}`}
-                                                checked={isSectionChecked}
-                                                onCheckedChange={(checked) => handleSectionToggle(section.id, !!checked)}
-                                            />
-                                            <Label htmlFor={`section-${section.id}`} className="text-lg font-semibold flex-grow cursor-pointer">
-                                                {section.title} ({selectedCount} / {section.data.length})
-                                            </Label>
-                                        </div>
-                                         <div className="flex gap-2">
-                                            <Button variant="outline" size="sm" onClick={() => exportToExcel([section])} disabled={section.data.length === 0}><Download className="mr-2 h-4 w-4"/>Excel</Button>
-                                            <Button variant="outline" size="sm" onClick={() => exportToPdf([section], section.title)} disabled={section.data.length === 0}><FileIcon className="mr-2 h-4 w-4"/>PDF</Button>
-                                         </div>
+                        return (
+                            <AccordionItem value={section.id} key={section.id} className="border-b-0">
+                                <AccordionTrigger className="p-4 bg-muted/50 rounded-t-lg hover:no-underline">
+                                    <div className="flex items-center space-x-3 w-full">
+                                        <Checkbox
+                                            id={`section-${section.id}`}
+                                            checked={isSectionChecked}
+                                            onCheckedChange={(checked) => handleSectionToggle(section.id, !!checked)}
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                        <Label htmlFor={`section-${section.id}`} className="text-lg font-semibold flex-grow cursor-pointer">
+                                            {section.title} ({selectedCount} / {dataForSelection.length})
+                                        </Label>
                                     </div>
-                                    <div className="pl-8">
-                                         <DataTable 
-                                            columns={tableColumns} 
+                                </AccordionTrigger>
+                                <AccordionContent className="p-4 border border-t-0 rounded-b-lg">
+                                    <p className='text-sm text-muted-foreground mb-4'>{section.description}</p>
+                                    
+                                    {section.subSections ? (
+                                        <Tabs defaultValue={section.subSections[0]?.id}>
+                                            <TabsList>
+                                                {section.subSections.map(sub => <TabsTrigger key={sub.id} value={sub.id}>{sub.title} ({sub.data.length})</TabsTrigger>)}
+                                            </TabsList>
+                                            {section.subSections.map(sub => (
+                                                <TabsContent key={sub.id} value={sub.id} className="mt-4">
+                                                    <DataTable columns={sub.columns} data={sub.data} />
+                                                </TabsContent>
+                                            ))}
+                                        </Tabs>
+                                    ) : (
+                                        <DataTable 
+                                            columns={section.columns} 
                                             data={section.data} 
                                             rowSelection={rowSelections[section.id] || {}}
                                             setRowSelection={(newSelection) => {
@@ -424,20 +444,20 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                                                 }
                                                 setRowSelections(newRowSelections);
                                             }}
-                                         />
-                                    </div>
-                                </div>
-                            );
-                        })}
-                         {sections.length === 0 && (
-                            <div className="text-center text-muted-foreground py-16">
-                                <FileQuestion className="h-12 w-12 mx-auto mb-4" />
-                                <p className='text-lg font-medium'>Nenhuma pendência encontrada</p>
-                                <p>Todos os dados processados estão em conformidade com as verificações realizadas.</p>
-                            </div>
-                        )}
-                    </div>
-                </ScrollArea>
+                                        />
+                                    )}
+                                </AccordionContent>
+                            </AccordionItem>
+                        );
+                    })}
+                     {sections.length === 0 && (
+                        <div className="text-center text-muted-foreground py-16">
+                            <FileQuestion className="h-12 w-12 mx-auto mb-4" />
+                            <p className='text-lg font-medium'>Nenhuma pendência encontrada</p>
+                            <p>Todos os dados processados estão em conformidade com as verificações realizadas.</p>
+                        </div>
+                    )}
+                </Accordion>
             </CardContent>
         </Card>
     );
