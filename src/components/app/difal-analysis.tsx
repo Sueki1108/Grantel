@@ -6,29 +6,29 @@ import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown, Calendar as CalendarIcon } from 'lucide-react';
+import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown, Calendar as CalendarIcon, Bot } from 'lucide-react';
+import JSZip from 'jszip';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
+import { Checkbox } from '../ui/checkbox';
+import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DataTable } from '@/components/app/data-table';
+import { DataTable } from './data-table';
 import { getColumnsWithCustomRender } from '@/lib/columns-helper';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { ProcessedData } from '@/lib/excel-processor';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Calendar } from '../ui/calendar';
+import { generateGnreScript } from '@/lib/gnre-script-generator';
 
 // ===============================================================
 // Tipos
 // ===============================================================
 
-type DifalData = {
-    'Chave de Acesso': string;
-    'Número da Nota': string;
-    'Data de Emissão': string;
-    'Valor Total da Nota': number;
-    'Valor da Guia (10%)': number;
+type GnreDataItem = {
+    filename: string;
+    chave_acesso: string;
+    valor_principal_calculado: number;
+    valor_principal_gnre: string;
 };
 
 type IgnoredData = {
@@ -37,243 +37,179 @@ type IgnoredData = {
     'Motivo da Rejeição': string;
 };
 
-
-type VerificationStatus = {
-    [checkName: string]: boolean;
+// ===============================================================
+// Helper Functions
+// ===============================================================
+const readFileAsText = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            if (event.target && event.target.result instanceof ArrayBuffer) {
+                const buffer = event.target.result;
+                try {
+                    const decoder = new TextDecoder('utf-8', { fatal: true });
+                    resolve(decoder.decode(buffer));
+                } catch (e) {
+                    const decoder = new TextDecoder('iso-8859-1');
+                    resolve(decoder.decode(buffer));
+                }
+            } else {
+                reject(new Error('Falha ao ler o ficheiro como ArrayBuffer.'));
+            }
+        };
+        reader.onerror = () => reject(new Error(`Erro ao ler o ficheiro: ${file.name}`));
+        reader.readAsArrayBuffer(file);
+    });
 };
 
-const verificationItems = [
-    { id: 'date', label: 'Vencimento e "Doc. Válido" corretos' },
-    { id: 'uf', label: 'UF Favorecida = MS' },
-    { id: 'revenueCode', label: 'Cód. Receita = 100102' },
-    { id: 'value', label: 'Valor da Guia (10%) confere' },
-    { id: 'key', label: 'Chave de Acesso confere' },
-    { id: 'cnpj', label: 'CNPJs (Emitente/Dest.) conferem' },
-    { id: 'municipality', label: 'Município de Destino = Selvíria' },
-];
+const NFE_NS = '{http://www.portalfiscal.inf.br/nfe}';
 
-// ===============================================================
-// Item Component
-// ===============================================================
-const DifalItem = ({ item, verificationStatus, onVerificationChange }: { item: DifalData, verificationStatus: VerificationStatus, onVerificationChange: (checkId: string, isChecked: boolean) => void }) => {
-    const { toast } = useToast();
+const parseXmlData = (xmlText: string, filename: string): GnreDataItem | null => {
+    try {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, "application/xml");
+        const root = xmlDoc.documentElement;
 
-    const copyToClipboard = (text: string | number, type: string) => {
-        const textToCopy = typeof text === 'number' ? text.toFixed(2).replace('.',',') : String(text);
-        navigator.clipboard.writeText(textToCopy).then(() => {
-            toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: textToCopy });
-        }).catch(() => {
-            toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
-        });
-    };
-    
-    const formattedDate = useMemo(() => {
-        if (!item['Data de Emissão']) return 'N/A';
-        try {
-            const dateStr = String(item['Data de Emissão']).substring(0, 10);
-            const [year, month, day] = dateStr.split('-');
-            return `${day}/${month}/${year}`;
-        } catch { return 'Inválida'; }
-    }, [item['Data de Emissão']]);
+        let chaveAcesso: string | null = null;
+        const chNFeElement = root.querySelector('chNFe'); // Tenta buscar em protNFe/infProt
+        if (chNFeElement?.textContent) {
+            chaveAcesso = chNFeElement.textContent;
+        } else {
+            const infNFeElement = root.querySelector('infNFe');
+            const idAttr = infNFeElement?.getAttribute('Id');
+            if (idAttr && idAttr.startsWith('NFe')) {
+                chaveAcesso = idAttr.substring(3);
+            }
+        }
+        
+        if (!chaveAcesso || chaveAcesso.length !== 44) {
+            console.warn(`Chave de acesso inválida ou não encontrada em ${filename}.`);
+            return null;
+        }
 
-    const isFullyVerified = verificationItems.every(v => verificationStatus[v.id]);
+        const vNFElement = root.querySelector('vNF');
+        const vNFText = vNFElement?.textContent;
 
-    return (
-         <div className={cn(
-            "p-4 rounded-lg border flex flex-col gap-4 transition-colors",
-            isFullyVerified ? "bg-green-100 dark:bg-green-900/30 border-green-500/50" : "bg-secondary/50"
-         )}>
-             <div className="font-mono text-sm break-all flex items-center gap-2">
-                 <span className="text-muted-foreground">Chave:</span>
-                 <span className='truncate'>{item['Chave de Acesso']}</span>
-                 <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => copyToClipboard(item['Chave de Acesso'], 'Chave')}><Copy className="h-4 w-4" /></Button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-sm">
-                <div className="flex flex-col">
-                    <span className="font-semibold">Nº da Nota</span>
-                     <div className="flex items-center gap-1">
-                        <span className="text-muted-foreground">{item['Número da Nota']}</span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(item['Número da Nota'], 'Número da Nota')}><Copy className="h-3 w-3" /></Button>
-                    </div>
-                </div>
-                <div className="flex flex-col">
-                    <span className="font-semibold">Emissão</span>
-                     <div className="flex items-center gap-1">
-                        <span className="text-muted-foreground">{formattedDate}</span>
-                         <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(formattedDate, 'Data')}><Copy className="h-3 w-3" /></Button>
-                    </div>
-                </div>
-                 <div className="flex flex-col">
-                    <span className="font-semibold">Valor Total da Nota</span>
-                     <div className="flex items-center gap-1">
-                        <span className="text-muted-foreground">{item['Valor Total da Nota'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(item['Valor Total da Nota'], 'Valor Total')}><Copy className="h-3 w-3" /></Button>
-                    </div>
-                </div>
-                 <div className="flex flex-col">
-                    <span className="font-semibold text-primary">Valor da Guia (10%)</span>
-                     <div className="flex items-center gap-1">
-                        <span className="text-muted-foreground font-bold text-base">{item['Valor da Guia (10%)'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(item['Valor da Guia (10%)'], 'Valor da Guia')}><Copy className="h-3 w-3" /></Button>
-                    </div>
-                </div>
-            </div>
-             <div className="border-t pt-4">
-                <h4 className="text-sm font-semibold mb-2">Checklist de Conferência</h4>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2">
-                    {verificationItems.map(check => (
-                        <div key={check.id} className="flex items-center space-x-2">
-                             <Checkbox
-                                id={`${item['Chave de Acesso']}-${check.id}`}
-                                checked={verificationStatus[check.id] || false}
-                                onCheckedChange={(checked) => onVerificationChange(check.id, !!checked)}
-                            />
-                            <Label htmlFor={`${item['Chave de Acesso']}-${check.id}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                                {check.label}
-                            </Label>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
+        if (!vNFText) {
+            console.warn(`Valor <vNF> não encontrado em ${filename}.`);
+            return null;
+        }
+        
+        const valorNf = parseFloat(vNFText);
+        const valorPrincipal = parseFloat((valorNf * 0.10).toFixed(2));
+        const valorPrincipalGnre = String(Math.round(valorPrincipal * 100));
+
+        return {
+            filename: filename,
+            chave_acesso: chaveAcesso,
+            valor_principal_calculado: valorPrincipal,
+            valor_principal_gnre: valorPrincipalGnre,
+        };
+
+    } catch (e) {
+        console.error(`ERRO ao processar '${filename}'. Detalhes: ${e}`);
+        return null;
+    }
 };
-
 
 // ===============================================================
 // Main Component
 // ===============================================================
-interface DifalAnalysisProps {
-    processedData: ProcessedData | null;
-}
-
-export function DifalAnalysis({ processedData }: DifalAnalysisProps) {
-    const [pdfFiles, setPdfFiles] = useState<File[]>([]);
+export function DifalAnalysis() {
+    const [xmlFiles, setXmlFiles] = useState<File[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [results, setResults] = useState<{ valid: DifalData[], ignored: IgnoredData[] } | null>(null);
-    const [verificationStatuses, setVerificationStatuses] = useState<Record<string, VerificationStatus>>({});
+    const [gnreData, setGnreData] = useState<GnreDataItem[]>([]);
     const [dueDate, setDueDate] = useState<Date | undefined>(new Date());
-
     const { toast } = useToast();
-    
-    const handleVerificationChange = (chave: string, checkId: string, isChecked: boolean) => {
-        setVerificationStatuses(prev => ({
-            ...prev,
-            [chave]: {
-                ...(prev[chave] || {}),
-                [checkId]: isChecked
-            }
-        }));
-    };
 
-    const handlePdfFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const selectedFiles = e.target.files;
         if (!selectedFiles) return;
-        setPdfFiles(prev => [...prev, ...Array.from(selectedFiles)]);
-        toast({ title: `${selectedFiles.length} ficheiro(s) PDF adicionados.` });
+        
+        let newFiles: File[] = [];
+        let extractedCount = 0;
+
+        for (const file of Array.from(selectedFiles)) {
+             if (file.type === 'application/zip' || file.name.toLowerCase().endsWith('.zip')) {
+                try {
+                    const zip = await JSZip.loadAsync(file);
+                    for (const relativePath in zip.files) {
+                        const zipEntry = zip.files[relativePath];
+                        if (!zipEntry?.dir && relativePath.toLowerCase().endsWith('.xml')) {
+                            const content = await zipEntry.async('string');
+                            newFiles.push(new File([content], zipEntry.name, { type: 'application/xml' }));
+                            extractedCount++;
+                        }
+                    }
+                } catch (error) {
+                    toast({ variant: "destructive", title: `Erro ao descompactar ${file.name}` });
+                }
+            } else if (file.type === 'text/xml' || file.name.toLowerCase().endsWith('.xml')) {
+                newFiles.push(file);
+            }
+        }
+        
+        setXmlFiles(prev => [...prev, ...newFiles]);
+        toast({ title: `${newFiles.length} ficheiro(s) XML adicionados.`, description: `${extractedCount > 0 ? `(${extractedCount} de .zip)` : ''} Clique em processar para analisar.` });
     };
 
-    const processXmlFiles = async () => {
-        if (!processedData?.sheets?.['Devoluções de Clientes']) {
-             toast({ variant: "destructive", title: "Dados de base em falta", description: "A planilha 'Devoluções de Clientes' não foi encontrada nos dados processados." });
+    const processXmlForGnre = async () => {
+        if (xmlFiles.length === 0) {
+            toast({ variant: "destructive", title: "Nenhum XML carregado", description: "Por favor, carregue os ficheiros XML de devolução." });
             return;
         }
 
         setIsLoading(true);
-        setResults(null);
+        setGnreData([]);
         
-        const validData: DifalData[] = [];
-        const ignoredData: IgnoredData[] = [];
-
-        const devolucoes = processedData.sheets['Devoluções de Clientes'] || [];
+        const processedItems: GnreDataItem[] = [];
         
-        for (const nota of devolucoes) {
-            const infCpl = nota.infCpl || ''; 
-            const valorTotal = nota['Total'] || 0;
-            const chaveAcesso = nota['Chave de acesso'];
-
-            if (infCpl.toUpperCase().includes("SELVIRIA/MS")) {
-                 validData.push({
-                    'Chave de Acesso': chaveAcesso,
-                    'Número da Nota': nota['Número'],
-                    'Data de Emissão': nota['Emissão'],
-                    'Valor Total da Nota': valorTotal,
-                    'Valor da Guia (10%)': parseFloat((valorTotal * 0.1).toFixed(2)),
-                });
-            } else {
-                 ignoredData.push({
-                    'Chave de Acesso': chaveAcesso,
-                    'Valor da Nota': valorTotal,
-                    'Motivo da Rejeição': 'Local de entrega não é Selvíria/MS.',
-                });
+        for (const file of xmlFiles) {
+            try {
+                const xmlText = await readFileAsText(file);
+                const data = parseXmlData(xmlText, file.name);
+                if (data) {
+                    processedItems.push(data);
+                }
+            } catch (err) {
+                console.error("Erro ao processar ficheiro", file.name, err);
             }
         }
         
-        setResults({ valid: validData, ignored: ignoredData });
+        setGnreData(processedItems);
         setIsLoading(false);
-        toast({ title: "Processamento Concluído", description: `${validData.length} notas de devolução válidas para DIFAL e ${ignoredData.length} ignoradas.` });
+        toast({ title: "Processamento Concluído", description: `${processedItems.length} XMLs válidos encontrados e prontos para gerar o script.` });
     };
 
-    const handleDownloadReport = () => {
-        if (!results || results.valid.length === 0) {
-            toast({ variant: 'destructive', title: 'Nenhum dado para exportar' });
+    const handleGenerateAndDownloadScript = () => {
+        if (gnreData.length === 0) {
+            toast({ variant: 'destructive', title: 'Nenhum dado processado', description: 'Processe os ficheiros XML primeiro.' });
+            return;
+        }
+        if (!dueDate) {
+             toast({ variant: 'destructive', title: 'Data de Vencimento em falta', description: 'Por favor, selecione uma data de vencimento para a guia.' });
             return;
         }
 
-        const reportData = results.valid.map(item => {
-            const status = verificationStatuses[item['Chave de Acesso']] || {};
-            const baseData: Record<string, any> = {
-                'Chave de Acesso': item['Chave de Acesso'],
-                'Número da Nota': item['Número da Nota'],
-                'Data de Emissão': item['Data de Emissão'],
-                'Valor da Nota': item['Valor Total da Nota'],
-                'Valor da Guia (10%)': item['Valor da Guia (10%)'],
-            };
-            verificationItems.forEach(check => {
-                baseData[check.label] = status[check.id] ? 'OK' : 'Pendente';
-            });
-            return baseData;
-        });
-
-        const worksheet = XLSX.utils.json_to_sheet(reportData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Relatório de Conferência');
-        XLSX.writeFile(workbook, `Relatorio_Conferencia_DIFAL.xlsx`);
-        toast({ title: 'Relatório Gerado' });
-    };
-    
-    const handleDownloadExcel = (data: any[], sheetName: string) => {
-        if (!data || data.length === 0) {
-            toast({ variant: 'destructive', title: "Nenhum dado para baixar" });
-            return;
+        try {
+            const dataUnica = format(dueDate, 'dd/MM/yyyy');
+            const scriptContent = generateGnreScript(gnreData, dataUnica, dataUnica);
+            
+            const blob = new Blob([scriptContent], { type: 'text/python;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'script_automacao_gnre.py';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            toast({ title: 'Script Gerado com Sucesso', description: 'O ficheiro script_automacao_gnre.py está a ser descarregado.' });
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Erro ao Gerar Script', description: error.message });
         }
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), sheetName.substring(0, 31));
-        XLSX.writeFile(wb, `Analise_DIFAL_${sheetName}.xlsx`);
-        toast({ title: "Download Iniciado" });
     };
-
-    if (!processedData) {
-        return (
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center gap-3">
-                         <TicketPercent className="h-8 w-8 text-primary" />
-                        <div>
-                            <CardTitle className="font-headline text-2xl">Ferramenta de Extração e Conferência para Guia DIFAL</CardTitle>
-                        </div>
-                    </div>
-                </CardHeader>
-                 <CardContent>
-                    <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
-                        <AlertTriangle className="h-12 w-12 text-amber-500" />
-                        <h3 className="mt-4 text-xl font-semibold">Aguardando Dados</h3>
-                        <p className="mt-2 text-center">Execute a "Validação de Documentos" na primeira aba para carregar os dados das notas e habilitar esta ferramenta.</p>
-                    </div>
-                </CardContent>
-            </Card>
-        )
-    }
 
     return (
         <div className="space-y-6">
@@ -282,19 +218,28 @@ export function DifalAnalysis({ processedData }: DifalAnalysisProps) {
                     <div className="flex items-center gap-3">
                          <TicketPercent className="h-8 w-8 text-primary" />
                         <div>
-                            <CardTitle className="font-headline text-2xl">Ferramenta de Extração e Conferência para Guia DIFAL</CardTitle>
+                            <CardTitle className="font-headline text-2xl">Gerador de Script para Automação de Guias DIFAL (GNRE)</CardTitle>
                             <CardDescription>
-                                Esta ferramenta analisa as 'Devoluções de Clientes' da aba de Validação para identificar as notas elegíveis para a guia DIFAL.
+                                Carregue os XMLs de devolução, defina a data, e gere um script Python para automatizar o preenchimento das guias GNRE no portal de Pernambuco.
                             </CardDescription>
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-8">
                     <div>
-                        <h3 className="text-lg font-bold mb-2">Etapa 1: Processar Dados Base</h3>
-                         <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-                             <div>
-                                <Label htmlFor='due-date'>Data de Vencimento da Guia</Label>
+                        <h3 className="text-lg font-bold mb-4">Etapa 1: Carregar XMLs e Definir Data</h3>
+                        <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                            <div className='flex flex-col gap-2'>
+                                <Label>Carregar XMLs de Devolução (.xml ou .zip)</Label>
+                                <label htmlFor="xml-upload-difal" className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 cursor-pointer hover:border-primary transition-colors h-full">
+                                    <FileUp className="h-8 w-8 text-muted-foreground mb-1" />
+                                    <span className="font-semibold text-sm">Clique ou arraste para carregar</span>
+                                    <input id="xml-upload-difal" type="file" className="sr-only" onChange={handleXmlFileChange} multiple accept=".xml,.zip" />
+                                </label>
+                                {xmlFiles.length > 0 && <div className="text-sm text-muted-foreground"><span className="font-bold">{xmlFiles.length}</span> ficheiro(s) XML pronto(s).</div>}
+                            </div>
+                            <div>
+                                <Label htmlFor='due-date'>Data de Vencimento/Pagamento da Guia</Label>
                                 <Popover>
                                     <PopoverTrigger asChild>
                                         <Button
@@ -319,88 +264,43 @@ export function DifalAnalysis({ processedData }: DifalAnalysisProps) {
                                     </PopoverContent>
                                 </Popover>
                             </div>
-                            <Button onClick={processXmlFiles} disabled={isLoading || !processedData} className="w-full self-end">
-                                {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : <><Cpu className="mr-2 h-4 w-4" /> Analisar Devoluções para DIFAL</>}
-                            </Button>
                         </div>
                     </div>
-
+                    
                     <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Etapa 2</span></div></div>
 
-                     <div>
-                        <h3 className="text-lg font-bold mb-2">Etapa 2: Anexar Guias Emitidas (PDF) para Conferência</h3>
-                        <p className="text-sm text-muted-foreground mb-4">Depois de emitir as guias de DIFAL, carregue os ficheiros PDF correspondentes aqui para manter um registo e facilitar a verificação na lista abaixo.</p>
-                         <label htmlFor="pdf-upload-difal" className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 cursor-pointer hover:border-primary transition-colors">
-                            <FileDown className="h-10 w-10 text-muted-foreground mb-2" />
-                            <span className="font-semibold">Carregar Guias (PDF)</span>
-                            <span className="text-sm text-muted-foreground">Arraste ou clique para selecionar</span>
-                            <input id="pdf-upload-difal" type="file" className="sr-only" onChange={handlePdfFileChange} multiple accept=".pdf" />
-                        </label>
-                        {pdfFiles.length > 0 && (
-                            <div className="mt-4 space-y-1 text-sm">
-                                <h4 className='font-medium'>Ficheiros PDF carregados:</h4>
-                                <ul className="list-disc list-inside text-muted-foreground max-h-40 overflow-y-auto">
-                                    {pdfFiles.map((file, i) => <li key={i}>{file.name}</li>)}
-                                </ul>
-                            </div>
-                        )}
+                    <div>
+                        <h3 className="text-lg font-bold mb-2">Etapa 2: Processar e Gerar Script</h3>
+                        <p className='text-sm text-muted-foreground mb-4'>Clique para extrair os dados dos XMLs. Depois, poderá gerar o script de automação.</p>
+                        <div className='flex flex-col sm:flex-row gap-4'>
+                            <Button onClick={processXmlForGnre} disabled={isLoading || xmlFiles.length === 0} className="w-full">
+                                {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : <><Cpu className="mr-2 h-4 w-4" /> Processar XMLs</>}
+                            </Button>
+                             <Button onClick={handleGenerateAndDownloadScript} disabled={gnreData.length === 0} className="w-full">
+                                <Bot className="mr-2 h-4 w-4" /> Gerar e Baixar Script de Automação
+                            </Button>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
 
-            {results && (
+            {gnreData.length > 0 && (
                 <Card>
                     <CardHeader>
-                        <div className='flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4'>
-                            <div>
-                                <CardTitle>Resultados e Conferência</CardTitle>
-                                <CardDescription>Confira cada item da checklist e baixe o relatório final.</CardDescription>
-                            </div>
-                            <Button onClick={handleDownloadReport} size="sm" disabled={results.valid.length === 0}>
-                                <Download className="mr-2 h-4 w-4" /> Baixar Relatório de Conferência
-                            </Button>
-                        </div>
+                        <CardTitle>Dados Extraídos dos XMLs</CardTitle>
+                        <CardDescription>
+                            Os seguintes dados foram extraídos e serão incluídos no script de automação.
+                        </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <Tabs defaultValue="valid">
-                            <TabsList className="grid w-full grid-cols-2">
-                                <TabsTrigger value="valid">Notas Válidas para DIFAL ({results.valid.length})</TabsTrigger>
-                                <TabsTrigger value="ignored">Notas Ignoradas ({results.ignored.length})</TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="valid" className="mt-4 space-y-2">
-                                {results.valid.length > 0 ? (
-                                    results.valid.map(item => 
-                                        <DifalItem 
-                                            key={item['Chave de Acesso']} 
-                                            item={item} 
-                                            verificationStatus={verificationStatuses[item['Chave de Acesso']] || {}}
-                                            onVerificationChange={(checkId, isChecked) => handleVerificationChange(item['Chave de Acesso'], checkId, isChecked)}
-                                        />
-                                    )
-                                ) : (
-                                    <p className="text-center text-muted-foreground py-8">Nenhuma nota válida encontrada.</p>
-                                )}
-                            </TabsContent>
-                            <TabsContent value="ignored" className="mt-4">
-                                 <Button onClick={() => handleDownloadExcel(results.ignored, "Notas_Ignoradas_DIFAL")} size="sm" className="mb-4" disabled={results.ignored.length === 0}>
-                                    <Download className="mr-2 h-4 w-4" /> Baixar Lista de Ignoradas
-                                 </Button>
-                                <DataTable 
-                                    columns={getColumnsWithCustomRender(
-                                        results.ignored, 
-                                        ['Chave de Acesso', 'Valor da Nota', 'Motivo da Rejeição'],
-                                        (row, id) => {
-                                            const value = row.original[id as keyof typeof row.original];
-                                            if (typeof value === 'number') {
-                                                return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
-                                            }
-                                            return <div>{String(value)}</div>;
-                                        }
-                                    )} 
-                                    data={results.ignored} 
-                                />
-                            </TabsContent>
-                        </Tabs>
+                       <DataTable 
+                            columns={[
+                                { accessorKey: 'filename', header: 'Nome do Ficheiro' },
+                                { accessorKey: 'chave_acesso', header: 'Chave de Acesso' },
+                                { accessorKey: 'valor_principal_calculado', header: 'Valor do Imposto (10%)', cell: ({row}) => (row.original as GnreDataItem).valor_principal_calculado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })},
+                            ]}
+                            data={gnreData}
+                       />
                     </CardContent>
                 </Card>
             )}

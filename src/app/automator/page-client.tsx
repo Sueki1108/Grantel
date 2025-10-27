@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -634,7 +635,7 @@ export function AutomatorClientPage() {
             <main className="container mx-auto p-4 md:p-8">
                 <div className={cn("mx-auto space-y-8 max-w-screen-2xl", isWideMode && "max-w-full")}>
                     <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
-                        <TabsList className="h-auto flex flex-wrap justify-start">
+                        <TabsList className="h-auto flex-wrap justify-start">
                              <TabsTrigger value="history" className="flex items-center gap-2">
                                 <History className="h-5 w-5" />Histórico
                             </TabsTrigger>
@@ -726,7 +727,7 @@ export function AutomatorClientPage() {
                         </TabsContent>
 
                         <TabsContent value="difal" className="mt-6">
-                            <DifalAnalysis processedData={processedData} />
+                            <DifalAnalysis />
                         </TabsContent>
                         
                         <TabsContent value="analyses" className="mt-6">
