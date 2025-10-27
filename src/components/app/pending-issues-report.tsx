@@ -2,13 +2,15 @@
 "use client";
 
 import * as React from 'react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ProcessedData } from '@/lib/excel-processor';
-import { ClipboardList, Download, FileQuestion } from 'lucide-react';
+import { ClipboardList, Download, FileQuestion, FileText, File as FileIcon } from 'lucide-react';
 import { getColumns } from '@/lib/columns-helper';
 import { DataTable } from './data-table';
 import * as XLSX from 'xlsx';
@@ -174,7 +176,6 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         return reportSections;
     }, [processedData, allPersistedClassifications]);
     
-    // Initialize selection state when sections are calculated
     React.useEffect(() => {
         const initialSections: Record<string, boolean> = {};
         const initialItems: Record<string, Record<string, boolean>> = {};
@@ -204,43 +205,107 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         }
     };
 
-    const handleExport = () => {
+    const exportToExcel = (sectionsToExport: Section[]) => {
         const workbook = XLSX.utils.book_new();
 
-        sections.forEach(section => {
-            const isSectionSelected = selectedSections[section.id];
-            if (!isSectionSelected) return;
-
-            const selectedIndices = Object.keys(rowSelections[section.id] || {}).filter(key => rowSelections[section.id][key]).map(Number);
-            const dataToExport = section.data.filter((_, index) => selectedIndices.includes(index));
-
-            if (dataToExport.length > 0) {
-                const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-                // Sanitize sheet name
+        sectionsToExport.forEach(section => {
+            if (section.data.length > 0) {
+                const worksheet = XLSX.utils.json_to_sheet(section.data);
                 const sheetName = section.title.replace(/[:\\/?*[\]]/g, '').substring(0, 31);
                 XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
             }
         });
         
-        if(workbook.SheetNames.length === 0) {
-             toast({
-                variant: 'destructive',
-                title: 'Nenhuma pendência selecionada',
-                description: 'Selecione pelo menos um item para exportar.',
-            });
+        if (workbook.SheetNames.length === 0) {
+             toast({ variant: 'destructive', title: 'Nenhuma pendência selecionada' });
             return;
         }
 
         const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([wbout], { type: 'application/octet-stream' });
-        saveAs(blob, 'Relatorio_Pendencias_Fiscais.xlsx');
-        
-        toast({
-            title: 'Exportação Concluída',
-            description: 'O seu relatório de pendências foi descarregado.',
-        });
+        saveAs(new Blob([wbout], { type: 'application/octet-stream' }), 'Relatorio_Pendencias_Fiscais.xlsx');
+        toast({ title: 'Relatório Excel Gerado' });
     };
 
+    const exportToPdf = (sectionsToExport: Section[]) => {
+        const doc = new jsPDF({
+            orientation: 'landscape',
+        });
+        
+        let isFirstPage = true;
+
+        sectionsToExport.forEach(section => {
+            if (section.data.length === 0) return;
+
+            if (!isFirstPage) {
+                doc.addPage();
+            }
+
+            doc.setFontSize(18);
+            doc.text(section.title, 14, 20);
+            doc.setFontSize(11);
+
+            const tableColumns = section.columns.map(col => col.accessorKey || col.id).filter(key => key !== 'select');
+            const tableRows = section.data.map(row => {
+                return tableColumns.map(colName => {
+                    let value = row[colName];
+                    if (value instanceof Date) {
+                        return value.toLocaleDateString('pt-BR');
+                    }
+                    if (typeof value === 'boolean') {
+                        return value ? 'Sim' : 'Não';
+                    }
+                    if (value === null || value === undefined) {
+                        return '';
+                    }
+                    return String(value);
+                });
+            });
+
+            autoTable(doc, {
+                head: [tableColumns],
+                body: tableRows,
+                startY: 25,
+                theme: 'striped',
+                headStyles: { fillColor: [41, 128, 185] },
+            });
+            
+            isFirstPage = false;
+        });
+
+        if (isFirstPage) { // No data was added
+            toast({ variant: 'destructive', title: 'Nenhuma pendência selecionada' });
+            return;
+        }
+
+        doc.save('Relatorio_Pendencias_Fiscais.pdf');
+        toast({ title: 'Relatório PDF Gerado' });
+    };
+
+    const handleExport = (format: 'excel' | 'pdf') => {
+        const sectionsToExport = sections.filter(section => {
+            const isSectionSelected = selectedSections[section.id];
+            const selectedItemsCount = Object.keys(rowSelections[section.id] || {}).filter(key => rowSelections[section.id][key]).length;
+            return isSectionSelected && selectedItemsCount > 0;
+        }).map(section => {
+            const selectedIndices = Object.keys(rowSelections[section.id] || {}).filter(key => rowSelections[section.id][key]).map(Number);
+            return {
+                ...section,
+                data: section.data.filter((_, index) => selectedIndices.includes(index)),
+            };
+        });
+
+        if (sectionsToExport.length === 0) {
+            toast({ variant: 'destructive', title: 'Nenhuma pendência selecionada', description: 'Selecione pelo menos um item para exportar.'});
+            return;
+        }
+
+        if (format === 'excel') {
+            exportToExcel(sectionsToExport);
+        } else {
+            exportToPdf(sectionsToExport);
+        }
+    };
+    
     if (!processedData) {
         return (
             <Card>
@@ -256,10 +321,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         );
     }
     
-     const getTotalSelectedItems = () => {
-        return Object.values(rowSelections).reduce((acc, currentSelection) => acc + Object.keys(currentSelection).filter(key => currentSelection[key]).length, 0);
-    }
-
+    const totalSelectedItems = Object.values(rowSelections).reduce((acc, currentSelection) => acc + Object.keys(currentSelection).filter(key => currentSelection[key]).length, 0);
 
     return (
         <Card>
@@ -272,9 +334,14 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                             <CardDescription>Consolide todas as análises num relatório final. Selecione as pendências que deseja exportar.</CardDescription>
                         </div>
                     </div>
-                     <Button onClick={handleExport} disabled={getTotalSelectedItems() === 0}>
-                        <Download className="mr-2 h-4 w-4" /> Exportar Relatório ({getTotalSelectedItems()})
-                    </Button>
+                     <div className="flex gap-2">
+                        <Button onClick={() => handleExport('excel')} disabled={totalSelectedItems === 0}>
+                            <Download className="mr-2 h-4 w-4" /> Exportar Excel ({totalSelectedItems})
+                        </Button>
+                        <Button onClick={() => handleExport('pdf')} variant="outline" disabled={totalSelectedItems === 0}>
+                            <FileIcon className="mr-2 h-4 w-4" /> Exportar PDF ({totalSelectedItems})
+                        </Button>
+                     </div>
                 </div>
             </CardHeader>
             <CardContent>
@@ -284,7 +351,6 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                             const isSectionChecked = selectedSections[section.id] || false;
                             const selectedCount = Object.keys(rowSelections[section.id] || {}).filter(key => rowSelections[section.id][key]).length;
 
-                            // Clone columns to add the selection column
                             const tableColumns = [...section.columns];
                             tableColumns.unshift({
                                 id: 'select',
@@ -308,15 +374,21 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                             
                             return (
                                 <div key={section.id} className="p-4 border rounded-lg">
-                                    <div className="flex items-center space-x-3 mb-4">
-                                        <Checkbox
-                                            id={`section-${section.id}`}
-                                            checked={isSectionChecked}
-                                            onCheckedChange={(checked) => handleSectionToggle(section.id, !!checked)}
-                                        />
-                                        <Label htmlFor={`section-${section.id}`} className="text-lg font-semibold flex-grow cursor-pointer">
-                                            {section.title} ({selectedCount} / {section.data.length})
-                                        </Label>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center space-x-3">
+                                            <Checkbox
+                                                id={`section-${section.id}`}
+                                                checked={isSectionChecked}
+                                                onCheckedChange={(checked) => handleSectionToggle(section.id, !!checked)}
+                                            />
+                                            <Label htmlFor={`section-${section.id}`} className="text-lg font-semibold flex-grow cursor-pointer">
+                                                {section.title} ({selectedCount} / {section.data.length})
+                                            </Label>
+                                        </div>
+                                         <div className="flex gap-2">
+                                            <Button variant="outline" size="sm" onClick={() => exportToExcel([section])} disabled={section.data.length === 0}><Download className="mr-2 h-4 w-4"/>Excel</Button>
+                                            <Button variant="outline" size="sm" onClick={() => exportToPdf([section])} disabled={section.data.length === 0}><FileIcon className="mr-2 h-4 w-4"/>PDF</Button>
+                                         </div>
                                     </div>
                                     <div className="pl-8">
                                          <DataTable 
