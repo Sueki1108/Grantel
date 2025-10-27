@@ -49,16 +49,15 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         if (!processedData) return [];
 
         const reportSections: Section[] = [];
+        const competenceKey = processedData.competence || 'default';
 
         // 1. Imobilizado
         const imobilizadoItems = (processedData.sheets?.['Imobilizados'] || [])
         .filter(item => {
-            const competenceKey = processedData.competence || 'default';
             const classification = allPersistedClassifications[competenceKey]?.classifications?.[item.uniqueItemId]?.classification;
             return classification === 'imobilizado';
         })
         .map(item => {
-             const competenceKey = processedData.competence || 'default';
              const persistedForCompetence = allPersistedClassifications[competenceKey];
              const accountCode = persistedForCompetence?.accountCodes?.[item.id]?.accountCode;
             
@@ -83,6 +82,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
 
         // 2. SPED - Não encontrados
         const notFoundInSped = (processedData.keyCheckResults?.keysNotFoundInTxt || []).map(item => ({
+             'Resumo da Pendência': 'Chave válida encontrada nos XMLs/planilhas, mas ausente no arquivo SPED.',
              'Chave de Acesso': item.key,
              'Tipo': item.type,
              'Fornecedor': item.Fornecedor,
@@ -100,6 +100,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
 
         // 3. SPED - Não na planilha
         const notInSheet = (processedData.keyCheckResults?.keysInTxtNotInSheet || []).map(item => ({
+            'Resumo da Pendência': 'Chave encontrada no SPED, mas não pertence às notas válidas para o período (pode ser cancelada, devolução, etc.).',
             'Chave de Acesso': item.key,
             'Tipo': item.type,
             'Fornecedor': item.Fornecedor,
@@ -125,19 +126,23 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         ];
 
         if (allDivergences.length > 0) {
-            reportSections.push({
-                id: 'sped_divergences',
-                title: 'Inconformidades Entre XML e SPED',
-                description: 'Foram encontradas divergências nos dados de notas que constam em ambos os locais (XML e SPED). As inconsistências estão separadas por tipo abaixo.',
-                data: [], // Os dados estão nas sub-secções
-                columns: [],
-                subSections: [
-                    { id: 'uf', title: 'UF', data: ufDivergences || [], columns: getColumns(ufDivergences || []) },
-                    { id: 'ie', title: 'IE', data: ieDivergences || [], columns: getColumns(ieDivergences || []) },
-                    { id: 'date', title: 'Data', data: dateDivergences || [], columns: getColumns(dateDivergences || []) },
-                    { id: 'value', title: 'Valor', data: valueDivergences || [], columns: getColumns(valueDivergences || []) },
-                ].filter(sub => sub.data.length > 0)
-            });
+             const subSections = [
+                { id: 'uf', title: 'UF', data: (ufDivergences || []).map(d => ({...d, 'Resumo da Pendência': `UF do destinatário no XML (${d['UF no XML']}) diverge do padrão da empresa.`})), columns: getColumns(ufDivergences || []) },
+                { id: 'ie', title: 'IE', data: (ieDivergences || []).map(d => ({...d, 'Resumo da Pendência': `Inscrição Estadual do destinatário no XML (${d['IE no XML']}) diverge do padrão da empresa.`})), columns: getColumns(ieDivergences || []) },
+                { id: 'date', title: 'Data', data: (dateDivergences || []).map(d => ({...d, 'Resumo da Pendência': `Data de emissão entre XML (${d['Data Emissão XML']}) e SPED (${d['Data Emissão SPED']}) diverge.`})), columns: getColumns(dateDivergences || []) },
+                { id: 'value', title: 'Valor', data: (valueDivergences || []).map(d => ({...d, 'Resumo da Pendência': `Valor total entre XML (${d['Valor XML']}) e SPED (${d['Valor SPED']}) diverge.`})), columns: getColumns(valueDivergences || []) },
+            ].filter(sub => sub.data.length > 0);
+
+            if (subSections.length > 0) {
+                 reportSections.push({
+                    id: 'sped_divergences',
+                    title: 'Inconformidades Entre XML e SPED',
+                    description: 'Foram encontradas divergências nos dados de notas que constam em ambos os locais (XML e SPED). As inconsistências estão separadas por tipo abaixo.',
+                    data: [],
+                    columns: [],
+                    subSections
+                });
+            }
         }
         
         // 5. SPED - Modificações
@@ -146,7 +151,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             const modifications = Object.entries(spedCorrections[0].modifications).flatMap(([key, value]) => {
                 if(Array.isArray(value) && value.length > 0) {
                      return value.map((v: any) => ({
-                        'Tipo de Modificação': key,
+                        'Resumo da Pendência': `Correção automática aplicada ao SPED (Tipo: ${key})`,
                         'Linha': v.lineNumber,
                         'Detalhe': `Original: ${v.original || v.line} | Corrigido: ${v.corrected || '(linha removida)'}`,
                     }));
@@ -164,36 +169,27 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             }
         }
 
-
         // 6. CFOP Incorreto/A Verificar
         const cfopValidationItems = processedData.reconciliationResults?.reconciled || [];
-        const cfopIssues = cfopValidationItems.map(item => {
-             const competenceKey = processedData.competence || 'default';
+        const cfopIncorrectItems = cfopValidationItems.filter(item => {
              const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
              const classification = allPersistedClassifications[competenceKey]?.cfopValidations?.classifications[uniqueKey]?.classification;
-             return {
-                 ...item,
-                 'Status Validação': classification,
-             }
-        }).filter(item => {
-             const competenceKey = processedData.competence || 'default';
-             const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
-             const classification = allPersistedClassifications[competenceKey]?.cfopValidations?.classifications[uniqueKey]?.classification;
-             return classification === 'incorrect' || classification === 'verify';
+             return classification === 'incorrect';
         });
-         if (cfopIssues.length > 0) {
-             const cfopReportData = cfopIssues.map(item => ({
+
+         if (cfopIncorrectItems.length > 0) {
+             const cfopReportData = cfopIncorrectItems.map(item => ({
+                'Resumo da Pendência': 'O CFOP lançado no Sienge foi manualmente classificado como incorreto ao ser comparado com o XML.',
                 'Fornecedor': item.Fornecedor,
                 'Número da Nota': item['Número da Nota'],
                 'Descrição XML': item['Descrição'],
                 'CFOP XML': item.CFOP,
                 'CFOP Sienge': item.Sienge_CFOP,
-                'Status': item['Status Validação'],
             }));
             reportSections.push({
                 id: 'cfop_issues',
-                title: 'Itens com Validação de CFOP Pendente (Incorreto/A Verificar)',
-                description: 'Os itens abaixo, que foram conciliados entre XML e Sienge, foram marcados como tendo um CFOP incorreto ou a necessitar de verificação manual.',
+                title: 'Itens com Validação de CFOP Incorreta',
+                description: 'Os itens abaixo, que foram conciliados entre XML e Sienge, foram marcados como tendo um CFOP incorreto.',
                 data: cfopReportData,
                 columns: getColumns(cfopReportData)
             });
@@ -201,6 +197,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         
         // 7. Revenda
         const resaleItems = (processedData.resaleAnalysis?.xmls || []).map(f => ({
+            'Resumo da Pendência': 'Nota fiscal identificada como operação de revenda, com base no CFOP do Sienge.',
             'Ficheiro XML de Revenda': f.name,
         }));
          if (resaleItems.length > 0) {
@@ -222,11 +219,16 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const initialItems: Record<string, Record<string, boolean>> = {};
         sections.forEach(section => {
             initialSections[section.id] = true;
+            
             const dataToSelect = section.data.length > 0 ? section.data : (section.subSections || []).flatMap(s => s.data);
+            
             const selection: Record<string, boolean> = {};
-            dataToSelect.forEach((_, index) => {
-                selection[String(index)] = true;
-            });
+            if(dataToSelect.length > 0){
+                 dataToSelect.forEach((_, index) => {
+                    selection[String(index)] = true;
+                });
+            }
+           
             initialItems[section.id] = selection;
         });
         setSelectedSections(initialSections);
@@ -252,11 +254,22 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const workbook = XLSX.utils.book_new();
 
         sectionsToExport.forEach(section => {
-            const exportData = section.subSections ? section.subSections.flatMap(s => s.data) : section.data;
-            if (exportData.length > 0) {
-                const worksheet = XLSX.utils.json_to_sheet(exportData);
-                const sheetName = section.title.replace(/[:\\/?*[\]]/g, '').substring(0, 31);
-                XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+            if (section.subSections && section.subSections.length > 0) {
+                section.subSections.forEach(sub => {
+                     const exportData = sub.data;
+                     if (exportData.length > 0) {
+                        const worksheet = XLSX.utils.json_to_sheet(exportData);
+                        const sheetName = sub.title.replace(/[:\\/?*[\]]/g, '').substring(0, 31);
+                        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+                    }
+                })
+            } else {
+                 const exportData = section.data;
+                 if (exportData.length > 0) {
+                    const worksheet = XLSX.utils.json_to_sheet(exportData);
+                    const sheetName = section.title.replace(/[:\\/?*[\]]/g, '').substring(0, 31);
+                    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+                }
             }
         });
         
@@ -278,43 +291,48 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         let isFirstPage = true;
 
         sectionsToExport.forEach(section => {
-             const exportData = section.subSections ? section.subSections.flatMap(s => s.data) : section.data;
-             const columns = section.subSections ? section.subSections[0].columns : section.columns;
+            const processSectionData = (data: any[], columns: any[], title: string) => {
+                 if (data.length === 0) return;
 
-            if (exportData.length === 0) return;
+                if (!isFirstPage) {
+                    doc.addPage();
+                }
 
-            if (!isFirstPage) {
-                doc.addPage();
+                doc.setFontSize(14);
+                doc.text(title, 14, 20);
+
+                const tableColumns = columns.map((col: any) => col.accessorKey || col.id).filter((key: any) => key !== 'select');
+                const tableRows = data.map(row => {
+                    return tableColumns.map((colName: string) => {
+                        let value = row[colName];
+                        if (value instanceof Date) return value.toLocaleDateString('pt-BR');
+                        if (typeof value === 'boolean') return value ? 'Sim' : 'Não';
+                        if (value === null || value === undefined) return '';
+                        return String(value);
+                    });
+                });
+
+                autoTable(doc, {
+                    head: [tableColumns],
+                    body: tableRows,
+                    startY: 28,
+                    theme: 'striped',
+                    headStyles: { fillColor: [41, 128, 185], cellPadding: 2, halign: 'center' },
+                    styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak' },
+                    columnStyles: tableColumns.reduce((acc: any, col: any) => {
+                        acc[col] = { cellWidth: 'auto' };
+                        return acc;
+                    }, {})
+                });
+                
+                isFirstPage = false;
             }
 
-            doc.setFontSize(16);
-            doc.text(section.title, 14, 20);
-
-            const tableColumns = columns.map((col: any) => col.accessorKey || col.id).filter((key: any) => key !== 'select');
-            const tableRows = exportData.map(row => {
-                return tableColumns.map((colName: string) => {
-                    let value = row[colName];
-                    if (value instanceof Date) return value.toLocaleDateString('pt-BR');
-                    if (typeof value === 'boolean') return value ? 'Sim' : 'Não';
-                    if (value === null || value === undefined) return '';
-                    return String(value);
-                });
-            });
-
-            autoTable(doc, {
-                head: [tableColumns],
-                body: tableRows,
-                startY: 28,
-                theme: 'striped',
-                headStyles: { fillColor: [41, 128, 185], cellPadding: 2, halign: 'center' },
-                styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak' },
-                columnStyles: tableColumns.reduce((acc: any, col: any) => {
-                    acc[col] = { cellWidth: 'auto' };
-                    return acc;
-                }, {})
-            });
-            
-            isFirstPage = false;
+            if (section.subSections) {
+                 section.subSections.forEach(sub => processSectionData(sub.data, sub.columns, `${section.title}: ${sub.title}`));
+            } else {
+                 processSectionData(section.data, section.columns, section.title);
+            }
         });
 
         if (isFirstPage) { // No data was added
@@ -327,17 +345,30 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
     };
 
     const handleExport = (format: 'excel' | 'pdf') => {
-        const sectionsToExport = sections.filter(section => {
-            const isSectionSelected = selectedSections[section.id];
-            const selectedItemsCount = Object.keys(rowSelections[section.id] || {}).filter(key => rowSelections[section.id][key]).length;
-            return isSectionSelected && selectedItemsCount > 0;
-        }).map(section => {
-            const allItems = section.data.length > 0 ? section.data : (section.subSections || []).flatMap(s => s.data);
+        const sectionsToExport = sections.map(section => {
             const selectedIndices = Object.keys(rowSelections[section.id] || {}).filter(key => rowSelections[section.id][key]).map(Number);
+            
+            if (section.subSections) {
+                let flatData: any[] = [];
+                const newSubSections = section.subSections.map(sub => {
+                    const subData = sub.data.filter((_, index) => selectedIndices.includes(flatData.length + index));
+                    flatData = [...flatData, ...sub.data];
+                    return {...sub, data: subData};
+                }).filter(sub => sub.data.length > 0);
+                
+                return {
+                    ...section,
+                    subSections: newSubSections
+                };
+            }
+            
             return {
                 ...section,
-                data: allItems.filter((_, index) => selectedIndices.includes(index)),
+                data: section.data.filter((_, index) => selectedIndices.includes(index)),
             };
+        }).filter(section => {
+            if (section.subSections) return section.subSections.length > 0;
+            return section.data.length > 0;
         });
 
         if (sectionsToExport.length === 0) {
@@ -398,8 +429,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                         const selectedCount = Object.keys(rowSelections[section.id] || {}).filter(key => rowSelections[section.id][key]).length;
 
                         return (
-                            <AccordionItem value={section.id} key={section.id} className="border-b-0 mb-4">
-                                <AccordionTrigger className="p-4 bg-muted/50 rounded-t-lg hover:no-underline">
+                            <AccordionItem value={section.id} key={section.id} className="border-b-0 mb-4 rounded-lg overflow-hidden border">
+                                <AccordionTrigger className="p-4 bg-muted/50 hover:no-underline data-[state=closed]:rounded-b-lg">
                                     <div className="flex items-center space-x-3 w-full">
                                         <Checkbox
                                             id={`section-${section.id}`}
@@ -407,12 +438,12 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                                             onCheckedChange={(checked) => handleSectionToggle(section.id, !!checked)}
                                             onClick={(e) => e.stopPropagation()}
                                         />
-                                        <Label htmlFor={`section-${section.id}`} className="text-lg font-semibold flex-grow cursor-pointer">
+                                        <Label htmlFor={`section-${section.id}`} className="text-lg font-semibold flex-grow cursor-pointer text-left">
                                             {section.title} ({selectedCount} / {dataForSelection.length})
                                         </Label>
                                     </div>
                                 </AccordionTrigger>
-                                <AccordionContent className="p-4 border border-t-0 rounded-b-lg">
+                                <AccordionContent className="p-4 border-t">
                                     <p className='text-sm text-muted-foreground mb-4'>{section.description}</p>
                                     
                                     {section.subSections ? (
@@ -422,25 +453,19 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                                             </TabsList>
                                             {section.subSections.map(sub => (
                                                 <TabsContent key={sub.id} value={sub.id} className="mt-4">
+                                                     <div className="flex gap-2 mb-2">
+                                                        <Button onClick={() => exportToExcel(sub.data, `${section.id}_${sub.id}`)} size="sm" variant="outline" disabled={sub.data.length === 0}><Download className="mr-2 h-4"/>Excel</Button>
+                                                        <Button onClick={() => exportToPdf(sub.data, sub.columns, `${section.title}: ${sub.title}`)} size="sm" variant="outline" disabled={sub.data.length === 0}><FileText className="mr-2 h-4"/>PDF</Button>
+                                                    </div>
                                                     <DataTable columns={sub.columns} data={sub.data} />
                                                 </TabsContent>
                                             ))}
                                         </Tabs>
                                     ) : (
-                                        <DataTable 
-                                            columns={section.columns} 
-                                            data={section.data} 
-                                            rowSelection={rowSelections[section.id] || {}}
-                                            setRowSelection={(newSelection) => {
-                                                const newRowSelections = { ...rowSelections };
-                                                if (typeof newSelection === 'function') {
-                                                    newRowSelections[section.id] = newSelection(rowSelections[section.id] || {});
-                                                } else {
-                                                    newRowSelections[section.id] = newSelection;
-                                                }
-                                                setRowSelections(newRowSelections);
-                                            }}
-                                        />
+                                         <div className="flex gap-2 mb-2">
+                                            <Button onClick={() => exportToExcel(section.data, section.id)} size="sm" variant="outline" disabled={section.data.length === 0}><Download className="mr-2 h-4"/>Excel</Button>
+                                            <Button onClick={() => exportToPdf(section.data, section.columns, section.title)} size="sm" variant="outline" disabled={section.data.length === 0}><FileText className="mr-2 h-4"/>PDF</Button>
+                                        </div>
                                     )}
                                 </AccordionContent>
                             </AccordionItem>
@@ -458,4 +483,3 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         </Card>
     );
 }
-
