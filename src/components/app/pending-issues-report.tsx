@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProcessedData } from '@/lib/excel-processor';
 import { ClipboardList, Download, FileQuestion, FileText, FileDown, FileSpreadsheet, EyeOff, Settings, Check, ListFilter, Eye } from 'lucide-react';
-import { getColumns } from '@/lib/columns-helper';
 import { DataTable } from './data-table';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -18,6 +17,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '..
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Label } from '../ui/label';
 import { Checkbox } from '../ui/checkbox';
+import { getColumnsWithCustomRender } from '@/lib/columns-helper';
 
 
 interface Section {
@@ -73,7 +73,6 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             .map(item => {
                 const persistedForCompetence = allPersistedClassifications[competenceKey];
                 const accountCode = persistedForCompetence?.accountCodes?.[item.id]?.accountCode;
-                
                 const nfeHeader = (processedData.sheets['Notas Válidas'] || []).find(n => n['Chave Unica'] === item['Chave Unica']);
 
                 return {
@@ -92,7 +91,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 title: 'Itens Classificados como Ativo Imobilizado',
                 description: 'Itens com valor > R$ 1.200,00 classificados manualmente como Ativo Imobilizado. Verifique se o código do ativo está correto.',
                 data: imobilizadoItems,
-                columns: getColumns(imobilizadoItems)
+                columns: getColumnsWithCustomRender(imobilizadoItems, Object.keys(imobilizadoItems[0] || {}))
             });
         }
 
@@ -109,8 +108,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 data: [],
                 columns: [],
                 subSections: [
-                    { id: 'nfe_not_found', title: 'NF-e', description: '', data: notFoundNfe, columns: getColumns(notFoundNfe)},
-                    { id: 'cte_not_found', title: 'CT-e', description: '', data: notFoundCte, columns: getColumns(notFoundCte)}
+                    { id: 'nfe_not_found', title: 'NF-e', description: '', data: notFoundNfe, columns: getColumnsWithCustomRender(notFoundNfe, Object.keys(notFoundNfe[0] || {}))},
+                    { id: 'cte_not_found', title: 'CT-e', description: '', data: notFoundCte, columns: getColumnsWithCustomRender(notFoundCte, Object.keys(notFoundCte[0] || {}))}
                 ]
             });
         }
@@ -123,7 +122,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 title: 'Chaves no SPED Não Encontradas nas Notas Válidas',
                 description: 'Estas chaves existem no SPED, mas não foram classificadas como válidas no seu controlo. Verifique se são notas canceladas, devolvidas ou escrituradas indevidamente.',
                 data: notInSheet,
-                columns: getColumns(notInSheet)
+                columns: getColumnsWithCustomRender(notInSheet, Object.keys(notInSheet[0] || {}))
             });
         }
 
@@ -132,10 +131,10 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         
         if ((ufDivergences?.length || 0) > 0 || (ieDivergences?.length || 0) > 0 || (dateDivergences?.length || 0) > 0 || (valueDivergences?.length || 0) > 0) {
             const subSections = [
-                { id: 'uf', title: 'Divergência de UF', description: 'Inconsistência entre a UF do destinatário no XML e o cadastro da empresa.', data: (ufDivergences || []).map(item => ({...item, '__itemKey': `uf-${item['Chave de Acesso']}`})), columns: getColumns(ufDivergences || []) },
-                { id: 'ie', title: 'Divergência de IE', description: 'Inconsistência entre a Inscrição Estadual do destinatário no XML e o cadastro da empresa.', data: (ieDivergences || []).map(item => ({...item, '__itemKey': `ie-${item['Chave de Acesso']}`})), columns: getColumns(ieDivergences || []) },
-                { id: 'date', title: 'Divergência de Data', description: 'A data de emissão do documento no XML não corresponde à data de emissão escriturada no SPED.', data: (dateDivergences || []).map(item => ({...item, '__itemKey': `date-${item['Chave de Acesso']}`})), columns: getColumns(dateDivergences || []) },
-                { id: 'value', title: 'Divergência de Valor', description: 'O valor total do documento no XML não corresponde ao valor total escriturado no SPED.', data: (valueDivergences || []).map(item => ({...item, '__itemKey': `value-${item['Chave de Acesso']}`})), columns: getColumns(valueDivergences || []) },
+                { id: 'uf', title: 'Divergência de UF', description: 'Inconsistência entre a UF do destinatário no XML e o cadastro da empresa.', data: (ufDivergences || []).map(item => ({...item, '__itemKey': `uf-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(ufDivergences || [], Object.keys(ufDivergences?.[0] || {})) },
+                { id: 'ie', title: 'Divergência de IE', description: 'Inconsistência entre a Inscrição Estadual do destinatário no XML e o cadastro da empresa.', data: (ieDivergences || []).map(item => ({...item, '__itemKey': `ie-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(ieDivergences || [], Object.keys(ieDivergences?.[0] || {})) },
+                { id: 'date', title: 'Divergência de Data', description: 'A data de emissão do documento no XML não corresponde à data de emissão escriturada no SPED.', data: (dateDivergences || []).map(item => ({...item, '__itemKey': `date-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(dateDivergences || [], Object.keys(dateDivergences?.[0] || {})) },
+                { id: 'value', title: 'Divergência de Valor', description: 'O valor total do documento no XML não corresponde ao valor total escriturado no SPED.', data: (valueDivergences || []).map(item => ({...item, '__itemKey': `value-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(valueDivergences || [], Object.keys(valueDivergences?.[0] || {})) },
             ].filter(sub => sub.data.length > 0);
 
             reportSections.push({
@@ -161,14 +160,14 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                     }));
                 }
                 return [];
-            });
+            }).filter(m => m);
             if(modifications.length > 0) {
                 reportSections.push({
                     id: 'sped_corrections',
                     title: 'Modificações Realizadas no Arquivo SPED',
                     description: 'O corretor automático realizou as seguintes alterações no arquivo SPED para garantir a conformidade.',
                     data: modifications,
-                    columns: getColumns(modifications)
+                    columns: getColumnsWithCustomRender(modifications, Object.keys(modifications[0] || {}))
                 });
             }
         }
@@ -199,7 +198,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 title: `CFOP ${cfop}`,
                 description: `Itens lançados no Sienge com CFOP ${cfop} que foram marcados como incorretos ou a verificar.`,
                 data: items,
-                columns: getColumns(items)
+                columns: getColumnsWithCustomRender(items, Object.keys(items[0] || {}))
             }));
 
             reportSections.push({
@@ -223,7 +222,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 title: 'Notas Fiscais de Revenda Identificadas',
                 description: 'Os seguintes XMLs foram identificados como operações de revenda, com base nos CFOPs correspondentes na planilha do Sienge.',
                 data: resaleItems,
-                columns: getColumns(resaleItems)
+                columns: getColumnsWithCustomRender(resaleItems, Object.keys(resaleItems[0] || {}))
             });
         }
 
@@ -286,7 +285,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 if (!isFirstPage) doc.addPage();
                 isFirstPage = false;
                 
-                autoTable(doc, {
+                 autoTable(doc, {
                     head: [], body: [],
                     didDrawPage: (data) => {
                          doc.setFontSize(14);
@@ -299,9 +298,9 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                      startY: 40,
                 });
                 
-
-                const tableColumns = columns.map((col: any) => col.header).filter((header: any) => typeof header === 'string');
-                const tableAccessors = columns.map((col:any) => col.id).filter((id:any) => id !== 'actions');
+                const validColumns = columns.filter(c => c.id !== '__itemKey');
+                const tableColumns = validColumns.map((col: any) => typeof col.header === 'function' ? col.id : col.header);
+                const tableAccessors = validColumns.map((col:any) => col.id);
                 const tableRows = exportData.map(row => tableAccessors.map((acc: string) => String(row[acc] ?? '')));
 
                 autoTable(doc, {
@@ -309,7 +308,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                     body: tableRows,
                     startY: (doc as any).lastAutoTable.finalY + 2,
                     theme: 'striped',
-                    headStyles: { fillColor: [41, 128, 185], cellPadding: 2, halign: 'center', minCellHeight: 10 },
+                    headStyles: { fillColor: [41, 128, 185], cellPadding: 2, halign: 'center', minCellHeight: 10, fontSize: 8 },
                     styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak' },
                     columnStyles: { 0: { cellWidth: 'auto' } }
                 });
@@ -388,14 +387,14 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                                             {sections.map(section => (
                                                 <div key={section.id} className="flex items-center justify-between">
                                                     <Label htmlFor={`export-${section.id}`}>{section.title}</Label>
-                                                    <Checkbox id={`export-${section.id}`} checked={exportOptions[section.id]} onCheckedChange={(checked) => handleToggleExportOption(section.id, !!checked)} />
+                                                    <Checkbox id={`export-${section.id}`} checked={exportOptions[section.id] || false} onCheckedChange={(checked) => handleToggleExportOption(section.id, !!checked)} />
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
                                 </PopoverContent>
                             </Popover>
-                            <Button onClick={() => handleExportAll('excel')}><Download className="mr-2 h-4 w-4" />Exportar Excel</Button>
+                            <Button onClick={() => handleExportAll('excel')}><FileSpreadsheet className="mr-2 h-4 w-4" />Exportar Excel</Button>
                             <Button onClick={() => handleExportAll('pdf')} variant="outline"><FileText className="mr-2 h-4 w-4" />Exportar PDF</Button>
                         </div>
                     </div>
@@ -437,12 +436,12 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                                 {section.subSections.map(sub => (
                                     <TabsContent key={sub.id} value={sub.id} className="mt-4">
                                         {sub.description && <p className="text-sm text-muted-foreground mb-4">{sub.description}</p>}
-                                        <DataTable columns={[...sub.columns.filter((c:any) => c.id !== '__itemKey'), { id: 'actions', cell: ({row}: any) => { const itemKey = row.original.__itemKey; return <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleIgnoredItem(itemKey)}><TooltipProvider><Tooltip><TooltipTrigger asChild><span>{ignoredItems.has(itemKey) ? <Eye className='h-4 w-4 text-green-600'/> : <EyeOff className='h-4 w-4'/>}</span></TooltipTrigger><TooltipContent><p>{ignoredItems.has(itemKey) ? "Re-incluir na exportação" : "Ignorar na exportação"}</p></TooltipContent></Tooltip></TooltipProvider></Button> }}]} data={sub.data} />
+                                        <DataTable columns={[...sub.columns.filter((c:any) => c.id !== '__itemKey'), { id: 'actions', header: () => <div className="text-center">Ignorar</div>, cell: ({row}: any) => { const itemKey = row.original.__itemKey; return <div className='flex justify-center'><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleIgnoredItem(itemKey)}><TooltipProvider><Tooltip><TooltipTrigger asChild><span>{ignoredItems.has(itemKey) ? <Eye className='h-4 w-4 text-green-600'/> : <EyeOff className='h-4 w-4'/>}</span></TooltipTrigger><TooltipContent><p>{ignoredItems.has(itemKey) ? "Re-incluir na exportação" : "Ignorar na exportação"}</p></TooltipContent></Tooltip></TooltipProvider></Button></div> }}]} data={sub.data} />
                                     </TabsContent>
                                 ))}
                             </Tabs>
                         ) : (
-                            <DataTable columns={[...section.columns.filter((c:any) => c.id !== '__itemKey'), { id: 'actions', cell: ({row}: any) => { const itemKey = row.original.__itemKey; return <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleIgnoredItem(itemKey)}><TooltipProvider><Tooltip><TooltipTrigger asChild><span>{ignoredItems.has(itemKey) ? <Eye className='h-4 w-4 text-green-600'/> : <EyeOff className='h-4 w-4'/>}</span></TooltipTrigger><TooltipContent><p>{ignoredItems.has(itemKey) ? "Re-incluir na exportação" : "Ignorar na exportação"}</p></TooltipContent></Tooltip></TooltipProvider></Button> }}]} data={section.data} />
+                            <DataTable columns={[...section.columns.filter((c:any) => c.id !== '__itemKey'), { id: 'actions', header: () => <div className="text-center">Ignorar</div>, cell: ({row}: any) => { const itemKey = row.original.__itemKey; return <div className='flex justify-center'><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleIgnoredItem(itemKey)}><TooltipProvider><Tooltip><TooltipTrigger asChild><span>{ignoredItems.has(itemKey) ? <Eye className='h-4 w-4 text-green-600'/> : <EyeOff className='h-4 w-4'/>}</span></TooltipTrigger><TooltipContent><p>{ignoredItems.has(itemKey) ? "Re-incluir na exportação" : "Ignorar na exportação"}</p></TooltipContent></Tooltip></TooltipProvider></Button></div> }}]} data={section.data} />
                         )}
                     </CardContent>
                  </Card>
@@ -450,3 +449,4 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         </div>
     );
 }
+    

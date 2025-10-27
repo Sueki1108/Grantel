@@ -10,7 +10,7 @@ import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns, getColumnsWithCustomRender } from "@/lib/columns-helper";
+import { getColumnsWithCustomRender } from "@/lib/columns-helper";
 import { cfopDescriptions } from "@/lib/cfop";
 import type { ProcessedData, SpedInfo } from "@/lib/excel-processor";
 import { FileUploadForm } from "@/components/app/file-upload-form";
@@ -66,6 +66,7 @@ const normalizeKey = (key: string | undefined): string => {
 
 interface AdditionalAnalysesProps {
     processedData: ProcessedData;
+    onProcessedDataChange: (data: ProcessedData) => void;
     onSiengeDataProcessed: (data: any[] | null) => void;
     siengeFile: File | null;
     onSiengeFileChange: (file: File | null) => void;
@@ -82,6 +83,7 @@ interface AdditionalAnalysesProps {
 
 export function AdditionalAnalyses({ 
     processedData,
+    onProcessedDataChange,
     onSiengeDataProcessed, 
     siengeFile, 
     onSiengeFileChange, 
@@ -143,7 +145,7 @@ export function AdditionalAnalyses({
         }
     
         setIsAnalyzingResale(true);
-        onSiengeDataProcessed(processedData.siengeSheetData); // Just to trigger a re-render cycle
+        onProcessedDataChange({ ...processedData, resaleAnalysis: null });
     
         setTimeout(async () => {
             try {
@@ -227,18 +229,18 @@ export function AdditionalAnalyses({
                     }
                 }
                 
-                onSiengeDataProcessed(localSiengeData); // To update state with resaleAnalysis
+                onProcessedDataChange({ ...processedData, siengeSheetData: localSiengeData, resaleAnalysis: { noteKeys: resaleNoteKeys, xmls: matchedXmls } });
                 toast({ title: "Análise de Revenda Concluída", description: `${matchedXmls.length} XMLs correspondentes encontrados.` });
     
             } catch (error: any) {
                 toast({ variant: 'destructive', title: "Erro na Análise de Revenda", description: error.message });
-                onSiengeDataProcessed(siengeSheetData); // Reset to old state
+                onProcessedDataChange({ ...processedData, resaleAnalysis: null });
             } finally {
                 setIsAnalyzingResale(false);
             }
         }, 50);
     
-    }, [siengeFile, siengeSheetData, allXmlFiles, toast, onSiengeDataProcessed, processedData]);
+    }, [siengeFile, siengeSheetData, allXmlFiles, toast, onProcessedDataChange, processedData]);
 
 
     const handleExportResaleXmls = async () => {
@@ -552,40 +554,39 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
                 return { matched: matchedInPass, remainingSienge: unmatchedSienge, remainingXml: unmatchedXml };
             };
             
-            // Pass 1: Valor Total
-            let result = reconciliationPass(remainingSiengeItems, remainingXmlItems,
-                (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]),
-                (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
-                "Valor Total"
-            );
-            reconciled.push(...result.matched);
-            
-            // Pass 2: Valor Total - IPI Despesas - ICMS ST (Common scenario)
-            if (h.ipiDespesas || h.icmsSt) {
-                 result = reconciliationPass(result.remainingSienge, result.remainingXml,
-                    (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0) - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)),
-                    (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
-                    "Valor Total - IPI/ICMS ST"
-                );
-                reconciled.push(...result.matched);
-            }
-            
-             // Pass 3: Preço Unitário
-            if (h.precoUnitario) {
-                result = reconciliationPass(result.remainingSienge, result.remainingXml, 
-                    (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.precoUnitario!]),
-                    (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Unitário']),
-                    "Preço Unitário"
-                );
-                reconciled.push(...result.matched);
-            }
+            let passes = [
+                {
+                    name: "Valor Total",
+                    siengeKeyFn: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]),
+                    xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
+                },
+                {
+                    name: "Preço Unitário",
+                    siengeKeyFn: (item: any) => h.precoUnitario ? getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.precoUnitario!]) : null,
+                    xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Unitário'])
+                },
+                {
+                    name: "Valor Total - IPI/ICMS ST",
+                    siengeKeyFn: (item: any) => (h.ipiDespesas || h.icmsSt) ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0) - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)) : null,
+                    xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
+                }
+            ];
 
+            for (const pass of passes) {
+                if (remainingSiengeItems.length === 0 || remainingXmlItems.length === 0) break;
+                const result = reconciliationPass(remainingSiengeItems, remainingXmlItems, pass.siengeKeyFn, pass.xmlKeyFn, pass.name);
+                if (result.matched.length > 0) {
+                    reconciled.push(...result.matched);
+                }
+                remainingSiengeItems = result.remainingSienge;
+                remainingXmlItems = result.remainingXml;
+            }
 
             return { 
                 reconciliationResults: { 
                     reconciled, 
-                    onlyInSienge: result.remainingSienge, 
-                    onlyInXml: result.remainingXml, 
+                    onlyInSienge: remainingSiengeItems, 
+                    onlyInXml: remainingXmlItems, 
                     otherSiengeItems 
                 }, 
                 error: null 
@@ -681,15 +682,15 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                                 </DialogContent>
                                             </Dialog>
                                         </div>
-                                        <DataTable columns={getColumns(reconciliationResults.reconciled)} data={reconciliationResults.reconciled} />
+                                        <DataTable columns={getColumnsWithCustomRender(reconciliationResults.reconciled, Object.keys(reconciliationResults.reconciled[0] || {}))} data={reconciliationResults.reconciled} />
                                     </TabsContent>
                                     <TabsContent value="onlyInSienge">
                                         <Button onClick={() => handleDownload(reconciliationResults.onlyInSienge, 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                        <DataTable columns={getColumns(reconciliationResults.onlyInSienge)} data={reconciliationResults.onlyInSienge} />
+                                        <DataTable columns={getColumnsWithCustomRender(reconciliationResults.onlyInSienge, Object.keys(reconciliationResults.onlyInSienge[0] || {}))} data={reconciliationResults.onlyInSienge} />
                                     </TabsContent>
                                     <TabsContent value="onlyInXml">
                                         <Button onClick={() => handleDownload(reconciliationResults.onlyInXml, 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                        <DataTable columns={getColumns(reconciliationResults.onlyInXml)} data={reconciliationResults.onlyInXml} />
+                                        <DataTable columns={getColumnsWithCustomRender(reconciliationResults.onlyInXml, Object.keys(reconciliationResults.onlyInXml[0] || {}))} data={reconciliationResults.onlyInXml} />
                                     </TabsContent>
                                 </div>
                             </Tabs>
@@ -713,7 +714,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                         {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
                                             <TabsContent key={esp} value={esp}>
                                                 <Button onClick={() => handleDownload(items, `Sienge_Outros_${esp}`)} size="sm" className="mb-4" disabled={items.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                                <DataTable columns={getColumns(items)} data={items} />
+                                                <DataTable columns={getColumnsWithCustomRender(items, Object.keys(items[0] || {}))} data={items} />
                                             </TabsContent>
                                         ))}
                                     </div>
@@ -734,7 +735,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                 </Alert>
             )}
 
-            {processedData && !siengeFile && (processedData.sheets['Itens Válidos'] || processedData.sheets['CTEs Válidos']) && !reconciliationResults && (
+            {processedData && (processedData.sheets['Itens Válidos'] || processedData.sheets['CTEs Válidos']) && !siengeFile && !reconciliationResults && (
                 <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8 mt-6">
                     <Loader2 className="h-12 w-12 animate-spin text-primary" />
                     <p className="mt-4 text-center">Aguardando o ficheiro "Itens do Sienge" para executar a conciliação automaticamente...</p>
@@ -743,3 +744,4 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
         </div>
     );
 }
+    

@@ -372,3 +372,4 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         </div>
     );
 }
+    
