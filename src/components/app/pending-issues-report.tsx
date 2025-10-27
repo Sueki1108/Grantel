@@ -6,14 +6,13 @@ import autoTable from 'jspdf-autotable';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProcessedData } from '@/lib/excel-processor';
-import { ClipboardList, Download, FileQuestion, FileText, FileDown, FileSpreadsheet, EyeOff, Settings, Check, ListFilter, Eye } from 'lucide-react';
+import { ClipboardList, Download, FileQuestion, FileText, FileDown, FileSpreadsheet, EyeOff, Settings, Check, ListFilter, Eye, RefreshCw } from 'lucide-react';
 import { DataTable } from './data-table';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { AllClassifications } from './imobilizado-analysis';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '../ui/tooltip';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Label } from '../ui/label';
 import { Checkbox } from '../ui/checkbox';
@@ -38,9 +37,10 @@ interface Section {
 interface PendingIssuesReportProps {
     processedData: ProcessedData | null;
     allPersistedClassifications: AllClassifications;
+    onForceUpdate: () => void;
 }
 
-export function PendingIssuesReport({ processedData, allPersistedClassifications }: PendingIssuesReportProps) {
+export function PendingIssuesReport({ processedData, allPersistedClassifications, onForceUpdate }: PendingIssuesReportProps) {
     const { toast } = useToast();
     const [ignoredItems, setIgnoredItems] = React.useState<Set<string>>(new Set());
     const [exportOptions, setExportOptions] = React.useState<Record<string, boolean>>({});
@@ -371,6 +371,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                             </div>
                         </div>
                         <div className="flex gap-2">
+                             <Button onClick={onForceUpdate} variant="secondary"><RefreshCw className="mr-2 h-4 w-4" />Atualizar Relatório</Button>
                              <Popover>
                                 <PopoverTrigger asChild>
                                     <Button variant="outline"><Settings className="mr-2 h-4 w-4" />Opções</Button>
@@ -449,4 +450,3 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         </div>
     );
 }
-    
