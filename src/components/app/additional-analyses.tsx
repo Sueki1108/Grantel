@@ -413,15 +413,36 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
         const { siengeSheetData, sheets } = processedData;
         const xmlItems = sheets?.['Itens Válidos'];
         const cteItems = sheets?.['CTEs Válidos'];
-        const allXmlItems = [
-            ...(xmlItems || []).map(item => ({ ...item, documentType: 'NFE', originalIndex: -1 })), 
-            ...(cteItems || []).map(cte => ({
-                ...cte, 'Número da Nota': cte['Número'], 'CPF/CNPJ do Emitente': cte['CPF/CNPJ do Fornecedor'],
-                'Valor Total': cte['Valor da Prestação'], 'Descrição': `Frete CTe N° ${cte['Número']}`,
-                CFOP: cte['CFOP'], documentType: 'CTE', Item: '1', 'Código': `CTE-${cte['Número']}`,
+        
+        // Correctly prepare NFE items with their header data
+        const nfeHeaderMap = new Map((sheets?.['Notas Válidas'] || []).map(n => [n['Chave Unica'], n]));
+        const allNfeItems = (xmlItems || []).map(item => {
+            const header = nfeHeaderMap.get(item['Chave Unica']);
+            return {
+                ...item,
+                Fornecedor: header?.Fornecedor || item.Fornecedor,
+                'Data de Emissão': header?.['Emissão'] || item['Emissão'],
+                documentType: 'NFE',
                 originalIndex: -1
-            }))
-        ];
+            };
+        });
+
+        // Correctly prepare CTE items
+        const allCteItems = (cteItems || []).map(cte => ({
+            ...cte, 
+            'Número da Nota': cte['Número'], 
+            'CPF/CNPJ do Emitente': cte['CPF/CNPJ do Fornecedor'],
+            'Valor Total': cte['Valor da Prestação'], 
+            'Descrição': `Frete CTe N° ${cte['Número']}`,
+            CFOP: cte['CFOP'], 
+            documentType: 'CTE', 
+            Item: '1', 
+            'Código': `CTE-${cte['Número']}`,
+            'Chave Unica': cleanAndToStr(cte['Número']) + cleanAndToStr(cte['CPF/CNPJ do Fornecedor']),
+            originalIndex: -1
+        }));
+        
+        const allXmlItems = [...allNfeItems, ...allCteItems];
 
         const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
             if (!data || data.length === 0 || !data[0]) return undefined;
@@ -479,8 +500,6 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
 
             if (!h.cnpj || !h.numero || !h.valorTotal) throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge para notas NFE/NFSR.");
             
-            const nfeHeaderMap = new Map((sheets?.['Notas Válidas'] || []).map(n => [n['Chave Unica'], n]));
-            
             const xmlItemsMap = new Map<string, any>();
             allXmlItems.forEach(item => {
                 const key = `${item['Chave Unica']}-${item['Item']}`;
@@ -493,11 +512,9 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
             filteredSiengeDataForReconciliation.forEach(siengeItem => {
                 let matchFound = false;
                 for (const [key, xmlItem] of xmlItemsMap.entries()) {
-                    if (siengeItem[h.numero!] === xmlItem['Número da Nota'] && siengeItem[h.cnpj!] === xmlItem['CPF/CNPJ do Emitente'] && siengeItem[h.siengeDesc!] === xmlItem['Descrição']) {
-                        const notaOriginal = nfeHeaderMap.get(xmlItem['Chave Unica']);
+                    if (siengeItem[h.numero!] == xmlItem['Número da Nota'] && siengeItem[h.cnpj!] == xmlItem['CPF/CNPJ do Emitente'] && siengeItem[h.siengeDesc!] == xmlItem['Descrição']) {
                         reconciled.push({
                             ...xmlItem,
-                            'Fornecedor': notaOriginal?.Fornecedor || xmlItem?.Fornecedor || 'N/A',
                             'Sienge_CFOP': siengeItem[h.siengeCfop as string] || 'N/A',
                             'Sienge_Descrição': siengeItem[h.siengeDesc as string] || 'N/A',
                             'Observações': `Conciliado via Descrição/CNPJ/Número`,
@@ -659,7 +676,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                 </Alert>
             )}
 
-            {!siengeFile && (processedData.sheets['Itens Válidos'] || processedData.sheets['CTEs Válidos']) && !reconciliationResults && (
+            {processedData && !siengeFile && (processedData.sheets['Itens Válidos'] || processedData.sheets['CTEs Válidos']) && !reconciliationResults && (
                 <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8 mt-6">
                     <Loader2 className="h-12 w-12 animate-spin text-primary" />
                     <p className="mt-4 text-center">Aguardando o ficheiro "Itens do Sienge" para executar a conciliação automaticamente...</p>
