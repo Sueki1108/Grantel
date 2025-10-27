@@ -692,7 +692,7 @@ function useReconciliation(processedData: ProcessedData | null) {
             };
             
             const allXmlItems = [
-                ...(xmlItems || []),
+                ...(xmlItems || []).map(item => ({ ...item, documentType: 'NFE' })), // Mark as NFE
                 ...(cteItems || []).map(cte => ({
                     ...cte,
                     'Número da Nota': cte['Número'],
@@ -700,6 +700,7 @@ function useReconciliation(processedData: ProcessedData | null) {
                     'Valor Total': cte['Valor da Prestação'],
                     'Descrição': `Frete referente ao CTe N° ${cte['Número']}`,
                     'CFOP': cte['CFOP'],
+                     documentType: 'CTE', // Mark as CTE
                 }))
             ];
             
@@ -824,7 +825,10 @@ function useReconciliation(processedData: ProcessedData | null) {
                     currentXml = Array.from(stillUnmatchedXml);
                 }
                 
-                return { reconciled: allMatched, onlyInSienge: currentSienge, onlyInXml: currentXml };
+                // Filter out CTEs from the 'onlyInXml' list
+                const finalOnlyInXml = currentXml.filter(item => item.documentType !== 'CTE');
+
+                return { reconciled: allMatched, onlyInSienge: currentSienge, onlyInXml: finalOnlyInXml };
             };
             
             return { reconciliationResults: runAllPasses(remainingSiengeItems, remainingXmlItems), error: null };
