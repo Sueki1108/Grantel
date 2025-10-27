@@ -212,7 +212,7 @@ def run_automation_for_item(driver, item_data, vencimento, data_pagamento):
         print("4. Preenchendo Receita, Vencimento e Valor Principal...")
 
         WebDriverWait(driver, TIMEOUT).until(
-            EC.element_to_be_clickable((By.XPATH, f"//select[@id='{ID_DROPDOWN_RECEITA}']/option[@value='{RECEITA_ALVO}']"))
+            EC.presence_of_element_located((By.XPATH, f"//select[@id='{ID_DROPDOWN_RECEITA}']/option[@value='{RECEITA_ALVO}']"))
         )
         select_receita = Select(driver.find_element(By.ID, ID_DROPDOWN_RECEITA))
         select_receita.select_by_value(RECEITA_ALVO)
