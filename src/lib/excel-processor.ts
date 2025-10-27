@@ -167,13 +167,14 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         const chaveAcesso = cleanAndToStr(nota['Chave de acesso']);
         const emitenteCnpjLimpo = cleanAndToStr(nota.emitCNPJ || nota['CPF/CNPJ do Fornecedor']);
         const destCnpjLimpo = cleanAndToStr(nota.destCNPJ || nota['CPF/CNPJ do Destinatário']);
+        const finNFe = nota.finNFe;
 
         // REGRA 1: Ignorar notas canceladas ou manifestadas
         if (chavesExcecao.has(chaveAcesso)) {
             return; 
         }
-        // REGRA 2: Ignorar devoluções (Grantel como emitente)
-        if (emitenteCnpjLimpo === GRANTEL_CNPJ) {
+        // REGRA 2: Ignorar notas de devolução (finNFe=4) ou com emitente sendo a Grantel (dupla checagem)
+        if (finNFe === '4' || emitenteCnpjLimpo === GRANTEL_CNPJ) {
             devolucoesDeCompra.push(nota);
             return;
         }
@@ -190,7 +191,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 
     log(`- Total de ${notasValidasNFe.length} NF-es válidas para conciliação.`);
     log(`- Total de ${notasValidasCTe.length} CT-es válidos para conciliação.`);
-    log(`- Total de ${devolucoesDeCompra.length} devoluções de compra (emissão própria) identificadas.`);
+    log(`- Total de ${devolucoesDeCompra.length} devoluções de compra (emissão própria ou finNFe=4) identificadas.`);
     
     const chavesNotasValidas = new Set(notasValidas.map(row => cleanAndToStr(row["Chave Unica"])));
     let itensValidos = itens.filter(item => chavesNotasValidas.has(cleanAndToStr(item["Chave Unica"])));
