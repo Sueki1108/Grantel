@@ -126,6 +126,7 @@ export function DifalAnalysis() {
     const [dueDate, setDueDate] = useState<Date | undefined>(new Date());
     const [gnreConfigs, setGnreConfigs] = useState<GnreConfig>(GNRE_DEFAULT_CONFIGS);
     const [savedConfigs, setSavedConfigs] = useState<SavedGnreConfig[]>([]);
+    const [configName, setConfigName] = useState('');
 
     const { toast } = useToast();
     
@@ -235,22 +236,22 @@ export function DifalAnalysis() {
     };
 
      const handleSaveConfig = () => {
-        const configNameToSave = prompt("Por favor, introduza um nome para esta configuração:", `Config ${new Date().toLocaleDateString()}`);
-        if (!configNameToSave || !configNameToSave.trim()) {
-            toast({ variant: 'destructive', title: 'Operação Cancelada', description: 'É necessário um nome para guardar a configuração.' });
+        if (!configName || !configName.trim()) {
+            toast({ variant: 'destructive', title: 'Nome Inválido', description: 'É necessário um nome para guardar a configuração.' });
             return;
         }
         
         const newSavedConfig: SavedGnreConfig = {
             id: new Date().toISOString(),
-            name: configNameToSave,
+            name: configName,
             ...gnreConfigs
         };
 
         const newHistory = [...savedConfigs, newSavedConfig];
         setSavedConfigs(newHistory);
         localStorage.setItem(GNRE_CONFIG_HISTORY_KEY, JSON.stringify(newHistory));
-        toast({ title: 'Configuração guardada!', description: `"${configNameToSave}" foi adicionada ao seu histórico.` });
+        toast({ title: 'Configuração guardada!', description: `"${configName}" foi adicionada ao seu histórico.` });
+        setConfigName('');
     };
 
     const handleLoadConfig = (configId: string) => {
@@ -353,7 +354,31 @@ export function DifalAnalysis() {
                                 </Tabs>
 
                                 <DialogFooter className="pt-4 mt-4 border-t gap-2">
-                                     <Button variant="outline" onClick={handleSaveConfig}><Save className="mr-2 h-4 w-4"/>Salvar Configuração Atual</Button>
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="outline"><Save className="mr-2 h-4 w-4"/>Salvar Configuração Atual</Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>Nomear Configuração</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    Digite um nome para guardar a sua configuração atual para uso futuro.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <div className="py-2">
+                                                <Input 
+                                                    id="config-name" 
+                                                    placeholder="Ex: GNRE Matriz SP"
+                                                    value={configName}
+                                                    onChange={(e) => setConfigName(e.target.value)}
+                                                />
+                                            </div>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                <AlertDialogAction onClick={handleSaveConfig}>Salvar</AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
                                     <DialogTrigger asChild>
                                         <Button>Fechar</Button>
                                     </DialogTrigger>
