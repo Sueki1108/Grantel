@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from 'react';
@@ -13,9 +14,10 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
     const [activeTab, setActiveTab] = useState('');
 
     const orderedSheetNames = [
-        "Notas Válidas", "CTEs Válidos", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
+        "Notas Válidas", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
         "Imobilizados",
-        "Devoluções de Compra (Fornecedor)", "Notas Canceladas",
+        "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes", "Remessas e Retornos",
+        "Notas Canceladas",
         ...Object.keys(results).filter(name => name.startsWith("Original - "))
     ];
     

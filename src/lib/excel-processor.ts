@@ -169,14 +169,22 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     log(`- Total de ${chavesExcecao.size} chaves de exceção coletadas.`);
     log("Filtrando notas e itens válidos com base nas regras de negócio...");
 
+    // 1. Separar notas com base no emitente e CFOP dos itens
     const notasValidas: any[] = [];
-    const devolucoesDeCompra: any[] = [];
-    const devolucoesDeClientes: any[] = [];
-    const remessasEretornos: any[] = [];
+    const devolucoesDeCompra: any[] = []; // Emitente = Grantel, Destinatário != Grantel
+    const devolucoesDeClientes: any[] = []; // Emitente != Grantel, mas CFOP do item começa com 1 ou 2
+    const remessasEretornos: any[] = []; // Emitente = Grantel, Destinatário = Grantel
 
-    const todasEntradas = [...nfe, ...cte];
+    const itensMap = new Map<string, any[]>();
+    itens.forEach(item => {
+        const chaveUnica = cleanAndToStr(item["Chave Unica"]);
+        if (!itensMap.has(chaveUnica)) {
+            itensMap.set(chaveUnica, []);
+        }
+        itensMap.get(chaveUnica)!.push(item);
+    });
 
-    todasEntradas.forEach(nota => {
+    [...nfe, ...cte].forEach(nota => {
         const chaveAcesso = cleanAndToStr(nota['Chave de acesso']);
         if (chavesExcecao.has(chaveAcesso)) {
             return; 
@@ -186,22 +194,29 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         const destCnpj = cleanAndToStr(nota.destCNPJ || nota['CPF/CNPJ do Destinatário']);
 
         if (emitenteCnpj === GRANTEL_CNPJ) {
-             if(destCnpj === GRANTEL_CNPJ) {
-                remessasEretornos.push(nota); // Transferência interna
-             } else {
-                devolucoesDeCompra.push(nota); // Devolução de compra para fornecedor
-             }
+            if (destCnpj === GRANTEL_CNPJ) {
+                remessasEretornos.push(nota);
+            } else {
+                devolucoesDeCompra.push(nota);
+            }
         } else {
-             notasValidas.push(nota); // É uma compra de terceiro
+            const notaItens = itensMap.get(cleanAndToStr(nota["Chave Unica"])) || [];
+            const isDevolucaoCliente = notaItens.some(item => {
+                const cfop = cleanAndToStr(item.CFOP);
+                return cfop.startsWith('1') || cfop.startsWith('2');
+            });
+
+            if (isDevolucaoCliente) {
+                devolucoesDeClientes.push(nota);
+            } else {
+                notasValidas.push(nota);
+            }
         }
     });
 
-    const notasValidasNFe = notasValidas.filter(n => n.destUF); 
-    const notasValidasCTe = notasValidas.filter(n => !n.destUF);
-
-    log(`- Total de ${notasValidasNFe.length} NF-es de compra válidas.`);
-    log(`- Total de ${notasValidasCTe.length} CT-es de compra válidos.`);
+    log(`- Total de ${notasValidas.length} notas de compra válidas (NF-e + CT-e).`);
     log(`- Total de ${devolucoesDeCompra.length} devoluções de compra (Grantel emitente) identificadas.`);
+    log(`- Total de ${devolucoesDeClientes.length} devoluções de clientes (CFOP 1xxx/2xxx) identificadas.`);
     log(`- Total de ${remessasEretornos.length} remessas/retornos/transferências identificados.`);
     
     const chavesNotasValidas = new Set(notasValidas.map(row => cleanAndToStr(row["Chave Unica"])));
@@ -226,21 +241,20 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         });
     log(`- ${imobilizados.length} itens com valor unitário > R$ 1.200 encontrados para análise de imobilizado.`);
 
-
     log("Agrupando resultados...");
     const notasCanceladas = [...nfe, ...cte, ...saidas].filter(row => {
         if (!row) return false;
         return chavesExcecao.has(cleanAndToStr(row["Chave de acesso"]));
     });
     
-    const chavesValidasEntrada = notasValidasNFe.map(row => ({
+    const chavesValidasEntrada = notasValidas.filter(n => n['destUF']).map(row => ({ // Apenas NF-e
         "Chave de acesso": cleanAndToStr(row["Chave de acesso"]), "Tipo": "NFE", "Fornecedor": row["Fornecedor"],
         "Emissão": String(row["Emissão"]).substring(0, 10), "Total": row['Total'] || 0,
         "destCNPJ": row.destCNPJ, "destIE": row.destIE, "destUF": row.destUF,
         "emitCNPJ": row.emitCNPJ, "emitName": row.emitName, "emitIE": row.emitIE,
     }));
 
-    const chavesValidasCte = notasValidasCTe.map(row => ({
+    const chavesValidasCte = notasValidas.filter(n => !n['destUF']).map(row => ({ // Apenas CT-e
         "Chave de acesso": cleanAndToStr(row["Chave de acesso"]), "Tipo": "CTE", "Fornecedor": row["Fornecedor"],
         "Emissão": String(row["Emissão"]).substring(0, 10), "Total": row['Valor da Prestação'] || 0,
     }));
