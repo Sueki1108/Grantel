@@ -31,7 +31,8 @@ interface PendingIssuesReportProps {
 
 export function PendingIssuesReport({ processedData, allPersistedClassifications }: PendingIssuesReportProps) {
     const [selectedSections, setSelectedSections] = React.useState<Record<string, boolean>>({});
-    const [selectedItems, setSelectedItems] = React.useState<Record<string, Set<string>>>({});
+    const [rowSelections, setRowSelections] = React.useState<Record<string, Record<string, boolean>>>({});
+
     const { toast } = useToast();
 
     const sections = React.useMemo((): Section[] => {
@@ -91,11 +92,17 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         // 5. SPED - Modificações
         const spedCorrections = processedData.spedCorrections || [];
          if (spedCorrections.length > 0 && spedCorrections[0].linesModified > 0) {
+            const modifications = Object.entries(spedCorrections[0].modifications).flatMap(([key, value]) => {
+                if(Array.isArray(value) && value.length > 0) {
+                    return value.map(v => ({'Tipo de Modificação': key, ...v}));
+                }
+                return [];
+            });
             reportSections.push({
                 id: 'sped_corrections',
                 title: 'Modificações Realizadas no Arquivo SPED',
-                data: spedCorrections.map(c => ({...c.modifications, "Linhas Modificadas": c.linesModified, "Linhas Lidas": c.linesRead})),
-                columns: getColumns(spedCorrections)
+                data: modifications,
+                columns: getColumns(modifications)
             });
         }
 
@@ -135,50 +142,30 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
     // Initialize selection state when sections are calculated
     React.useEffect(() => {
         const initialSections: Record<string, boolean> = {};
-        const initialItems: Record<string, Set<string>> = {};
+        const initialItems: Record<string, Record<string, boolean>> = {};
         sections.forEach(section => {
             initialSections[section.id] = true;
-            initialItems[section.id] = new Set(section.data.map((_, index) => String(index)));
+            const selection: Record<string, boolean> = {};
+            section.data.forEach((_, index) => {
+                selection[String(index)] = true;
+            });
+            initialItems[section.id] = selection;
         });
         setSelectedSections(initialSections);
-        setSelectedItems(initialItems);
+        setRowSelections(initialItems);
     }, [sections]);
-
 
     const handleSectionToggle = (sectionId: string, isChecked: boolean) => {
         setSelectedSections(prev => ({ ...prev, [sectionId]: isChecked }));
         const section = sections.find(s => s.id === sectionId);
         if (section) {
-            const allItemKeys = new Set(section.data.map((_, index) => String(index)));
-            setSelectedItems(prev => ({
-                ...prev,
-                [sectionId]: isChecked ? allItemKeys : new Set()
-            }));
-        }
-    };
-
-    const handleItemToggle = (sectionId: string, itemKey: string, isChecked: boolean) => {
-        setSelectedItems(prev => {
-            const newSet = new Set(prev[sectionId] || []);
-            if (isChecked) {
-                newSet.add(itemKey);
-            } else {
-                newSet.delete(itemKey);
+            const newSelection: Record<string, boolean> = {};
+            if(isChecked) {
+                section.data.forEach((_, index) => {
+                    newSelection[String(index)] = true;
+                });
             }
-            return { ...prev, [sectionId]: newSet };
-        });
-
-        // Update section toggle if all/none are selected
-        const section = sections.find(s => s.id === sectionId);
-        if (section) {
-             const newSet = new Set(selectedItems[sectionId] || []);
-             if(isChecked) newSet.add(itemKey); else newSet.delete(itemKey);
-
-            if (newSet.size === section.data.length) {
-                setSelectedSections(prev => ({ ...prev, [sectionId]: true }));
-            } else if (newSet.size === 0) {
-                setSelectedSections(prev => ({ ...prev, [sectionId]: false }));
-            }
+            setRowSelections(prev => ({...prev, [sectionId]: newSelection}));
         }
     };
 
@@ -189,8 +176,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             const isSectionSelected = selectedSections[section.id];
             if (!isSectionSelected) return;
 
-            const selectedItemIndices = Array.from(selectedItems[section.id] || []).map(Number);
-            const dataToExport = section.data.filter((_, index) => selectedItemIndices.includes(index));
+            const selectedIndices = Object.keys(rowSelections[section.id] || {}).map(Number);
+            const dataToExport = section.data.filter((_, index) => selectedIndices.includes(index));
 
             if (dataToExport.length > 0) {
                 const worksheet = XLSX.utils.json_to_sheet(dataToExport);
@@ -235,7 +222,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
     }
     
      const getTotalSelectedItems = () => {
-        return Object.values(selectedItems).reduce((acc, currentSet) => acc + currentSet.size, 0);
+        return Object.values(rowSelections).reduce((acc, currentSelection) => acc + Object.keys(currentSelection).length, 0);
     }
 
 
@@ -260,8 +247,30 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                     <div className="space-y-6">
                         {sections.map(section => {
                             const isSectionChecked = selectedSections[section.id] || false;
-                             const selectedCount = selectedItems[section.id]?.size || 0;
+                            const selectedCount = Object.keys(rowSelections[section.id] || {}).length;
 
+                            // Clone columns to add the selection column
+                            const tableColumns = [...section.columns];
+                            tableColumns.unshift({
+                                id: 'select',
+                                header: ({ table }: any) => (
+                                    <Checkbox
+                                        checked={table.getIsAllRowsSelected()}
+                                        onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
+                                        aria-label="Selecionar todas as linhas"
+                                    />
+                                ),
+                                cell: ({ row }: any) => (
+                                    <Checkbox
+                                        checked={row.getIsSelected()}
+                                        onCheckedChange={(value) => row.toggleSelected(!!value)}
+                                        aria-label="Selecionar linha"
+                                    />
+                                ),
+                                enableSorting: false,
+                                enableHiding: false,
+                            });
+                            
                             return (
                                 <div key={section.id} className="p-4 border rounded-lg">
                                     <div className="flex items-center space-x-3 mb-4">
@@ -274,21 +283,21 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                                             {section.title} ({selectedCount} / {section.data.length})
                                         </Label>
                                     </div>
-                                    <div className="pl-8 space-y-2">
-                                        {section.data.map((item, index) => (
-                                            <div key={index} className="flex items-start space-x-2">
-                                                <Checkbox
-                                                    id={`item-${section.id}-${index}`}
-                                                    checked={selectedItems[section.id]?.has(String(index)) || false}
-                                                    onCheckedChange={(checked) => handleItemToggle(section.id, String(index), !!checked)}
-                                                />
-                                                <Label htmlFor={`item-${section.id}-${index}`} className="text-sm font-normal leading-snug w-full">
-                                                    <div className="p-2 border rounded-md bg-muted/50">
-                                                        <pre className="whitespace-pre-wrap font-mono text-xs">{JSON.stringify(item, null, 2)}</pre>
-                                                    </div>
-                                                </Label>
-                                            </div>
-                                        ))}
+                                    <div className="pl-8">
+                                         <DataTable 
+                                            columns={tableColumns} 
+                                            data={section.data} 
+                                            rowSelection={rowSelections[section.id] || {}}
+                                            setRowSelection={(newSelection) => {
+                                                const newRowSelections = { ...rowSelections };
+                                                if (typeof newSelection === 'function') {
+                                                    newRowSelections[section.id] = newSelection(rowSelections[section.id] || {});
+                                                } else {
+                                                    newRowSelections[section.id] = newSelection;
+                                                }
+                                                setRowSelections(newRowSelections);
+                                            }}
+                                         />
                                     </div>
                                 </div>
                             );
@@ -306,3 +315,6 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         </Card>
     );
 }
+
+
+      
