@@ -133,13 +133,11 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     
     log("Identificando notas de remessa, retorno e outras operações que não são compras...");
     const chavesRemessaRetorno = new Set<string>();
-    // CFOPs de Remessa/Retorno que não devem entrar na conciliação principal
     const remessaCfopPrefixes = ['190', '191', '192', '194', '290', '291', '292', '294', '590', '591', '592', '594', '690', '691', '692', '694'];
     itens.forEach(item => {
         if (!item || !item.CFOP) return;
         const cfop = cleanAndToStr(item.CFOP);
-        // O CFOP 5929 e 6929 refere-se a lançamento de cupom fiscal e deve ser considerado.
-        if (cfop !== '5929' && cfop !== '6929' && remessaCfopPrefixes.some(prefix => cfop.startsWith(prefix))) {
+        if (remessaCfopPrefixes.some(prefix => cfop.startsWith(prefix))) {
             chavesRemessaRetorno.add(cleanAndToStr(item['Chave de acesso']));
         }
     });
