@@ -104,7 +104,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         if (notFoundInSped.length > 0) {
             reportSections.push({
                 id: 'sped_not_found',
-                title: 'Notas não Lançadas no SPED',
+                title: 'Notas não Lançadas',
                 description: 'As chaves abaixo constam como válidas no seu controlo, mas não foram localizadas no arquivo SPED, indicando que podem não ter sido escrituradas.',
                 data: [],
                 columns: [],
