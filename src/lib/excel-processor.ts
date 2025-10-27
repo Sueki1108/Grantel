@@ -1,3 +1,4 @@
+
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import { KeyCheckResult } from '@/components/app/key-checker';
@@ -130,35 +131,6 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         }
     });
     log(`- ${chavesDevolucaoFornecedor.size} notas de devolução para fornecedor (finNFe=4) identificadas.`);
-    
-    log("Identificando notas de remessa e retorno...");
-    const chavesRemessaRetorno = new Set<string>();
-    const remessaCfops = [
-        '1901', '1902', '1903', '1904', '1905', '1906', '1907', '1908', '1909', 
-        '1910', '1911', '1912', '1913', '1914', '1915', '1916', '1917', '1918', 
-        '1919', '1920', '1921', '1922', '1923', '1924', '1925', '1926', '1949',
-        '2901', '2902', '2903', '2904', '2905', '2906', '2907', '2908', '2909',
-        '2910', '2911', '2912', '2913', '2914', '2915', '2916', '2917', '2918',
-        '2919', '2920', '2921', '2922', '2923', '2924', '2925', '2949',
-        '5901', '5902', '5903', '5904', '5905', '5906', '5907', '5908', '5909',
-        '5910', '5911', '5912', '5913', '5914', '5915', '5916', '5917', '5918',
-        '5919', '5920', '5921', '5922', '5923', '5924', '5925', '5926', '5927',
-        '5928', '5931', '5932', '5933', '5934', '5949',
-        '6901', '6902', '6903', '6904', '6905', '6906', '6907', '6908', '6909',
-        '6910', '6911', '6912', '6913', '6914', '6915', '6916', '6917', '6918',
-        '6919', '6920', '6921', '6922', '6923', '6924', '6925', '6929', '6931',
-        '6932', '6933', '6934', '6949'
-    ];
-    
-    itens.forEach(item => {
-        if (!item || !item.CFOP) return;
-        const cfop = cleanAndToStr(item.CFOP);
-        if (remessaCfops.includes(cfop)) {
-            chavesRemessaRetorno.add(cleanAndToStr(item['Chave de acesso']));
-        }
-    });
-     log(`- ${chavesRemessaRetorno.size} chaves de remessa/retorno identificadas via CFOP dos itens.`);
-
 
     log("Coletando chaves de exceção (canceladas, manifesto)...");
     const chavesExcecao = new Set<string>(eventCanceledKeys);
@@ -194,8 +166,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         const chaveAcesso = cleanAndToStr(row['Chave de acesso']);
         return chaveAcesso && 
                !chavesExcecao.has(chaveAcesso) && 
-               !chavesDevolucaoFornecedor.has(chaveAcesso) &&
-               !chavesRemessaRetorno.has(chaveAcesso);
+               !chavesDevolucaoFornecedor.has(chaveAcesso);
     }
     
     const nfeFiltrada = nfe.filter(row => row && !Object.values(row).some(v => typeof v === 'string' && v.toUpperCase().includes("TOTAL")));
@@ -203,7 +174,19 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     
     let notasValidas = nfeFiltrada.filter(isChaveValida);
     let ctesValidos = cteFiltrado.filter(isChaveValida);
-    let saidasValidas = saidas.filter(isChaveValida);
+    let saidasValidas = saidas.filter(row => {
+        if (!row || !row['Chave Unica']) return false;
+        const chaveAcesso = cleanAndToStr(row['Chave de acesso']);
+        if (chavesExcecao.has(chaveAcesso)) return false;
+
+        const itensDestaNota = itensSaidas.filter(i => cleanAndToStr(i['Chave Unica']) === cleanAndToStr(row['Chave Unica']));
+        const isDevolucaoCliente = itensDestaNota.some(item => {
+            if (!item || !item["CFOP"]) return false;
+            const cfop = cleanAndToStr(item["CFOP"]);
+            return cfop.startsWith('52') || cfop.startsWith('62');
+        });
+        return !isDevolucaoCliente;
+    });
     
     log(`- Total de ${notasValidas.length} NF-es válidas.`);
     log(`- Total de ${ctesValidos.length} CT-es válidos.`);
@@ -223,7 +206,6 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         if (!item || !item['Valor Unitário']) return false;
         
         const cfop = cleanAndToStr(item.CFOP);
-        // Verifica se o CFOP NÃO é de remessa/retorno/conserto
         const isRemessaConserto = remessaConsertoCfopPrefixes.some(prefix => cfop.startsWith(prefix));
 
         const valorUnitario = parseFloat(String(item['Valor Unitário']));
@@ -247,11 +229,9 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         const chaveAcesso = cleanAndToStr(row['Chave de acesso']);
         const statusVal = row["Status"];
         const isCancelledByStatus = typeof statusVal === 'string' && statusVal.toLowerCase().includes('cancelada');
-        // Adiciona à lista de canceladas se tiver o status OU estiver no set de exceções
         return isCancelledByStatus || chavesExcecao.has(chaveAcesso);
     });
     
-    const remessasERetornos = nfe.filter(row => chavesRemessaRetorno.has(cleanAndToStr(row['Chave de acesso'])));
     const devolucoesDeCompra = nfe.filter(row => chavesDevolucaoFornecedor.has(cleanAndToStr(row['Chave de acesso'])));
     
     const devolucoesDeClientes = saidas.filter(row => {
@@ -260,8 +240,22 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         return itensDestaNota.some(item => {
             if (!item || !item["CFOP"]) return false;
             const cfop = cleanAndToStr(item["CFOP"]);
-            // Devoluções de Venda de Saída iniciam com 52, 62
             return cfop.startsWith('52') || cfop.startsWith('62');
+        });
+    });
+
+    const remessaCfopsList = [
+        '5901', '6901', '5902', '6902', '5903', '6903', '5904', '6904', '5905', '6905', 
+        '5908', '6908', '5909', '6909', '5910', '6910', '5911', '6911', '5912', '6912', 
+        '5913', '6913', '5914', '6914', '5915', '6915', '5916', '6916', '5917', '6917', 
+        '5924', '6924', '5925', '6925', '5949', '6949'
+    ];
+    const remessasERetornos = saidas.filter(row => {
+        if (!row || !row['Chave Unica']) return false;
+        const itensDestaNota = itensSaidas.filter(i => cleanAndToStr(i['Chave Unica']) === cleanAndToStr(row['Chave Unica']));
+        return itensDestaNota.some(item => {
+            if (!item || !item.CFOP) return false;
+            return remessaCfopsList.includes(cleanAndToStr(item.CFOP));
         });
     });
 
@@ -354,3 +348,5 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         keyCheckResults: null,
     };
 }
+
+    
