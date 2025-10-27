@@ -33,7 +33,7 @@ export const GNRE_DEFAULT_CONFIGS: GnreConfig = {
     "RAZAO_SOCIAL_ALVO": "GRANTEL ENGENHARIA LTDA",
     "ENDERECO_ALVO": "RUA PARANAGUA, 78",
     "CEP_ALVO": "83410390",
-    "MUNICIPIO_ALVO_EMITENTE": "06902", // O código para Curitiba-PR
+    "MUNICIPIO_ALVO_EMITENTE": "05805", // Código para Colombo - PR
     "TELEFONE_ALVO": "4133386454",
     "RECEITA_ALVO": "100102",
     "CNPJ_DESTINATARIO": "81732042000119",
@@ -381,5 +381,5 @@ if __name__ == '__main__':
 
 `;
 
-    return seleniumImports + gnreListContent + configVars + automationFunction;
+    return `${seleniumImports}${gnreListContent}${configVars}${automationFunction}`;
 }
