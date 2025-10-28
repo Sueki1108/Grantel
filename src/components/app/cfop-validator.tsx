@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -150,6 +149,17 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         });
     };
 
+    const renderHeader = (column: any, displayName: string) => {
+        return (
+            <div 
+                className="flex items-center text-left w-full cursor-pointer"
+                onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            >
+                <span>{displayName}</span>
+                <ArrowUpDown className="ml-2 h-4 w-4" />
+            </div>
+        );
+    };
 
     // Colunas da Tabela
     const columns = useMemo(() => {
@@ -225,7 +235,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
     }, [reconciledItems]);
 
-    const actionColumn: any = {
+    const actionColumn = useMemo(() => ({
         id: 'Ações',
         header: 'Ações',
         cell: ({ row }: any) => {
@@ -244,9 +254,9 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                 </TooltipProvider>
             );
         }
-    };
+    }), [validationStatus, handleValidationChange]);
     
-    const statusColumn: any = {
+    const statusColumn = useMemo(() => ({
         id: 'status',
         header: 'Status',
         cell: ({ row }: any) => {
@@ -258,7 +268,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                 default: return <Badge variant="outline"><FileWarning className="h-4 w-4 mr-1" /> Pendente</Badge>;
             }
         }
-    };
+    }), [validationStatus]);
     
      const filteredAndGroupedItems = useMemo((): GroupedItems => {
         // First, filter items based on the active tab's status
@@ -282,7 +292,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const [activeTabGroup, setActiveTabGroup] = useState<string>('');
     const tableRef = React.useRef<ReactTable<CfopValidationData> | null>(null);
 
-    const fullColumns = useMemo(() => [ ...columns, statusColumn, actionColumn], [columns, validationStatus]);
+    const fullColumns = useMemo(() => [ ...columns, statusColumn, actionColumn], [columns, statusColumn, actionColumn]);
 
     const sortedGroupTitles = useMemo(() => Object.keys(filteredAndGroupedItems).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)), [filteredAndGroupedItems]);
 
@@ -303,18 +313,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         }
     };
     
-    const renderHeader = (column: any, displayName: string) => {
-        return (
-            <div 
-                className="flex items-center text-left w-full cursor-pointer"
-                onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            >
-                <span>{displayName}</span>
-                <ArrowUpDown className="ml-2 h-4 w-4" />
-            </div>
-        );
-    };
-
     return (
         <div className="space-y-4 h-full flex flex-col relative">
              <div className="flex justify-between items-center">
@@ -394,6 +392,3 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         </div>
     );
 }
-    
-
-    

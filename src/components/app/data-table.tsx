@@ -37,62 +37,6 @@ interface DataTableProps<TData, TValue> {
   tableRef?: React.MutableRefObject<ReactTable<TData> | null>;
 }
 
-function Filter({
-  column,
-  table,
-}: {
-  column: Column<any, any>
-  table: ReactTable<any>
-}) {
-  const firstValue = table
-    .getPreFilteredRowModel()
-    .flatRows[0]?.getValue(column.id)
-
-  const columnFilterValue = column.getFilterValue()
-
-  const isSpecialNumberColumn = (column.id.toUpperCase().includes('CFOP') || column.id.toUpperCase().includes('CST'));
-
-  return typeof firstValue === 'number' && !isSpecialNumberColumn ? (
-    <div className="flex space-x-2">
-      <Input
-        type="number"
-        value={(columnFilterValue as [number, number])?.[0] ?? ''}
-        onChange={e =>
-          column.setFilterValue((old: [number, number]) => [
-            e.target.value,
-            old?.[1],
-          ])
-        }
-        placeholder={`Min`}
-        className="w-24 border-slate-200 h-8"
-        onClick={(e) => e.stopPropagation()}
-      />
-      <Input
-        type="number"
-        value={(columnFilterValue as [number, number])?.[1] ?? ''}
-        onChange={e =>
-          column.setFilterValue((old: [number, number]) => [
-            old?.[0],
-            e.target.value,
-          ])
-        }
-        placeholder={`Max`}
-        className="w-24 border-slate-200 h-8"
-        onClick={(e) => e.stopPropagation()}
-      />
-    </div>
-  ) : (
-    <Input
-      type="text"
-      value={(columnFilterValue ?? '') as string}
-      onChange={e => column.setFilterValue(e.target.value)}
-      placeholder={`Filtrar...`}
-      className="w-full border-slate-200 h-8"
-      onClick={(e) => e.stopPropagation()}
-    />
-  )
-}
-
 export function DataTable<TData, TValue>({
   columns,
   data,
@@ -168,7 +112,14 @@ export function DataTable<TData, TValue>({
                                 )}
                                 {header.column.getCanFilter() ? (
                                     <div className="mt-1">
-                                        <Filter column={header.column} table={table} />
+                                        <Input
+                                            type="text"
+                                            value={(header.column.getFilterValue() ?? '') as string}
+                                            onChange={e => header.column.setFilterValue(e.target.value)}
+                                            placeholder={`Filtrar...`}
+                                            className="w-full border-slate-200 h-8"
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
                                     </div>
                                 ) : null}
                             </>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from '@/components/app/data-table';
 import { getColumns } from '@/lib/columns-helper';
@@ -13,20 +13,22 @@ interface ResultsDisplayProps {
 export function ResultsDisplay({ results }: ResultsDisplayProps) {
     const [activeTab, setActiveTab] = useState('');
 
-    const orderedSheetNames = [
+    const orderedSheetNames = useMemo(() => [
         "Notas Válidas", "CTEs Válidos", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
         "Imobilizados",
         "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes", "Remessas e Retornos",
         "Notas Canceladas",
         ...Object.keys(results).filter(name => name.startsWith("Original - "))
-    ];
+    ], [results]);
     
     useEffect(() => {
         if (orderedSheetNames.length > 0) {
             const firstValidSheet = orderedSheetNames.find(sheetName => results[sheetName] && results[sheetName].length > 0);
-            setActiveTab(firstValidSheet || '');
+            if (firstValidSheet) {
+                setActiveTab(firstValidSheet);
+            }
         }
-    }, [results]);
+    }, [orderedSheetNames, results]);
 
     const handleTabChange = (value: string) => {
         setActiveTab(value);
@@ -47,28 +49,43 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
         return nameMap[sheetName] || sheetName;
     };
 
+    const memoizedTabs = useMemo(() => {
+        return orderedSheetNames.map(sheetName => {
+            const sheetData = results[sheetName];
+            if (sheetData && sheetData.length > 0) {
+                // Memoize columns for each table
+                const columns = getColumns(sheetData);
+                return {
+                    sheetName,
+                    displayName: getDisplayName(sheetName),
+                    component: (
+                        <TabsContent key={sheetName} value={sheetName}>
+                            <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+                                <DataTable columns={columns} data={sheetData} />
+                                <ScrollBar orientation="horizontal" />
+                            </ScrollArea>
+                        </TabsContent>
+                    )
+                };
+            }
+            return null;
+        }).filter(Boolean);
+    }, [results, orderedSheetNames]);
+
+    if (!memoizedTabs || memoizedTabs.length === 0) return null;
+
     return (
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
                 <div className='flex-grow overflow-x-auto'>
                     <TabsList className="inline-flex h-auto">
-                        {orderedSheetNames.map(sheetName => (
-                            results[sheetName] && results[sheetName].length > 0 && 
-                            <TabsTrigger key={sheetName} value={sheetName}>{getDisplayName(sheetName)}</TabsTrigger>
+                        {memoizedTabs.map(tab => (
+                            tab && <TabsTrigger key={tab.sheetName} value={tab.sheetName}>{tab.displayName}</TabsTrigger>
                         ))}
                     </TabsList>
                 </div>
             </div>
-            {orderedSheetNames.map(sheetName => (
-                results[sheetName] && results[sheetName].length > 0 && activeTab === sheetName && (
-                    <TabsContent key={sheetName} value={sheetName}>
-                        <ScrollArea className="w-full whitespace-nowrap rounded-md border">
-                            <DataTable columns={getColumns(results[sheetName])} data={results[sheetName]} />
-                            <ScrollBar orientation="horizontal" />
-                        </ScrollArea>
-                    </TabsContent>
-                )
-            ))}
+            {memoizedTabs.map(tab => tab?.component)}
         </Tabs>
     );
 }
