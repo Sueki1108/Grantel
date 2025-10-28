@@ -59,7 +59,7 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
                 </div>
             </div>
             {orderedSheetNames.map(sheetName => (
-                results[sheetName] && results[sheetName].length > 0 && (
+                results[sheetName] && results[sheetName].length > 0 && activeTab === sheetName && (
                     <TabsContent key={sheetName} value={sheetName}>
                         <DataTable columns={getColumns(results[sheetName])} data={results[sheetName]} />
                     </TabsContent>
