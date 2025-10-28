@@ -807,7 +807,7 @@ export function KeyChecker({
     };
 
     const ModificationDisplay = ({ logs }: { logs: ModificationLog[] }) => (
-        <ScrollArea className="h-full pr-4">
+        <div className="h-full overflow-y-auto pr-4">
             <div className="text-sm font-mono whitespace-pre-wrap space-y-4">
                 {logs.map((log, index) => (
                     <div key={index} className="p-2 rounded-md border">
@@ -817,11 +817,11 @@ export function KeyChecker({
                     </div>
                 ))}
             </div>
-        </ScrollArea>
+        </div>
     );
 
     const RemovedLinesDisplay = ({ logs }: { logs: RemovedLineLog[] }) => (
-        <ScrollArea className="h-full pr-4">
+        <div className="h-full overflow-y-auto pr-4">
             <div className="text-sm font-mono whitespace-pre-wrap space-y-2">
                 {logs.map((log, index) => (
                     <div key={index} className="p-2 rounded-md border bg-yellow-100 dark:bg-yellow-900/30">
@@ -829,7 +829,7 @@ export function KeyChecker({
                     </div>
                 ))}
             </div>
-        </ScrollArea>
+        </div>
     );
 
     return (
