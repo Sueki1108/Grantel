@@ -6,7 +6,7 @@ import autoTable from 'jspdf-autotable';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProcessedData } from '@/lib/excel-processor';
-import { ClipboardList, Download, FileQuestion, FileText, FileDown, FileSpreadsheet, EyeOff, Settings, Check, ListFilter, Eye, RefreshCw } from 'lucide-react';
+import { ClipboardList, Download, FileQuestion, FileText, FileDown, FileSpreadsheet, EyeOff, Settings, Check, ListFilter, Eye, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
 import { DataTable } from './data-table';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -17,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Label } from '../ui/label';
 import { Checkbox } from '../ui/checkbox';
 import { getColumnsWithCustomRender } from '@/lib/columns-helper';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 
 
 interface Section {
@@ -43,7 +44,19 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
     const { toast } = useToast();
     const [ignoredItems, setIgnoredItems] = React.useState<Set<string>>(new Set());
     const [exportOptions, setExportOptions] = React.useState<Record<string, boolean>>({});
+    const [openCollapsibles, setOpenCollapsibles] = React.useState<Set<string>>(new Set());
 
+    const toggleCollapsible = (id: string) => {
+        setOpenCollapsibles(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) {
+                newSet.delete(id);
+            } else {
+                newSet.add(id);
+            }
+            return newSet;
+        });
+    };
 
     const toggleIgnoredItem = (itemKey: string) => {
         setIgnoredItems(prev => {
@@ -196,34 +209,22 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         // 6. SPED - Modificações
         const spedCorrections = processedData.spedCorrections || [];
         if (spedCorrections.length > 0 && spedCorrections[0].linesModified > 0) {
-            const allModifications = Object.entries(spedCorrections[0].modifications).flatMap(([key, value]) => {
-                if(Array.isArray(value) && value.length > 0) {
-                     return value.map((v: any, i: number) => ({
-                        'Tipo de Correção': key,
-                        'Linha': v.lineNumber,
-                        'Detalhe': `Original: ${v.original || v.line} | Corrigido: ${v.corrected || '(removida)'}`,
-                        '__itemKey': `spedmod-${key}-${i}`
-                    }));
-                }
-                return [];
-            }).filter(m => m);
-
-            if (allModifications.length > 0) {
-                 const subSections = Object.entries(spedCorrections[0].modifications)
-                    .map(([key, value]) => {
-                        if(Array.isArray(value) && value.length > 0) {
-                            const data = value.map((v: any, i: number) => ({
-                                'Linha': v.lineNumber,
-                                'Original': v.original || v.line,
-                                'Corrigido': v.corrected || '(removida)',
-                                '__itemKey': `spedmod-${key}-${i}`
-                            }));
-                            return { id: `sped_mod_${key}`, title: key, data, columns: getColumnsWithCustomRender(data, ['Linha', 'Original', 'Corrigido']) };
-                        }
-                        return null;
-                    })
-                    .filter(sub => sub && sub.data.length > 0) as { id: string; title: string; data: any[]; columns: any[]; }[];
-                
+             const subSections = Object.entries(spedCorrections[0].modifications)
+                .map(([key, value]) => {
+                    if(Array.isArray(value) && value.length > 0) {
+                        const data = value.map((v: any, i: number) => ({
+                            'Linha': v.lineNumber,
+                            'Original': v.original || v.line,
+                            'Corrigido': v.corrected || '(removida)',
+                            '__itemKey': `spedmod-${key}-${i}`
+                        }));
+                        return { id: `sped_mod_${key}`, title: key, data, columns: getColumnsWithCustomRender(data, ['Linha', 'Original', 'Corrigido']) };
+                    }
+                    return null;
+                })
+                .filter(sub => sub && sub.data.length > 0) as { id: string; title: string; data: any[]; columns: any[]; }[];
+            
+            if (subSections.length > 0) {
                 reportSections.push({
                     id: 'sped_corrections',
                     title: 'Modificações Realizadas no Arquivo SPED',
@@ -256,12 +257,28 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
 
     React.useEffect(() => {
         const initialOptions: Record<string, boolean> = {};
-        sections.forEach(s => { initialOptions[s.id] = true; });
+        sections.forEach(s => { 
+            initialOptions[s.id] = true;
+            if (s.subSections) {
+                s.subSections.forEach(sub => {
+                    initialOptions[sub.id] = true;
+                });
+            }
+        });
         setExportOptions(initialOptions);
     }, [sections]);
 
-    const handleToggleExportOption = (sectionId: string, checked: boolean) => {
-        setExportOptions(prev => ({...prev, [sectionId]: checked}));
+    const handleToggleExportOption = (id: string, checked: boolean, isMainSection: boolean) => {
+        setExportOptions(prev => {
+            const newOptions = {...prev, [id]: checked};
+            if (isMainSection) {
+                const section = sections.find(s => s.id === id);
+                section?.subSections?.forEach(sub => {
+                    newOptions[sub.id] = checked;
+                });
+            }
+            return newOptions;
+        });
     };
 
     const exportToExcel = (sectionsToExport: Section[], fileName: string) => {
@@ -270,6 +287,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         sectionsToExport.forEach(section => {
             if (section.subSections && section.subSections.length > 0) {
                 section.subSections.forEach(sub => {
+                     if (!exportOptions[sub.id]) return;
                      const exportData = sub.data.filter(item => !ignoredItems.has(item.__itemKey)).map(({__itemKey, ...rest}) => rest);
                      if (exportData.length > 0) {
                         const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -278,6 +296,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                     }
                 })
             } else {
+                 if (!exportOptions[section.id]) return;
                  const exportData = section.data.filter(item => !ignoredItems.has(item.__itemKey)).map(({__itemKey, ...rest}) => rest);
                  if (exportData.length > 0) {
                     const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -339,9 +358,15 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             }
 
             if (section.subSections) {
-                 section.subSections.forEach(sub => processSectionData(sub.data, sub.columns, `${section.title}: ${sub.title}`, section.description));
+                 section.subSections.forEach(sub => {
+                    if (exportOptions[sub.id]) {
+                        processSectionData(sub.data, sub.columns, `${section.title}: ${sub.title}`, section.description)
+                    }
+                });
             } else {
-                 processSectionData(section.data, section.columns, section.title, section.description);
+                 if (exportOptions[section.id]) {
+                    processSectionData(section.data, section.columns, section.title, section.description);
+                }
             }
         });
 
@@ -355,7 +380,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
     };
 
     const handleExportAll = (format: 'excel' | 'pdf') => {
-        const selectedSections = sections.filter(s => exportOptions[s.id]);
+        const selectedSections = sections.filter(s => exportOptions[s.id] || s.subSections?.some(sub => exportOptions[sub.id]));
         if (selectedSections.length === 0) {
             toast({ variant: 'destructive', title: 'Nenhuma secção selecionada para exportar.' });
             return;
@@ -410,10 +435,29 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                                         </div>
                                         <div className="grid gap-2">
                                             {sections.map(section => (
-                                                <div key={section.id} className="flex items-center justify-between">
-                                                    <Label htmlFor={`export-${section.id}`}>{section.title}</Label>
-                                                    <Checkbox id={`export-${section.id}`} checked={exportOptions[section.id] || false} onCheckedChange={(checked) => handleToggleExportOption(section.id, !!checked)} />
-                                                </div>
+                                                <Collapsible key={section.id} open={openCollapsibles.has(section.id)} onOpenChange={() => toggleCollapsible(section.id)}>
+                                                    <div className='flex items-center space-x-2'>
+                                                         <Checkbox id={`export-${section.id}`} checked={exportOptions[section.id] || false} onCheckedChange={(checked) => handleToggleExportOption(section.id, !!checked, true)} />
+                                                        {section.subSections ? (
+                                                            <CollapsibleTrigger className='flex items-center gap-1 flex-1'>
+                                                                <Label htmlFor={`export-${section.id}`} className='cursor-pointer'>{section.title}</Label>
+                                                                {openCollapsibles.has(section.id) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                                            </CollapsibleTrigger>
+                                                        ) : (
+                                                            <Label htmlFor={`export-${section.id}`}>{section.title}</Label>
+                                                        )}
+                                                    </div>
+                                                    {section.subSections && (
+                                                        <CollapsibleContent className='pl-6 mt-2 space-y-2'>
+                                                            {section.subSections.map(sub => (
+                                                                 <div key={sub.id} className="flex items-center space-x-2">
+                                                                    <Checkbox id={`export-${sub.id}`} checked={exportOptions[sub.id] || false} onCheckedChange={(checked) => handleToggleExportOption(sub.id, !!checked, false)} />
+                                                                    <Label htmlFor={`export-${sub.id}`}>{sub.title}</Label>
+                                                                </div>
+                                                            ))}
+                                                        </CollapsibleContent>
+                                                    )}
+                                                </Collapsible>
                                             ))}
                                         </div>
                                     </div>
