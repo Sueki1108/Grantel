@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, type ChangeEvent, useCallback } from "react";
@@ -69,7 +70,6 @@ interface AdditionalAnalysesProps {
     onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData) => ProcessedData)) => void;
     siengeFile: File | null;
     onSiengeFileChange: (file: File | null) => void;
-    onSiengeDataProcessed: (data: any[] | null) => void;
     onClearSiengeFile: () => void;
     allXmlFiles: File[];
     spedFiles: File[];
@@ -86,7 +86,6 @@ export function AdditionalAnalyses({
     onProcessedDataChange,
     siengeFile, 
     onSiengeFileChange, 
-    onSiengeDataProcessed,
     onClearSiengeFile, 
     allXmlFiles,
     spedFiles,
@@ -101,37 +100,27 @@ export function AdditionalAnalyses({
     const [activeTab, setActiveTab] = useState("sped");
     const [isExporting, setIsExporting] = useState(false);
     
-    // State local para Revenda
     const [resaleAnalysis, setResaleAnalysis] = useState<{ noteKeys: Set<string>; xmls: File[] } | null>(null);
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
 
-    // Processamento do arquivo Sienge
     useEffect(() => {
-        if (!siengeFile || processedData.siengeSheetData) return;
-        
-        const process = async () => {
-            try {
-                const data = await readFileAsJson(siengeFile);
-                onSiengeDataProcessed(data);
-                toast({ title: 'Planilha Sienge Processada', description: 'As análises de conciliação e revenda foram atualizadas.' });
-            } catch (error: any) {
-                toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: error.message });
-                onSiengeDataProcessed(null);
-            }
-        };
-        process();
-    }, [siengeFile, processedData.siengeSheetData, onSiengeDataProcessed, toast]);
+        if (siengeFile && !processedData.siengeSheetData) {
+            const process = async () => {
+                try {
+                    const data = await readFileAsJson(siengeFile);
+                    onProcessedDataChange(prev => ({...prev, siengeSheetData: data}));
+                    toast({ title: 'Planilha Sienge Processada', description: 'As análises de conciliação e revenda foram atualizadas.' });
+                } catch (error: any) {
+                    toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: error.message });
+                    onProcessedDataChange(prev => ({...prev, siengeSheetData: null}));
+                }
+            };
+            process();
+        }
+    }, [siengeFile, processedData.siengeSheetData, onProcessedDataChange, toast]);
 
-
-    const { reconciliationResults, error: reconciliationError } = useReconciliation(processedData, processedData.siengeSheetData);
-
-    const handleSiengeFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0] || null;
-        onSiengeFileChange(file);
-    };
-    
-    const handleAnalyzeResale = useCallback(async () => {
-        if (!siengeFile) {
+    const handleAnalyzeResale = () => {
+        if (!processedData.siengeSheetData) {
             toast({ variant: 'destructive', title: "Dados incompletos", description: "Carregue a planilha Sienge primeiro." });
             return;
         }
@@ -145,12 +134,7 @@ export function AdditionalAnalyses({
     
         setTimeout(async () => {
             try {
-                let localSiengeData = processedData.siengeSheetData;
-                if (!localSiengeData) {
-                    localSiengeData = await readFileAsJson(siengeFile);
-                    onSiengeDataProcessed(localSiengeData);
-                }
-    
+                const localSiengeData = processedData.siengeSheetData!;
                 const RESALE_CFOPS = ['1102', '2102', '1403', '2403'];
                 
                 const findSiengeHeader = (possibleNames: string[]): string | undefined => {
@@ -235,9 +219,9 @@ export function AdditionalAnalyses({
                 setIsAnalyzingResale(false);
             }
         }, 50);
-    
-    }, [siengeFile, processedData.siengeSheetData, allXmlFiles, toast, onSiengeDataProcessed]);
-    
+    };
+
+
     const handleExportResaleXmls = async () => {
         if (!resaleAnalysis || resaleAnalysis.xmls.length === 0) {
             toast({ title: "Nenhum XML de revenda encontrado para exportar" });
@@ -310,13 +294,13 @@ export function AdditionalAnalyses({
                     {activeTab === 'reconciliation' && (
                         <ReconciliationAnalysis 
                             siengeFile={siengeFile}
-                            onSiengeFileChange={handleSiengeFileChange}
+                            onSiengeFileChange={onSiengeFileChange}
                             onClearSiengeFile={onClearSiengeFile}
                             processedData={processedData}
-                            reconciliationResults={reconciliationResults}
-                            error={reconciliationError}
+                            onProcessedDataChange={onProcessedDataChange}
                             allPersistedClassifications={allPersistedClassifications}
                             onPersistAllClassifications={onPersistAllClassifications}
+                            competence={competence}
                         />
                     )}
 
@@ -337,7 +321,7 @@ export function AdditionalAnalyses({
                                 <FileUploadForm
                                     requiredFiles={['Itens do Sienge']}
                                     files={{ 'Itens do Sienge': !!siengeFile }}
-                                    onFileChange={handleSiengeFileChange}
+                                    onFileChange={(e) => onSiengeFileChange(e.target.files?.[0] || null)}
                                     onClearFile={onClearSiengeFile}
                                 />
                                 {!processedData.siengeSheetData ? (
@@ -396,66 +380,54 @@ export type ReconciliationResults = {
 interface ReconciliationAnalysisProps {
     siengeFile: File | null;
     processedData: ProcessedData;
+    onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData) => ProcessedData)) => void;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
-    reconciliationResults: ReconciliationResults;
-    error: string | null;
     allPersistedClassifications: AllClassifications;
     onPersistAllClassifications: (allData: AllClassifications) => void;
+    competence: string | null;
 }
 
-function useReconciliation(processedData: ProcessedData | null, siengeSheetData: any[] | null): { reconciliationResults: ReconciliationResults, error: string | null } {
+function useReconciliation(processedData: ProcessedData | null): { reconciliationResults: ReconciliationResults, error: string | null } {
     return useMemo(() => {
-        if (!processedData) return { reconciliationResults: null, error: null };
+        if (!processedData || !processedData.siengeSheetData) {
+            const allXmlItems = [
+                ...(processedData?.sheets?.['Itens Válidos'] || []),
+                ...(processedData?.sheets?.['CTEs Válidos'] || []).map(cte => ({
+                    ...cte, 'Número da Nota': cte['Número'], 'CPF/CNPJ do Emitente': cte['CPF/CNPJ do Fornecedor'],
+                    'Valor Total': cte['Valor da Prestação'], 'Descrição': `Frete CTe N° ${cte['Número']}`, documentType: 'CTE',
+                    Item: '1', 'Código': `CTE-${cte['Número']}`, 'Chave Unica': cleanAndToStr(cte['Número']) + cleanAndToStr(cte['CPF/CNPJ do Fornecedor']),
+                }))
+            ];
+             return { 
+                reconciliationResults: allXmlItems.length > 0 ? { reconciled: [], onlyInSienge: [], onlyInXml: allXmlItems, otherSiengeItems: {} } : null, 
+                error: null 
+            };
+        }
 
-        const { sheets } = processedData;
+        const { sheets, siengeSheetData } = processedData;
         const xmlItems = sheets?.['Itens Válidos'];
         const cteItems = sheets?.['CTEs Válidos'];
-
         const nfeHeaderMap = new Map((sheets?.['Notas Válidas'] || []).map(n => [n['Chave Unica'], n]));
         
         const allXmlItems: any[] = [];
         if (xmlItems) {
-            allXmlItems.push(...xmlItems.map(item => {
-                const header = nfeHeaderMap.get(item['Chave Unica']);
-                return {
-                    ...item,
-                    Fornecedor: header?.Fornecedor || item.Fornecedor,
-                    'Data de Emissão': header?.['Emissão'] || item['Emissão'],
-                    documentType: 'NFE',
-                };
-            }));
+            allXmlItems.push(...xmlItems.map(item => ({
+                ...item,
+                Fornecedor: nfeHeaderMap.get(item['Chave Unica'])?.Fornecedor || item.Fornecedor,
+                'Data de Emissão': nfeHeaderMap.get(item['Chave Unica'])?.['Emissão'] || item['Emissão'],
+                documentType: 'NFE',
+            })));
         }
         if (cteItems) {
             allXmlItems.push(...cteItems.map(cte => ({
-                ...cte, 
-                'Número da Nota': cte['Número'], 
-                'CPF/CNPJ do Emitente': cte['CPF/CNPJ do Fornecedor'],
-                'Valor Total': cte['Valor da Prestação'], 
-                'Descrição': `Frete CTe N° ${cte['Número']}`,
-                CFOP: cte['CFOP'], 
-                documentType: 'CTE', 
-                Item: '1', 
-                'Código': `CTE-${cte['Número']}`,
+                ...cte, 'Número da Nota': cte['Número'], 'CPF/CNPJ do Emitente': cte['CPF/CNPJ do Fornecedor'],
+                'Valor Total': cte['Valor da Prestação'], 'Descrição': `Frete CTe N° ${cte['Número']}`,
+                CFOP: cte['CFOP'], documentType: 'CTE', Item: '1', 'Código': `CTE-${cte['Número']}`,
                 'Chave Unica': cleanAndToStr(cte['Número']) + cleanAndToStr(cte['CPF/CNPJ do Fornecedor']),
             })));
         }
 
-        if (!siengeSheetData) {
-            if (allXmlItems.length > 0) {
-                return { 
-                    reconciliationResults: { 
-                        reconciled: [], 
-                        onlyInSienge: [], 
-                        onlyInXml: allXmlItems,
-                        otherSiengeItems: {},
-                    }, 
-                    error: null 
-                };
-            }
-            return { reconciliationResults: null, error: null };
-        }
-        
         try {
             const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
                 if (!data || data.length === 0 || !data[0]) return undefined;
@@ -479,9 +451,7 @@ function useReconciliation(processedData: ProcessedData | null, siengeSheetData:
                 if (espValue === 'NFE' || espValue === 'NFSR') {
                     siengeItemsForReconciliation.push(row);
                 } else {
-                    if (!otherSiengeItems[espValue]) {
-                        otherSiengeItems[espValue] = [];
-                    }
+                    if (!otherSiengeItems[espValue]) otherSiengeItems[espValue] = [];
                     otherSiengeItems[espValue].push(row);
                 }
             });
@@ -492,12 +462,6 @@ function useReconciliation(processedData: ProcessedData | null, siengeSheetData:
                 valorTotal: findHeader(siengeItemsForReconciliation, ['valor total', 'valor', 'vlr total']),
                 siengeCfop: findHeader(siengeItemsForReconciliation, ['cfop']),
                 siengeDesc: findHeader(siengeItemsForReconciliation, ['descrição', 'descrição do item', 'produto fiscal']),
-                icmsOutras: findHeader(siengeItemsForReconciliation, ['icms outras', 'icmsoutras']),
-                desconto: findHeader(siengeItemsForReconciliation, ['desconto']),
-                frete: findHeader(siengeItemsForReconciliation, ['frete']),
-                ipiDespesas: findHeader(siengeItemsForReconciliation, ['ipi despesas', 'ipidespesas']),
-                icmsSt: findHeader(siengeItemsForReconciliation, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
-                despesasAcessorias: findHeader(siengeItemsForReconciliation, ['despesas acessórias', 'despesasacessorias', 'voutro']),
                 precoUnitario: findHeader(siengeItemsForReconciliation, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
             };
 
@@ -562,30 +526,18 @@ function useReconciliation(processedData: ProcessedData | null, siengeSheetData:
                     siengeKeyFn: (item: any) => h.precoUnitario ? getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.precoUnitario!]) : null,
                     xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Unitário'])
                 },
-                 {
-                    name: "Valor Total - IPI/ICMS ST",
-                    siengeKeyFn: (item: any) => (h.ipiDespesas || h.icmsSt) ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0) - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)) : null,
-                    xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
-                }
             ];
 
             for (const pass of passes) {
                 if (remainingSiengeItems.length === 0 || remainingXmlItems.length === 0) break;
                 const result = reconciliationPass(remainingSiengeItems, remainingXmlItems, pass.siengeKeyFn, pass.xmlKeyFn, pass.name);
-                if (result.matched.length > 0) {
-                    reconciled.push(...result.matched);
-                }
+                if (result.matched.length > 0) reconciled.push(...result.matched);
                 remainingSiengeItems = result.remainingSienge;
                 remainingXmlItems = result.remainingXml;
             }
 
             return { 
-                reconciliationResults: { 
-                    reconciled, 
-                    onlyInSienge: remainingSiengeItems, 
-                    onlyInXml: remainingXmlItems, 
-                    otherSiengeItems 
-                }, 
+                reconciliationResults: { reconciled, onlyInSienge: remainingSiengeItems, onlyInXml: remainingXmlItems, otherSiengeItems }, 
                 error: null 
             };
 
@@ -593,20 +545,24 @@ function useReconciliation(processedData: ProcessedData | null, siengeSheetData:
             console.error("Reconciliation Error:", err);
             return { reconciliationResults: null, error: err.message };
         }
-    }, [processedData, siengeSheetData]);
+    }, [processedData]);
 }
 
 
-function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error, allPersistedClassifications, onPersistAllClassifications }: ReconciliationAnalysisProps) {
+function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, processedData, onProcessedDataChange, allPersistedClassifications, onPersistAllClassifications, competence }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState("reconciled");
     const [activeOtherTab, setActiveOtherTab] = useState<string>('');
+    
+    const { reconciliationResults, error } = useReconciliation(processedData);
 
     useEffect(() => {
         if (error) {
             toast({ variant: 'destructive', title: "Erro na Conciliação", description: error });
+        } else if (reconciliationResults) {
+            onProcessedDataChange(prev => ({...prev, reconciliationResults}));
         }
-    }, [error, toast]);
+    }, [error, reconciliationResults, onProcessedDataChange, toast]);
     
      useEffect(() => {
         if (reconciliationResults?.otherSiengeItems) {
@@ -616,7 +572,6 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
             }
         }
     }, [reconciliationResults?.otherSiengeItems]);
-
 
     const handleDownload = (data: any[], title: string) => {
         if (!data || data.length === 0) {
@@ -652,7 +607,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                 </CardContent>
             </Card>
             
-            {reconciliationResults && (
+            {reconciliationResults ? (
                 <div className="mt-6 space-y-6">
                     <Card>
                         <CardHeader>
@@ -671,6 +626,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                             items={reconciliationResults.reconciled}
                                             allPersistedClassifications={allPersistedClassifications}
                                             onPersistAllClassifications={onPersistAllClassifications}
+                                            competence={competence}
                                         />
                                     )}
                                      {activeTab === 'onlyInSienge' && (
@@ -718,24 +674,18 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                         </Card>
                     )}
                 </div>
-            )}
-
-            {error && (
+            ) : error ? (
                 <Alert variant="destructive" className="mt-4">
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>Erro na Análise de Conciliação</AlertTitle>
-                    <AlertDescription>
-                        {error}
-                    </AlertDescription>
+                    <AlertDescription>{error}</AlertDescription>
                 </Alert>
-            )}
-
-            {!siengeFile && (
-                <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8 mt-6">
+            ) : !siengeFile ? (
+                 <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8 mt-6">
                     <Loader2 className="h-12 w-12 animate-spin text-primary" />
                     <p className="mt-4 text-center">Aguardando o ficheiro "Itens do Sienge" para executar a conciliação automaticamente...</p>
                 </div>
-            )}
+            ) : null}
         </div>
     );
 }
