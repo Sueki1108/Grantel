@@ -37,13 +37,12 @@ interface SaidasAnalysisProps {
 
 export function SaidasAnalysis({ saidasData, initialStatus, onStatusChange, lastPeriodNumber, onLastPeriodNumberChange }: SaidasAnalysisProps) {
     const { toast } = useToast();
-    // Estado local para gerir as classificações. O estado no pai (`page-client`) será atualizado apenas quando necessário.
-    const [localStatusMap, setLocalStatusMap] = useState<Record<number, SaidaStatus>>({});
+    const [localStatusMap, setLocalStatusMap] = useState<Record<number, SaidaStatus>>(initialStatus || {});
     const [lastNumberInput, setLastNumberInput] = useState<string>(String(lastPeriodNumber || ''));
     const [rangeStart, setRangeStart] = useState('');
     const [rangeEnd, setRangeEnd] = useState('');
 
-    // Sincroniza o estado local se a prop inicial mudar (ex: ao restaurar uma sessão)
+
     useEffect(() => {
         setLocalStatusMap(initialStatus || {});
     }, [initialStatus]);
@@ -115,7 +114,7 @@ export function SaidasAnalysis({ saidasData, initialStatus, onStatusChange, last
     const handleStatusChange = (numero: number, newStatus: SaidaStatus) => {
         const newStatusMap = { ...localStatusMap, [numero]: newStatus };
         setLocalStatusMap(newStatusMap);
-        onStatusChange(newStatusMap); // Notifica o pai para persistência
+        onStatusChange(newStatusMap); // Notify parent
         toast({
             title: 'Status Alterado',
             description: `A nota número ${numero} foi marcada como ${newStatus}. O estado será guardado.`,
@@ -124,7 +123,7 @@ export function SaidasAnalysis({ saidasData, initialStatus, onStatusChange, last
 
     const handleClearStatus = () => {
         setLocalStatusMap({});
-        onStatusChange({}); // Notifica o pai para limpar
+        onStatusChange({}); // Notify parent
         toast({
             title: 'Classificações Limpas',
             description: 'Todos os status manuais das notas de saída foram removidos.',
@@ -356,3 +355,4 @@ export function SaidasAnalysis({ saidasData, initialStatus, onStatusChange, last
         </Card>
     );
 }
+    

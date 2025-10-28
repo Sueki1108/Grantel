@@ -66,7 +66,6 @@ const normalizeKey = (key: string | undefined): string => {
 
 interface AdditionalAnalysesProps {
     processedData: ProcessedData;
-    onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData) => ProcessedData)) => void;
     onSiengeDataProcessed: (data: any[] | null) => void;
     siengeFile: File | null;
     onSiengeFileChange: (file: File | null) => void;
@@ -83,7 +82,6 @@ interface AdditionalAnalysesProps {
 
 export function AdditionalAnalyses({ 
     processedData,
-    onProcessedDataChange,
     onSiengeDataProcessed, 
     siengeFile, 
     onSiengeFileChange, 
@@ -119,15 +117,6 @@ export function AdditionalAnalyses({
     }, [siengeFile, siengeSheetData, onSiengeDataProcessed, toast]);
 
     const { reconciliationResults, error: reconciliationError } = useReconciliation(processedData);
-    
-    // Este useEffect atualizava o estado pai e causava o loop. 
-    // O useReconciliation agora é memoizado, e a atualização de estado deve ser feita de forma mais controlada.
-    useEffect(() => {
-        if (reconciliationResults && processedData.reconciliationResults !== reconciliationResults) {
-            onProcessedDataChange(prev => ({...prev, reconciliationResults}));
-        }
-    }, [reconciliationResults, onProcessedDataChange, processedData.reconciliationResults]);
-
 
     // Estado Exportação XML Revenda
     const [isExporting, setIsExporting] = useState(false);
@@ -153,7 +142,6 @@ export function AdditionalAnalyses({
         }
     
         setIsAnalyzingResale(true);
-        onProcessedDataChange({ ...processedData, resaleAnalysis: null });
     
         setTimeout(async () => {
             try {
@@ -237,18 +225,16 @@ export function AdditionalAnalyses({
                     }
                 }
                 
-                onProcessedDataChange(prev => ({ ...prev, siengeSheetData: localSiengeData, resaleAnalysis: { noteKeys: resaleNoteKeys, xmls: matchedXmls } }));
                 toast({ title: "Análise de Revenda Concluída", description: `${matchedXmls.length} XMLs correspondentes encontrados.` });
     
             } catch (error: any) {
                 toast({ variant: 'destructive', title: "Erro na Análise de Revenda", description: error.message });
-                onProcessedDataChange(prev => ({ ...prev, resaleAnalysis: null }));
             } finally {
                 setIsAnalyzingResale(false);
             }
         }, 50);
     
-    }, [siengeFile, siengeSheetData, allXmlFiles, toast, onProcessedDataChange, onSiengeDataProcessed, processedData]);
+    }, [siengeFile, siengeSheetData, allXmlFiles, toast, onSiengeDataProcessed, processedData]);
 
 
     const handleExportResaleXmls = async () => {
@@ -298,8 +284,8 @@ export function AdditionalAnalyses({
                     </div>
                 </CardHeader>
              </Card>
-
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            
+             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                     <TabsTrigger value="sped">Verificação SPED</TabsTrigger>
                     <TabsTrigger value="reconciliation">Conciliação Itens (XML vs Sienge)</TabsTrigger>
@@ -670,7 +656,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                             <CardTitle>Resultados da Conciliação</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <Tabs value={activeTab} onValueChange={setActiveTab}>
+                             <Tabs value={activeTab} onValueChange={setActiveTab}>
                                 <TabsList className="grid w-full grid-cols-1 md:grid-cols-3">
                                     <TabsTrigger value="reconciled">Conciliados ({reconciliationResults.reconciled.length})</TabsTrigger>
                                     <TabsTrigger value="onlyInSienge">Apenas no Sienge ({reconciliationResults.onlyInSienge.length})</TabsTrigger>
@@ -729,23 +715,13 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                 <CardDescription>Linhas da planilha Sienge que não são NF-e ou NFS-r, agrupadas pela coluna "Esp".</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
-                                    <TabsList className="h-auto flex-wrap justify-start">
-                                        {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
-                                            <TabsTrigger key={esp} value={esp}>{esp} ({items.length})</TabsTrigger>
-                                        ))}
-                                    </TabsList>
-                                     <div className="mt-4">
-                                        {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
-                                            activeSubTab === esp && (
-                                                <div key={esp}>
-                                                    <Button onClick={() => handleDownload(items, `Sienge_Outros_${esp}`)} size="sm" className="mb-4" disabled={items.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                                    <DataTable columns={getColumnsWithCustomRender(items, Object.keys(items[0] || {}))} data={items} />
-                                                </div>
-                                            )
-                                        ))}
+                                {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
+                                     <div key={esp}>
+                                         <h3 className="font-bold my-4">{esp} ({items.length})</h3>
+                                        <Button onClick={() => handleDownload(items, `Sienge_Outros_${esp}`)} size="sm" className="mb-4" disabled={items.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
+                                        <DataTable columns={getColumnsWithCustomRender(items, Object.keys(items[0] || {}))} data={items} />
                                     </div>
-                                </Tabs>
+                                ))}
                             </CardContent>
                         </Card>
                     )}

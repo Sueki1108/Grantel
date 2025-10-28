@@ -373,3 +373,4 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         </div>
     );
 }
+    
