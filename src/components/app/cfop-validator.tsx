@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -5,7 +6,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX, Copy } from "lucide-react";
+import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX, Copy, Save } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from '../ui/badge';
@@ -52,15 +53,17 @@ interface CfopValidatorProps {
     items: CfopValidationData[];
     allPersistedClassifications: AllClassifications;
     onPersistAllClassifications: (allData: AllClassifications) => void;
+    competence: string | null;
 }
 
 const getUniqueProductKey = (item: CfopValidationData): string => {
     return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
 };
 
-export function CfopValidator({ items, allPersistedClassifications, onPersistAllClassifications }: CfopValidatorProps) {
+export function CfopValidator({ items, allPersistedClassifications, onPersistAllClassifications, competence }: CfopValidatorProps) {
     const { toast } = useToast();
     const [validationStatus, setValidationStatus] = useState<Record<string, ValidationStatus>>({});
+    const [hasChanges, setHasChanges] = useState(false);
     const [activeFilter, setActiveFilter] = useState<ValidationStatus | 'all'>('unvalidated');
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
@@ -69,44 +72,57 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
     // Carrega o estado persistido na inicialização
     useEffect(() => {
-        const persistedValidations = (allPersistedClassifications && allPersistedClassifications['cfopValidations']?.classifications) || {};
+        if (!competence) return;
+
+        const persistedForCompetence = (allPersistedClassifications && allPersistedClassifications[competence]?.cfopValidations) || {};
         const initialStatus: Record<string, ValidationStatus> = {};
 
         reconciledItems.forEach(item => {
             const uniqueProductKey = getUniqueProductKey(item);
-            initialStatus[item['Chave de acesso'] + item.Item] = persistedValidations[uniqueProductKey]?.classification as ValidationStatus || 'unvalidated';
+            initialStatus[item['Chave de acesso'] + item.Item] = persistedForCompetence.classifications?.[uniqueProductKey]?.classification as ValidationStatus || 'unvalidated';
         });
 
         setValidationStatus(initialStatus);
-    }, [reconciledItems, allPersistedClassifications]);
+        setHasChanges(false);
+    }, [reconciledItems, allPersistedClassifications, competence]);
 
 
      const handleValidationChange = (itemsToUpdate: CfopValidationData[], newStatus: ValidationStatus) => {
         const newValidationStatus = { ...validationStatus };
-        const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedClassifications || {}));
-        if (!updatedPersistedData['cfopValidations']) {
-            updatedPersistedData['cfopValidations'] = { classifications: {}, accountCodes: {} };
-        }
         
         itemsToUpdate.forEach(item => {
             const itemKey = item['Chave de acesso'] + item.Item;
             newValidationStatus[itemKey] = newStatus;
-            
-            const uniqueProductKey = getUniqueProductKey(item);
-             if (newStatus !== 'unvalidated') {
-                updatedPersistedData['cfopValidations'].classifications[uniqueProductKey] = { classification: newStatus };
-            } else {
-                delete updatedPersistedData['cfopValidations'].classifications[uniqueProductKey];
-            }
         });
 
         setValidationStatus(newValidationStatus);
-        onPersistAllClassifications(updatedPersistedData);
+        setHasChanges(true);
+    };
+
+    const handleSaveChanges = () => {
+        if (!competence) return;
+
+        const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedClassifications || {}));
         
-        toast({
-            title: `${itemsToUpdate.length} item(ns) classificado(s) como "${newStatus}"`,
-            description: "A sua alteração foi guardada automaticamente."
+        if (!updatedPersistedData[competence]) {
+            updatedPersistedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} } };
+        }
+        if (!updatedPersistedData[competence].cfopValidations) {
+            updatedPersistedData[competence].cfopValidations = { classifications: {} };
+        }
+
+        reconciledItems.forEach(item => {
+            const itemKey = item['Chave de acesso'] + item.Item;
+            const newStatus = validationStatus[itemKey];
+            if (newStatus && newStatus !== 'unvalidated') {
+                const uniqueProductKey = getUniqueProductKey(item);
+                updatedPersistedData[competence].cfopValidations.classifications[uniqueProductKey] = { classification: newStatus };
+            }
         });
+        
+        onPersistAllClassifications(updatedPersistedData);
+        setHasChanges(false);
+        toast({ title: 'Classificações de CFOP guardadas!' });
     };
     
     const handleBulkClassification = (newStatus: ValidationStatus) => {
@@ -301,22 +317,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
     return (
         <div className="space-y-4 h-full flex flex-col relative">
-             {numSelected > 0 && (
-                <div className="sticky bottom-4 z-20 w-full flex justify-center">
-                    <Card className="flex items-center gap-4 p-3 shadow-2xl animate-in fade-in-0 slide-in-from-bottom-5">
-                         <span className="text-sm font-medium pl-2">{numSelected} item(ns) selecionado(s)</span>
-                        <div className="h-6 border-l" />
-                         <span className="text-sm font-medium">Classificar como:</span>
-                         <div className="flex gap-2">
-                             <Button size="sm" onClick={() => handleBulkClassification('correct')}><ThumbsUp className="mr-2 h-4 w-4" /> Correto</Button>
-                             <Button size="sm" variant="destructive" onClick={() => handleBulkClassification('incorrect')}><ThumbsDown className="mr-2 h-4 w-4" /> Incorreto</Button>
-                             <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('verify')}><Search className="mr-2 h-4 w-4" /> Verificar</Button>
-                             <Button size="sm" variant="outline" onClick={() => handleBulkClassification('unvalidated')}><RotateCcw className="mr-2 h-4 w-4" /> Reverter</Button>
-                         </div>
-                    </Card>
-                </div>
-            )}
-            <div className='flex items-center gap-4'>
+             <div className="flex justify-between items-center">
                 <Tabs defaultValue="unvalidated" value={activeFilter} onValueChange={(value) => setActiveFilter(value as any)} className="w-full">
                     <TabsList className="grid w-full grid-cols-5">
                         <TabsTrigger value="all">Todos</TabsTrigger>
@@ -326,10 +327,15 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                         <TabsTrigger value="verify">A Verificar</TabsTrigger>
                     </TabsList>
                 </Tabs>
-                <Button variant="outline" onClick={handleClearFilters} className='shrink-0'>
-                    <FilterX className="mr-2 h-4 w-4" />
-                    Limpar Filtros
-                </Button>
+                <div className="flex gap-2 ml-4">
+                    <Button variant="outline" onClick={handleClearFilters} className='shrink-0'>
+                        <FilterX className="mr-2 h-4 w-4" />
+                        Limpar Filtros
+                    </Button>
+                    <Button onClick={handleSaveChanges} disabled={!hasChanges}>
+                        <Save className="mr-2 h-4 w-4" /> Guardar Alterações
+                    </Button>
+                </div>
             </div>
              
              <div className="flex-grow overflow-y-auto">
@@ -369,7 +375,25 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                      </div>
                 )}
             </div>
+
+            {numSelected > 0 && (
+                <div className="sticky bottom-4 z-20 w-full flex justify-center">
+                    <Card className="flex items-center gap-4 p-3 shadow-2xl animate-in fade-in-0 slide-in-from-bottom-5">
+                         <span className="text-sm font-medium pl-2">{numSelected} item(ns) selecionado(s)</span>
+                        <div className="h-6 border-l" />
+                         <span className="text-sm font-medium">Classificar como:</span>
+                         <div className="flex gap-2">
+                             <Button size="sm" onClick={() => handleBulkClassification('correct')}><ThumbsUp className="mr-2 h-4 w-4" /> Correto</Button>
+                             <Button size="sm" variant="destructive" onClick={() => handleBulkClassification('incorrect')}><ThumbsDown className="mr-2 h-4 w-4" /> Incorreto</Button>
+                             <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('verify')}><Search className="mr-2 h-4 w-4" /> Verificar</Button>
+                             <Button size="sm" variant="outline" onClick={() => handleBulkClassification('unvalidated')}><RotateCcw className="mr-2 h-4 w-4" /> Reverter</Button>
+                         </div>
+                    </Card>
+                </div>
+            )}
         </div>
     );
 }
+    
+
     
