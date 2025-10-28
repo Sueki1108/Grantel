@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from '@/components/app/data-table';
 import { getColumns } from '@/lib/columns-helper';
+import { ScrollArea, ScrollBar } from '../ui/scroll-area';
 
 interface ResultsDisplayProps {
     results: Record<string, any[]>;
@@ -49,14 +50,15 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
     return (
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
-                <div className='flex-grow overflow-x-auto'>
-                     <TabsList className="inline-flex h-auto">
+                <ScrollArea className="w-full whitespace-nowrap">
+                    <TabsList className="inline-flex h-auto">
                         {orderedSheetNames.map(sheetName => (
                             results[sheetName] && results[sheetName].length > 0 && 
                             <TabsTrigger key={sheetName} value={sheetName}>{getDisplayName(sheetName)}</TabsTrigger>
                         ))}
                     </TabsList>
-                </div>
+                    <ScrollBar orientation="horizontal" />
+                </ScrollArea>
             </div>
             {orderedSheetNames.map(sheetName => (
                 results[sheetName] && results[sheetName].length > 0 && activeTab === sheetName && (
