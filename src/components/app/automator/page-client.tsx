@@ -125,17 +125,11 @@ export function AutomatorClientPage() {
         };
     
         const sessionData: SessionData = {
+            version: '2.0',
             competence: currentCompetence,
             processedAt: new Date().toISOString(),
             processedData: optimizedProcessedData,
-            fileNames: {
-                nfeEntrada: xmlFiles.nfeEntrada.map(f => f.name),
-                cte: xmlFiles.cte.map(f => f.name),
-                nfeSaida: xmlFiles.nfeSaida.map(f => f.name),
-                nfse: xmlFiles.nfse.map(f => f.name),
-                manifesto: Object.keys(fileStatus),
-                sped: spedFiles.map(f => f.name),
-            },
+            xmlFileContents: { nfeEntrada: [], cte: [], nfeSaida: [], nfse: [] }, // Kept for type compatibility, but not populated to save space
             lastSaidaNumber,
             disregardedNfseNotes: Array.from(disregardedNfseNotes),
             saidasStatus,
@@ -242,6 +236,10 @@ export function AutomatorClientPage() {
         }
     };
     
+    const handleSiengeFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+        setSiengeFile(e.target.files?.[0] || null);
+    };
+
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>, category: 'nfeEntrada' | 'cte' | 'nfeSaida' | 'nfse') => {
         const selectedFiles = e.target.files;
         if (!selectedFiles) return;
@@ -564,10 +562,8 @@ export function AutomatorClientPage() {
 
     const handleSiengeDataProcessed = useCallback((siengeData: any[] | null) => {
         setProcessedData(prevData => {
-            if (!prevData) {
-                return { sheets: {}, spedInfo: null, siengeSheetData: siengeData, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null };
-            }
-            return { ...prevData, siengeSheetData: siengeData };
+            const baseData = prevData || { sheets: {}, spedInfo: null, siengeSheetData: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null };
+            return { ...baseData, siengeSheetData: siengeData };
         });
         if (siengeData) {
             toast({ title: "Dados Sienge Processados", description: "As análises de conferência de impostos foram atualizadas." });
@@ -714,7 +710,7 @@ export function AutomatorClientPage() {
                              {activeMainTab === 'difal' && <DifalAnalysis /> }
                             
                             {activeMainTab === 'analyses' && (
-                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={setSiengeFile} onSiengeDataProcessed={handleSiengeDataProcessed} onClearSiengeFile={() => { setSiengeFile(null); handleSiengeDataProcessed(null); const input = document.querySelector('input[name="Itens do Sienge"]') as HTMLInputElement; if (input) input.value = ''; }} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
+                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onSiengeDataProcessed={handleSiengeDataProcessed} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
                             )}
                          
                              {activeMainTab === 'pending' && (

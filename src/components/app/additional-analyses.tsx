@@ -69,6 +69,7 @@ interface AdditionalAnalysesProps {
     onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData | null) => ProcessedData)) => void;
     siengeFile: File | null;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
+    onSiengeDataProcessed: (siengeData: any[] | null) => void;
     onClearSiengeFile: () => void;
     allXmlFiles: File[];
     spedFiles: File[];
@@ -84,7 +85,8 @@ export function AdditionalAnalyses({
     processedData, 
     onProcessedDataChange,
     siengeFile, 
-    onSiengeFileChange, 
+    onSiengeFileChange,
+    onSiengeDataProcessed,
     onClearSiengeFile,
     allXmlFiles,
     spedFiles,
@@ -100,31 +102,30 @@ export function AdditionalAnalyses({
     const [isExporting, setIsExporting] = useState(false);
     const [resaleAnalysis, setResaleAnalysis] = useState<{ noteKeys: Set<string>; xmls: File[] } | null>(null);
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
-    const [siengeSheetData, setSiengeSheetData] = useState<any[] | null>(null);
 
 
     useEffect(() => {
         if (!siengeFile) {
-            setSiengeSheetData(null);
+            onSiengeDataProcessed(null);
             return;
         }
         
         const process = async () => {
             try {
                 const data = await readFileAsJson(siengeFile);
-                setSiengeSheetData(data);
+                onSiengeDataProcessed(data);
                 toast({ title: 'Planilha Sienge Processada', description: 'As análises de conciliação e revenda foram atualizadas.' });
             } catch (error: any) {
                 toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: error.message });
-                setSiengeSheetData(null);
+                onSiengeDataProcessed(null);
             }
         };
         process();
-    }, [siengeFile, toast]);
+    }, [siengeFile, toast, onSiengeDataProcessed]);
 
 
     const handleAnalyzeResale = () => {
-        if (!siengeSheetData) {
+        if (!processedData.siengeSheetData) {
             toast({ variant: 'destructive', title: "Dados incompletos", description: "Carregue a planilha Sienge primeiro." });
             return;
         }
@@ -138,7 +139,7 @@ export function AdditionalAnalyses({
     
         setTimeout(async () => {
             try {
-                const localSiengeData = siengeSheetData!;
+                const localSiengeData = processedData.siengeSheetData!;
                 const RESALE_CFOPS = ['1102', '2102', '1403', '2403'];
                 
                 const findSiengeHeader = (possibleNames: string[]): string | undefined => {
@@ -305,7 +306,7 @@ export function AdditionalAnalyses({
                             allPersistedClassifications={allPersistedClassifications}
                             onPersistAllClassifications={onPersistAllClassifications}
                             competence={competence}
-                            siengeSheetData={siengeSheetData}
+                            siengeSheetData={processedData.siengeSheetData}
                         />
                     )}
 
@@ -329,7 +330,7 @@ export function AdditionalAnalyses({
                                     onFileChange={onSiengeFileChange}
                                     onClearFile={onClearSiengeFile}
                                 />
-                                {!siengeSheetData ? (
+                                {!processedData.siengeSheetData ? (
                                     <div className="p-8 text-center text-muted-foreground mt-4">
                                         <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
                                         <h3 className="text-xl font-semibold mb-2">Aguardando dados Sienge</h3>
@@ -395,6 +396,7 @@ interface ReconciliationAnalysisProps {
 }
 
 function useReconciliation(processedData: ProcessedData | null, siengeSheetData: any[] | null): { reconciliationResults: ReconciliationResults, error: string | null } {
+    
     const { sheets } = processedData || {};
 
     const reconciliationResults = useMemo(() => {
