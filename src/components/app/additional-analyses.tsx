@@ -120,6 +120,8 @@ export function AdditionalAnalyses({
 
     const { reconciliationResults, error: reconciliationError } = useReconciliation(processedData);
     
+    // Este useEffect atualizava o estado pai e causava o loop. 
+    // O useReconciliation agora é memoizado, e a atualização de estado deve ser feita de forma mais controlada.
     useEffect(() => {
         if (reconciliationResults && processedData.reconciliationResults !== reconciliationResults) {
             onProcessedDataChange(prev => ({...prev, reconciliationResults}));

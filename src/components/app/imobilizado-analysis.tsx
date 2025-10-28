@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -54,14 +53,11 @@ interface ImobilizadoAnalysisProps {
 export function ImobilizadoAnalysis({ items: initialItems, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
-    // Estado local para gerir as classificações e códigos de conta da sessão atual.
     const [sessionClassifications, setSessionClassifications] = useState<Record<string, Classification>>({});
     const [sessionAccountCodes, setSessionAccountCodes] = useState<Record<string, string>>({});
     const [hasChanges, setHasChanges] = useState(false);
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
-
-    // Efeito para carregar o estado persistido para o estado local da sessão quando a competência ou os itens mudam.
     useEffect(() => {
         if (!competence) return;
         
@@ -70,23 +66,20 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         const persistedForCompetence = allPersistedData[competence] || { classifications: {}, accountCodes: {} };
         
         initialItems.forEach(item => {
-            // Tenta obter a classificação da competência atual, ou faz fallback para a mais recente de outras competências
             let currentClassification = persistedForCompetence.classifications?.[item.uniqueItemId]?.classification;
             
             if (!currentClassification) {
-                // Fallback logic
                 for (const otherCompetence in allPersistedData) {
                     if (otherCompetence !== competence) {
                         const classification = allPersistedData[otherCompetence]?.classifications?.[item.uniqueItemId]?.classification;
                         if (classification) {
                             currentClassification = classification;
-                            break; // Usa a primeira que encontrar
+                            break; 
                         }
                     }
                 }
             }
             initialClassifications[item.id] = currentClassification || 'unclassified';
-
 
             const persistedCode = persistedForCompetence.accountCodes?.[item.id]?.accountCode;
             if (persistedCode) {
@@ -97,7 +90,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         setSessionClassifications(initialClassifications);
         setSessionAccountCodes(initialCodes);
         setHasChanges(false);
-        setRowSelection({}); // Limpa a seleção ao trocar de competência/dados
+        setRowSelection({});
 
     }, [competence, allPersistedData, initialItems]);
 
@@ -106,7 +99,6 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         const newClassifications = { ...sessionClassifications };
         
         itemsToUpdate.forEach(item => {
-            // Propaga a mudança para todos os itens com a mesma chave de produto única
             const itemsWithSameProductKey = initialItems.filter(i => i.uniqueItemId === item.uniqueItemId);
             itemsWithSameProductKey.forEach(i => {
                 newClassifications[i.id] = newClassification;
@@ -121,7 +113,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         const selectedItemIds = Object.keys(rowSelection);
         const selectedItems = initialItems.filter((item, index) => selectedItemIds.includes(String(index)));
         handleClassificationChange(selectedItems, newClassification);
-        setRowSelection({}); // Limpa a seleção após a ação
+        setRowSelection({}); 
     };
 
     
@@ -146,7 +138,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             }
 
             const sessionCode = sessionAccountCodes[item.id];
-            if (sessionCode !== undefined) { // Permite guardar códigos vazios
+            if (sessionCode !== undefined) { 
                 if (!updatedPersistedData[competence].accountCodes) updatedPersistedData[competence].accountCodes = {};
                 updatedPersistedData[competence].accountCodes[item.id] = { accountCode: sessionCode };
             }
@@ -163,7 +155,6 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
 
         initialItems.forEach(item => {
             let classification = sessionClassifications[item.id] || 'unclassified';
-            // Safety check: if a classification from localStorage is somehow invalid, default to unclassified.
             if (!categories[classification]) {
                 classification = 'unclassified';
             }
@@ -382,4 +373,3 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         </div>
     );
 }
-

@@ -738,7 +738,7 @@ export function AutomatorClientPage() {
                             Selecione os meses de referência que deseja incluir no processamento. Isto definirá a competência da sessão.
                         </DialogDescription>
                     </DialogHeader>
-                    <ScrollArea className="h-72 w-full rounded-md border p-4">
+                    <div className="h-72 w-full overflow-y-auto rounded-md border p-4">
                         <div className="grid gap-4">
                             <div className="flex items-center space-x-2">
                                 <Checkbox
@@ -770,7 +770,7 @@ export function AutomatorClientPage() {
                                 </div>
                             ))}
                         </div>
-                    </ScrollArea>
+                    </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsPeriodModalOpen(false)}>Cancelar</Button>
                         <Button onClick={handleSubmit} disabled={Object.values(selectedPeriods).every(v => !v)}>
