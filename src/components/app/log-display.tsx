@@ -7,7 +7,6 @@ import {
     AccordionItem,
     AccordionTrigger,
 } from "@/components/ui/accordion";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface LogDisplayProps {
     logs: string[];
@@ -23,7 +22,7 @@ export function LogDisplay({ logs }: LogDisplayProps) {
             <AccordionItem value="item-1">
                 <AccordionTrigger>Mostrar/Ocultar Logs de Processamento ({logs.length} linhas)</AccordionTrigger>
                 <AccordionContent>
-                    <ScrollArea className="h-72 w-full rounded-md border bg-muted/50 p-4">
+                    <div className="h-72 w-full rounded-md border bg-muted/50 p-4 overflow-y-auto">
                         <div className="text-sm font-mono whitespace-pre-wrap">
                             {logs.map((log, index) => (
                                 <p key={index} className="mb-1 last:mb-0">
@@ -31,11 +30,9 @@ export function LogDisplay({ logs }: LogDisplayProps) {
                                 </p>
                             ))}
                         </div>
-                    </ScrollArea>
+                    </div>
                 </AccordionContent>
             </AccordionItem>
         </Accordion>
     );
 }
-
-    

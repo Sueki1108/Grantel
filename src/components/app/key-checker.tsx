@@ -19,7 +19,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 
@@ -914,8 +914,8 @@ export function KeyChecker({
                                 {isCorrecting ? (
                                     <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
                                 ) : correctionResult ? (
-                                     <div className="flex-grow overflow-hidden">
-                                        <Tabs value={activeCorrectionTab} onValueChange={setActiveCorrectionTab} className="h-full flex flex-col">
+                                     <div className="flex-grow overflow-hidden flex flex-col">
+                                        <Tabs value={activeCorrectionTab} onValueChange={setActiveCorrectionTab} className="flex-grow flex flex-col overflow-hidden">
                                             <TabsList className="grid w-full grid-cols-3 shrink-0">
                                                 <TabsTrigger value="summary">Resumo</TabsTrigger>
                                                 <TabsTrigger value="modifications">Modificações ({correctionResult.linesModified})</TabsTrigger>
@@ -942,7 +942,7 @@ export function KeyChecker({
                                                 )}
 
                                                 {activeCorrectionTab === 'modifications' && (
-                                                    <div className="mt-0 h-full">
+                                                    <div className="mt-0 h-full flex flex-col">
                                                         <Tabs value={activeModificationTab} onValueChange={setActiveModificationTab} className="flex flex-col h-full">
                                                             <TabsList className="h-auto flex-wrap justify-start shrink-0">
                                                                 <TabsTrigger value="counters">Contadores ({correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length})</TabsTrigger>
