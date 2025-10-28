@@ -677,5 +677,3 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
         </Card>
     );
 }
-
-    
