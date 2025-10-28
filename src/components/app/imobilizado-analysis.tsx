@@ -110,8 +110,10 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
     };
 
     const handleBulkClassification = (newClassification: Classification) => {
-        const selectedItemIds = Object.keys(rowSelection);
-        const selectedItems = initialItems.filter((item, index) => selectedItemIds.includes(String(index)));
+        const table = tableRef.current;
+        if (!table) return;
+
+        const selectedItems = table.getFilteredSelectedRowModel().rows.map(row => row.original);
         handleClassificationChange(selectedItems, newClassification);
         setRowSelection({}); 
     };
@@ -189,6 +191,8 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         XLSX.writeFile(workbook, `Grantel - Imobilizado - ${classification}.xlsx`);
         toast({ title: 'Download Iniciado' });
     };
+
+    const tableRef = React.useRef<any>(null);
     
     const renderTableFor = (data: ItemData[], classification: Classification) => {
         if (!data || data.length === 0) {
@@ -283,7 +287,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             }
         });
 
-        return <DataTable columns={columns} data={data} rowSelection={rowSelection} setRowSelection={setRowSelection} />;
+        return <DataTable columns={columns} data={data} rowSelection={rowSelection} setRowSelection={setRowSelection} tableRef={tableRef} />;
     };
 
     if (!initialItems || initialItems.length === 0) {
