@@ -246,7 +246,7 @@ export function AdditionalAnalyses({
             }
         }, 50);
     
-    }, [siengeFile, siengeSheetData, allXmlFiles, toast, onProcessedDataChange, onSiengeDataProcessed]);
+    }, [siengeFile, siengeSheetData, allXmlFiles, toast, onProcessedDataChange, onSiengeDataProcessed, processedData]);
 
 
     const handleExportResaleXmls = async () => {
@@ -611,6 +611,7 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
 function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, processedData, reconciliationResults, error, allPersistedClassifications, onPersistAllClassifications }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState("reconciled");
+    const [activeSubTab, setActiveSubTab] = useState('');
     
     useEffect(() => {
         if (error) {
@@ -630,6 +631,13 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
         const fileName = `Grantel - Conciliação ${title}.xlsx`;
         XLSX.writeFile(workbook, fileName);
     };
+
+    useEffect(() => {
+        if (reconciliationResults?.otherSiengeItems && Object.keys(reconciliationResults.otherSiengeItems).length > 0) {
+            setActiveSubTab(Object.keys(reconciliationResults.otherSiengeItems)[0]);
+        }
+    }, [reconciliationResults]);
+
 
     return (
         <div className="space-y-6">
@@ -719,7 +727,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                 <CardDescription>Linhas da planilha Sienge que não são NF-e ou NFS-r, agrupadas pela coluna "Esp".</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <Tabs defaultValue={Object.keys(reconciliationResults.otherSiengeItems)[0]}>
+                                <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
                                     <TabsList className="h-auto flex-wrap justify-start">
                                         {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
                                             <TabsTrigger key={esp} value={esp}>{esp} ({items.length})</TabsTrigger>
@@ -727,7 +735,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                     </TabsList>
                                      <div className="mt-4">
                                         {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
-                                            activeTab === esp && (
+                                            activeSubTab === esp && (
                                                 <div key={esp}>
                                                     <Button onClick={() => handleDownload(items, `Sienge_Outros_${esp}`)} size="sm" className="mb-4" disabled={items.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
                                                     <DataTable columns={getColumnsWithCustomRender(items, Object.keys(items[0] || {}))} data={items} />
