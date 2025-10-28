@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -6,7 +7,7 @@ import autoTable from 'jspdf-autotable';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProcessedData } from '@/lib/excel-processor';
-import { ClipboardList, Download, FileQuestion, FileText, FileDown, FileSpreadsheet, EyeOff, Settings, Check, ListFilter, Eye, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
+import { ClipboardList, Download, FileQuestion, FileText, FileDown, FileSpreadsheet, Settings, Check, ListFilter, RefreshCw, ChevronDown, ChevronRight, MinusCircle } from 'lucide-react';
 import { DataTable } from './data-table';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -504,12 +505,12 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                                 </TabsList>
                                 {section.subSections.map(sub => (
                                     <TabsContent key={sub.id} value={sub.id} className="mt-4">
-                                        <DataTable columns={[...sub.columns.filter((c:any) => c.id !== '__itemKey'), { id: 'actions', header: () => <div className="text-center">Ignorar</div>, cell: ({row}: any) => { const itemKey = row.original.__itemKey; return <div className='flex justify-center'><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleIgnoredItem(itemKey)}><TooltipProvider><Tooltip><TooltipTrigger asChild><span>{ignoredItems.has(itemKey) ? <Eye className='h-4 w-4 text-green-600'/> : <EyeOff className='h-4 w-4'/>}</span></TooltipTrigger><TooltipContent><p>{ignoredItems.has(itemKey) ? "Re-incluir na exportação" : "Ignorar na exportação"}</p></TooltipContent></Tooltip></TooltipProvider></Button></div> }}]} data={sub.data} />
+                                        <DataTable columns={[...sub.columns.filter((c:any) => c.id !== '__itemKey'), { id: 'actions', header: () => <div className="text-center">Ignorar</div>, cell: ({row}: any) => { const itemKey = row.original.__itemKey; return <div className='flex justify-center'><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleIgnoredItem(itemKey)}><TooltipProvider><Tooltip><TooltipTrigger asChild><span>{ignoredItems.has(itemKey) ? <RotateCw className='h-4 w-4 text-green-600'/> : <MinusCircle className='h-4 w-4'/>}</span></TooltipTrigger><TooltipContent><p>{ignoredItems.has(itemKey) ? "Re-incluir na exportação" : "Ignorar na exportação"}</p></TooltipContent></Tooltip></TooltipProvider></Button></div> }}]} data={sub.data} />
                                     </TabsContent>
                                 ))}
                             </Tabs>
                         ) : (
-                            <DataTable columns={[...section.columns.filter((c:any) => c.id !== '__itemKey'), { id: 'actions', header: () => <div className="text-center">Ignorar</div>, cell: ({row}: any) => { const itemKey = row.original.__itemKey; return <div className='flex justify-center'><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleIgnoredItem(itemKey)}><TooltipProvider><Tooltip><TooltipTrigger asChild><span>{ignoredItems.has(itemKey) ? <Eye className='h-4 w-4 text-green-600'/> : <EyeOff className='h-4 w-4'/>}</span></TooltipTrigger><TooltipContent><p>{ignoredItems.has(itemKey) ? "Re-incluir na exportação" : "Ignorar na exportação"}</p></TooltipContent></Tooltip></TooltipProvider></Button></div> }}]} data={section.data} />
+                            <DataTable columns={[...section.columns.filter((c:any) => c.id !== '__itemKey'), { id: 'actions', header: () => <div className="text-center">Ignorar</div>, cell: ({row}: any) => { const itemKey = row.original.__itemKey; return <div className='flex justify-center'><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleIgnoredItem(itemKey)}><TooltipProvider><Tooltip><TooltipTrigger asChild><span>{ignoredItems.has(itemKey) ? <RotateCw className='h-4 w-4 text-green-600'/> : <MinusCircle className='h-4 w-4'/>}</span></TooltipTrigger><TooltipContent><p>{ignoredItems.has(itemKey) ? "Re-incluir na exportação" : "Ignorar na exportação"}</p></TooltipContent></Tooltip></TooltipProvider></Button></div> }}]} data={section.data} />
                         )}
                     </CardContent>
                  </Card>
