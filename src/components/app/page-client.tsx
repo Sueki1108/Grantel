@@ -17,7 +17,7 @@ import * as XLSX from 'xlsx';
 import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
 import { processDataFrames, type ProcessedData, type SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdditionalAnalyses } from "@/components/app/additional-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -60,7 +60,6 @@ export function AutomatorClientPage() {
     
     // State for files uploaded in child components
     const [spedFiles, setSpedFiles] = useState<File[]>([]);
-    const [siengeFile, setSiengeFile] = useState<File | null>(null);
     const [lastSaidaNumber, setLastSaidaNumber] = useState<number>(0);
     const [disregardedNfseNotes, setDisregardedNfseNotes] = useState<Set<string>>(new Set());
     const [imobilizadoClassifications, setImobilizadoClassifications] = useState<AllClassifications>({});
@@ -134,7 +133,6 @@ export function AutomatorClientPage() {
                 nfeSaida: xmlFiles.nfeSaida.map(f => f.name),
                 nfse: xmlFiles.nfse.map(f => f.name),
                 manifesto: Object.keys(fileStatus),
-                sienge: siengeFile ? siengeFile.name : null,
                 sped: spedFiles.map(f => f.name),
             },
             lastSaidaNumber,
@@ -315,7 +313,6 @@ export function AutomatorClientPage() {
         setError(null);
         setLogs([]);
         setSpedFiles([]);
-        setSiengeFile(null);
         setProcessing(false);
         setLastSaidaNumber(0);
         setDisregardedNfseNotes(new Set());
@@ -557,23 +554,12 @@ export function AutomatorClientPage() {
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => {
         setProcessedData(prevData => {
             if (!prevData) {
-                return { sheets: {}, spedInfo: spedInfo || null, siengeSheetData: null, keyCheckResults: keyCheckResults || null, spedCorrections: spedCorrections ? [spedCorrections] : null, competence: null, resaleAnalysis: null };
+                return { sheets: {}, spedInfo: spedInfo || null, keyCheckResults: keyCheckResults || null, spedCorrections: spedCorrections ? [spedCorrections] : null, competence: null, resaleAnalysis: null };
             }
             return { ...prevData, spedInfo: spedInfo, keyCheckResults: keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : prevData.spedCorrections };
         });
     }, []);
 
-    const handleSiengeDataProcessed = (siengeData: any[] | null) => {
-        setProcessedData(prevData => {
-            if (!prevData) {
-                return { sheets: {}, spedInfo: null, siengeSheetData: siengeData, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null };
-            }
-            return { ...prevData, siengeSheetData: siengeData };
-        });
-        if (siengeData) {
-            toast({ title: "Dados Sienge Processados", description: "As análises de conferência de impostos foram atualizadas." });
-        }
-    };
     
     // =================================================================
     // UI CONTROL AND RENDER
@@ -715,7 +701,7 @@ export function AutomatorClientPage() {
                              {activeMainTab === 'difal' && <DifalAnalysis /> }
                             
                             {activeMainTab === 'analyses' && (
-                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} onSiengeDataProcessed={handleSiengeDataProcessed} siengeFile={siengeFile} onSiengeFileChange={setSiengeFile} onClearSiengeFile={() => { setSiengeFile(null); handleSiengeDataProcessed(null); const input = document.querySelector('input[name="Itens do Sienge"]') as HTMLInputElement; if (input) input.value = ''; }} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
+                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
                             )}
                          
                              {activeMainTab === 'pending' && (
@@ -738,7 +724,7 @@ export function AutomatorClientPage() {
                             Selecione os meses de referência que deseja incluir no processamento. Isto definirá a competência da sessão.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="h-72 w-full overflow-y-auto rounded-md border p-4">
+                    <ScrollArea className="h-72 w-full rounded-md border p-4">
                         <div className="grid gap-4">
                             <div className="flex items-center space-x-2">
                                 <Checkbox
@@ -770,7 +756,7 @@ export function AutomatorClientPage() {
                                 </div>
                             ))}
                         </div>
-                    </div>
+                    </ScrollArea>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsPeriodModalOpen(false)}>Cancelar</Button>
                         <Button onClick={handleSubmit} disabled={Object.values(selectedPeriods).every(v => !v)}>

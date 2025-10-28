@@ -66,11 +66,6 @@ const normalizeKey = (key: string | undefined): string => {
 
 interface AdditionalAnalysesProps {
     processedData: ProcessedData;
-    onProcessedDataChange: (fn: (prev: ProcessedData) => ProcessedData) => void;
-    onSiengeDataProcessed: (data: any[] | null) => void;
-    siengeFile: File | null;
-    onSiengeFileChange: (file: File | null) => void;
-    onClearSiengeFile: () => void;
     allXmlFiles: File[];
     spedFiles: File[];
     onSpedFilesChange: (files: File[]) => void;
@@ -83,11 +78,6 @@ interface AdditionalAnalysesProps {
 
 export function AdditionalAnalyses({ 
     processedData,
-    onProcessedDataChange,
-    onSiengeDataProcessed, 
-    siengeFile, 
-    onSiengeFileChange, 
-    onClearSiengeFile, 
     allXmlFiles,
     spedFiles,
     onSpedFilesChange,
@@ -100,20 +90,42 @@ export function AdditionalAnalyses({
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState("sped");
     const [isExporting, setIsExporting] = useState(false);
+    
+    // State local para Sienge
+    const [siengeFile, setSiengeFile] = useState<File | null>(null);
+    const [siengeSheetData, setSiengeSheetData] = useState<any[] | null>(null);
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
     const [resaleAnalysis, setResaleAnalysis] = useState<{ noteKeys: Set<string>; xmls: File[] } | null>(null);
-
-
-    const siengeSheetData = processedData.siengeSheetData;
     
+
+    // Processamento do arquivo Sienge
+    useEffect(() => {
+        if (!siengeFile) {
+            setSiengeSheetData(null);
+            return;
+        };
+        
+        const process = async () => {
+            try {
+                const data = await readFileAsJson(siengeFile);
+                setSiengeSheetData(data);
+                toast({ title: 'Análise Sienge Concluída', description: 'Os dados foram processados e as abas de conferência foram atualizadas.' });
+            } catch (error: any) {
+                toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: error.message });
+                setSiengeSheetData(null);
+            }
+        };
+        process();
+    }, [siengeFile, toast]);
+
     // Análise de revenda automática
     useEffect(() => {
-        const analyzeResale = async () => {
-            if (!siengeSheetData || allXmlFiles.length === 0) {
-                setResaleAnalysis(null);
-                return;
-            }
+        if (!siengeSheetData || allXmlFiles.length === 0) {
+            setResaleAnalysis(null);
+            return;
+        }
 
+        const analyzeResale = async () => {
             setIsAnalyzingResale(true);
             setResaleAnalysis(null);
             
@@ -192,34 +204,22 @@ export function AdditionalAnalyses({
         };
 
         analyzeResale();
-    }, [siengeSheetData, allXmlFiles]);
+    }, [siengeSheetData, allXmlFiles, toast]);
     
-    // Processamento do arquivo Sienge
-    useEffect(() => {
-        if (!siengeFile || siengeSheetData) return;
-        
-        const process = async () => {
-            try {
-                const data = await readFileAsJson(siengeFile);
-                onSiengeDataProcessed(data);
-                toast({ title: 'Análise Sienge Concluída', description: 'Os dados foram processados e as abas de conferência foram atualizadas.' });
-            } catch (error: any) {
-                toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: error.message });
-                onSiengeDataProcessed(null);
-            }
-        };
-        process();
-    }, [siengeFile, siengeSheetData, onSiengeDataProcessed, toast]);
 
-    const { reconciliationResults, error: reconciliationError } = useReconciliation(processedData);
+    const { reconciliationResults, error: reconciliationError } = useReconciliation(processedData, siengeSheetData);
 
     const handleSiengeFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        onSiengeFileChange(file || null);
-        if (file) {
-            onSiengeDataProcessed(null); // Clear previous sienge data to trigger processing
-        }
+        const file = e.target.files?.[0] || null;
+        setSiengeFile(file);
     };
+
+    const handleClearSiengeFile = () => {
+        setSiengeFile(null);
+        setSiengeSheetData(null);
+        const input = document.querySelector('input[name="Itens do Sienge"]') as HTMLInputElement;
+        if (input) input.value = '';
+    }
     
     const handleExportResaleXmls = async () => {
         if (!resaleAnalysis || resaleAnalysis.xmls.length === 0) {
@@ -294,8 +294,9 @@ export function AdditionalAnalyses({
                         <ReconciliationAnalysis 
                             siengeFile={siengeFile}
                             onSiengeFileChange={handleSiengeFileChange}
-                            onClearSiengeFile={onClearSiengeFile}
+                            onClearSiengeFile={handleClearSiengeFile}
                             processedData={processedData}
+                            siengeSheetData={siengeSheetData}
                             reconciliationResults={reconciliationResults}
                             error={reconciliationError}
                             allPersistedClassifications={allPersistedClassifications}
@@ -321,7 +322,7 @@ export function AdditionalAnalyses({
                                     requiredFiles={['Itens do Sienge']}
                                     files={{ 'Itens do Sienge': !!siengeFile }}
                                     onFileChange={handleSiengeFileChange}
-                                    onClearFile={onClearSiengeFile}
+                                    onClearFile={handleClearSiengeFile}
                                 />
                                 {isAnalyzingResale ? (
                                     <div className="flex items-center justify-center p-8 text-muted-foreground mt-4">
@@ -380,6 +381,7 @@ export type ReconciliationResults = {
 interface ReconciliationAnalysisProps {
     siengeFile: File | null;
     processedData: ProcessedData;
+    siengeSheetData: any[] | null;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
     reconciliationResults: ReconciliationResults;
@@ -388,11 +390,11 @@ interface ReconciliationAnalysisProps {
     onPersistAllClassifications: (allData: AllClassifications) => void;
 }
 
-function useReconciliation(processedData: ProcessedData | null): { reconciliationResults: ReconciliationResults, error: string | null } {
+function useReconciliation(processedData: ProcessedData | null, siengeSheetData: any[] | null): { reconciliationResults: ReconciliationResults, error: string | null } {
     return useMemo(() => {
         if (!processedData) return { reconciliationResults: null, error: null };
 
-        const { siengeSheetData, sheets } = processedData;
+        const { sheets } = processedData;
         const xmlItems = sheets?.['Itens Válidos'];
         const cteItems = sheets?.['CTEs Válidos'];
 
@@ -577,14 +579,13 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
             console.error("Reconciliation Error:", err);
             return { reconciliationResults: null, error: err.message };
         }
-    }, [processedData]);
+    }, [processedData, siengeSheetData]);
 }
 
 
-function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, processedData, reconciliationResults, error, allPersistedClassifications, onPersistAllClassifications }: ReconciliationAnalysisProps) {
+function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error, allPersistedClassifications, onPersistAllClassifications }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState("reconciled");
-    const [activeSubTab, setActiveSubTab] = useState('');
     
     useEffect(() => {
         if (error) {
@@ -604,13 +605,6 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
         const fileName = `Grantel - Conciliação ${title}.xlsx`;
         XLSX.writeFile(workbook, fileName);
     };
-
-    useEffect(() => {
-        if (reconciliationResults?.otherSiengeItems && Object.keys(reconciliationResults.otherSiengeItems).length > 0) {
-            setActiveSubTab(Object.keys(reconciliationResults.otherSiengeItems)[0]);
-        }
-    }, [reconciliationResults]);
-
 
     return (
         <div className="space-y-6">
@@ -723,7 +717,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                 </Alert>
             )}
 
-            {processedData && (processedData.sheets['Itens Válidos'] || processedData.sheets['CTEs Válidos']) && !siengeFile && !reconciliationResults && (
+            {!siengeFile && (
                 <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8 mt-6">
                     <Loader2 className="h-12 w-12 animate-spin text-primary" />
                     <p className="mt-4 text-center">Aguardando o ficheiro "Itens do Sienge" para executar a conciliação automaticamente...</p>
