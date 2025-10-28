@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -13,7 +12,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 // ===============================================================
@@ -574,105 +572,100 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                 </div>
             </CardHeader>
             <CardContent>
-                 <Accordion type="single" collapsible className="w-full mb-6">
-                    <AccordionItem value="filters">
-                        <AccordionTrigger>
-                            <div className='flex items-center gap-2 text-base'>
-                                <ListFilter className="h-5 w-5" /> Filtros e Opções de Análise
-                            </div>
-                        </AccordionTrigger>
-                        <AccordionContent className='pt-4'>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <Card className="bg-muted/50">
-                                    <CardHeader className='pb-2'><CardTitle className="text-lg">Desconsiderar Notas</CardTitle></CardHeader>
-                                    <CardContent>
-                                        <div className="flex gap-4 items-end">
-                                            <div className="flex-grow">
-                                                <Label htmlFor="disregarded-notes-input">Número(s) da NFS-e</Label>
-                                                <Input id="disregarded-notes-input" placeholder="Ex: 3673, 3674" value={noteInput} onChange={(e) => setNoteInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleDisregardNote()} />
-                                            </div>
-                                            <Button onClick={handleDisregardNote}><FilterX className='h-4 w-4 mr-2'/>Desconsiderar</Button>
-                                        </div>
-                                        {disregardedNotes.size > 0 && (
-                                            <div className="mt-4">
-                                                <h4 className="text-sm font-medium mb-2">Notas desconsideradas:</h4>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {Array.from(disregardedNotes).map(note => (
-                                                        <div key={note} className="flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-sm">
-                                                            <span>{note}</span>
-                                                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-full" onClick={() => handleRevertNote(note)} title="Reverter">
-                                                                <RotateCcw className="h-3 w-3" />
-                                                            </Button>
-                                                        </div>
-                                                    ))}
+                 <Card className="mb-6 bg-muted/50">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-lg"><ListFilter /> Filtros e Opções de Análise</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <h3 className='font-medium mb-2'>Desconsiderar Notas</h3>
+                                <div className="flex gap-4 items-end">
+                                    <div className="flex-grow">
+                                        <Label htmlFor="disregarded-notes-input">Número(s) da NFS-e</Label>
+                                        <Input id="disregarded-notes-input" placeholder="Ex: 3673, 3674" value={noteInput} onChange={(e) => setNoteInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleDisregardNote()} />
+                                    </div>
+                                    <Button onClick={handleDisregardNote}><FilterX className='h-4 w-4 mr-2'/>Desconsiderar</Button>
+                                </div>
+                                {disregardedNotes.size > 0 && (
+                                    <div className="mt-4">
+                                        <h4 className="text-sm font-medium mb-2">Notas desconsideradas:</h4>
+                                        <div className="flex flex-wrap gap-2">
+                                            {Array.from(disregardedNotes).map(note => (
+                                                <div key={note} className="flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-sm">
+                                                    <span>{note}</span>
+                                                    <Button variant="ghost" size="icon" className="h-5 w-5 rounded-full" onClick={() => handleRevertNote(note)} title="Reverter">
+                                                        <RotateCcw className="h-3 w-3" />
+                                                    </Button>
                                                 </div>
-                                            </div>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                                 <Card className="bg-muted/50">
-                                    <CardHeader className='pb-2'><CardTitle className="text-lg">Frases de Suspensão Ativas</CardTitle></CardHeader>
-                                    <CardContent>
-                                        <div className="space-y-2">
-                                            {SUSPENSION_PHRASES.map(phrase => {
-                                                const notesForPhrase = getNotesForPhrase(phrase);
-                                                return (
-                                                    <div key={phrase} className="flex items-center justify-between">
-                                                        <div className='flex items-center space-x-2'>
-                                                            <Checkbox id={`phrase-${phrase}`} checked={selectedSuspensionPhrases.has(phrase)} onCheckedChange={(checked) => handleSuspensionPhraseToggle(phrase, !!checked)} />
-                                                            <Label htmlFor={`phrase-${phrase}`} className="text-sm font-light leading-none">{phrase}</Label>
-                                                        </div>
-                                                        <Dialog>
-                                                            <DialogTrigger asChild>
-                                                                <Button variant="ghost" size="icon" className="h-7 w-7" disabled={notesForPhrase.length === 0} title={`Ver ${notesForPhrase.length} notas`}>
-                                                                    <Eye className="h-4 w-4" />
-                                                                </Button>
-                                                            </DialogTrigger>
-                                                            <DialogContent className="max-w-4xl">
-                                                                <DialogHeader>
-                                                                    <div className="flex justify-between items-center">
-                                                                        <div>
-                                                                            <DialogTitle>Notas com "{phrase}"</DialogTitle>
-                                                                            <DialogDescription>
-                                                                                Lista de notas que contêm a frase de suspensão selecionada.
-                                                                            </DialogDescription>
-                                                                        </div>
-                                                                         <Button onClick={() => handleDownloadExcel(notesForPhrase, `Suspensao_${phrase.replace(/\s/g, '_')}`)} variant="outline" size="sm" disabled={notesForPhrase.length === 0}>
-                                                                            <Download className="mr-2 h-4 w-4" /> Baixar
-                                                                        </Button>
-                                                                    </div>
-                                                                </DialogHeader>
-                                                                <div className="max-h-[60vh] overflow-y-auto">
-                                                                    <table className="w-full text-sm">
-                                                                        <thead className='sticky top-0 bg-secondary'>
-                                                                            <tr className='text-left border-b'>
-                                                                                <th className="p-2 font-medium">Nº da Nota</th>
-                                                                                <th className="p-2 font-medium">Descrição Completa</th>
-                                                                            </tr>
-                                                                        </thead>
-                                                                        <tbody>
-                                                                            {notesForPhrase.map(note => (
-                                                                                <tr key={note.numero_nfse} className="border-b">
-                                                                                    <td className="p-2 align-top">{note.numero_nfse}</td>
-                                                                                    <td className="p-2 whitespace-pre-wrap break-words">{highlightText(note.descritivo, phrase)}</td>
-                                                                                </tr>
-                                                                            ))}
-                                                                        </tbody>
-                                                                    </table>
-                                                                </div>
-                                                            </DialogContent>
-                                                        </Dialog>
-                                                    </div>
-                                                );
-                                            })}
+                                            ))}
                                         </div>
-                                    </CardContent>
-                                </Card>
+                                    </div>
+                                )}
                             </div>
-                        </AccordionContent>
-                    </AccordionItem>
-                </Accordion>
-                {renderContent()}
+                             <div>
+                                <h3 className='font-medium mb-2'>Frases de Suspensão Ativas</h3>
+                                <div className="space-y-2">
+                                    {SUSPENSION_PHRASES.map(phrase => {
+                                        const notesForPhrase = getNotesForPhrase(phrase);
+                                        return (
+                                            <div key={phrase} className="flex items-center justify-between">
+                                                <div className='flex items-center space-x-2'>
+                                                    <Checkbox id={`phrase-${phrase}`} checked={selectedSuspensionPhrases.has(phrase)} onCheckedChange={(checked) => handleSuspensionPhraseToggle(phrase, !!checked)} />
+                                                    <Label htmlFor={`phrase-${phrase}`} className="text-sm font-light leading-none">{phrase}</Label>
+                                                </div>
+                                                <Dialog>
+                                                    <DialogTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={notesForPhrase.length === 0} title={`Ver ${notesForPhrase.length} notas`}>
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                    </DialogTrigger>
+                                                    <DialogContent className="max-w-4xl">
+                                                        <DialogHeader>
+                                                            <div className="flex justify-between items-center">
+                                                                <div>
+                                                                    <DialogTitle>Notas com "{phrase}"</DialogTitle>
+                                                                    <DialogDescription>
+                                                                        Lista de notas que contêm a frase de suspensão selecionada.
+                                                                    </DialogDescription>
+                                                                </div>
+                                                                 <Button onClick={() => handleDownloadExcel(notesForPhrase, `Suspensao_${phrase.replace(/\s/g, '_')}`)} variant="outline" size="sm" disabled={notesForPhrase.length === 0}>
+                                                                    <Download className="mr-2 h-4 w-4" /> Baixar
+                                                                </Button>
+                                                            </div>
+                                                        </DialogHeader>
+                                                        <div className="max-h-[60vh] overflow-y-auto">
+                                                            <table className="w-full text-sm">
+                                                                <thead className='sticky top-0 bg-secondary'>
+                                                                    <tr className='text-left border-b'>
+                                                                        <th className="p-2 font-medium">Nº da Nota</th>
+                                                                        <th className="p-2 font-medium">Descrição Completa</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {notesForPhrase.map(note => (
+                                                                        <tr key={note.numero_nfse} className="border-b">
+                                                                            <td className="p-2 align-top">{note.numero_nfse}</td>
+                                                                            <td className="p-2 whitespace-pre-wrap break-words">{highlightText(note.descritivo, phrase)}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+                
+                <div className='mt-6'>
+                    {renderContent()}
+                </div>
             </CardContent>
         </Card>
     );

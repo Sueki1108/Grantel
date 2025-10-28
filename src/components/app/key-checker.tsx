@@ -914,14 +914,13 @@ export function KeyChecker({
                                 {isCorrecting ? (
                                     <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
                                 ) : correctionResult ? (
-                                     <div className="flex-grow overflow-hidden flex flex-col">
+                                    <div className="flex-grow overflow-hidden flex flex-col">
                                         <Tabs value={activeCorrectionTab} onValueChange={setActiveCorrectionTab} className="flex-grow flex flex-col overflow-hidden">
                                             <TabsList className="grid w-full grid-cols-3 shrink-0">
                                                 <TabsTrigger value="summary">Resumo</TabsTrigger>
                                                 <TabsTrigger value="modifications">Modificações ({correctionResult.linesModified})</TabsTrigger>
                                                 <TabsTrigger value="full_log">Log Completo</TabsTrigger>
                                             </TabsList>
-                                            
                                             <div className="flex-grow mt-4 overflow-y-auto">
                                                 {activeCorrectionTab === 'summary' && (
                                                     <div className="mt-0">
@@ -953,7 +952,7 @@ export function KeyChecker({
                                                                 <TabsTrigger value="units">Unidades ({correctionResult.modifications.unitStandardization.length})</TabsTrigger>
                                                                 <TabsTrigger value="removed">0190 Removidos ({correctionResult.modifications.removed0190.length})</TabsTrigger>
                                                             </TabsList>
-                                                             <div className="flex-grow mt-2 overflow-hidden">
+                                                            <div className="flex-grow mt-2 overflow-hidden">
                                                                 {activeModificationTab === 'counters' && <div className="h-full"><div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2"><TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>A contagem de linhas em cada bloco (registros x990) e a contagem total (9999) foram recalculadas.</p></TooltipContent></Tooltip></TooltipProvider><span>Contagem de linhas de cada bloco e do ficheiro recalculada.</span></div><ModificationDisplay logs={[...correctionResult.modifications.blockCount, ...correctionResult.modifications.totalLineCount, ...correctionResult.modifications.count9900]} /></div>}
                                                                 {activeModificationTab === 'ie' && <div className="h-full"><div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2"><TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>A Inscrição Estadual (IE) de participantes (registo 0150) foi corrigida com base nos dados dos XMLs.</p></TooltipContent></Tooltip></TooltipProvider><span>IE do participante corrigida com base nos XMLs.</span></div><ModificationDisplay logs={correctionResult.modifications.ieCorrection} /></div>}
                                                                 {activeModificationTab === 'cte_series' && <div className="h-full"><div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2"><TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>A série de CT-es (registo D100) foi corrigida com base nos dados dos XMLs de CTe.</p></TooltipContent></Tooltip></TooltipProvider><span>Série do CT-e (D100) corrigida com base nos XMLs.</span></div><ModificationDisplay logs={correctionResult.modifications.cteSeriesCorrection} /></div>}
