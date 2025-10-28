@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from '@/components/app/data-table';
 import { getColumns } from '@/lib/columns-helper';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
 interface ResultsDisplayProps {
     results: Record<string, any[]>;
@@ -60,9 +61,12 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
             </div>
             {orderedSheetNames.map(sheetName => (
                 results[sheetName] && results[sheetName].length > 0 && activeTab === sheetName && (
-                     <div key={sheetName}>
-                        <DataTable columns={getColumns(results[sheetName])} data={results[sheetName]} />
-                    </div>
+                    <TabsContent key={sheetName} value={sheetName}>
+                        <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+                            <DataTable columns={getColumns(results[sheetName])} data={results[sheetName]} />
+                            <ScrollBar orientation="horizontal" />
+                        </ScrollArea>
+                    </TabsContent>
                 )
             ))}
         </Tabs>
