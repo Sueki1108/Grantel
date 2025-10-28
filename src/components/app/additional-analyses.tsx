@@ -101,6 +101,8 @@ export function AdditionalAnalyses({
     const [activeTab, setActiveTab] = useState("sped");
     const [isExporting, setIsExporting] = useState(false);
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
+    const [resaleAnalysis, setResaleAnalysis] = useState<{ noteKeys: Set<string>; xmls: File[] } | null>(null);
+
 
     const siengeSheetData = processedData.siengeSheetData;
     
@@ -108,10 +110,12 @@ export function AdditionalAnalyses({
     useEffect(() => {
         const analyzeResale = async () => {
             if (!siengeSheetData || allXmlFiles.length === 0) {
+                setResaleAnalysis(null);
                 return;
             }
 
             setIsAnalyzingResale(true);
+            setResaleAnalysis(null);
             
             try {
                 const RESALE_CFOPS = ['1102', '2102', '1403', '2403'];
@@ -176,19 +180,19 @@ export function AdditionalAnalyses({
                     }
                 }
                 
-                onProcessedDataChange(prev => ({...prev, resaleAnalysis: { noteKeys: resaleNoteKeys, xmls: matchedXmls }}));
+                setResaleAnalysis({ noteKeys: resaleNoteKeys, xmls: matchedXmls });
                 toast({ title: "Análise de Revenda Concluída", description: `${matchedXmls.length} XMLs correspondentes encontrados.` });
 
             } catch (error: any) {
                 toast({ variant: 'destructive', title: "Erro na Análise de Revenda", description: error.message });
-                onProcessedDataChange(prev => ({...prev, resaleAnalysis: null }));
+                setResaleAnalysis(null);
             } finally {
                 setIsAnalyzingResale(false);
             }
         };
 
         analyzeResale();
-    }, [siengeSheetData, allXmlFiles, toast, onProcessedDataChange]);
+    }, [siengeSheetData, allXmlFiles]);
     
     // Processamento do arquivo Sienge
     useEffect(() => {
@@ -218,17 +222,17 @@ export function AdditionalAnalyses({
     };
     
     const handleExportResaleXmls = async () => {
-        if (!processedData.resaleAnalysis || processedData.resaleAnalysis.xmls.length === 0) {
+        if (!resaleAnalysis || resaleAnalysis.xmls.length === 0) {
             toast({ title: "Nenhum XML de revenda encontrado", description: "Execute a análise primeiro." });
             return;
         }
 
         setIsExporting(true);
-        toast({ title: "Exportação Iniciada", description: `A compactar ${processedData.resaleAnalysis.xmls.length} ficheiros XML. Por favor, aguarde.` });
+        toast({ title: "Exportação Iniciada", description: `A compactar ${resaleAnalysis.xmls.length} ficheiros XML. Por favor, aguarde.` });
 
         try {
             const zip = new JSZip();
-            for (const file of processedData.resaleAnalysis.xmls) {
+            for (const file of resaleAnalysis.xmls) {
                 const content = await file.text();
                 zip.file(file.name, content);
             }
@@ -332,16 +336,16 @@ export function AdditionalAnalyses({
                                     </div>
                                 ) : (
                                     <div className="flex flex-col items-start gap-4 mt-6">
-                                        {processedData.resaleAnalysis && (
+                                        {resaleAnalysis && (
                                             <div className="mt-4 w-full">
                                                 <p className="text-sm text-muted-foreground">
-                                                    Foram encontradas <span className="font-bold text-foreground">{processedData.resaleAnalysis.noteKeys.size}</span> chaves de revenda no Sienge.
-                                                    Destas, <span className="font-bold text-foreground">{processedData.resaleAnalysis.xmls.length}</span> ficheiros XML correspondentes foram encontrados e estão prontos para exportação.
+                                                    Foram encontradas <span className="font-bold text-foreground">{resaleAnalysis.noteKeys.size}</span> chaves de revenda no Sienge.
+                                                    Destas, <span className="font-bold text-foreground">{resaleAnalysis.xmls.length}</span> ficheiros XML correspondentes foram encontrados e estão prontos para exportação.
                                                 </p>
-                                                <Button onClick={handleExportResaleXmls} disabled={isExporting || processedData.resaleAnalysis.xmls.length === 0} className="mt-4">
-                                                    {isExporting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A compactar...</> : `Baixar ${processedData.resaleAnalysis.xmls.length} XMLs de Revenda`}
+                                                <Button onClick={handleExportResaleXmls} disabled={isExporting || resaleAnalysis.xmls.length === 0} className="mt-4">
+                                                    {isExporting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A compactar...</> : `Baixar ${resaleAnalysis.xmls.length} XMLs de Revenda`}
                                                 </Button>
-                                                {processedData.resaleAnalysis.xmls.length === 0 && processedData.resaleAnalysis.noteKeys.size > 0 && (
+                                                {resaleAnalysis.xmls.length === 0 && resaleAnalysis.noteKeys.size > 0 && (
                                                     <Alert variant="destructive" className="mt-4">
                                                         <AlertCircle className="h-4 w-4" />
                                                         <AlertTitle>XMLs não encontrados</AlertTitle>
