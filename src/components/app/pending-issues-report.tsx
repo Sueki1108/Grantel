@@ -28,7 +28,6 @@ interface Section {
     subSections?: {
         id: string;
         title: string;
-        description: string;
         data: any[];
         columns: any[];
     }[]
@@ -119,7 +118,6 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             const cfopSubSections = Object.entries(groupedByCfop).map(([cfop, items]) => ({
                 id: `cfop_pending_${cfop}`,
                 title: `CFOP ${cfop}`,
-                description: `Itens lançados no Sienge com CFOP ${cfop} que foram marcados como incorretos ou a verificar.`,
                 data: items,
                 columns: getColumnsWithCustomRender(items, Object.keys(items[0] || {}).filter(k => k !== '__itemKey'))
             }));
@@ -148,8 +146,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 data: [],
                 columns: [],
                 subSections: [
-                    { id: 'nfe_not_found', title: 'NF-e', description: '', data: notFoundNfe, columns: getColumnsWithCustomRender(notFoundNfe, Object.keys(notFoundNfe[0] || {}).filter(k => k !== '__itemKey'))},
-                    { id: 'cte_not_found', title: 'CT-e', description: '', data: notFoundCte, columns: getColumnsWithCustomRender(notFoundCte, Object.keys(notFoundCte[0] || {}).filter(k => k !== '__itemKey'))}
+                    { id: 'nfe_not_found', title: 'NF-e', data: notFoundNfe, columns: getColumnsWithCustomRender(notFoundNfe, Object.keys(notFoundNfe[0] || {}).filter(k => k !== '__itemKey'))},
+                    { id: 'cte_not_found', title: 'CT-e', data: notFoundCte, columns: getColumnsWithCustomRender(notFoundCte, Object.keys(notFoundCte[0] || {}).filter(k => k !== '__itemKey'))}
                 ]
             });
         }
@@ -167,8 +165,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 data: [],
                 columns: [],
                 subSections: [
-                    { id: 'nfe_not_in_sheet', title: 'NF-e', description: '', data: notInSheetNfe, columns: getColumnsWithCustomRender(notInSheetNfe, Object.keys(notInSheetNfe[0] || {}).filter(k => k !== '__itemKey'))},
-                    { id: 'cte_not_in_sheet', title: 'CT-e', description: '', data: notInSheetCte, columns: getColumnsWithCustomRender(notInSheetCte, Object.keys(notInSheetCte[0] || {}).filter(k => k !== '__itemKey'))}
+                    { id: 'nfe_not_in_sheet', title: 'NF-e', data: notInSheetNfe, columns: getColumnsWithCustomRender(notInSheetNfe, Object.keys(notInSheetNfe[0] || {}).filter(k => k !== '__itemKey'))},
+                    { id: 'cte_not_in_sheet', title: 'CT-e', data: notInSheetCte, columns: getColumnsWithCustomRender(notInSheetCte, Object.keys(notInSheetCte[0] || {}).filter(k => k !== '__itemKey'))}
                 ]
             });
         }
@@ -179,10 +177,10 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         
         if ((ufDivergences?.length || 0) > 0 || (ieDivergences?.length || 0) > 0 || (dateDivergences?.length || 0) > 0 || (valueDivergences?.length || 0) > 0) {
             const subSections = [
-                { id: 'uf', title: 'Divergência de UF', description: 'Inconsistência entre a UF do destinatário no XML e o cadastro da empresa.', data: (ufDivergences || []).map(item => ({...item, '__itemKey': `uf-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(ufDivergences || [], Object.keys(ufDivergences?.[0] || {}).filter(k => k !== '__itemKey')) },
-                { id: 'ie', title: 'Divergência de IE', description: 'Inconsistência entre a Inscrição Estadual do destinatário no XML e o cadastro da empresa.', data: (ieDivergences || []).map(item => ({...item, '__itemKey': `ie-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(ieDivergences || [], Object.keys(ieDivergences?.[0] || {}).filter(k => k !== '__itemKey')) },
-                { id: 'date', title: 'Divergência de Data', description: 'A data de emissão do documento no XML não corresponde à data de emissão escriturada no SPED.', data: (dateDivergences || []).map(item => ({...item, '__itemKey': `date-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(dateDivergences || [], Object.keys(dateDivergences?.[0] || {}).filter(k => k !== '__itemKey')) },
-                { id: 'value', title: 'Divergência de Valor', description: 'O valor total do documento no XML não corresponde ao valor total escriturado no SPED.', data: (valueDivergences || []).map(item => ({...item, '__itemKey': `value-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(valueDivergences || [], Object.keys(valueDivergences?.[0] || {}).filter(k => k !== '__itemKey')) },
+                { id: 'uf', title: 'Divergência de UF', data: (ufDivergences || []).map(item => ({...item, '__itemKey': `uf-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(ufDivergences || [], Object.keys(ufDivergences?.[0] || {}).filter(k => k !== '__itemKey')) },
+                { id: 'ie', title: 'Divergência de IE', data: (ieDivergences || []).map(item => ({...item, '__itemKey': `ie-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(ieDivergences || [], Object.keys(ieDivergences?.[0] || {}).filter(k => k !== '__itemKey')) },
+                { id: 'date', title: 'Divergência de Data', data: (dateDivergences || []).map(item => ({...item, '__itemKey': `date-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(dateDivergences || [], Object.keys(dateDivergences?.[0] || {}).filter(k => k !== '__itemKey')) },
+                { id: 'value', title: 'Divergência de Valor', data: (valueDivergences || []).map(item => ({...item, '__itemKey': `value-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(valueDivergences || [], Object.keys(valueDivergences?.[0] || {}).filter(k => k !== '__itemKey')) },
             ].filter(sub => sub.data.length > 0);
 
             reportSections.push({
@@ -197,8 +195,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         
         // 6. SPED - Modificações
         const spedCorrections = processedData.spedCorrections || [];
-         if (spedCorrections.length > 0 && spedCorrections[0].linesModified > 0) {
-            const modifications = Object.entries(spedCorrections[0].modifications).flatMap(([key, value]) => {
+        if (spedCorrections.length > 0 && spedCorrections[0].linesModified > 0) {
+            const allModifications = Object.entries(spedCorrections[0].modifications).flatMap(([key, value]) => {
                 if(Array.isArray(value) && value.length > 0) {
                      return value.map((v: any, i: number) => ({
                         'Tipo de Correção': key,
@@ -209,13 +207,30 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 }
                 return [];
             }).filter(m => m);
-            if(modifications.length > 0) {
+
+            if (allModifications.length > 0) {
+                 const subSections = Object.entries(spedCorrections[0].modifications)
+                    .map(([key, value]) => {
+                        if(Array.isArray(value) && value.length > 0) {
+                            const data = value.map((v: any, i: number) => ({
+                                'Linha': v.lineNumber,
+                                'Original': v.original || v.line,
+                                'Corrigido': v.corrected || '(removida)',
+                                '__itemKey': `spedmod-${key}-${i}`
+                            }));
+                            return { id: `sped_mod_${key}`, title: key, data, columns: getColumnsWithCustomRender(data, ['Linha', 'Original', 'Corrigido']) };
+                        }
+                        return null;
+                    })
+                    .filter(sub => sub && sub.data.length > 0) as { id: string; title: string; data: any[]; columns: any[]; }[];
+                
                 reportSections.push({
                     id: 'sped_corrections',
                     title: 'Modificações Realizadas no Arquivo SPED',
                     description: 'O corretor automático realizou as seguintes alterações no arquivo SPED para garantir a conformidade.',
-                    data: modifications,
-                    columns: getColumnsWithCustomRender(modifications, Object.keys(modifications[0] || {}).filter(k => k !== '__itemKey'))
+                    data: [],
+                    columns: [],
+                    subSections
                 });
             }
         }
@@ -324,7 +339,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             }
 
             if (section.subSections) {
-                 section.subSections.forEach(sub => processSectionData(sub.data, sub.columns, `${section.title}: ${sub.title}`, sub.description));
+                 section.subSections.forEach(sub => processSectionData(sub.data, sub.columns, `${section.title}: ${sub.title}`, section.description));
             } else {
                  processSectionData(section.data, section.columns, section.title, section.description);
             }
@@ -445,7 +460,6 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                                 </TabsList>
                                 {section.subSections.map(sub => (
                                     <TabsContent key={sub.id} value={sub.id} className="mt-4">
-                                        {sub.description && <p className="text-sm text-muted-foreground mb-4">{sub.description}</p>}
                                         <DataTable columns={[...sub.columns.filter((c:any) => c.id !== '__itemKey'), { id: 'actions', header: () => <div className="text-center">Ignorar</div>, cell: ({row}: any) => { const itemKey = row.original.__itemKey; return <div className='flex justify-center'><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleIgnoredItem(itemKey)}><TooltipProvider><Tooltip><TooltipTrigger asChild><span>{ignoredItems.has(itemKey) ? <Eye className='h-4 w-4 text-green-600'/> : <EyeOff className='h-4 w-4'/>}</span></TooltipTrigger><TooltipContent><p>{ignoredItems.has(itemKey) ? "Re-incluir na exportação" : "Ignorar na exportação"}</p></TooltipContent></Tooltip></TooltipProvider></Button></div> }}]} data={sub.data} />
                                     </TabsContent>
                                 ))}
