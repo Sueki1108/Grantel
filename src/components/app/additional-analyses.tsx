@@ -66,6 +66,7 @@ const normalizeKey = (key: string | undefined): string => {
 
 interface AdditionalAnalysesProps {
     processedData: ProcessedData;
+    onProcessedDataChange: (fn: (prev: ProcessedData) => ProcessedData) => void;
     onSiengeDataProcessed: (data: any[] | null) => void;
     siengeFile: File | null;
     onSiengeFileChange: (file: File | null) => void;
@@ -82,6 +83,7 @@ interface AdditionalAnalysesProps {
 
 export function AdditionalAnalyses({ 
     processedData,
+    onProcessedDataChange,
     onSiengeDataProcessed, 
     siengeFile, 
     onSiengeFileChange, 
@@ -97,9 +99,98 @@ export function AdditionalAnalyses({
 }: AdditionalAnalysesProps) {
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState("sped");
+    const [isExporting, setIsExporting] = useState(false);
+    const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
 
     const siengeSheetData = processedData.siengeSheetData;
     
+    // Análise de revenda automática
+    useEffect(() => {
+        const analyzeResale = async () => {
+            if (!siengeSheetData || allXmlFiles.length === 0) {
+                return;
+            }
+
+            setIsAnalyzingResale(true);
+            
+            try {
+                const RESALE_CFOPS = ['1102', '2102', '1403', '2403'];
+                const findSiengeHeader = (possibleNames: string[]): string | undefined => {
+                    if (siengeSheetData.length === 0 || !siengeSheetData[0]) return undefined;
+                    const headers = Object.keys(siengeSheetData[0]);
+                    const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
+                    for (const name of possibleNames) {
+                        const normalizedName = normalizeKey(name);
+                        const found = normalizedHeaders.find(h => h.normalized === normalizedName);
+                        if (found) return found.original;
+                    }
+                    return undefined;
+                };
+
+                const h = {
+                    cfop: findSiengeHeader(['cfop']),
+                    numero: findSiengeHeader(['número', 'numero', 'numero da nota', 'nota fiscal']),
+                    cnpj: findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor']),
+                };
+
+                if (!h.cfop || !h.numero || !h.cnpj) {
+                    throw new Error("Não foi possível encontrar as colunas 'CFOP', 'Número' e 'CPF/CNPJ' na planilha Sienge para a análise de revenda.");
+                }
+
+                const resaleNoteKeys = new Set<string>();
+                siengeSheetData.forEach(item => {
+                    const cfop = cleanAndToStr(item[h.cfop!]);
+                    if (RESALE_CFOPS.includes(cfop)) {
+                        const numero = cleanAndToStr(item[h.numero!]);
+                        const cnpj = String(item[h.cnpj!]).replace(/\D/g, '');
+                        if (numero && cnpj) resaleNoteKeys.add(`${numero}-${cnpj}`);
+                    }
+                });
+
+                const parser = new DOMParser();
+                const NFE_NAMESPACE = "http://www.portalfiscal.inf.br/nfe";
+                const matchedXmls: File[] = [];
+
+                for (const file of allXmlFiles) {
+                    if (!file.name.toLowerCase().endsWith('.xml')) continue;
+                    try {
+                        const fileContent = await file.text();
+                        const xmlDoc = parser.parseFromString(fileContent, "application/xml");
+                        const getTagValue = (element: Element | undefined, tagName: string): string => {
+                            if (!element) return '';
+                            const tags = element.getElementsByTagNameNS(NFE_NAMESPACE, tagName);
+                            return tags[0]?.textContent ?? '';
+                        };
+                        const infNFe = xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'infNFe')[0];
+                        if (!infNFe) continue;
+                        const ide = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'ide')[0];
+                        const emit = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'emit')[0];
+                        if (!ide || !emit) continue;
+                        const numero = cleanAndToStr(getTagValue(ide, 'nNF'));
+                        const cnpj = cleanAndToStr(getTagValue(emit, 'CNPJ'));
+                        if (numero && cnpj && resaleNoteKeys.has(`${numero}-${cnpj}`)) {
+                            matchedXmls.push(file);
+                        }
+                    } catch (e) {
+                         console.warn(`Could not parse XML content for file ${file.name}:`, e);
+                    }
+                }
+                
+                onProcessedDataChange(prev => ({...prev, resaleAnalysis: { noteKeys: resaleNoteKeys, xmls: matchedXmls }}));
+                toast({ title: "Análise de Revenda Concluída", description: `${matchedXmls.length} XMLs correspondentes encontrados.` });
+
+            } catch (error: any) {
+                toast({ variant: 'destructive', title: "Erro na Análise de Revenda", description: error.message });
+                onProcessedDataChange(prev => ({...prev, resaleAnalysis: null }));
+            } finally {
+                setIsAnalyzingResale(false);
+            }
+        };
+
+        analyzeResale();
+    }, [siengeSheetData, allXmlFiles, toast, onProcessedDataChange]);
+    
+    // Processamento do arquivo Sienge
     useEffect(() => {
         if (!siengeFile || siengeSheetData) return;
         
@@ -118,125 +209,14 @@ export function AdditionalAnalyses({
 
     const { reconciliationResults, error: reconciliationError } = useReconciliation(processedData);
 
-    // Estado Exportação XML Revenda
-    const [isExporting, setIsExporting] = useState(false);
-    
-    const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
-
     const handleSiengeFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         onSiengeFileChange(file || null);
         if (file) {
-            onSiengeDataProcessed(null);
+            onSiengeDataProcessed(null); // Clear previous sienge data to trigger processing
         }
     };
     
-    const handleAnalyzeResale = useCallback(async () => {
-        if (!siengeFile) {
-            toast({ variant: 'destructive', title: "Dados incompletos", description: "Carregue a planilha Sienge primeiro." });
-            return;
-        }
-        if (allXmlFiles.length === 0) {
-            toast({ variant: 'destructive', title: "Dados incompletos", description: "Carregue os arquivos XML de entrada primeiro." });
-            return;
-        }
-    
-        setIsAnalyzingResale(true);
-    
-        setTimeout(async () => {
-            try {
-                let localSiengeData = siengeSheetData;
-                if (!localSiengeData) {
-                    localSiengeData = await readFileAsJson(siengeFile);
-                    onSiengeDataProcessed(localSiengeData);
-                }
-    
-                const RESALE_CFOPS = ['1102', '2102', '1403', '2403'];
-                
-                const findSiengeHeader = (possibleNames: string[]): string | undefined => {
-                    if (!localSiengeData || localSiengeData.length === 0 || !localSiengeData[0]) return undefined;
-                    const headers = Object.keys(localSiengeData[0]);
-                    const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
-                    for (const name of possibleNames) {
-                        const normalizedName = normalizeKey(name);
-                        const found = normalizedHeaders.find(h => h.normalized === normalizedName);
-                        if (found) return found.original;
-                    }
-                    return undefined;
-                };
-    
-                const h = {
-                    cfop: findSiengeHeader(['cfop']),
-                    numero: findSiengeHeader(['número', 'numero', 'numero da nota', 'nota fiscal']),
-                    cnpj: findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor']),
-                };
-    
-                if (!h.cfop || !h.numero || !h.cnpj) {
-                    throw new Error("Não foi possível encontrar as colunas 'CFOP', 'Número' e 'CPF/CNPJ' na planilha Sienge.");
-                }
-    
-                const resaleNoteKeys = new Set<string>();
-                localSiengeData.forEach(item => {
-                    const cfop = cleanAndToStr(item[h.cfop!]);
-                    if (RESALE_CFOPS.includes(cfop)) {
-                        const numero = cleanAndToStr(item[h.numero!]);
-                        const cnpj = String(item[h.cnpj!]).replace(/\D/g, '');
-                        if (numero && cnpj) {
-                            resaleNoteKeys.add(`${numero}-${cnpj}`);
-                        }
-                    }
-                });
-    
-                const parser = new DOMParser();
-                const NFE_NAMESPACE = "http://www.portalfiscal.inf.br/nfe";
-                const matchedXmls: File[] = [];
-    
-                for (const file of allXmlFiles) {
-                    if (!file.name.toLowerCase().endsWith('.xml')) continue;
-                    
-                    try {
-                        const fileContent = await file.text();
-                        const xmlDoc = parser.parseFromString(fileContent, "application/xml");
-    
-                        const getTagValue = (element: Element | undefined, tagName: string): string => {
-                            if (!element) return '';
-                            const tags = element.getElementsByTagNameNS(NFE_NAMESPACE, tagName);
-                            return tags[0]?.textContent ?? '';
-                        };
-                        
-                        const infNFe = xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'infNFe')[0];
-                        if (!infNFe) continue;
-    
-                        const ide = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'ide')[0];
-                        const emit = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'emit')[0];
-                        if (!ide || !emit) continue;
-                        
-                        const numero = cleanAndToStr(getTagValue(ide, 'nNF'));
-                        const cnpj = cleanAndToStr(getTagValue(emit, 'CNPJ'));
-                        
-                        if (numero && cnpj) {
-                            const compositeKey = `${numero}-${cnpj}`;
-                            if (resaleNoteKeys.has(compositeKey)) {
-                                matchedXmls.push(file);
-                            }
-                        }
-                    } catch (e) {
-                         console.warn(`Could not parse XML content for file ${file.name}:`, e);
-                    }
-                }
-                
-                toast({ title: "Análise de Revenda Concluída", description: `${matchedXmls.length} XMLs correspondentes encontrados.` });
-    
-            } catch (error: any) {
-                toast({ variant: 'destructive', title: "Erro na Análise de Revenda", description: error.message });
-            } finally {
-                setIsAnalyzingResale(false);
-            }
-        }, 50);
-    
-    }, [siengeFile, siengeSheetData, allXmlFiles, toast, onSiengeDataProcessed, processedData]);
-
-
     const handleExportResaleXmls = async () => {
         if (!processedData.resaleAnalysis || processedData.resaleAnalysis.xmls.length === 0) {
             toast({ title: "Nenhum XML de revenda encontrado", description: "Execute a análise primeiro." });
@@ -339,7 +319,12 @@ export function AdditionalAnalyses({
                                     onFileChange={handleSiengeFileChange}
                                     onClearFile={onClearSiengeFile}
                                 />
-                                {!siengeFile ? (
+                                {isAnalyzingResale ? (
+                                    <div className="flex items-center justify-center p-8 text-muted-foreground mt-4">
+                                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                        <span>A analisar notas de revenda...</span>
+                                    </div>
+                                ) : !siengeFile ? (
                                     <div className="p-8 text-center text-muted-foreground mt-4">
                                         <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
                                         <h3 className="text-xl font-semibold mb-2">Aguardando dados Sienge</h3>
@@ -347,10 +332,6 @@ export function AdditionalAnalyses({
                                     </div>
                                 ) : (
                                     <div className="flex flex-col items-start gap-4 mt-6">
-                                        <Button onClick={handleAnalyzeResale} disabled={isAnalyzingResale || isExporting}>
-                                            {isAnalyzingResale ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Analisando...</> : "Analisar XMLs para Revenda"}
-                                        </Button>
-
                                         {processedData.resaleAnalysis && (
                                             <div className="mt-4 w-full">
                                                 <p className="text-sm text-muted-foreground">
@@ -747,4 +728,6 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
         </div>
     );
 }
+    
+
     
