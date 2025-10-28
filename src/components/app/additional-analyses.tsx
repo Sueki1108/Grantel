@@ -663,32 +663,11 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                 </TabsList>
                                 <div className="mt-4">
                                      {activeTab === 'reconciled' && (
-                                        <div>
-                                            <div className="flex gap-2 mb-4">
-                                                <Button onClick={() => handleDownload(reconciliationResults.reconciled, 'Itens_Conciliados')} size="sm" disabled={reconciliationResults.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                                <Dialog>
-                                                    <DialogTrigger asChild>
-                                                        <Button variant="outline" disabled={!reconciliationResults || reconciliationResults.reconciled.length === 0}>
-                                                            Validar CFOP
-                                                        </Button>
-                                                    </DialogTrigger>
-                                                    <DialogContent className="max-w-[95vw] h-[90vh] flex flex-col">
-                                                        <DialogHeader>
-                                                            <DialogTitle>Validação de CFOP dos Itens Conciliados</DialogTitle>
-                                                            <DialogDescription>
-                                                                Classifique os itens e verifique se o CFOP lançado no Sienge está correto. As suas validações são guardadas automaticamente.
-                                                            </DialogDescription>
-                                                        </DialogHeader>
-                                                        <CfopValidator 
-                                                            items={reconciliationResults.reconciled}
-                                                            allPersistedClassifications={allPersistedClassifications}
-                                                            onPersistAllClassifications={onPersistAllClassifications}
-                                                        />
-                                                    </DialogContent>
-                                                </Dialog>
-                                            </div>
-                                            <DataTable columns={getColumnsWithCustomRender(reconciliationResults.reconciled, Object.keys(reconciliationResults.reconciled[0] || {}))} data={reconciliationResults.reconciled} />
-                                        </div>
+                                        <CfopValidator 
+                                            items={reconciliationResults.reconciled}
+                                            allPersistedClassifications={allPersistedClassifications}
+                                            onPersistAllClassifications={onPersistAllClassifications}
+                                        />
                                     )}
                                      {activeTab === 'onlyInSienge' && (
                                          <div>

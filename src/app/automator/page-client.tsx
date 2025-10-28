@@ -22,6 +22,7 @@ import { AdditionalAnalyses } from "@/components/app/additional-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { SaidasAnalysis } from "@/components/app/saidas-analysis";
 import { NfseAnalysis } from "@/components/app/nfse-analysis";
 import { KeyCheckResult } from "@/components/app/key-checker";
@@ -74,6 +75,8 @@ export function AutomatorClientPage() {
     const [selectedPeriods, setSelectedPeriods] = useState<Record<string, boolean>>({});
     const [isPreProcessing, setIsPreProcessing] = useState(false);
     
+    // UI Settings state
+    const [isWideMode, setIsWideMode] = useState(false);
     const [activeMainTab, setActiveMainTab] = useState("history");
 
     // =================================================================
@@ -87,6 +90,10 @@ export function AutomatorClientPage() {
         } catch (e) {
             console.error("Failed to load imobilizado classifications from localStorage", e);
         }
+
+        // Load UI settings
+        const wideMode = localStorage.getItem('ui-widemode') === 'true';
+        setIsWideMode(wideMode);
     }, []);
 
     const handlePersistImobilizado = (allDataToSave: AllClassifications) => {
@@ -133,7 +140,6 @@ export function AutomatorClientPage() {
                 nfeSaida: xmlFiles.nfeSaida.map(f => f.name),
                 nfse: xmlFiles.nfse.map(f => f.name),
                 manifesto: Object.keys(fileStatus),
-                sienge: siengeFile ? siengeFile.name : null,
                 sped: spedFiles.map(f => f.name),
             },
             lastSaidaNumber,
@@ -188,6 +194,15 @@ export function AutomatorClientPage() {
     // =================================================================
     // UI SETTINGS
     // =================================================================
+    const handleSettingsChange = ({ wideMode }: { wideMode: boolean }) => {
+        setIsWideMode(wideMode);
+        localStorage.setItem('ui-widemode', String(wideMode));
+        toast({
+            title: "Configurações salvas",
+            description: `O modo amplo foi ${wideMode ? 'ativado' : 'desativado'}.`,
+        });
+    };
+
     const competence = useMemo(() => {
         const activePeriods = Object.keys(selectedPeriods).filter(p => selectedPeriods[p]);
         if (activePeriods.length > 0) {
@@ -556,23 +571,12 @@ export function AutomatorClientPage() {
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => {
         setProcessedData(prevData => {
             if (!prevData) {
-                return { sheets: {}, spedInfo: spedInfo || null, siengeSheetData: null, keyCheckResults: keyCheckResults || null, spedCorrections: spedCorrections ? [spedCorrections] : null, competence: null, resaleAnalysis: null };
+                return { sheets: {}, spedInfo: spedInfo || null, keyCheckResults: keyCheckResults || null, spedCorrections: spedCorrections ? [spedCorrections] : null, competence: null };
             }
             return { ...prevData, spedInfo: spedInfo, keyCheckResults: keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : prevData.spedCorrections };
         });
     }, []);
 
-    const handleSiengeDataProcessed = (siengeData: any[] | null) => {
-        setProcessedData(prevData => {
-            if (!prevData) {
-                return { sheets: {}, spedInfo: null, siengeSheetData: siengeData, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null };
-            }
-            return { ...prevData, siengeSheetData: siengeData };
-        });
-        if (siengeData) {
-            toast({ title: "Dados Sienge Processados", description: "As análises de conferência de impostos foram atualizadas." });
-        }
-    };
     
     // =================================================================
     // UI CONTROL AND RENDER
@@ -714,14 +718,14 @@ export function AutomatorClientPage() {
                              {activeMainTab === 'difal' && <DifalAnalysis /> }
                             
                             {activeMainTab === 'analyses' && (
-                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} onSiengeDataProcessed={handleSiengeDataProcessed} siengeFile={siengeFile} onSiengeFileChange={setSiengeFile} onClearSiengeFile={() => { setSiengeFile(null); handleSiengeDataProcessed(null); const input = document.querySelector('input[name="Itens do Sienge"]') as HTMLInputElement; if (input) input.value = ''; }} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
+                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
                             )}
                          
                              {activeMainTab === 'pending' && (
                                 <PendingIssuesReport 
                                     processedData={processedData}
                                     allPersistedClassifications={imobilizadoClassifications}
-                                    onForceUpdate={() => setProcessedData(prev => prev ? {...prev} : null)}
+                                    onForceUpdate={handlePersistImobilizado}
                                 />
                             )}
                         </div>
@@ -737,7 +741,7 @@ export function AutomatorClientPage() {
                             Selecione os meses de referência que deseja incluir no processamento. Isto definirá a competência da sessão.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="h-72 w-full overflow-y-auto rounded-md border p-4">
+                    <ScrollArea className="h-72 w-full rounded-md border p-4">
                         <div className="grid gap-4">
                             <div className="flex items-center space-x-2">
                                 <Checkbox
@@ -769,7 +773,7 @@ export function AutomatorClientPage() {
                                 </div>
                             ))}
                         </div>
-                    </div>
+                    </ScrollArea>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsPeriodModalOpen(false)}>Cancelar</Button>
                         <Button onClick={handleSubmit} disabled={Object.values(selectedPeriods).every(v => !v)}>

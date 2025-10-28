@@ -38,7 +38,7 @@ interface Section {
 interface PendingIssuesReportProps {
     processedData: ProcessedData | null;
     allPersistedClassifications: AllClassifications;
-    onForceUpdate: () => void;
+    onForceUpdate: (allData: AllClassifications) => void;
 }
 
 const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications_v2';
@@ -52,23 +52,20 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
     const [currentClassifications, setCurrentClassifications] = React.useState(allPersistedClassifications);
 
      React.useEffect(() => {
-        // Quando as props iniciais mudam (por exemplo, ao restaurar uma sessão), atualiza o estado local.
         setCurrentClassifications(allPersistedClassifications);
     }, [allPersistedClassifications]);
 
     const handleForceUpdate = () => {
-        // Primeiro, força uma releitura do localStorage para obter as classificações mais recentes.
         try {
-            const savedImobilizado = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
-            if (savedImobilizado) {
-                setCurrentClassifications(JSON.parse(savedImobilizado));
-            }
+            const savedData = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
+            const latestClassifications = savedData ? JSON.parse(savedData) : {};
+            setCurrentClassifications(latestClassifications);
+            onForceUpdate(latestClassifications);
+            toast({title: "Relatório Atualizado", description: "Os dados foram recarregados com as informações mais recentes."})
         } catch (e) {
-            console.error("Failed to re-load imobilizado classifications from localStorage", e);
+            console.error("Failed to re-load classifications from localStorage", e);
+            toast({variant: 'destructive', title: "Erro ao Atualizar", description: "Não foi possível recarregar as classificações."});
         }
-        // Em seguida, aciona a atualização do `processedData` no componente pai para garantir a consistência de outros dados.
-        onForceUpdate();
-        toast({title: "Relatório Atualizado", description: "Os dados foram recarregados com as informações mais recentes."})
     };
 
 
