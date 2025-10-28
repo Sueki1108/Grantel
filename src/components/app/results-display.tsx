@@ -15,7 +15,8 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
     const orderedSheetNames = [
         "Notas Válidas", "CTEs Válidos", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
         "Imobilizados",
-        "Emissão Própria", "Notas Canceladas",
+        "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes", "Remessas e Retornos",
+        "Notas Canceladas",
         ...Object.keys(results).filter(name => name.startsWith("Original - "))
     ];
     

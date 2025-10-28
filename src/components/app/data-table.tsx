@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -152,7 +153,7 @@ export function DataTable<TData, TValue>({
               </div>
             )}
       </div>
-      <div className="rounded-md border overflow-x-auto">
+      <ScrollArea className="rounded-md border whitespace-nowrap">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -215,7 +216,8 @@ export function DataTable<TData, TValue>({
             </TableFooter>
            )}
         </Table>
-      </div>
+        <ScrollBar orientation="horizontal" />
+      </ScrollArea>
       <div className="flex items-center justify-end space-x-2 py-4">
         <Button
           variant="outline"
