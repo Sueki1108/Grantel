@@ -67,7 +67,7 @@ const normalizeKey = (key: string | undefined): string => {
 
 interface AdditionalAnalysesProps {
     processedData: ProcessedData;
-    onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData) => ProcessedData)) => void;
+    onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData | null) => ProcessedData)) => void;
     siengeFile: File | null;
     onSiengeFileChange: (file: File | null) => void;
     onClearSiengeFile: () => void;
@@ -108,16 +108,26 @@ export function AdditionalAnalyses({
             const process = async () => {
                 try {
                     const data = await readFileAsJson(siengeFile);
-                    onProcessedDataChange(prev => ({...prev, siengeSheetData: data}));
+                    onProcessedDataChange(prev => ({...(prev || { sheets: {} }), siengeSheetData: data}));
                     toast({ title: 'Planilha Sienge Processada', description: 'As análises de conciliação e revenda foram atualizadas.' });
                 } catch (error: any) {
                     toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: error.message });
-                    onProcessedDataChange(prev => ({...prev, siengeSheetData: null}));
+                    onProcessedDataChange(prev => ({...(prev || { sheets: {} }), siengeSheetData: null}));
                 }
             };
             process();
         }
     }, [siengeFile, processedData.siengeSheetData, onProcessedDataChange, toast]);
+
+    const handleSiengeFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0] || null;
+        onSiengeFileChange(file);
+        if (file) {
+            // Clear previous data to trigger re-processing
+            onProcessedDataChange(prev => ({ ...(prev || { sheets: {} }), siengeSheetData: null, reconciliationResults: null }));
+        }
+    };
+
 
     const handleAnalyzeResale = () => {
         if (!processedData.siengeSheetData) {
@@ -294,7 +304,7 @@ export function AdditionalAnalyses({
                     {activeTab === 'reconciliation' && (
                         <ReconciliationAnalysis 
                             siengeFile={siengeFile}
-                            onSiengeFileChange={onSiengeFileChange}
+                            onSiengeFileChange={handleSiengeFileChange}
                             onClearSiengeFile={onClearSiengeFile}
                             processedData={processedData}
                             onProcessedDataChange={onProcessedDataChange}
@@ -321,7 +331,7 @@ export function AdditionalAnalyses({
                                 <FileUploadForm
                                     requiredFiles={['Itens do Sienge']}
                                     files={{ 'Itens do Sienge': !!siengeFile }}
-                                    onFileChange={(e) => onSiengeFileChange(e.target.files?.[0] || null)}
+                                    onFileChange={handleSiengeFileChange}
                                     onClearFile={onClearSiengeFile}
                                 />
                                 {!processedData.siengeSheetData ? (
@@ -379,8 +389,8 @@ export type ReconciliationResults = {
 
 interface ReconciliationAnalysisProps {
     siengeFile: File | null;
-    processedData: ProcessedData;
-    onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData) => ProcessedData)) => void;
+    processedData: ProcessedData | null;
+    onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData | null) => ProcessedData)) => void;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
     allPersistedClassifications: AllClassifications;
@@ -560,18 +570,18 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
         if (error) {
             toast({ variant: 'destructive', title: "Erro na Conciliação", description: error });
         } else if (reconciliationResults) {
-            onProcessedDataChange(prev => ({...prev, reconciliationResults}));
+            onProcessedDataChange(prev => ({...(prev || { sheets: {} }), reconciliationResults}));
         }
     }, [error, reconciliationResults, onProcessedDataChange, toast]);
     
      useEffect(() => {
         if (reconciliationResults?.otherSiengeItems) {
             const firstTab = Object.keys(reconciliationResults.otherSiengeItems)[0];
-            if (firstTab) {
+            if (firstTab && !activeOtherTab) {
                 setActiveOtherTab(firstTab);
             }
         }
-    }, [reconciliationResults?.otherSiengeItems]);
+    }, [reconciliationResults?.otherSiengeItems, activeOtherTab]);
 
     const handleDownload = (data: any[], title: string) => {
         if (!data || data.length === 0) {
