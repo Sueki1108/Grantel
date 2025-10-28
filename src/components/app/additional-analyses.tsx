@@ -84,9 +84,9 @@ interface AdditionalAnalysesProps {
 export function AdditionalAnalyses({ 
     processedData, 
     onProcessedDataChange,
-    onSiengeDataProcessed, 
     siengeFile, 
     onSiengeFileChange, 
+    onSiengeDataProcessed,
     onClearSiengeFile, 
     allXmlFiles,
     spedFiles,

@@ -75,8 +75,6 @@ export function AutomatorClientPage() {
     const [selectedPeriods, setSelectedPeriods] = useState<Record<string, boolean>>({});
     const [isPreProcessing, setIsPreProcessing] = useState(false);
     
-    // UI Settings state
-    const [isWideMode, setIsWideMode] = useState(false);
     const [activeMainTab, setActiveMainTab] = useState("history");
 
     // =================================================================
@@ -90,10 +88,6 @@ export function AutomatorClientPage() {
         } catch (e) {
             console.error("Failed to load imobilizado classifications from localStorage", e);
         }
-
-        // Load UI settings
-        const wideMode = localStorage.getItem('ui-widemode') === 'true';
-        setIsWideMode(wideMode);
     }, []);
 
     const handlePersistImobilizado = (allDataToSave: AllClassifications) => {
@@ -131,42 +125,36 @@ export function AutomatorClientPage() {
         };
     
         const sessionData: SessionData = {
+            version: '2.0',
             competence: currentCompetence,
             processedAt: new Date().toISOString(),
             processedData: optimizedProcessedData,
-            fileNames: {
-                nfeEntrada: xmlFiles.nfeEntrada.map(f => f.name),
-                cte: xmlFiles.cte.map(f => f.name),
-                nfeSaida: xmlFiles.nfeSaida.map(f => f.name),
-                nfse: xmlFiles.nfse.map(f => f.name),
-                manifesto: Object.keys(fileStatus),
-                sped: spedFiles.map(f => f.name),
-            },
             lastSaidaNumber,
             disregardedNfseNotes: Array.from(disregardedNfseNotes),
             saidasStatus,
+            xmlFileContents: { nfeEntrada: [], cte: [], nfeSaida: [], nfse: [] }, // Will be populated
         };
     
-        try {
-            const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(sessionData, null, 2))}`;
-            const link = document.createElement("a");
-            link.href = jsonString;
+        const exportFile = () => {
+            try {
+                const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(sessionData, null, 2))}`;
+                const link = document.createElement("a");
+                link.href = jsonString;
 
-            const year = currentCompetence.substring(0,4);
-            const month = currentCompetence.substring(5,7);
-            
-            link.download = `Grantel - Backup Fiscal - ${month}.${year}.json`;
+                const year = currentCompetence.substring(0,4);
+                const month = currentCompetence.substring(5,7);
+                
+                link.download = `Grantel - Backup Fiscal - ${month}.${year}.json`;
 
-            link.click();
-            toast({ title: "Sessão Exportada", description: `O ficheiro ${link.download} está a ser descarregado.` });
-        } catch (e: any) {
-            console.error("Failed to export session:", e);
-             if (e.message.includes('localStorage')) {
-                toast({ variant: 'destructive', title: 'Erro ao Exportar Sessão', description: "Falha ao guardar sessão: os dados processados podem ser demasiado grandes para o armazenamento local. Tente com um período menor." });
-            } else {
+                link.click();
+                toast({ title: "Sessão Exportada", description: `O ficheiro ${link.download} está a ser descarregado.` });
+            } catch (e: any) {
+                console.error("Failed to export session:", e);
                 toast({ variant: 'destructive', title: 'Erro ao Exportar Sessão', description: e.message });
             }
         }
+
+        exportFile();
     };
     
     const handleRestoreSession = (session: SessionData) => {
@@ -194,15 +182,6 @@ export function AutomatorClientPage() {
     // =================================================================
     // UI SETTINGS
     // =================================================================
-    const handleSettingsChange = ({ wideMode }: { wideMode: boolean }) => {
-        setIsWideMode(wideMode);
-        localStorage.setItem('ui-widemode', String(wideMode));
-        toast({
-            title: "Configurações salvas",
-            description: `O modo amplo foi ${wideMode ? 'ativado' : 'desativado'}.`,
-        });
-    };
-
     const competence = useMemo(() => {
         const activePeriods = Object.keys(selectedPeriods).filter(p => selectedPeriods[p]);
         if (activePeriods.length > 0) {
@@ -571,12 +550,23 @@ export function AutomatorClientPage() {
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => {
         setProcessedData(prevData => {
             if (!prevData) {
-                return { sheets: {}, spedInfo: spedInfo || null, keyCheckResults: keyCheckResults || null, spedCorrections: spedCorrections ? [spedCorrections] : null, competence: null };
+                return { sheets: {}, spedInfo: spedInfo || null, siengeSheetData: null, keyCheckResults: keyCheckResults || null, spedCorrections: spedCorrections ? [spedCorrections] : null, competence: null, resaleAnalysis: null };
             }
             return { ...prevData, spedInfo: spedInfo, keyCheckResults: keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : prevData.spedCorrections };
         });
     }, []);
 
+    const handleSiengeDataProcessed = useCallback((siengeData: any[] | null) => {
+        setProcessedData(prevData => {
+            if (!prevData) {
+                return { sheets: {}, spedInfo: null, siengeSheetData: siengeData, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null };
+            }
+            return { ...prevData, siengeSheetData: siengeData };
+        });
+        if (siengeData) {
+            toast({ title: "Dados Sienge Processados", description: "As análises de conferência de impostos foram atualizadas." });
+        }
+    }, [toast]);
     
     // =================================================================
     // UI CONTROL AND RENDER
@@ -718,7 +708,7 @@ export function AutomatorClientPage() {
                              {activeMainTab === 'difal' && <DifalAnalysis /> }
                             
                             {activeMainTab === 'analyses' && (
-                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
+                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={setSiengeFile} onSiengeDataProcessed={handleSiengeDataProcessed} onClearSiengeFile={() => { setSiengeFile(null); handleSiengeDataProcessed(null); }} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
                             )}
                          
                              {activeMainTab === 'pending' && (
