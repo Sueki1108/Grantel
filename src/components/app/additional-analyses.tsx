@@ -91,9 +91,11 @@ export function AdditionalAnalyses({
     const [activeTab, setActiveTab] = useState("sped");
     const [isExporting, setIsExporting] = useState(false);
     
-    // State local para Sienge
+    // State local para Sienge e Revenda
     const [siengeFile, setSiengeFile] = useState<File | null>(null);
     const [siengeSheetData, setSiengeSheetData] = useState<any[] | null>(null);
+    const [matchedResaleXmls, setMatchedResaleXmls] = useState<File[]>([]);
+    const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
 
     // Processamento do arquivo Sienge
     useEffect(() => {
@@ -106,7 +108,7 @@ export function AdditionalAnalyses({
             try {
                 const data = await readFileAsJson(siengeFile);
                 setSiengeSheetData(data);
-                toast({ title: 'Análise Sienge Concluída', description: 'Os dados foram processados e as abas de conferência foram atualizadas.' });
+                toast({ title: 'Planilha Sienge Processada', description: 'As análises de conciliação e revenda foram atualizadas.' });
             } catch (error: any) {
                 toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: error.message });
                 setSiengeSheetData(null);
@@ -115,11 +117,8 @@ export function AdditionalAnalyses({
         process();
     }, [siengeFile, toast]);
 
-    const resaleAnalysis = useMemo(() => {
-        if (!siengeSheetData || allXmlFiles.length === 0) {
-            return null;
-        }
-
+    const resaleKeys = useMemo(() => {
+        if (!siengeSheetData) return null;
         try {
             const RESALE_CFOPS = ['1102', '2102', '1403', '2403'];
             const findSiengeHeader = (possibleNames: string[]): string | undefined => {
@@ -140,60 +139,68 @@ export function AdditionalAnalyses({
                 cnpj: findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor']),
             };
 
-            if (!h.cfop || !h.numero || !h.cnpj) {
-                throw new Error("Não foi possível encontrar as colunas 'CFOP', 'Número' e 'CPF/CNPJ' na planilha Sienge para a análise de revenda.");
-            }
+            if (!h.cfop || !h.numero || !h.cnpj) return null;
 
-            const resaleNoteKeys = new Set<string>();
+            const keys = new Set<string>();
             siengeSheetData.forEach(item => {
                 const cfop = cleanAndToStr(item[h.cfop!]);
                 if (RESALE_CFOPS.includes(cfop)) {
                     const numero = cleanAndToStr(item[h.numero!]);
                     const cnpj = String(item[h.cnpj!]).replace(/\D/g, '');
-                    if (numero && cnpj) resaleNoteKeys.add(`${numero}-${cnpj}`);
+                    if (numero && cnpj) keys.add(`${numero}-${cnpj}`);
                 }
             });
-
-            return { noteKeys: resaleNoteKeys, xmls: [] }; // XMLs will be matched on demand or in another step
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: "Erro na Análise de Revenda", description: error.message });
+            return keys;
+        } catch (error) {
             return null;
         }
-    }, [siengeSheetData, allXmlFiles, toast]);
+    }, [siengeSheetData]);
+
+    useEffect(() => {
+        if (!resaleKeys || allXmlFiles.length === 0) {
+            setMatchedResaleXmls([]);
+            return;
+        }
     
-    const matchedResaleXmls = useMemo(() => {
-        if (!resaleAnalysis) return [];
-        const parser = new DOMParser();
-        const NFE_NAMESPACE = "http://www.portalfiscal.inf.br/nfe";
-        const matched: File[] = [];
-
-        allXmlFiles.forEach(async file => {
-            if (!file.name.toLowerCase().endsWith('.xml')) return;
-            try {
-                const fileContent = await file.text();
-                const xmlDoc = parser.parseFromString(fileContent, "application/xml");
-                const getTagValue = (element: Element | undefined, tagName: string): string => {
-                    if (!element) return '';
-                    const tags = element.getElementsByTagNameNS(NFE_NAMESPACE, tagName);
-                    return tags[0]?.textContent ?? '';
-                };
-                const infNFe = xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'infNFe')[0];
-                if (!infNFe) return;
-                const ide = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'ide')[0];
-                const emit = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'emit')[0];
-                if (!ide || !emit) return;
-                const numero = cleanAndToStr(getTagValue(ide, 'nNF'));
-                const cnpj = cleanAndToStr(getTagValue(emit, 'CNPJ'));
-                if (numero && cnpj && resaleAnalysis.noteKeys.has(`${numero}-${cnpj}`)) {
-                    matched.push(file);
+        const matchFiles = async () => {
+            setIsAnalyzingResale(true);
+            const parser = new DOMParser();
+            const NFE_NAMESPACE = "http://www.portalfiscal.inf.br/nfe";
+            const matched: File[] = [];
+    
+            for (const file of allXmlFiles) {
+                if (!file.name.toLowerCase().endsWith('.xml')) continue;
+                try {
+                    const fileContent = await file.text();
+                    const xmlDoc = parser.parseFromString(fileContent, "application/xml");
+                    const getTagValue = (element: Element | undefined, tagName: string): string => {
+                        if (!element) return '';
+                        const tags = element.getElementsByTagNameNS(NFE_NAMESPACE, tagName);
+                        return tags[0]?.textContent ?? '';
+                    };
+                    const infNFe = xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'infNFe')[0];
+                    if (!infNFe) continue;
+                    const ide = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'ide')[0];
+                    const emit = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'emit')[0];
+                    if (!ide || !emit) continue;
+                    const numero = cleanAndToStr(getTagValue(ide, 'nNF'));
+                    const cnpj = cleanAndToStr(getTagValue(emit, 'CNPJ'));
+                    if (numero && cnpj && resaleKeys.has(`${numero}-${cnpj}`)) {
+                        matched.push(file);
+                    }
+                } catch (e) {
+                    console.warn(`Não foi possível analisar o conteúdo XML do ficheiro ${file.name}:`, e);
                 }
-            } catch (e) {
-                 console.warn(`Could not parse XML content for file ${file.name}:`, e);
             }
-        });
-        return matched;
-
-    }, [resaleAnalysis, allXmlFiles]);
+            setMatchedResaleXmls(matched);
+            setIsAnalyzingResale(false);
+            if(resaleKeys.size > 0) {
+                toast({ title: 'Análise de Revenda Concluída', description: `${matched.length} XMLs de revenda correspondentes encontrados.` });
+            }
+        };
+    
+        matchFiles();
+    }, [resaleKeys, allXmlFiles, toast]);
 
 
     const { reconciliationResults, error: reconciliationError } = useReconciliation(processedData, siengeSheetData);
@@ -321,25 +328,32 @@ export function AdditionalAnalyses({
                                     </div>
                                 ) : (
                                     <div className="flex flex-col items-start gap-4 mt-6">
-                                        {resaleAnalysis && (
-                                            <div className="mt-4 w-full">
-                                                <p className="text-sm text-muted-foreground">
-                                                    Foram encontradas <span className="font-bold text-foreground">{resaleAnalysis.noteKeys.size}</span> chaves de revenda no Sienge.
-                                                    Destas, <span className="font-bold text-foreground">{matchedResaleXmls.length}</span> ficheiros XML correspondentes foram encontrados e estão prontos para exportação.
-                                                </p>
-                                                <Button onClick={handleExportResaleXmls} disabled={isExporting || matchedResaleXmls.length === 0} className="mt-4">
-                                                    {isExporting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A compactar...</> : `Baixar ${matchedResaleXmls.length} XMLs de Revenda`}
-                                                </Button>
-                                                {matchedResaleXmls.length === 0 && resaleAnalysis.noteKeys.size > 0 && (
-                                                    <Alert variant="destructive" className="mt-4">
-                                                        <AlertCircle className="h-4 w-4" />
-                                                        <AlertTitle>XMLs não encontrados</AlertTitle>
-                                                        <AlertDescription>
-                                                            Apesar de as notas de revenda terem sido identificadas no Sienge, os ficheiros XML correspondentes não foram encontrados entre os ficheiros carregados. Verifique se o nome dos XMLs contém a chave de 44 dígitos.
-                                                        </AlertDescription>
-                                                    </Alert>
-                                                )}
+                                        {isAnalyzingResale ? (
+                                            <div className="flex items-center text-muted-foreground">
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin"/>
+                                                A analisar notas de revenda...
                                             </div>
+                                        ) : (
+                                            resaleKeys && (
+                                                <div className="mt-4 w-full">
+                                                    <p className="text-sm text-muted-foreground">
+                                                        Foram encontradas <span className="font-bold text-foreground">{resaleKeys.size}</span> chaves de revenda no Sienge.
+                                                        Destas, <span className="font-bold text-foreground">{matchedResaleXmls.length}</span> ficheiros XML correspondentes foram encontrados e estão prontos para exportação.
+                                                    </p>
+                                                    <Button onClick={handleExportResaleXmls} disabled={isExporting || matchedResaleXmls.length === 0} className="mt-4">
+                                                        {isExporting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A compactar...</> : `Baixar ${matchedResaleXmls.length} XMLs de Revenda`}
+                                                    </Button>
+                                                    {matchedResaleXmls.length === 0 && resaleKeys.size > 0 && (
+                                                        <Alert variant="destructive" className="mt-4">
+                                                            <AlertCircle className="h-4 w-4" />
+                                                            <AlertTitle>XMLs não encontrados</AlertTitle>
+                                                            <AlertDescription>
+                                                                Apesar de as notas de revenda terem sido identificadas no Sienge, os ficheiros XML correspondentes não foram encontrados entre os ficheiros carregados. Verifique se o nome dos XMLs contém a chave de 44 dígitos.
+                                                            </AlertDescription>
+                                                        </Alert>
+                                                    )}
+                                                </div>
+                                            )
                                         )}
                                     </div>
                                 )}
@@ -710,6 +724,3 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
         </div>
     );
 }
-    
-
-    
