@@ -913,101 +913,63 @@ export function KeyChecker({
                                 {isCorrecting ? (
                                     <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
                                 ) : correctionResult ? (
-                                    <Tabs defaultValue="summary" className="flex flex-col h-full">
-                                         <TabsList className="grid w-full grid-cols-3">
-                                            <TabsTrigger value="summary">Resumo</TabsTrigger>
-                                            <TabsTrigger value="modifications">Modificações ({correctionResult.linesModified})</TabsTrigger>
-                                            <TabsTrigger value="full_log">Log Completo</TabsTrigger>
-                                        </TabsList>
+                                    <div className="flex flex-col h-full">
+                                         <Tabs defaultValue="summary" className="flex-grow flex flex-col overflow-hidden">
+                                            <TabsList className="grid w-full grid-cols-3 shrink-0">
+                                                <TabsTrigger value="summary">Resumo</TabsTrigger>
+                                                <TabsTrigger value="modifications">Modificações ({correctionResult.linesModified})</TabsTrigger>
+                                                <TabsTrigger value="full_log">Log Completo</TabsTrigger>
+                                            </TabsList>
+                                            
+                                            <div className="flex-grow mt-4 overflow-y-auto">
+                                                <TabsContent value="summary" className="mt-0">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-center">
+                                                        <div className="rounded-lg border bg-card p-4"><p className="text-sm font-medium text-muted-foreground">Linhas Lidas</p><p className="text-2xl font-bold">{correctionResult.linesRead}</p></div>
+                                                        <div className="rounded-lg border bg-card p-4"><p className="text-sm font-medium text-muted-foreground">Linhas Modificadas</p><p className="text-2xl font-bold">{correctionResult.linesModified}</p></div>
+                                                    </div>
+                                                    <div className="mt-6 space-y-2 text-sm">
+                                                        <p><strong className="text-primary">Contadores:</strong> {correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length} linhas corrigidas.</p>
+                                                        <p><strong className="text-primary">Inscrição Estadual (NF-e):</strong> {correctionResult.modifications.ieCorrection.length} linhas corrigidas.</p>
+                                                        <p><strong className="text-primary">Série (CT-e):</strong> {correctionResult.modifications.cteSeriesCorrection.length} linhas corrigidas.</p>
+                                                        <p><strong className="text-primary">Endereços (Espaços):</strong> {correctionResult.modifications.addressSpaces.length} linhas corrigidas.</p>
+                                                        <p><strong className="text-primary">Truncamento de Campos:</strong> {correctionResult.modifications.truncation.length} linhas corrigidas.</p>
+                                                        <p><strong className="text-primary">Padronização de Unidades:</strong> {correctionResult.modifications.unitStandardization.length} linhas corrigidas.</p>
+                                                        <p><strong className="text-primary">Registros 0190 Removidos:</strong> {correctionResult.modifications.removed0190.length} linhas removidas.</p>
+                                                    </div>
+                                                </TabsContent>
 
-                                        <TabsContent value="summary" className="mt-4 flex-grow">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-center">
-                                                <div className="rounded-lg border bg-card p-4"><p className="text-sm font-medium text-muted-foreground">Linhas Lidas</p><p className="text-2xl font-bold">{correctionResult.linesRead}</p></div>
-                                                <div className="rounded-lg border bg-card p-4"><p className="text-sm font-medium text-muted-foreground">Linhas Modificadas</p><p className="text-2xl font-bold">{correctionResult.linesModified}</p></div>
+                                                <TabsContent value="modifications" className="mt-0 h-full">
+                                                    <Tabs defaultValue="counters" className="flex flex-col h-full">
+                                                        <TabsList className="h-auto flex-wrap justify-start shrink-0">
+                                                            <TabsTrigger value="counters">Contadores ({correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length})</TabsTrigger>
+                                                            <TabsTrigger value="ie">IE (NF-e) ({correctionResult.modifications.ieCorrection.length})</TabsTrigger>
+                                                            <TabsTrigger value="cte_series">Série (CT-e) ({correctionResult.modifications.cteSeriesCorrection.length})</TabsTrigger>
+                                                            <TabsTrigger value="address">Endereços ({correctionResult.modifications.addressSpaces.length})</TabsTrigger>
+                                                            <TabsTrigger value="truncation">Truncamento ({correctionResult.modifications.truncation.length})</TabsTrigger>
+                                                            <TabsTrigger value="units">Unidades ({correctionResult.modifications.unitStandardization.length})</TabsTrigger>
+                                                            <TabsTrigger value="removed">0190 Removidos ({correctionResult.modifications.removed0190.length})</TabsTrigger>
+                                                        </TabsList>
+                                                        <div className="flex-grow mt-2 overflow-hidden">
+                                                            <TabsContent value="counters" className="h-full"><div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2"><TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>A contagem de linhas em cada bloco (registros x990) e a contagem total (9999) foram recalculadas.</p></TooltipContent></Tooltip></TooltipProvider><span>Contagem de linhas de cada bloco e do ficheiro recalculada.</span></div><ModificationDisplay logs={[...correctionResult.modifications.blockCount, ...correctionResult.modifications.totalLineCount, ...correctionResult.modifications.count9900]} /></TabsContent>
+                                                            <TabsContent value="ie" className="h-full"><div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2"><TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>A Inscrição Estadual (IE) de participantes (registo 0150) foi corrigida com base nos dados dos XMLs.</p></TooltipContent></Tooltip></TooltipProvider><span>IE do participante corrigida com base nos XMLs.</span></div><ModificationDisplay logs={correctionResult.modifications.ieCorrection} /></TabsContent>
+                                                            <TabsContent value="cte_series" className="h-full"><div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2"><TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>A série de CT-es (registo D100) foi corrigida com base nos dados dos XMLs de CTe.</p></TooltipContent></Tooltip></TooltipProvider><span>Série do CT-e (D100) corrigida com base nos XMLs.</span></div><ModificationDisplay logs={correctionResult.modifications.cteSeriesCorrection} /></TabsContent>
+                                                            <TabsContent value="address" className="h-full"><div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2"><TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Espaços múltiplos no campo de complemento do endereço (registro 0150) foram substituídos por um único espaço.</p></TooltipContent></Tooltip></TooltipProvider><span>Espaços múltiplos no complemento do endereço foram corrigidos.</span></div><ModificationDisplay logs={correctionResult.modifications.addressSpaces} /></TabsContent>
+                                                            <TabsContent value="truncation" className="h-full"><div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2"><TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Campos de texto livre (ex: observações) foram limitados a 235 caracteres para evitar erros de importação.</p></TooltipContent></Tooltip></TooltipProvider><span>Campos de texto livre (observações) foram limitados a 235 caracteres.</span></div><ModificationDisplay logs={correctionResult.modifications.truncation} /></TabsContent>
+                                                            <TabsContent value="units" className="h-full"><div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2"><TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Unidades de medida de produtos foram padronizadas para 'un' para manter a consistência.</p></TooltipContent></Tooltip></TooltipProvider><span>Unidades de medida de produtos foram padronizadas para 'un'.</span></div><ModificationDisplay logs={correctionResult.modifications.unitStandardization} /></TabsContent>
+                                                            <TabsContent value="removed" className="h-full"><div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2"><TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registros do tipo '0190' desnecessários (todos exceto os definidos) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider><span>Registros '0190' desnecessários foram removidos.</span></div><RemovedLinesDisplay logs={correctionResult.modifications.removed0190} /></TabsContent>
+                                                        </div>
+                                                    </Tabs>
+                                                </TabsContent>
+                                                
+                                                <TabsContent value="full_log" className="mt-0 h-full">
+                                                    <LogDisplay logs={correctionResult.log} />
+                                                </TabsContent>
                                             </div>
-                                             <div className="mt-6 space-y-2 text-sm">
-                                                <p><strong className="text-primary">Contadores:</strong> {correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length} linhas corrigidas.</p>
-                                                <p><strong className="text-primary">Inscrição Estadual (NF-e):</strong> {correctionResult.modifications.ieCorrection.length} linhas corrigidas.</p>
-                                                <p><strong className="text-primary">Série (CT-e):</strong> {correctionResult.modifications.cteSeriesCorrection.length} linhas corrigidas.</p>
-                                                <p><strong className="text-primary">Endereços (Espaços):</strong> {correctionResult.modifications.addressSpaces.length} linhas corrigidas.</p>
-                                                <p><strong className="text-primary">Truncamento de Campos:</strong> {correctionResult.modifications.truncation.length} linhas corrigidas.</p>
-                                                <p><strong className="text-primary">Padronização de Unidades:</strong> {correctionResult.modifications.unitStandardization.length} linhas corrigidas.</p>
-                                                <p><strong className="text-primary">Registros 0190 Removidos:</strong> {correctionResult.modifications.removed0190.length} linhas removidas.</p>
-                                            </div>
-                                        </TabsContent>
-
-                                        <TabsContent value="modifications" className="mt-4 flex-grow overflow-hidden">
-                                            <Tabs defaultValue="counters" className="flex flex-col h-full">
-                                                <TabsList className="h-auto flex-wrap justify-start">
-                                                    <TabsTrigger value="counters">Contadores ({correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length})</TabsTrigger>
-                                                    <TabsTrigger value="ie">IE (NF-e) ({correctionResult.modifications.ieCorrection.length})</TabsTrigger>
-                                                    <TabsTrigger value="cte_series">Série (CT-e) ({correctionResult.modifications.cteSeriesCorrection.length})</TabsTrigger>
-                                                    <TabsTrigger value="address">Endereços ({correctionResult.modifications.addressSpaces.length})</TabsTrigger>
-                                                    <TabsTrigger value="truncation">Truncamento ({correctionResult.modifications.truncation.length})</TabsTrigger>
-                                                    <TabsTrigger value="units">Unidades ({correctionResult.modifications.unitStandardization.length})</TabsTrigger>
-                                                    <TabsTrigger value="removed">0190 Removidos ({correctionResult.modifications.removed0190.length})</TabsTrigger>
-                                                </TabsList>
-                                                <div className="flex-grow overflow-hidden mt-2">
-                                                    <TabsContent value="counters" className="h-full">
-                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>A contagem de linhas em cada bloco (registros x990) e a contagem total (9999) foram recalculadas.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Contagem de linhas de cada bloco e do ficheiro recalculada.</span>
-                                                        </div>
-                                                        <ModificationDisplay logs={[...correctionResult.modifications.blockCount, ...correctionResult.modifications.totalLineCount, ...correctionResult.modifications.count9900]} />
-                                                    </TabsContent>
-                                                    <TabsContent value="ie" className="h-full">
-                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>A Inscrição Estadual (IE) de participantes (registo 0150) foi corrigida com base nos dados dos XMLs.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>IE do participante corrigida com base nos XMLs.</span>
-                                                        </div>
-                                                        <ModificationDisplay logs={correctionResult.modifications.ieCorrection} />
-                                                    </TabsContent>
-                                                    <TabsContent value="cte_series" className="h-full">
-                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>A série de CT-es (registo D100) foi corrigida com base nos dados dos XMLs de CTe.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Série do CT-e (D100) corrigida com base nos XMLs.</span>
-                                                        </div>
-                                                        <ModificationDisplay logs={correctionResult.modifications.cteSeriesCorrection} />
-                                                    </TabsContent>
-                                                    <TabsContent value="address" className="h-full">
-                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Espaços múltiplos no campo de complemento do endereço (registro 0150) foram substituídos por um único espaço.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Espaços múltiplos no complemento do endereço foram corrigidos.</span>
-                                                        </div>
-                                                        <ModificationDisplay logs={correctionResult.modifications.addressSpaces} />
-                                                    </TabsContent>
-                                                    <TabsContent value="truncation" className="h-full">
-                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Campos de texto livre (ex: observações) foram limitados a 235 caracteres para evitar erros de importação.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Campos de texto livre (observações) foram limitados a 235 caracteres.</span>
-                                                        </div>
-                                                        <ModificationDisplay logs={correctionResult.modifications.truncation} />
-                                                    </TabsContent>
-                                                    <TabsContent value="units" className="h-full">
-                                                        <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Unidades de medida de produtos foram padronizadas para 'un' para manter a consistência.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Unidades de medida de produtos foram padronizadas para 'un'.</span>
-                                                        </div>
-                                                        <ModificationDisplay logs={correctionResult.modifications.unitStandardization} />
-                                                    </TabsContent>
-                                                     <TabsContent value="removed" className="h-full">
-                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registros do tipo '0190' desnecessários (todos exceto os definidos) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Registros '0190' desnecessários foram removidos.</span>
-                                                        </div>
-                                                        <RemovedLinesDisplay logs={correctionResult.modifications.removed0190} />
-                                                    </TabsContent>
-                                                </div>
-                                            </Tabs>
-                                        </TabsContent>
-
-                                        <TabsContent value="full_log" className="mt-4 flex-grow overflow-hidden">
-                                            <LogDisplay logs={correctionResult.log} />
-                                        </TabsContent>
-                                    </Tabs>
+                                        </Tabs>
+                                    </div>
                                 ) : null}
                                 </div>
-                                <DialogFooter className="pt-4 border-t">
+                                <DialogFooter className="pt-4 border-t shrink-0">
                                     <Button variant="outline" onClick={() => setIsCorrectionModalOpen(false)}>Fechar</Button>
                                     <Button onClick={handleDownloadCorrected} disabled={!correctionResult || !!correctionResult.error}>
                                         <Download className="mr-2 h-4 w-4" /> Baixar Arquivo Corrigido
@@ -1081,4 +1043,3 @@ export function KeyChecker({
 }
 
     
-

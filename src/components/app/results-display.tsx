@@ -62,10 +62,7 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
             {orderedSheetNames.map(sheetName => (
                 results[sheetName] && results[sheetName].length > 0 && (
                     <TabsContent key={sheetName} value={sheetName}>
-                        <ScrollArea className="w-full whitespace-nowrap rounded-md border">
-                            <DataTable columns={getColumns(results[sheetName])} data={results[sheetName]} />
-                             <ScrollBar orientation="horizontal" />
-                        </ScrollArea>
+                        <DataTable columns={getColumns(results[sheetName])} data={results[sheetName]} />
                     </TabsContent>
                 )
             ))}
