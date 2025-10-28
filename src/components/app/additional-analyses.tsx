@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FileSearch, Sheet, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Building, Save, Database, FileJson, MinusCircle } from "lucide-react";
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
 import { cfopDescriptions } from "@/lib/cfop";
@@ -66,6 +66,11 @@ const normalizeKey = (key: string | undefined): string => {
 
 interface AdditionalAnalysesProps {
     processedData: ProcessedData;
+    onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData) => ProcessedData)) => void;
+    siengeFile: File | null;
+    onSiengeFileChange: (file: File | null) => void;
+    onSiengeDataProcessed: (data: any[] | null) => void;
+    onClearSiengeFile: () => void;
     allXmlFiles: File[];
     spedFiles: File[];
     onSpedFilesChange: (files: File[]) => void;
@@ -77,7 +82,12 @@ interface AdditionalAnalysesProps {
 }
 
 export function AdditionalAnalyses({ 
-    processedData,
+    processedData, 
+    onProcessedDataChange,
+    onSiengeDataProcessed, 
+    siengeFile, 
+    onSiengeFileChange, 
+    onClearSiengeFile, 
     allXmlFiles,
     spedFiles,
     onSpedFilesChange,
@@ -91,49 +101,35 @@ export function AdditionalAnalyses({
     const [activeTab, setActiveTab] = useState("sped");
     const [isExporting, setIsExporting] = useState(false);
     
-    // State local para Sienge e Revenda
-    const [siengeFile, setSiengeFile] = useState<File | null>(null);
-    const [siengeSheetData, setSiengeSheetData] = useState<any[] | null>(null);
+    // State local para Revenda
     const [resaleAnalysis, setResaleAnalysis] = useState<{ noteKeys: Set<string>; xmls: File[] } | null>(null);
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
 
     // Processamento do arquivo Sienge
     useEffect(() => {
-        if (!siengeFile) {
-            setSiengeSheetData(null);
-            setResaleAnalysis(null);
-            return;
-        };
+        if (!siengeFile || processedData.siengeSheetData) return;
         
         const process = async () => {
             try {
                 const data = await readFileAsJson(siengeFile);
-                setSiengeSheetData(data);
+                onSiengeDataProcessed(data);
                 toast({ title: 'Planilha Sienge Processada', description: 'As análises de conciliação e revenda foram atualizadas.' });
             } catch (error: any) {
                 toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: error.message });
-                setSiengeSheetData(null);
+                onSiengeDataProcessed(null);
             }
         };
         process();
-    }, [siengeFile, toast]);
+    }, [siengeFile, processedData.siengeSheetData, onSiengeDataProcessed, toast]);
 
 
-    const { reconciliationResults, error: reconciliationError } = useReconciliation(processedData, siengeSheetData);
+    const { reconciliationResults, error: reconciliationError } = useReconciliation(processedData, processedData.siengeSheetData);
 
     const handleSiengeFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0] || null;
-        setSiengeFile(file);
+        onSiengeFileChange(file);
     };
-
-    const handleClearSiengeFile = () => {
-        setSiengeFile(null);
-        setSiengeSheetData(null);
-        setResaleAnalysis(null);
-        const input = document.querySelector('input[name="Itens do Sienge"]') as HTMLInputElement;
-        if (input) input.value = '';
-    }
-
+    
     const handleAnalyzeResale = useCallback(async () => {
         if (!siengeFile) {
             toast({ variant: 'destructive', title: "Dados incompletos", description: "Carregue a planilha Sienge primeiro." });
@@ -149,10 +145,10 @@ export function AdditionalAnalyses({
     
         setTimeout(async () => {
             try {
-                let localSiengeData = siengeSheetData;
+                let localSiengeData = processedData.siengeSheetData;
                 if (!localSiengeData) {
                     localSiengeData = await readFileAsJson(siengeFile);
-                    setSiengeSheetData(localSiengeData);
+                    onSiengeDataProcessed(localSiengeData);
                 }
     
                 const RESALE_CFOPS = ['1102', '2102', '1403', '2403'];
@@ -240,7 +236,7 @@ export function AdditionalAnalyses({
             }
         }, 50);
     
-    }, [siengeFile, siengeSheetData, allXmlFiles, toast]);
+    }, [siengeFile, processedData.siengeSheetData, allXmlFiles, toast, onSiengeDataProcessed]);
     
     const handleExportResaleXmls = async () => {
         if (!resaleAnalysis || resaleAnalysis.xmls.length === 0) {
@@ -315,9 +311,8 @@ export function AdditionalAnalyses({
                         <ReconciliationAnalysis 
                             siengeFile={siengeFile}
                             onSiengeFileChange={handleSiengeFileChange}
-                            onClearSiengeFile={handleClearSiengeFile}
+                            onClearSiengeFile={onClearSiengeFile}
                             processedData={processedData}
-                            siengeSheetData={siengeSheetData}
                             reconciliationResults={reconciliationResults}
                             error={reconciliationError}
                             allPersistedClassifications={allPersistedClassifications}
@@ -343,9 +338,9 @@ export function AdditionalAnalyses({
                                     requiredFiles={['Itens do Sienge']}
                                     files={{ 'Itens do Sienge': !!siengeFile }}
                                     onFileChange={handleSiengeFileChange}
-                                    onClearFile={handleClearSiengeFile}
+                                    onClearFile={onClearSiengeFile}
                                 />
-                                {!siengeSheetData ? (
+                                {!processedData.siengeSheetData ? (
                                     <div className="p-8 text-center text-muted-foreground mt-4">
                                         <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
                                         <h3 className="text-xl font-semibold mb-2">Aguardando dados Sienge</h3>
@@ -401,7 +396,6 @@ export type ReconciliationResults = {
 interface ReconciliationAnalysisProps {
     siengeFile: File | null;
     processedData: ProcessedData;
-    siengeSheetData: any[] | null;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
     reconciliationResults: ReconciliationResults;
@@ -606,12 +600,22 @@ function useReconciliation(processedData: ProcessedData | null, siengeSheetData:
 function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error, allPersistedClassifications, onPersistAllClassifications }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState("reconciled");
-    
+    const [activeOtherTab, setActiveOtherTab] = useState<string>('');
+
     useEffect(() => {
         if (error) {
             toast({ variant: 'destructive', title: "Erro na Conciliação", description: error });
         }
     }, [error, toast]);
+    
+     useEffect(() => {
+        if (reconciliationResults?.otherSiengeItems) {
+            const firstTab = Object.keys(reconciliationResults.otherSiengeItems)[0];
+            if (firstTab) {
+                setActiveOtherTab(firstTab);
+            }
+        }
+    }, [reconciliationResults?.otherSiengeItems]);
 
 
     const handleDownload = (data: any[], title: string) => {
@@ -693,13 +697,23 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                 <CardDescription>Linhas da planilha Sienge que não são NF-e ou NFS-r, agrupadas pela coluna "Esp".</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
-                                     <div key={esp}>
-                                         <h3 className="font-bold my-4">{esp} ({items.length})</h3>
-                                        <Button onClick={() => handleDownload(items, `Sienge_Outros_${esp}`)} size="sm" className="mb-4" disabled={items.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                        <DataTable columns={getColumnsWithCustomRender(items, Object.keys(items[0] || {}))} data={items} />
-                                    </div>
-                                ))}
+                                <Tabs value={activeOtherTab} onValueChange={setActiveOtherTab} className="w-full">
+                                    <TabsList className="h-auto flex-wrap justify-start">
+                                        {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
+                                            <TabsTrigger key={esp} value={esp}>
+                                                {esp} ({items.length})
+                                            </TabsTrigger>
+                                        ))}
+                                    </TabsList>
+                                    {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
+                                        <TabsContent key={esp} value={esp} className="mt-4">
+                                            <Button onClick={() => handleDownload(items, `Sienge_Outros_${esp}`)} size="sm" className="mb-4" disabled={items.length === 0}>
+                                                <Download className="mr-2 h-4 w-4" /> Baixar
+                                            </Button>
+                                            <DataTable columns={getColumnsWithCustomRender(items, Object.keys(items[0] || {}))} data={items} />
+                                        </TabsContent>
+                                    ))}
+                                </Tabs>
                             </CardContent>
                         </Card>
                     )}
