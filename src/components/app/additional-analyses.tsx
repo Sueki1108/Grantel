@@ -68,9 +68,6 @@ const normalizeKey = (key: string | undefined): string => {
 interface AdditionalAnalysesProps {
     processedData: ProcessedData;
     onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData | null) => ProcessedData)) => void;
-    siengeFile: File | null;
-    onSiengeFileChange: (file: File | null) => void;
-    onClearSiengeFile: () => void;
     allXmlFiles: File[];
     spedFiles: File[];
     onSpedFilesChange: (files: File[]) => void;
@@ -84,9 +81,6 @@ interface AdditionalAnalysesProps {
 export function AdditionalAnalyses({ 
     processedData, 
     onProcessedDataChange,
-    siengeFile, 
-    onSiengeFileChange, 
-    onClearSiengeFile, 
     allXmlFiles,
     spedFiles,
     onSpedFilesChange,
@@ -100,37 +94,49 @@ export function AdditionalAnalyses({
     const [activeTab, setActiveTab] = useState("sped");
     const [isExporting, setIsExporting] = useState(false);
     
+    // Sienge state is now local to this component
+    const [siengeFile, setSiengeFile] = useState<File | null>(null);
+    const [siengeSheetData, setSiengeSheetData] = useState<any[] | null>(null);
+
+
     const [resaleAnalysis, setResaleAnalysis] = useState<{ noteKeys: Set<string>; xmls: File[] } | null>(null);
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
 
-    useEffect(() => {
-        if (siengeFile && !processedData.siengeSheetData) {
-            const process = async () => {
-                try {
-                    const data = await readFileAsJson(siengeFile);
-                    onProcessedDataChange(prev => ({...(prev || { sheets: {} }), siengeSheetData: data}));
-                    toast({ title: 'Planilha Sienge Processada', description: 'As análises de conciliação e revenda foram atualizadas.' });
-                } catch (error: any) {
-                    toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: error.message });
-                    onProcessedDataChange(prev => ({...(prev || { sheets: {} }), siengeSheetData: null}));
-                }
-            };
-            process();
-        }
-    }, [siengeFile, processedData.siengeSheetData, onProcessedDataChange, toast]);
-
     const handleSiengeFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0] || null;
-        onSiengeFileChange(file);
+        setSiengeFile(file);
         if (file) {
-            // Clear previous data to trigger re-processing
-            onProcessedDataChange(prev => ({ ...(prev || { sheets: {} }), siengeSheetData: null, reconciliationResults: null }));
+            setSiengeSheetData(null); // Clear previous data to trigger re-processing
         }
     };
+    
+    const handleClearSiengeFile = () => {
+        setSiengeFile(null);
+        setSiengeSheetData(null);
+        const input = document.querySelector('input[name="Itens do Sienge"]') as HTMLInputElement;
+        if (input) input.value = '';
+    }
+
+    // Effect to process the Sienge file when it changes
+    useEffect(() => {
+        if (!siengeFile || siengeSheetData) return;
+        
+        const process = async () => {
+            try {
+                const data = await readFileAsJson(siengeFile);
+                setSiengeSheetData(data);
+                toast({ title: 'Planilha Sienge Processada', description: 'As análises de conciliação e revenda foram atualizadas.' });
+            } catch (error: any) {
+                toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: error.message });
+                setSiengeSheetData(null);
+            }
+        };
+        process();
+    }, [siengeFile, siengeSheetData, toast]);
 
 
     const handleAnalyzeResale = () => {
-        if (!processedData.siengeSheetData) {
+        if (!siengeSheetData) {
             toast({ variant: 'destructive', title: "Dados incompletos", description: "Carregue a planilha Sienge primeiro." });
             return;
         }
@@ -144,7 +150,7 @@ export function AdditionalAnalyses({
     
         setTimeout(async () => {
             try {
-                const localSiengeData = processedData.siengeSheetData!;
+                const localSiengeData = siengeSheetData!;
                 const RESALE_CFOPS = ['1102', '2102', '1403', '2403'];
                 
                 const findSiengeHeader = (possibleNames: string[]): string | undefined => {
@@ -305,8 +311,9 @@ export function AdditionalAnalyses({
                         <ReconciliationAnalysis 
                             siengeFile={siengeFile}
                             onSiengeFileChange={handleSiengeFileChange}
-                            onClearSiengeFile={onClearSiengeFile}
+                            onClearSiengeFile={handleClearSiengeFile}
                             processedData={processedData}
+                            siengeSheetData={siengeSheetData}
                             onProcessedDataChange={onProcessedDataChange}
                             allPersistedClassifications={allPersistedClassifications}
                             onPersistAllClassifications={onPersistAllClassifications}
@@ -332,9 +339,9 @@ export function AdditionalAnalyses({
                                     requiredFiles={['Itens do Sienge']}
                                     files={{ 'Itens do Sienge': !!siengeFile }}
                                     onFileChange={handleSiengeFileChange}
-                                    onClearFile={onClearSiengeFile}
+                                    onClearFile={handleClearSiengeFile}
                                 />
-                                {!processedData.siengeSheetData ? (
+                                {!siengeSheetData ? (
                                     <div className="p-8 text-center text-muted-foreground mt-4">
                                         <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
                                         <h3 className="text-xl font-semibold mb-2">Aguardando dados Sienge</h3>
@@ -390,6 +397,7 @@ export type ReconciliationResults = {
 interface ReconciliationAnalysisProps {
     siengeFile: File | null;
     processedData: ProcessedData | null;
+    siengeSheetData: any[] | null;
     onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData | null) => ProcessedData)) => void;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
@@ -398,45 +406,39 @@ interface ReconciliationAnalysisProps {
     competence: string | null;
 }
 
-function useReconciliation(processedData: ProcessedData | null): { reconciliationResults: ReconciliationResults, error: string | null } {
+function useReconciliation(processedData: ProcessedData | null, siengeSheetData: any[] | null): { reconciliationResults: ReconciliationResults, error: string | null } {
     return useMemo(() => {
-        if (!processedData || !processedData.siengeSheetData) {
-            const allXmlItems = [
-                ...(processedData?.sheets?.['Itens Válidos'] || []),
-                ...(processedData?.sheets?.['CTEs Válidos'] || []).map(cte => ({
-                    ...cte, 'Número da Nota': cte['Número'], 'CPF/CNPJ do Emitente': cte['CPF/CNPJ do Fornecedor'],
-                    'Valor Total': cte['Valor da Prestação'], 'Descrição': `Frete CTe N° ${cte['Número']}`, documentType: 'CTE',
-                    Item: '1', 'Código': `CTE-${cte['Número']}`, 'Chave Unica': cleanAndToStr(cte['Número']) + cleanAndToStr(cte['CPF/CNPJ do Fornecedor']),
-                }))
-            ];
+        const allXmlItems = [
+            ...(processedData?.sheets?.['Itens Válidos'] || []),
+            ...(processedData?.sheets?.['CTEs Válidos'] || []).map(cte => ({
+                ...cte, 'Número da Nota': cte['Número'], 'CPF/CNPJ do Emitente': cte['CPF/CNPJ do Fornecedor'],
+                'Valor Total': cte['Valor da Prestação'], 'Descrição': `Frete CTe N° ${cte['Número']}`, documentType: 'CTE',
+                Item: '1', 'Código': `CTE-${cte['Número']}`, 'Chave Unica': cleanAndToStr(cte['Número']) + cleanAndToStr(cte['CPF/CNPJ do Fornecedor']),
+            }))
+        ];
+
+        if (!siengeSheetData) {
              return { 
                 reconciliationResults: allXmlItems.length > 0 ? { reconciled: [], onlyInSienge: [], onlyInXml: allXmlItems, otherSiengeItems: {} } : null, 
                 error: null 
             };
         }
 
-        const { sheets, siengeSheetData } = processedData;
-        const xmlItems = sheets?.['Itens Válidos'];
-        const cteItems = sheets?.['CTEs Válidos'];
+        const { sheets } = processedData || {};
         const nfeHeaderMap = new Map((sheets?.['Notas Válidas'] || []).map(n => [n['Chave Unica'], n]));
         
-        const allXmlItems: any[] = [];
-        if (xmlItems) {
-            allXmlItems.push(...xmlItems.map(item => ({
-                ...item,
-                Fornecedor: nfeHeaderMap.get(item['Chave Unica'])?.Fornecedor || item.Fornecedor,
-                'Data de Emissão': nfeHeaderMap.get(item['Chave Unica'])?.['Emissão'] || item['Emissão'],
-                documentType: 'NFE',
-            })));
-        }
-        if (cteItems) {
-            allXmlItems.push(...cteItems.map(cte => ({
-                ...cte, 'Número da Nota': cte['Número'], 'CPF/CNPJ do Emitente': cte['CPF/CNPJ do Fornecedor'],
-                'Valor Total': cte['Valor da Prestação'], 'Descrição': `Frete CTe N° ${cte['Número']}`,
-                CFOP: cte['CFOP'], documentType: 'CTE', Item: '1', 'Código': `CTE-${cte['Número']}`,
-                'Chave Unica': cleanAndToStr(cte['Número']) + cleanAndToStr(cte['CPF/CNPJ do Fornecedor']),
-            })));
-        }
+        const enrichedXmlItems: any[] = allXmlItems.map(item => {
+            const header = nfeHeaderMap.get(item['Chave Unica']);
+            if (header) {
+                 return {
+                    ...item,
+                    Fornecedor: header.Fornecedor || item.Fornecedor,
+                    'Data de Emissão': header['Emissão'] || item['Emissão'],
+                    documentType: item.documentType || 'NFE',
+                }
+            }
+            return item;
+        });
 
         try {
             const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
@@ -486,7 +488,7 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
             };
 
             let reconciled: any[] = [];
-            let remainingXmlItems = [...allXmlItems];
+            let remainingXmlItems = [...enrichedXmlItems];
             let remainingSiengeItems = [...siengeItemsForReconciliation];
 
             const reconciliationPass = (sienge: any[], xml: any[], getSiengeKey: (item: any) => string | null, getXmlKey: (item: any) => string | null, passName: string) => {
@@ -555,16 +557,16 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
             console.error("Reconciliation Error:", err);
             return { reconciliationResults: null, error: err.message };
         }
-    }, [processedData]);
+    }, [processedData, siengeSheetData]);
 }
 
 
-function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, processedData, onProcessedDataChange, allPersistedClassifications, onPersistAllClassifications, competence }: ReconciliationAnalysisProps) {
+function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, processedData, siengeSheetData, onProcessedDataChange, allPersistedClassifications, onPersistAllClassifications, competence }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState("reconciled");
     const [activeOtherTab, setActiveOtherTab] = useState<string>('');
     
-    const { reconciliationResults, error } = useReconciliation(processedData);
+    const { reconciliationResults, error } = useReconciliation(processedData, siengeSheetData);
 
     useEffect(() => {
         if (error) {
