@@ -7,7 +7,7 @@ import autoTable from 'jspdf-autotable';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProcessedData } from '@/lib/excel-processor';
-import { ClipboardList, Download, FileQuestion, FileText, FileDown, FileSpreadsheet, Settings, Check, ListFilter, RefreshCw, ChevronDown, ChevronRight, MinusCircle } from 'lucide-react';
+import { ClipboardList, Download, FileQuestion, FileText, FileDown, FileSpreadsheet, Settings, Check, ListFilter, RefreshCw, ChevronDown, ChevronRight, MinusCircle, RotateCw } from 'lucide-react';
 import { DataTable } from './data-table';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -41,11 +41,36 @@ interface PendingIssuesReportProps {
     onForceUpdate: () => void;
 }
 
+const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications_v2';
+
+
 export function PendingIssuesReport({ processedData, allPersistedClassifications, onForceUpdate }: PendingIssuesReportProps) {
     const { toast } = useToast();
     const [ignoredItems, setIgnoredItems] = React.useState<Set<string>>(new Set());
     const [exportOptions, setExportOptions] = React.useState<Record<string, boolean>>({});
     const [openCollapsibles, setOpenCollapsibles] = React.useState<Set<string>>(new Set());
+    const [currentClassifications, setCurrentClassifications] = React.useState(allPersistedClassifications);
+
+     React.useEffect(() => {
+        // Quando as props iniciais mudam (por exemplo, ao restaurar uma sessão), atualiza o estado local.
+        setCurrentClassifications(allPersistedClassifications);
+    }, [allPersistedClassifications]);
+
+    const handleForceUpdate = () => {
+        // Primeiro, força uma releitura do localStorage para obter as classificações mais recentes.
+        try {
+            const savedImobilizado = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
+            if (savedImobilizado) {
+                setCurrentClassifications(JSON.parse(savedImobilizado));
+            }
+        } catch (e) {
+            console.error("Failed to re-load imobilizado classifications from localStorage", e);
+        }
+        // Em seguida, aciona a atualização do `processedData` no componente pai para garantir a consistência de outros dados.
+        onForceUpdate();
+        toast({title: "Relatório Atualizado", description: "Os dados foram recarregados com as informações mais recentes."})
+    };
+
 
     const toggleCollapsible = (id: string) => {
         setOpenCollapsibles(prev => {
@@ -80,11 +105,11 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         // 1. Imobilizado
         const imobilizadoItems = (processedData.sheets?.['Imobilizados'] || [])
             .filter(item => {
-                const classification = allPersistedClassifications[competenceKey]?.classifications?.[item.uniqueItemId]?.classification;
+                const classification = currentClassifications[competenceKey]?.classifications?.[item.uniqueItemId]?.classification;
                 return classification === 'imobilizado';
             })
             .map(item => {
-                const persistedForCompetence = allPersistedClassifications[competenceKey];
+                const persistedForCompetence = currentClassifications[competenceKey];
                 const accountCode = persistedForCompetence?.accountCodes?.[item.id]?.accountCode;
                 const nfeHeader = (processedData.sheets['Notas Válidas'] || []).find(n => n['Chave Unica'] === item['Chave Unica']);
 
@@ -110,7 +135,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         
         // 2. CFOP Incorreto ou a Verificar
         const cfopValidationItems = processedData.reconciliationResults?.reconciled || [];
-        const cfopValidationsForCompetence = allPersistedClassifications[competenceKey]?.cfopValidations?.classifications || {};
+        const cfopValidationsForCompetence = currentClassifications[competenceKey]?.cfopValidations?.classifications || {};
         
         const cfopPendingItems = cfopValidationItems.filter(item => {
              const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
@@ -254,7 +279,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
 
 
         return reportSections;
-    }, [processedData, allPersistedClassifications]);
+    }, [processedData, currentClassifications]);
 
     React.useEffect(() => {
         const initialOptions: Record<string, boolean> = {};
@@ -421,7 +446,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                             </div>
                         </div>
                         <div className="flex gap-2">
-                             <Button onClick={onForceUpdate} variant="secondary"><RefreshCw className="mr-2 h-4 w-4" />Atualizar Relatório</Button>
+                             <Button onClick={handleForceUpdate} variant="secondary"><RefreshCw className="mr-2 h-4 w-4" />Atualizar Relatório</Button>
                              <Popover>
                                 <PopoverTrigger asChild>
                                     <Button variant="outline"><Settings className="mr-2 h-4 w-4" />Opções</Button>
@@ -518,3 +543,5 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         </div>
     );
 }
+
+    
