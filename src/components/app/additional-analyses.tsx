@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FileSearch, Sheet, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Building, Save, Database, FileJson, MinusCircle } from "lucide-react";
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
 import { cfopDescriptions } from "@/lib/cfop";
@@ -98,6 +98,7 @@ export function AdditionalAnalyses({
     onPersistAllClassifications,
 }: AdditionalAnalysesProps) {
     const { toast } = useToast();
+    const [activeTab, setActiveTab] = useState("sped");
 
     const siengeSheetData = processedData.siengeSheetData;
     
@@ -296,96 +297,98 @@ export function AdditionalAnalyses({
                 </CardHeader>
              </Card>
 
-            <Tabs defaultValue="sped" className="w-full">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                     <TabsTrigger value="sped">Verificação SPED</TabsTrigger>
                     <TabsTrigger value="reconciliation">Conciliação Itens (XML vs Sienge)</TabsTrigger>
                     <TabsTrigger value="resale_export">Exportação de Revenda (Sienge)</TabsTrigger>
                 </TabsList>
-
-                <TabsContent value="sped" className="mt-6">
-                     <KeyChecker 
-                        chavesValidas={processedData.sheets['Chaves Válidas'] || []}
-                        spedFiles={spedFiles}
-                        onFilesChange={onSpedFilesChange}
-                        onSpedProcessed={onSpedProcessed}
-                        initialSpedInfo={processedData.spedInfo}
-                        initialKeyCheckResults={processedData.keyCheckResults}
-                        nfeEntradaData={processedData.sheets['Notas Válidas'] || []}
-                        cteData={processedData.sheets['CTEs Válidos'] || []}
-                    />
-                </TabsContent>
                 
-                 <TabsContent value="reconciliation" className="mt-6">
-                    <ReconciliationAnalysis 
-                        siengeFile={siengeFile}
-                        onSiengeFileChange={handleSiengeFileChange}
-                        onClearSiengeFile={onClearSiengeFile}
-                        processedData={processedData}
-                        reconciliationResults={reconciliationResults}
-                        error={reconciliationError}
-                        allPersistedClassifications={allPersistedClassifications}
-                        onPersistAllClassifications={onPersistAllClassifications}
-                    />
-                </TabsContent>
+                <div className="mt-6">
+                    {activeTab === 'sped' && (
+                        <KeyChecker 
+                            chavesValidas={processedData.sheets['Chaves Válidas'] || []}
+                            spedFiles={spedFiles}
+                            onFilesChange={onSpedFilesChange}
+                            onSpedProcessed={onSpedProcessed}
+                            initialSpedInfo={processedData.spedInfo}
+                            initialKeyCheckResults={processedData.keyCheckResults}
+                            nfeEntradaData={processedData.sheets['Notas Válidas'] || []}
+                            cteData={processedData.sheets['CTEs Válidos'] || []}
+                        />
+                    )}
+                    
+                    {activeTab === 'reconciliation' && (
+                        <ReconciliationAnalysis 
+                            siengeFile={siengeFile}
+                            onSiengeFileChange={handleSiengeFileChange}
+                            onClearSiengeFile={onClearSiengeFile}
+                            processedData={processedData}
+                            reconciliationResults={reconciliationResults}
+                            error={reconciliationError}
+                            allPersistedClassifications={allPersistedClassifications}
+                            onPersistAllClassifications={onPersistAllClassifications}
+                        />
+                    )}
 
-                 <TabsContent value="resale_export" className="mt-6">
-                    <Card>
-                        <CardHeader>
-                            <div className="flex items-center gap-3">
-                                <Archive className="h-8 w-8 text-primary" />
-                                <div>
-                                    <CardTitle>Exportar XMLs de Revenda</CardTitle>
-                                    <CardDescription>
-                                        Identifique e baixe um arquivo .zip com os XMLs de notas fiscais classificadas com CFOP de revenda no relatório do Sienge.
-                                    </CardDescription>
+                    {activeTab === 'resale_export' && (
+                        <Card>
+                            <CardHeader>
+                                <div className="flex items-center gap-3">
+                                    <Archive className="h-8 w-8 text-primary" />
+                                    <div>
+                                        <CardTitle>Exportar XMLs de Revenda</CardTitle>
+                                        <CardDescription>
+                                            Identifique e baixe um arquivo .zip com os XMLs de notas fiscais classificadas com CFOP de revenda no relatório do Sienge.
+                                        </CardDescription>
+                                    </div>
                                 </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <FileUploadForm
-                                requiredFiles={['Itens do Sienge']}
-                                files={{ 'Itens do Sienge': !!siengeFile }}
-                                onFileChange={handleSiengeFileChange}
-                                onClearFile={onClearSiengeFile}
-                            />
-                            {!siengeFile ? (
-                                <div className="p-8 text-center text-muted-foreground mt-4">
-                                    <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
-                                    <h3 className="text-xl font-semibold mb-2">Aguardando dados Sienge</h3>
-                                    <p>Carregue a planilha "Itens do Sienge" para identificar as notas de revenda.</p>
-                                </div>
-                            ) : (
-                                <div className="flex flex-col items-start gap-4 mt-6">
-                                    <Button onClick={handleAnalyzeResale} disabled={isAnalyzingResale || isExporting}>
-                                        {isAnalyzingResale ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Analisando...</> : "Analisar XMLs para Revenda"}
-                                    </Button>
+                            </CardHeader>
+                            <CardContent>
+                                <FileUploadForm
+                                    requiredFiles={['Itens do Sienge']}
+                                    files={{ 'Itens do Sienge': !!siengeFile }}
+                                    onFileChange={handleSiengeFileChange}
+                                    onClearFile={onClearSiengeFile}
+                                />
+                                {!siengeFile ? (
+                                    <div className="p-8 text-center text-muted-foreground mt-4">
+                                        <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
+                                        <h3 className="text-xl font-semibold mb-2">Aguardando dados Sienge</h3>
+                                        <p>Carregue a planilha "Itens do Sienge" para identificar as notas de revenda.</p>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-start gap-4 mt-6">
+                                        <Button onClick={handleAnalyzeResale} disabled={isAnalyzingResale || isExporting}>
+                                            {isAnalyzingResale ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Analisando...</> : "Analisar XMLs para Revenda"}
+                                        </Button>
 
-                                    {processedData.resaleAnalysis && (
-                                        <div className="mt-4 w-full">
-                                            <p className="text-sm text-muted-foreground">
-                                                Foram encontradas <span className="font-bold text-foreground">{processedData.resaleAnalysis.noteKeys.size}</span> chaves de revenda no Sienge.
-                                                Destas, <span className="font-bold text-foreground">{processedData.resaleAnalysis.xmls.length}</span> ficheiros XML correspondentes foram encontrados e estão prontos para exportação.
-                                            </p>
-                                            <Button onClick={handleExportResaleXmls} disabled={isExporting || processedData.resaleAnalysis.xmls.length === 0} className="mt-4">
-                                                {isExporting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A compactar...</> : `Baixar ${processedData.resaleAnalysis.xmls.length} XMLs de Revenda`}
-                                            </Button>
-                                            {processedData.resaleAnalysis.xmls.length === 0 && processedData.resaleAnalysis.noteKeys.size > 0 && (
-                                                <Alert variant="destructive" className="mt-4">
-                                                    <AlertCircle className="h-4 w-4" />
-                                                    <AlertTitle>XMLs não encontrados</AlertTitle>
-                                                    <AlertDescription>
-                                                        Apesar de as notas de revenda terem sido identificadas no Sienge, os ficheiros XML correspondentes não foram encontrados entre os ficheiros carregados. Verifique se o nome dos XMLs contém a chave de 44 dígitos.
-                                                    </AlertDescription>
-                                                </Alert>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                                        {processedData.resaleAnalysis && (
+                                            <div className="mt-4 w-full">
+                                                <p className="text-sm text-muted-foreground">
+                                                    Foram encontradas <span className="font-bold text-foreground">{processedData.resaleAnalysis.noteKeys.size}</span> chaves de revenda no Sienge.
+                                                    Destas, <span className="font-bold text-foreground">{processedData.resaleAnalysis.xmls.length}</span> ficheiros XML correspondentes foram encontrados e estão prontos para exportação.
+                                                </p>
+                                                <Button onClick={handleExportResaleXmls} disabled={isExporting || processedData.resaleAnalysis.xmls.length === 0} className="mt-4">
+                                                    {isExporting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A compactar...</> : `Baixar ${processedData.resaleAnalysis.xmls.length} XMLs de Revenda`}
+                                                </Button>
+                                                {processedData.resaleAnalysis.xmls.length === 0 && processedData.resaleAnalysis.noteKeys.size > 0 && (
+                                                    <Alert variant="destructive" className="mt-4">
+                                                        <AlertCircle className="h-4 w-4" />
+                                                        <AlertTitle>XMLs não encontrados</AlertTitle>
+                                                        <AlertDescription>
+                                                            Apesar de as notas de revenda terem sido identificadas no Sienge, os ficheiros XML correspondentes não foram encontrados entre os ficheiros carregados. Verifique se o nome dos XMLs contém a chave de 44 dígitos.
+                                                        </AlertDescription>
+                                                    </Alert>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
             </Tabs>
         </div>
     );
@@ -607,6 +610,7 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
 
 function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, processedData, reconciliationResults, error, allPersistedClassifications, onPersistAllClassifications }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
+    const [activeTab, setActiveTab] = useState("reconciled");
     
     useEffect(() => {
         if (error) {
@@ -656,47 +660,53 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                             <CardTitle>Resultados da Conciliação</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <Tabs defaultValue="reconciled">
+                            <Tabs value={activeTab} onValueChange={setActiveTab}>
                                 <TabsList className="grid w-full grid-cols-1 md:grid-cols-3">
                                     <TabsTrigger value="reconciled">Conciliados ({reconciliationResults.reconciled.length})</TabsTrigger>
                                     <TabsTrigger value="onlyInSienge">Apenas no Sienge ({reconciliationResults.onlyInSienge.length})</TabsTrigger>
                                     <TabsTrigger value="onlyInXml">Apenas no XML ({reconciliationResults.onlyInXml.length})</TabsTrigger>
                                 </TabsList>
                                 <div className="mt-4">
-                                    <TabsContent value="reconciled">
-                                        <div className="flex gap-2 mb-4">
-                                            <Button onClick={() => handleDownload(reconciliationResults.reconciled, 'Itens_Conciliados')} size="sm" disabled={reconciliationResults.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                            <Dialog>
-                                                <DialogTrigger asChild>
-                                                    <Button variant="outline" disabled={!reconciliationResults || reconciliationResults.reconciled.length === 0}>
-                                                        Validar CFOP
-                                                    </Button>
-                                                </DialogTrigger>
-                                                <DialogContent className="max-w-[95vw] h-[90vh] flex flex-col">
-                                                    <DialogHeader>
-                                                        <DialogTitle>Validação de CFOP dos Itens Conciliados</DialogTitle>
-                                                        <DialogDescription>
-                                                            Classifique os itens e verifique se o CFOP lançado no Sienge está correto. As suas validações são guardadas automaticamente.
-                                                        </DialogDescription>
-                                                    </DialogHeader>
-                                                    <CfopValidator 
-                                                        items={reconciliationResults.reconciled}
-                                                        allPersistedClassifications={allPersistedClassifications}
-                                                        onPersistAllClassifications={onPersistAllClassifications}
-                                                    />
-                                                </DialogContent>
-                                            </Dialog>
+                                     {activeTab === 'reconciled' && (
+                                        <div>
+                                            <div className="flex gap-2 mb-4">
+                                                <Button onClick={() => handleDownload(reconciliationResults.reconciled, 'Itens_Conciliados')} size="sm" disabled={reconciliationResults.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                                <Dialog>
+                                                    <DialogTrigger asChild>
+                                                        <Button variant="outline" disabled={!reconciliationResults || reconciliationResults.reconciled.length === 0}>
+                                                            Validar CFOP
+                                                        </Button>
+                                                    </DialogTrigger>
+                                                    <DialogContent className="max-w-[95vw] h-[90vh] flex flex-col">
+                                                        <DialogHeader>
+                                                            <DialogTitle>Validação de CFOP dos Itens Conciliados</DialogTitle>
+                                                            <DialogDescription>
+                                                                Classifique os itens e verifique se o CFOP lançado no Sienge está correto. As suas validações são guardadas automaticamente.
+                                                            </DialogDescription>
+                                                        </DialogHeader>
+                                                        <CfopValidator 
+                                                            items={reconciliationResults.reconciled}
+                                                            allPersistedClassifications={allPersistedClassifications}
+                                                            onPersistAllClassifications={onPersistAllClassifications}
+                                                        />
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </div>
+                                            <DataTable columns={getColumnsWithCustomRender(reconciliationResults.reconciled, Object.keys(reconciliationResults.reconciled[0] || {}))} data={reconciliationResults.reconciled} />
                                         </div>
-                                        <DataTable columns={getColumnsWithCustomRender(reconciliationResults.reconciled, Object.keys(reconciliationResults.reconciled[0] || {}))} data={reconciliationResults.reconciled} />
-                                    </TabsContent>
-                                    <TabsContent value="onlyInSienge">
-                                        <Button onClick={() => handleDownload(reconciliationResults.onlyInSienge, 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                        <DataTable columns={getColumnsWithCustomRender(reconciliationResults.onlyInSienge, Object.keys(reconciliationResults.onlyInSienge[0] || {}))} data={reconciliationResults.onlyInSienge} />
-                                    </TabsContent>
-                                    <TabsContent value="onlyInXml">
-                                        <Button onClick={() => handleDownload(reconciliationResults.onlyInXml, 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                        <DataTable columns={getColumnsWithCustomRender(reconciliationResults.onlyInXml, Object.keys(reconciliationResults.onlyInXml[0] || {}))} data={reconciliationResults.onlyInXml} />
-                                    </TabsContent>
+                                    )}
+                                     {activeTab === 'onlyInSienge' && (
+                                         <div>
+                                            <Button onClick={() => handleDownload(reconciliationResults.onlyInSienge, 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                            <DataTable columns={getColumnsWithCustomRender(reconciliationResults.onlyInSienge, Object.keys(reconciliationResults.onlyInSienge[0] || {}))} data={reconciliationResults.onlyInSienge} />
+                                         </div>
+                                    )}
+                                     {activeTab === 'onlyInXml' && (
+                                         <div>
+                                            <Button onClick={() => handleDownload(reconciliationResults.onlyInXml, 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                            <DataTable columns={getColumnsWithCustomRender(reconciliationResults.onlyInXml, Object.keys(reconciliationResults.onlyInXml[0] || {}))} data={reconciliationResults.onlyInXml} />
+                                         </div>
+                                    )}
                                 </div>
                             </Tabs>
                         </CardContent>
@@ -715,12 +725,14 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                             <TabsTrigger key={esp} value={esp}>{esp} ({items.length})</TabsTrigger>
                                         ))}
                                     </TabsList>
-                                    <div className="mt-4">
+                                     <div className="mt-4">
                                         {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
-                                            <TabsContent key={esp} value={esp}>
-                                                <Button onClick={() => handleDownload(items, `Sienge_Outros_${esp}`)} size="sm" className="mb-4" disabled={items.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                                <DataTable columns={getColumnsWithCustomRender(items, Object.keys(items[0] || {}))} data={items} />
-                                            </TabsContent>
+                                            activeTab === esp && (
+                                                <div key={esp}>
+                                                    <Button onClick={() => handleDownload(items, `Sienge_Outros_${esp}`)} size="sm" className="mb-4" disabled={items.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
+                                                    <DataTable columns={getColumnsWithCustomRender(items, Object.keys(items[0] || {}))} data={items} />
+                                                </div>
+                                            )
                                         ))}
                                     </div>
                                 </Tabs>

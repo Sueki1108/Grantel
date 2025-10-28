@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemo, useState } from "react";
@@ -193,7 +192,10 @@ interface KeyResultsDisplayProps {
 
 export function KeyResultsDisplay({ results }: KeyResultsDisplayProps) {
     const { toast } = useToast();
-    
+    const [activeTab, setActiveTab] = useState("not-in-sped");
+    const [activeSubTab, setActiveSubTab] = useState("nfe");
+    const [activeDivergenceTab, setActiveDivergenceTab] = useState("consolidated");
+
     if (!results) {
         return null;
     }
@@ -241,138 +243,140 @@ export function KeyResultsDisplay({ results }: KeyResultsDisplayProps) {
 
 
     return (
-        <Tabs defaultValue="not-in-sped" className="w-full mt-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-4">
             <TabsList className="grid w-full grid-cols-1 md:grid-cols-4">
                 <TabsTrigger value="not-in-sped" className="text-red-600">Não Encontrado no SPED</TabsTrigger>
                 <TabsTrigger value="not-in-sheet" className="text-blue-600">Não Encontrado na Planilha</TabsTrigger>
                 <TabsTrigger value="valid" className="text-green-600">Válido em Ambos</TabsTrigger>
                 <TabsTrigger value="divergences" className="text-orange-600">Inconformidades</TabsTrigger>
             </TabsList>
-
-            {/* Aba: Não Encontrado no SPED */}
-            <TabsContent value="not-in-sped" className="mt-6">
-                <Card className="shadow-lg border-red-500/50">
-                    <CardHeader>
-                        <CardTitle className="font-headline text-2xl text-red-700 dark:text-red-500">Chaves da Planilha NÃO ENCONTRADAS no SPED</CardTitle>
-                        <CardDescription>Estas chaves estavam na sua planilha mas não no arquivo .txt.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Tabs defaultValue="nfe" className="w-full">
-                            <TabsList>
-                                <TabsTrigger value="nfe">NFe ({notFoundNfe.length})</TabsTrigger>
-                                <TabsTrigger value="cte">CTe ({notFoundCte.length})</TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="nfe" className="pt-4">
-                                <KeyDisplayList keys={notFoundNfe} duplicateKeys={duplicateSheetKeys} listName="NFe_Nao_Encontradas_SPED" />
-                            </TabsContent>
-                             <TabsContent value="cte" className="pt-4">
-                                <KeyDisplayList keys={notFoundCte} duplicateKeys={duplicateSheetKeys} listName="CTe_Nao_Encontrados_SPED" />
-                            </TabsContent>
-                        </Tabs>
-                    </CardContent>
-                </Card>
-            </TabsContent>
-
-             {/* Aba: Não Encontrado na Planilha */}
-            <TabsContent value="not-in-sheet" className="mt-6">
-                 <Card className="shadow-lg border-blue-500/50">
-                    <CardHeader>
-                        <CardTitle className="font-headline text-2xl text-blue-700 dark:text-blue-500">Chaves do SPED NÃO ENCONTRADAS na Planilha</CardTitle>
-                        <CardDescription>Estas chaves estavam no seu arquivo .txt mas não na planilha.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                         <Tabs defaultValue="nfe" className="w-full">
-                            <TabsList>
-                                <TabsTrigger value="nfe">NFe ({inTxtNotInSheetNfe.length})</TabsTrigger>
-                                <TabsTrigger value="cte">CTe ({inTxtNotInSheetCte.length})</TabsTrigger>
-                            </TabsList>
-                             <TabsContent value="nfe" className="pt-4">
-                                <KeyDisplayList keys={inTxtNotInSheetNfe} duplicateKeys={duplicateTxtKeys} listName="NFe_SPED_Nao_na_Planilha" />
-                            </TabsContent>
-                            <TabsContent value="cte" className="pt-4">
-                                <KeyDisplayList keys={inTxtNotInSheetCte} duplicateKeys={duplicateTxtKeys} listName="CTe_SPED_Nao_na_Planilha" />
-                            </TabsContent>
-                        </Tabs>
-                    </CardContent>
-                </Card>
-            </TabsContent>
-
-             {/* Aba: Válido em Ambos */}
-            <TabsContent value="valid" className="mt-6">
-                <Card className="shadow-lg border-green-500/50">
-                    <CardHeader>
-                        <CardTitle className="font-headline text-2xl text-green-700 dark:text-green-500">Chaves Válidas (Encontradas em Ambos)</CardTitle>
-                        <CardDescription>Estas chaves foram encontradas com sucesso na planilha e no arquivo SPED.</CardDescription>
-                    </CardHeader>
-                     <CardContent>
-                         <Tabs defaultValue="nfe" className="w-full">
-                            <TabsList>
-                                <TabsTrigger value="nfe">NFe ({validNfe.length})</TabsTrigger>
-                                <TabsTrigger value="cte">CTe ({validCte.length})</TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="nfe" className="pt-4">
-                                <KeyDisplayList keys={validNfe} duplicateKeys={new Set()} listName="NFe_Validas" />
-                            </TabsContent>
-                             <TabsContent value="cte" className="pt-4">
-                                <KeyDisplayList keys={validCte} duplicateKeys={new Set()} listName="CTe_Validos" />
-                            </TabsContent>
-                        </Tabs>
-                    </CardContent>
-                </Card>
-            </TabsContent>
             
-            {/* Aba: Divergências */}
-            <TabsContent value="divergences" className="mt-6">
-                <Card className="shadow-lg border-orange-500/50">
-                     <CardHeader>
-                        <CardTitle className="font-headline text-2xl text-orange-700 dark:text-orange-500">Inconformidades e Divergências</CardTitle>
-                        <CardDescription>Alertas sobre divergências de data, valor e cadastro (UF/IE) entre XML e SPED.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                         <Tabs defaultValue="consolidated" className="w-full">
-                             <TabsList className="grid w-full grid-cols-5">
-                                <TabsTrigger value="consolidated">Consolidado ({results.consolidatedDivergences.length})</TabsTrigger>
-                                <TabsTrigger value="uf-divergence">UF ({results.ufDivergences.length})</TabsTrigger>
-                                <TabsTrigger value="ie-divergence">IE ({results.ieDivergences.length})</TabsTrigger>
-                                <TabsTrigger value="data">Data ({results.dateDivergences.length})</TabsTrigger>
-                                <TabsTrigger value="valor">Valor ({results.valueDivergences.length})</TabsTrigger>
-                            </TabsList>
-                            
-                            <TabsContent value="consolidated" className="pt-4">
-                                <Button onClick={() => handleDownload(results.consolidatedDivergences, "Inconformidades_Consolidado", toast)} disabled={results.consolidatedDivergences.length === 0} size="sm" className="mb-4">
-                                    <Download className="mr-2 h-4 w-4" /> Baixar esta lista
-                                </Button>
-                                <DataTable columns={getColumns(results.consolidatedDivergences)} data={results.consolidatedDivergences} />
-                            </TabsContent>
+            <div className="mt-6">
+                {activeTab === 'not-in-sped' && (
+                    <Card className="shadow-lg border-red-500/50">
+                        <CardHeader>
+                            <CardTitle className="font-headline text-2xl text-red-700 dark:text-red-500">Chaves da Planilha NÃO ENCONTRADAS no SPED</CardTitle>
+                            <CardDescription>Estas chaves estavam na sua planilha mas não no arquivo .txt.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Tabs value={activeSubTab} onValueChange={setActiveSubTab} className="w-full">
+                                <TabsList>
+                                    <TabsTrigger value="nfe">NFe ({notFoundNfe.length})</TabsTrigger>
+                                    <TabsTrigger value="cte">CTe ({notFoundCte.length})</TabsTrigger>
+                                </TabsList>
+                                <div className="pt-4">
+                                    {activeSubTab === 'nfe' && <KeyDisplayList keys={notFoundNfe} duplicateKeys={duplicateSheetKeys} listName="NFe_Nao_Encontradas_SPED" />}
+                                    {activeSubTab === 'cte' && <KeyDisplayList keys={notFoundCte} duplicateKeys={duplicateSheetKeys} listName="CTe_Nao_Encontrados_SPED" />}
+                                </div>
+                            </Tabs>
+                        </CardContent>
+                    </Card>
+                )}
 
-                            <TabsContent value="uf-divergence" className="pt-4">
-                                <Button onClick={() => handleDownload(results.ufDivergences, "Inconformidades_Cadastrais_UF", toast)} disabled={results.ufDivergences.length === 0} size="sm" className="mb-4">
-                                    <Download className="mr-2 h-4 w-4" /> Baixar esta lista
-                                </Button>
-                                <DataTable columns={getColumns(results.ufDivergences)} data={results.ufDivergences} />
-                            </TabsContent>
-                             <TabsContent value="ie-divergence" className="pt-4">
-                                <Button onClick={() => handleDownload(results.ieDivergences, "Inconformidades_Cadastrais_IE", toast)} disabled={results.ieDivergences.length === 0} size="sm" className="mb-4">
-                                    <Download className="mr-2 h-4 w-4" /> Baixar esta lista
-                                </Button>
-                                <DataTable columns={getColumns(results.ieDivergences)} data={results.ieDivergences} />
-                            </TabsContent>
-                            <TabsContent value="data" className="pt-4">
-                                <Button onClick={() => handleDownload(results.dateDivergences, "Divergencias_Data", toast)} disabled={results.dateDivergences.length === 0} size="sm" className="mb-4">
-                                    <Download className="mr-2 h-4 w-4" /> Baixar
-                                </Button>
-                                 <DataTable columns={getColumns(results.dateDivergences)} data={results.dateDivergences} />
-                            </TabsContent>
-                             <TabsContent value="valor" className="pt-4">
-                                <Button onClick={() => handleDownload(results.valueDivergences, "Divergencias_Valor", toast)} disabled={results.valueDivergences.length === 0} size="sm" className="mb-4">
-                                    <Download className="mr-2 h-4 w-4" /> Baixar
-                                </Button>
-                                 <DataTable columns={getColumns(results.valueDivergences)} data={results.valueDivergences} />
-                            </TabsContent>
-                         </Tabs>
-                    </CardContent>
-                </Card>
-            </TabsContent>
+                {activeTab === 'not-in-sheet' && (
+                    <Card className="shadow-lg border-blue-500/50">
+                        <CardHeader>
+                            <CardTitle className="font-headline text-2xl text-blue-700 dark:text-blue-500">Chaves do SPED NÃO ENCONTRADAS na Planilha</CardTitle>
+                            <CardDescription>Estas chaves estavam no seu arquivo .txt mas não na planilha.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Tabs value={activeSubTab} onValueChange={setActiveSubTab} className="w-full">
+                                <TabsList>
+                                    <TabsTrigger value="nfe">NFe ({inTxtNotInSheetNfe.length})</TabsTrigger>
+                                    <TabsTrigger value="cte">CTe ({inTxtNotInSheetCte.length})</TabsTrigger>
+                                </TabsList>
+                                <div className="pt-4">
+                                    {activeSubTab === 'nfe' && <KeyDisplayList keys={inTxtNotInSheetNfe} duplicateKeys={duplicateTxtKeys} listName="NFe_SPED_Nao_na_Planilha" />}
+                                    {activeSubTab === 'cte' && <KeyDisplayList keys={inTxtNotInSheetCte} duplicateKeys={duplicateTxtKeys} listName="CTe_SPED_Nao_na_Planilha" />}
+                                </div>
+                            </Tabs>
+                        </CardContent>
+                    </Card>
+                )}
+                
+                {activeTab === 'valid' && (
+                     <Card className="shadow-lg border-green-500/50">
+                        <CardHeader>
+                            <CardTitle className="font-headline text-2xl text-green-700 dark:text-green-500">Chaves Válidas (Encontradas em Ambos)</CardTitle>
+                            <CardDescription>Estas chaves foram encontradas com sucesso na planilha e no arquivo SPED.</CardDescription>
+                        </CardHeader>
+                         <CardContent>
+                            <Tabs value={activeSubTab} onValueChange={setActiveSubTab} className="w-full">
+                                <TabsList>
+                                    <TabsTrigger value="nfe">NFe ({validNfe.length})</TabsTrigger>
+                                    <TabsTrigger value="cte">CTe ({validCte.length})</TabsTrigger>
+                                </TabsList>
+                                <div className="pt-4">
+                                    {activeSubTab === 'nfe' && <KeyDisplayList keys={validNfe} duplicateKeys={new Set()} listName="NFe_Validas" />}
+                                    {activeSubTab === 'cte' && <KeyDisplayList keys={validCte} duplicateKeys={new Set()} listName="CTe_Validos" />}
+                                </div>
+                            </Tabs>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {activeTab === 'divergences' && (
+                     <Card className="shadow-lg border-orange-500/50">
+                         <CardHeader>
+                            <CardTitle className="font-headline text-2xl text-orange-700 dark:text-orange-500">Inconformidades e Divergências</CardTitle>
+                            <CardDescription>Alertas sobre divergências de data, valor e cadastro (UF/IE) entre XML e SPED.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Tabs value={activeDivergenceTab} onValueChange={setActiveDivergenceTab} className="w-full">
+                                <TabsList className="grid w-full grid-cols-5">
+                                    <TabsTrigger value="consolidated">Consolidado ({results.consolidatedDivergences.length})</TabsTrigger>
+                                    <TabsTrigger value="uf-divergence">UF ({results.ufDivergences.length})</TabsTrigger>
+                                    <TabsTrigger value="ie-divergence">IE ({results.ieDivergences.length})</TabsTrigger>
+                                    <TabsTrigger value="data">Data ({results.dateDivergences.length})</TabsTrigger>
+                                    <TabsTrigger value="valor">Valor ({results.valueDivergences.length})</TabsTrigger>
+                                </TabsList>
+                                <div className="pt-4">
+                                    {activeDivergenceTab === 'consolidated' && (
+                                        <div>
+                                            <Button onClick={() => handleDownload(results.consolidatedDivergences, "Inconformidades_Consolidado", toast)} disabled={results.consolidatedDivergences.length === 0} size="sm" className="mb-4">
+                                                <Download className="mr-2 h-4 w-4" /> Baixar esta lista
+                                            </Button>
+                                            <DataTable columns={getColumns(results.consolidatedDivergences)} data={results.consolidatedDivergences} />
+                                        </div>
+                                    )}
+                                     {activeDivergenceTab === 'uf-divergence' && (
+                                         <div>
+                                            <Button onClick={() => handleDownload(results.ufDivergences, "Inconformidades_Cadastrais_UF", toast)} disabled={results.ufDivergences.length === 0} size="sm" className="mb-4">
+                                                <Download className="mr-2 h-4 w-4" /> Baixar esta lista
+                                            </Button>
+                                            <DataTable columns={getColumns(results.ufDivergences)} data={results.ufDivergences} />
+                                         </div>
+                                    )}
+                                    {activeDivergenceTab === 'ie-divergence' && (
+                                        <div>
+                                            <Button onClick={() => handleDownload(results.ieDivergences, "Inconformidades_Cadastrais_IE", toast)} disabled={results.ieDivergences.length === 0} size="sm" className="mb-4">
+                                                <Download className="mr-2 h-4 w-4" /> Baixar esta lista
+                                            </Button>
+                                            <DataTable columns={getColumns(results.ieDivergences)} data={results.ieDivergences} />
+                                        </div>
+                                    )}
+                                    {activeDivergenceTab === 'data' && (
+                                        <div>
+                                            <Button onClick={() => handleDownload(results.dateDivergences, "Divergencias_Data", toast)} disabled={results.dateDivergences.length === 0} size="sm" className="mb-4">
+                                                <Download className="mr-2 h-4 w-4" /> Baixar
+                                            </Button>
+                                            <DataTable columns={getColumns(results.dateDivergences)} data={results.dateDivergences} />
+                                        </div>
+                                    )}
+                                     {activeDivergenceTab === 'valor' && (
+                                        <div>
+                                            <Button onClick={() => handleDownload(results.valueDivergences, "Divergencias_Valor", toast)} disabled={results.valueDivergences.length === 0} size="sm" className="mb-4">
+                                                <Download className="mr-2 h-4 w-4" /> Baixar
+                                            </Button>
+                                            <DataTable columns={getColumns(results.valueDivergences)} data={results.valueDivergences} />
+                                        </div>
+                                    )}
+                                </div>
+                            </Tabs>
+                        </CardContent>
+                    </Card>
+                )}
+            </div>
         </Tabs>
     );
 }
