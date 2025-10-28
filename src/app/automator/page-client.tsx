@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -26,12 +26,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { SaidasAnalysis } from "@/components/app/saidas-analysis";
 import { NfseAnalysis } from "@/components/app/nfse-analysis";
 import { KeyCheckResult } from "@/components/app/key-checker";
-import { SettingsDialog } from "@/components/app/settings-dialog";
 import { cn } from "@/lib/utils";
 import { ImobilizadoAnalysis, type AllClassifications } from "@/components/app/imobilizado-analysis";
 import { HistoryAnalysis, type SessionData } from "@/components/app/history-analysis";
 import { DifalAnalysis } from "@/components/app/difal-analysis";
-import { PendingIssuesReport } from "@/components/app/pending-issues-report";
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -102,21 +100,31 @@ export function AutomatorClientPage() {
         try {
             localStorage.setItem(IMOBILIZADO_STORAGE_KEY, JSON.stringify(allDataToSave));
             toast({
-                title: "Classificações de Imobilizado Guardadas",
-                description: "As suas classificações e códigos de ativo foram guardados no armazenamento local do navegador."
+                title: "Classificações Guardadas",
+                description: "As suas classificações foram guardadas no armazenamento local do navegador."
             });
         } catch(e) {
-            console.error("Failed to save imobilizado classifications to localStorage", e);
+            console.error("Failed to save classifications to localStorage", e);
             toast({ variant: 'destructive', title: "Erro ao guardar classificações"});
         }
     };
     
-    const handleExportSession = () => {
+    const handleExportSession = async () => {
         const currentCompetence = competence;
         if (!currentCompetence || !processedData) {
             toast({ variant: 'destructive', title: 'Dados insuficientes', description: 'Processe os dados e selecione uma competência antes de exportar.' });
             return;
         }
+    
+        // Function to read a file and return its base64 content
+        const readFileAsBase64 = (file: File): Promise<string> => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve((reader.result as string).split(',')[1]);
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+        };
     
         // Create an optimized version of processedData without original sheets
         const optimizedSheets: ProcessedData['sheets'] = {};
@@ -130,23 +138,26 @@ export function AutomatorClientPage() {
             ...processedData,
             sheets: optimizedSheets
         };
+        
+        toast({ title: 'A exportar sessão...', description: 'A ler e a converter os seus ficheiros XML. Por favor, aguarde.'});
+
+        // Convert all XML files to base64
+        const xmlFileContents = {
+            nfeEntrada: await Promise.all(xmlFiles.nfeEntrada.map(async f => ({ name: f.name, content: await readFileAsBase64(f) }))),
+            cte: await Promise.all(xmlFiles.cte.map(async f => ({ name: f.name, content: await readFileAsBase64(f) }))),
+            nfeSaida: await Promise.all(xmlFiles.nfeSaida.map(async f => ({ name: f.name, content: await readFileAsBase64(f) }))),
+            nfse: await Promise.all(xmlFiles.nfse.map(async f => ({ name: f.name, content: await readFileAsBase64(f) }))),
+        };
     
         const sessionData: SessionData = {
+            version: '2.0',
             competence: currentCompetence,
             processedAt: new Date().toISOString(),
             processedData: optimizedProcessedData,
-            fileNames: {
-                nfeEntrada: xmlFiles.nfeEntrada.map(f => f.name),
-                cte: xmlFiles.cte.map(f => f.name),
-                nfeSaida: xmlFiles.nfeSaida.map(f => f.name),
-                nfse: xmlFiles.nfse.map(f => f.name),
-                manifesto: Object.keys(fileStatus),
-                sienge: siengeFile ? siengeFile.name : null,
-                sped: spedFiles.map(f => f.name),
-            },
             lastSaidaNumber,
             disregardedNfseNotes: Array.from(disregardedNfseNotes),
             saidasStatus,
+            xmlFileContents
         };
     
         try {
@@ -163,22 +174,45 @@ export function AutomatorClientPage() {
             toast({ title: "Sessão Exportada", description: `O ficheiro ${link.download} está a ser descarregado.` });
         } catch (e: any) {
             console.error("Failed to export session:", e);
-             if (e.message.includes('localStorage')) {
-                toast({ variant: 'destructive', title: 'Erro ao Exportar Sessão', description: "Falha ao guardar sessão: os dados processados podem ser demasiado grandes para o armazenamento local. Tente com um período menor." });
+             if (e.message.includes('localStorage') || e.message.includes('encodeURIComponent')) {
+                toast({ variant: 'destructive', title: 'Erro ao Exportar Sessão', description: "Falha ao guardar sessão: os dados processados são demasiado grandes. Tente com um período menor." });
             } else {
                 toast({ variant: 'destructive', title: 'Erro ao Exportar Sessão', description: e.message });
             }
         }
     };
     
+    const base64ToFile = (base64: string, filename: string, mimeType: string): File => {
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        return new File([byteArray], filename, { type: mimeType });
+    };
+
     const handleRestoreSession = (session: SessionData) => {
-        handleClearAllData();
-        
+        handleClearAllData(); // Clears all state including file inputs
+
+        // Restore state from session
         setProcessedData(session.processedData);
         setLastSaidaNumber(session.lastSaidaNumber || 0);
         setSaidasStatus(session.saidasStatus || {});
         setDisregardedNfseNotes(new Set(session.disregardedNfseNotes || []));
 
+        // Restore file objects from base64
+        if (session.xmlFileContents) {
+            const restoredXmlFiles = {
+                nfeEntrada: session.xmlFileContents.nfeEntrada.map(f => base64ToFile(f.content, f.name, 'application/xml')),
+                cte: session.xmlFileContents.cte.map(f => base64ToFile(f.content, f.name, 'application/xml')),
+                nfeSaida: session.xmlFileContents.nfeSaida.map(f => base64ToFile(f.content, f.name, 'application/xml')),
+                nfse: session.xmlFileContents.nfse.map(f => base64ToFile(f.content, f.name, 'application/xml')),
+            };
+            setXmlFiles(restoredXmlFiles);
+        }
+
+        // Restore period selection
         const periods = session.competence.split('_');
         const restoredPeriods: Record<string, boolean> = {};
         periods.forEach(p => { restoredPeriods[p] = true });
@@ -571,11 +605,21 @@ export function AutomatorClientPage() {
     };
 
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => {
-        setProcessedData(prevData => ({ ...prevData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : prevData?.spedCorrections } as ProcessedData));
+        setProcessedData(prevData => {
+            if (!prevData) {
+                return { sheets: {}, spedInfo: spedInfo || null, siengeSheetData: null, keyCheckResults: keyCheckResults || null, spedCorrections: spedCorrections ? [spedCorrections] : null, competence: null, resaleAnalysis: null };
+            }
+            return { ...prevData, spedInfo: spedInfo, keyCheckResults: keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : prevData.spedCorrections };
+        });
     }, []);
 
     const handleSiengeDataProcessed = (siengeData: any[] | null) => {
-        setProcessedData(prevData => ({ ...prevData, siengeSheetData: siengeData } as ProcessedData));
+        setProcessedData(prevData => {
+            if (!prevData) {
+                return { sheets: {}, spedInfo: null, siengeSheetData: siengeData, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null };
+            }
+            return { ...prevData, siengeSheetData: siengeData };
+        });
         if (siengeData) {
             toast({ title: "Dados Sienge Processados", description: "As análises de conferência de impostos foram atualizadas." });
         }
@@ -616,6 +660,11 @@ export function AutomatorClientPage() {
                         </div>
                      </div>
                      <div className="flex items-center gap-2">
+                         <Button asChild variant="outline" size="sm">
+                            <Link href="/automator/pending-issues">
+                                Relatório de Pendências
+                            </Link>
+                         </Button>
                         <ThemeToggle />
                      </div>
                 </div>
@@ -652,9 +701,6 @@ export function AutomatorClientPage() {
                             <TabsTrigger value="analyses" disabled={analysisTabDisabled} className="flex items-center gap-2">
                                 5. Análises Avançadas
                                 {processedData?.keyCheckResults && <CheckCircle className="h-5 w-5 text-green-600" />}
-                            </TabsTrigger>
-                             <TabsTrigger value="pending">
-                                6. Pendências
                             </TabsTrigger>
                         </TabsList>
 
@@ -724,13 +770,6 @@ export function AutomatorClientPage() {
                         
                         <TabsContent value="analyses" className="mt-6">
                             {!analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} onSiengeDataProcessed={handleSiengeDataProcessed} siengeFile={siengeFile} onSiengeFileChange={setSiengeFile} onClearSiengeFile={() => { setSiengeFile(null); handleSiengeDataProcessed(null); const input = document.querySelector('input[name="Itens do Sienge"]') as HTMLInputElement; if (input) input.value = ''; }} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>}
-                        </TabsContent>
-                         
-                        <TabsContent value="pending" className="mt-6">
-                             <PendingIssuesReport 
-                                processedData={processedData}
-                                allPersistedClassifications={imobilizadoClassifications}
-                            />
                         </TabsContent>
 
                     </Tabs>
