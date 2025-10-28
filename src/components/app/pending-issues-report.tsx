@@ -173,7 +173,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const notFoundInSped = (processedData.keyCheckResults?.keysNotFoundInTxt || []);
         const notFoundNfe = notFoundInSped.filter(item => (item.type === 'NFE' || item.type === 'Saída')).map(item => ({...item, '__itemKey': `notfound-${item.key}`}));
         const notFoundCte = notFoundInSped.filter(item => item.type === 'CTE').map(item => ({...item, '__itemKey': `notfound-${item.key}`}));
-
+        
         if (notFoundInSped.length > 0) {
             reportSections.push({
                 id: 'sped_not_found',
@@ -415,6 +415,32 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         }
     };
     
+    // Memoize columns for DataTable
+    const memoizedActionColumn = React.useMemo(() => ({
+        id: 'actions',
+        header: () => <div className="text-center">Ignorar</div>,
+        cell: ({ row }: any) => {
+            const itemKey = row.original.__itemKey;
+            return (
+                <div className='flex justify-center'>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleIgnoredItem(itemKey)}>
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <span>{ignoredItems.has(itemKey) ? <RotateCw className='h-4 w-4 text-green-600' /> : <MinusCircle className='h-4 w-4' />}</span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>{ignoredItems.has(itemKey) ? "Re-incluir na exportação" : "Ignorar na exportação"}</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    </Button>
+                </div>
+            );
+        },
+    }), [ignoredItems, toggleIgnoredItem]);
+
+
     if (!processedData) {
         return (
             <Card>
@@ -527,12 +553,12 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                                 </TabsList>
                                 {section.subSections.map(sub => (
                                     <TabsContent key={sub.id} value={sub.id} className="mt-4">
-                                        <DataTable columns={[...sub.columns.filter((c:any) => c.id !== '__itemKey'), { id: 'actions', header: () => <div className="text-center">Ignorar</div>, cell: ({row}: any) => { const itemKey = row.original.__itemKey; return <div className='flex justify-center'><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleIgnoredItem(itemKey)}><TooltipProvider><Tooltip><TooltipTrigger asChild><span>{ignoredItems.has(itemKey) ? <RotateCw className='h-4 w-4 text-green-600'/> : <MinusCircle className='h-4 w-4'/>}</span></TooltipTrigger><TooltipContent><p>{ignoredItems.has(itemKey) ? "Re-incluir na exportação" : "Ignorar na exportação"}</p></TooltipContent></Tooltip></TooltipProvider></Button></div> }}]} data={sub.data} />
+                                        <DataTable columns={[...sub.columns, memoizedActionColumn]} data={sub.data} />
                                     </TabsContent>
                                 ))}
                             </Tabs>
                         ) : (
-                            <DataTable columns={[...section.columns.filter((c:any) => c.id !== '__itemKey'), { id: 'actions', header: () => <div className="text-center">Ignorar</div>, cell: ({row}: any) => { const itemKey = row.original.__itemKey; return <div className='flex justify-center'><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleIgnoredItem(itemKey)}><TooltipProvider><Tooltip><TooltipTrigger asChild><span>{ignoredItems.has(itemKey) ? <RotateCw className='h-4 w-4 text-green-600'/> : <MinusCircle className='h-4 w-4'/>}</span></TooltipTrigger><TooltipContent><p>{ignoredItems.has(itemKey) ? "Re-incluir na exportação" : "Ignorar na exportação"}</p></TooltipContent></Tooltip></TooltipProvider></Button></div> }}]} data={section.data} />
+                            <DataTable columns={[...section.columns, memoizedActionColumn]} data={section.data} />
                         )}
                     </CardContent>
                  </Card>

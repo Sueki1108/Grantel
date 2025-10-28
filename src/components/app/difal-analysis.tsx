@@ -270,6 +270,13 @@ export function DifalAnalysis() {
         toast({ title: 'Configuração Removida', description: 'A configuração foi removida do seu histórico.' });
     };
 
+    const dataTableColumns = useMemo(() => [
+        { accessorKey: 'filename', header: 'Nome do Ficheiro' },
+        { accessorKey: 'chave_acesso', header: 'Chave de Acesso' },
+        { accessorKey: 'valor_principal_calculado', header: 'Valor do Imposto (10%)', cell: ({row}: any) => (row.original as GnreDataItem).valor_principal_calculado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })},
+    ], []);
+
+
     return (
         <div className="space-y-6">
             <Card>
@@ -456,11 +463,7 @@ export function DifalAnalysis() {
                     </CardHeader>
                     <CardContent>
                        <DataTable 
-                            columns={[
-                                { accessorKey: 'filename', header: 'Nome do Ficheiro' },
-                                { accessorKey: 'chave_acesso', header: 'Chave de Acesso' },
-                                { accessorKey: 'valor_principal_calculado', header: 'Valor do Imposto (10%)', cell: ({row}) => (row.original as GnreDataItem).valor_principal_calculado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })},
-                            ]}
+                            columns={dataTableColumns}
                             data={gnreData}
                        />
                     </CardContent>
