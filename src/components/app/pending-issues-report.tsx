@@ -540,5 +540,3 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         </div>
     );
 }
-
-    
