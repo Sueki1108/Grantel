@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -6,7 +7,7 @@ import autoTable from 'jspdf-autotable';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProcessedData } from '@/lib/excel-processor';
-import { ClipboardList, Download, FileQuestion, FileText, FileDown, FileSpreadsheet, Settings, Check, ListFilter, RefreshCw, ChevronDown, ChevronRight, MinusCircle, RotateCw } from 'lucide-react';
+import { ClipboardList, Download, FileQuestion, FileText, FileDown, FileSpreadsheet, Settings, Check, ListFilter, RefreshCw, ChevronDown, ChevronRight, MinusCircle, RotateCw, HelpCircle } from 'lucide-react';
 import { DataTable } from './data-table';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -32,6 +33,7 @@ interface Section {
         title: string;
         data: any[];
         columns: any[];
+        description?: string;
     }[]
 }
 
@@ -42,6 +44,21 @@ interface PendingIssuesReportProps {
 }
 
 const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications_v2';
+
+const modificationDetails: {
+    [key: string]: { title: string; description: string };
+} = {
+    count9900: { title: 'Contadores', description: 'A contagem de linhas em cada bloco (registos x990) e a contagem total (9999) foram recalculadas para corresponder ao número real de linhas no ficheiro.' },
+    ieCorrection: { title: 'IE (NF-e)', description: 'A Inscrição Estadual (IE) de participantes (registo 0150) foi corrigida com base nos dados dos XMLs para garantir a conformidade.' },
+    cteSeriesCorrection: { title: 'Série (CT-e)', description: 'A série de CT-es (registo D100) foi corrigida com base nos dados dos XMLs de CTe para corresponder à série original.' },
+    addressSpaces: { title: 'Endereços', description: 'Espaços múltiplos no campo de complemento do endereço (registo 0150) foram substituídos por um único espaço para evitar erros de formatação.' },
+    truncation: { title: 'Truncamento', description: 'Campos de texto livre (ex: observações nos registos 0450, 0460, C110) foram limitados a 235 caracteres para evitar erros de importação.' },
+    unitStandardization: { title: 'Unidades', description: 'Unidades de medida de produtos (registos 0200, C170) foram padronizadas para \'un\' para manter a consistência e evitar erros.' },
+    removed0190: { title: '0190 Removidos', description: 'Registos do tipo \'0190\' desnecessários (todos exceto \'un\' e \'pc\') foram removidos para limpar o ficheiro e evitar potenciais problemas.' },
+    blockCount: { title: 'Contadores de Bloco', description: 'A contagem de linhas para cada bloco do SPED (ex: Bloco C, Bloco D) foi recalculada.' },
+    totalLineCount: { title: 'Contador Total', description: 'A contagem total de linhas do ficheiro (registro 9999) foi recalculada para refletir o número final de linhas.' },
+};
+
 
 
 export function PendingIssuesReport({ processedData, allPersistedClassifications, onForceUpdate }: PendingIssuesReportProps) {
@@ -233,9 +250,10 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const spedCorrections = processedData.spedCorrections || [];
         if (spedCorrections.length > 0 && spedCorrections[0].linesModified > 0) {
              const mods = spedCorrections[0].modifications;
+             const groupedCounterModifications = [...mods.blockCount, ...mods.totalLineCount, ...mods.count9900];
              const summaryNode = (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-muted-foreground">
-                    <p><strong>Contadores:</strong> {mods.blockCount.length + mods.totalLineCount.length + mods.count9900.length}</p>
+                    <p><strong>Contadores:</strong> {groupedCounterModifications.length}</p>
                     <p><strong>IE (NF-e):</strong> {mods.ieCorrection.length}</p>
                     <p><strong>Série (CT-e):</strong> {mods.cteSeriesCorrection.length}</p>
                     <p><strong>Endereços:</strong> {mods.addressSpaces.length}</p>
@@ -245,20 +263,32 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 </div>
             );
 
-             const subSections = Object.entries(mods)
-                .map(([key, value]) => {
-                    if(Array.isArray(value) && value.length > 0) {
-                        const data = value.map((v: any, i: number) => ({
-                            'Linha': v.lineNumber,
-                            'Original': v.original || v.line,
-                            'Corrigido': v.corrected || '(removida)',
-                            '__itemKey': `spedmod-${key}-${i}`
-                        }));
-                        return { id: `sped_mod_${key}`, title: key, data, columns: getColumnsWithCustomRender(data, ['Linha', 'Original', 'Corrigido']) };
-                    }
-                    return null;
-                })
-                .filter(sub => sub && sub.data.length > 0) as { id: string; title: string; data: any[]; columns: any[]; }[];
+            const allModifications = {
+                ...mods,
+                groupedCounters: groupedCounterModifications
+            };
+            delete allModifications.blockCount;
+            delete allModifications.totalLineCount;
+            delete allModifications.count9900;
+            
+            const orderedModKeys: (keyof typeof allModifications)[] = ['groupedCounters', 'ieCorrection', 'cteSeriesCorrection', 'addressSpaces', 'truncation', 'unitStandardization', 'removed0190'];
+
+             const subSections = orderedModKeys.map(key => {
+                const value = allModifications[key];
+                const detailKey = key === 'groupedCounters' ? 'count9900' : key;
+                const detail = modificationDetails[detailKey];
+                
+                if(Array.isArray(value) && value.length > 0) {
+                    const data = value.map((v: any, i: number) => ({
+                        'Linha': v.lineNumber,
+                        'Original': v.original || v.line,
+                        'Corrigido': v.corrected || '(removida)',
+                        '__itemKey': `spedmod-${key}-${i}`
+                    }));
+                    return { id: `sped_mod_${key}`, title: detail?.title || key, data, columns: getColumnsWithCustomRender(data, ['Linha', 'Original', 'Corrigido']), description: detail?.description };
+                }
+                return null;
+            }).filter(sub => sub !== null) as { id: string; title: string; data: any[]; columns: any[]; description?: string}[];
             
             if (subSections.length > 0) {
                 reportSections.push({
@@ -397,7 +427,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             if (section.subSections) {
                  section.subSections.forEach(sub => {
                     if (exportOptions[sub.id]) {
-                        processSectionData(sub.data, sub.columns, `${section.title}: ${sub.title}`, section.description)
+                        processSectionData(sub.data, sub.columns, `${section.title}: ${sub.title}`, sub.description || section.description)
                     }
                 });
             } else {
@@ -568,6 +598,12 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                                 </TabsList>
                                 {section.subSections.map(sub => (
                                     <TabsContent key={sub.id} value={sub.id} className="mt-4">
+                                        {sub.description && (
+                                            <div className="text-sm text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
+                                                <TooltipProvider><Tooltip><TooltipTrigger asChild><button><HelpCircle className="h-4 w-4"/></button></TooltipTrigger><TooltipContent><p>{sub.description}</p></TooltipContent></Tooltip></TooltipProvider>
+                                                <span>{sub.description}</span>
+                                            </div>
+                                        )}
                                         <DataTable columns={[...sub.columns, memoizedActionColumn]} data={sub.data} />
                                     </TabsContent>
                                 ))}
