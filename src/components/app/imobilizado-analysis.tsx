@@ -14,7 +14,7 @@ import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/comp
 import { RowSelectionState, Table as ReactTable } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
 import * as React from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../ui/dialog';
 import { cfopDescriptions } from '@/lib/cfop';
 import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';
@@ -189,8 +189,6 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
 export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
-    const [sessionClassifications, setSessionClassifications] = useState<Record<string, Classification>>({});
-    const [sessionAccountCodes, setSessionAccountCodes] = useState<Record<string, string>>({});
     const [hasChanges, setHasChanges] = useState(false);
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
     const containerRef = React.useRef<HTMLDivElement>(null);
@@ -198,6 +196,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
     const [isCfopModalOpen, setIsCfopModalOpen] = useState(false);
     const [newCfopInput, setNewCfopInput] = useState('');
     const [isDisregardedModalOpen, setIsDisregardedModalOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState<Classification>('unclassified');
 
     // ===============================================================
     // CFOP Configuration Logic
@@ -254,46 +253,55 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
         });
     }, [initialAllItems, configuredCfops]);
 
-
     // ===============================================================
     // Classification and Persistence Logic
     // ===============================================================
-    useEffect(() => {
-        if (!competence) return;
-        
-        const initialClassifications: Record<string, Classification> = {};
-        const initialCodes: Record<string, string> = {};
-        const persistedForCompetence = allPersistedData[competence] || { classifications: {}, accountCodes: {} };
-        
-        imobilizadoItems.forEach(item => {
-            let currentClassification = persistedForCompetence.classifications?.[item.uniqueItemId]?.classification;
+    
+    // Memoize the initial state calculation
+    const { initialClassifications, initialCodes } = useMemo(() => {
+        const classifications: Record<string, Classification> = {};
+        const codes: Record<string, string> = {};
+        if (competence) {
+            const persistedForCompetence = allPersistedData[competence] || { classifications: {}, accountCodes: {} };
             
-            if (!currentClassification) {
-                for (const otherCompetence in allPersistedData) {
-                    if (otherCompetence !== competence) {
-                        const classification = allPersistedData[otherCompetence]?.classifications?.[item.uniqueItemId]?.classification;
-                        if (classification) {
-                            currentClassification = classification;
-                            break; 
+            imobilizadoItems.forEach(item => {
+                let currentClassification = persistedForCompetence.classifications?.[item.uniqueItemId]?.classification;
+                
+                if (!currentClassification) {
+                    for (const otherCompetence in allPersistedData) {
+                        if (otherCompetence !== competence) {
+                            const classification = allPersistedData[otherCompetence]?.classifications?.[item.uniqueItemId]?.classification;
+                            if (classification) {
+                                currentClassification = classification;
+                                break; 
+                            }
                         }
                     }
                 }
-            }
-            initialClassifications[item.id] = currentClassification || 'unclassified';
+                classifications[item.id] = currentClassification || 'unclassified';
 
-            const persistedCode = persistedForCompetence.accountCodes?.[item.id]?.accountCode;
-            if (persistedCode) {
-                initialCodes[item.id] = persistedCode;
-            }
-        });
-
+                const persistedCode = persistedForCompetence.accountCodes?.[item.id]?.accountCode;
+                if (persistedCode) {
+                    codes[item.id] = persistedCode;
+                }
+            });
+        }
+        return { initialClassifications: classifications, initialCodes: codes };
+    }, [competence, allPersistedData, imobilizadoItems]);
+    
+    // Initialize state from the memoized value
+    const [sessionClassifications, setSessionClassifications] = useState(initialClassifications);
+    const [sessionAccountCodes, setSessionAccountCodes] = useState(initialCodes);
+    
+    // Effect to reset state only when the fundamental inputs change
+    useEffect(() => {
         setSessionClassifications(initialClassifications);
         setSessionAccountCodes(initialCodes);
         setHasChanges(false);
         setRowSelection({});
+    }, [initialClassifications, initialCodes]);
 
-    }, [competence, allPersistedData, imobilizadoItems]);
-    
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -308,8 +316,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
             document.removeEventListener("mousedown", handleClickOutside);
         };
     }, [rowSelection]);
-
-
+    
      const handleClassificationChange = (itemsToUpdate: ItemData[], newClassification: Classification) => {
         const newClassifications = { ...sessionClassifications };
         
@@ -418,6 +425,11 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
     };
 
     const tableRef = React.useRef<ReactTable<ItemData> | null>(null);
+
+    const onTabChange = (value: string) => {
+        setRowSelection({}); // Clear selection when changing tabs
+        setActiveTab(value as Classification);
+    };
 
     if (!initialAllItems || initialAllItems.length === 0) {
         return (
@@ -532,7 +544,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
                 </CardHeader>
                 <CardContent>
                     <TooltipProvider>
-                        <Tabs defaultValue="unclassified" className="w-full">
+                        <Tabs value={activeTab} onValueChange={onTabChange} className="w-full">
                             <TabsList className="grid w-full grid-cols-4">
                                 <TabsTrigger value="unclassified" className="flex gap-2"><List />Não Classificados ({filteredItems.unclassified.length})</TabsTrigger>
                                 <TabsTrigger value="imobilizado" className="flex gap-2"><Factory />Imobilizado ({filteredItems.imobilizado.length})</TabsTrigger>
@@ -562,3 +574,4 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
         </div>
     );
 }
+    
