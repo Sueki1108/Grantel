@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from 'react';
@@ -27,6 +26,7 @@ interface Section {
     description: string;
     data: any[];
     columns: any[];
+    summary?: React.ReactNode;
     subSections?: {
         id: string;
         title: string;
@@ -232,7 +232,20 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         // 6. SPED - Modificações
         const spedCorrections = processedData.spedCorrections || [];
         if (spedCorrections.length > 0 && spedCorrections[0].linesModified > 0) {
-             const subSections = Object.entries(spedCorrections[0].modifications)
+             const mods = spedCorrections[0].modifications;
+             const summaryNode = (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-muted-foreground">
+                    <p><strong>Contadores:</strong> {mods.blockCount.length + mods.totalLineCount.length + mods.count9900.length}</p>
+                    <p><strong>IE (NF-e):</strong> {mods.ieCorrection.length}</p>
+                    <p><strong>Série (CT-e):</strong> {mods.cteSeriesCorrection.length}</p>
+                    <p><strong>Endereços:</strong> {mods.addressSpaces.length}</p>
+                    <p><strong>Truncamento:</strong> {mods.truncation.length}</p>
+                    <p><strong>Unidades:</strong> {mods.unitStandardization.length}</p>
+                    <p><strong>0190 Removidos:</strong> {mods.removed0190.length}</p>
+                </div>
+            );
+
+             const subSections = Object.entries(mods)
                 .map(([key, value]) => {
                     if(Array.isArray(value) && value.length > 0) {
                         const data = value.map((v: any, i: number) => ({
@@ -254,6 +267,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                     description: 'O corretor automático realizou as seguintes alterações no arquivo SPED para garantir a conformidade.',
                     data: [],
                     columns: [],
+                    summary: summaryNode,
                     subSections
                 });
             }
@@ -438,7 +452,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 </div>
             );
         },
-    }), [ignoredItems, toggleIgnoredItem]);
+    }), [ignoredItems]);
 
 
     if (!processedData) {
@@ -546,6 +560,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                          </div>
                      </CardHeader>
                     <CardContent>
+                        {section.summary && <div className="mb-4 p-4 border rounded-md bg-muted/50">{section.summary}</div>}
                         {section.subSections ? (
                             <Tabs defaultValue={section.subSections[0]?.id} className="w-full">
                                 <TabsList>
