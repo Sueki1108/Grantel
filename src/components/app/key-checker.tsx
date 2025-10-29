@@ -948,51 +948,51 @@ export function KeyChecker({
                                                 </TabsList>
                                                 <div className="flex-grow overflow-hidden mt-2">
                                                     <TabsContent value="counters" className="h-full">
-                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>A contagem de linhas em cada bloco (registros x990) e a contagem total (9999) foram recalculadas.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Contagem de linhas de cada bloco e do ficheiro recalculada.</span>
+                                                        <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
+                                                            <TooltipProvider><Tooltip><TooltipTrigger asChild><button><HelpCircle className="h-4 w-4"/></button></TooltipTrigger><TooltipContent><p>A contagem de linhas em cada bloco (registos x990) e a contagem total (9999) foram recalculadas para corresponder ao número real de linhas no ficheiro.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <span>A contagem de linhas de cada bloco e do ficheiro foi recalculada.</span>
                                                         </div>
                                                         <ModificationDisplay logs={[...correctionResult.modifications.blockCount, ...correctionResult.modifications.totalLineCount, ...correctionResult.modifications.count9900]} />
                                                     </TabsContent>
                                                     <TabsContent value="ie" className="h-full">
                                                          <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>A Inscrição Estadual (IE) de participantes (registo 0150) foi corrigida com base nos dados dos XMLs.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>IE do participante corrigida com base nos XMLs.</span>
+                                                            <TooltipProvider><Tooltip><TooltipTrigger asChild><button><HelpCircle className="h-4 w-4"/></button></TooltipTrigger><TooltipContent><p>A Inscrição Estadual (IE) de participantes (registo 0150) foi corrigida com base nos dados dos XMLs para garantir a conformidade.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <span>A IE do participante foi corrigida com base nos XMLs.</span>
                                                         </div>
                                                         <ModificationDisplay logs={correctionResult.modifications.ieCorrection} />
                                                     </TabsContent>
                                                     <TabsContent value="cte_series" className="h-full">
-                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>A série de CT-es (registo D100) foi corrigida com base nos dados dos XMLs de CTe.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Série do CT-e (D100) corrigida com base nos XMLs.</span>
+                                                        <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
+                                                            <TooltipProvider><Tooltip><TooltipTrigger asChild><button><HelpCircle className="h-4 w-4"/></button></TooltipTrigger><TooltipContent><p>A série de CT-es (registo D100) foi corrigida com base nos dados dos XMLs de CTe para corresponder à série original.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <span>A série do CT-e (D100) foi corrigida com base nos XMLs.</span>
                                                         </div>
                                                         <ModificationDisplay logs={correctionResult.modifications.cteSeriesCorrection} />
                                                     </TabsContent>
                                                     <TabsContent value="address" className="h-full">
-                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Espaços múltiplos no campo de complemento do endereço (registro 0150) foram substituídos por um único espaço.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Espaços múltiplos no complemento do endereço foram corrigidos.</span>
+                                                        <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
+                                                            <TooltipProvider><Tooltip><TooltipTrigger asChild><button><HelpCircle className="h-4 w-4"/></button></TooltipTrigger><TooltipContent><p>Espaços múltiplos no campo de complemento do endereço (registo 0150) foram substituídos por um único espaço para evitar erros de formatação.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <span>Os espaços múltiplos no complemento do endereço foram corrigidos.</span>
                                                         </div>
                                                         <ModificationDisplay logs={correctionResult.modifications.addressSpaces} />
                                                     </TabsContent>
                                                     <TabsContent value="truncation" className="h-full">
                                                          <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Campos de texto livre (ex: observações) foram limitados a 235 caracteres para evitar erros de importação.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Campos de texto livre (observações) foram limitados a 235 caracteres.</span>
+                                                            <TooltipProvider><Tooltip><TooltipTrigger asChild><button><HelpCircle className="h-4 w-4"/></button></TooltipTrigger><TooltipContent><p>Campos de texto livre (ex: observações nos registos 0450, 0460, C110) foram limitados a 235 caracteres para evitar erros de importação.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <span>Os campos de texto livre (observações) foram limitados a 235 caracteres.</span>
                                                         </div>
                                                         <ModificationDisplay logs={correctionResult.modifications.truncation} />
                                                     </TabsContent>
                                                     <TabsContent value="units" className="h-full">
                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Unidades de medida de produtos foram padronizadas para 'un' para manter a consistência.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Unidades de medida de produtos foram padronizadas para 'un'.</span>
+                                                            <TooltipProvider><Tooltip><TooltipTrigger asChild><button><HelpCircle className="h-4 w-4"/></button></TooltipTrigger><TooltipContent><p>Unidades de medida de produtos (registos 0200, C170) foram padronizadas para 'un' para manter a consistência e evitar erros.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <span>As unidades de medida de produtos foram padronizadas para 'un'.</span>
                                                         </div>
                                                         <ModificationDisplay logs={correctionResult.modifications.unitStandardization} />
                                                     </TabsContent>
                                                      <TabsContent value="removed" className="h-full">
                                                          <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registros do tipo '0190' desnecessários (todos exceto os definidos) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Registros '0190' desnecessários foram removidos.</span>
+                                                            <TooltipProvider><Tooltip><TooltipTrigger asChild><button><HelpCircle className="h-4 w-4"/></button></TooltipTrigger><TooltipContent><p>Registos do tipo '0190' desnecessários (todos exceto 'un' e 'pc') foram removidos para limpar o ficheiro e evitar potenciais problemas.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <span>Os registos '0190' desnecessários foram removidos.</span>
                                                         </div>
                                                         <RemovedLinesDisplay logs={correctionResult.modifications.removed0190} />
                                                     </TabsContent>
