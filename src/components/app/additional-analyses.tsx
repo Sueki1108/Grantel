@@ -397,9 +397,8 @@ interface ReconciliationAnalysisProps {
 
 function useReconciliation(processedData: ProcessedData | null, siengeSheetData: any[] | null): { reconciliationResults: ReconciliationResults, error: string | null } {
     
-    const { sheets } = processedData || {};
-
-    const reconciliationResults = useMemo(() => {
+    return useMemo(() => {
+        const { sheets } = processedData || {};
         const allXmlItems = [
             ...(sheets?.['Itens Válidos'] || []),
             ...(sheets?.['CTEs Válidos'] || []).map(cte => ({
@@ -548,7 +547,7 @@ function useReconciliation(processedData: ProcessedData | null, siengeSheetData:
             console.error("Reconciliation Error:", err);
             return { reconciliationResults: null, error: err.message };
         }
-    }, [sheets, siengeSheetData]);
+    }, [processedData?.sheets, siengeSheetData]);
     
     return reconciliationResults;
 }
