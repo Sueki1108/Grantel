@@ -39,6 +39,13 @@ export interface AllClassifications {
     [competence: string]: {
         classifications: { [uniqueItemId: string]: ClassificationStorage };
         accountCodes: AccountCodeStorage;
+        cfopValidations?: {
+             classifications: {
+                [uniqueProductKey: string]: {
+                    classification: 'correct' | 'incorrect' | 'verify';
+                }
+            }
+        }
     };
 }
 
@@ -326,6 +333,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
                              <Button size="sm" onClick={() => handleBulkClassification('imobilizado')}><Factory className="mr-2 h-4 w-4" /> Imobilizado</Button>
                              <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('uso-consumo')}><Wrench className="mr-2 h-4 w-4" /> Uso e Consumo</Button>
                              <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('utilizado-em-obra')}><HardHat className="mr-2 h-4 w-4" /> Utilizado em Obra</Button>
+                              <Button size="sm" variant="outline" onClick={() => handleBulkClassification('unclassified')}><RotateCcw className="mr-2 h-4 w-4" /> Reverter</Button>
                          </div>
                     </Card>
                 </div>
