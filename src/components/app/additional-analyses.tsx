@@ -106,18 +106,18 @@ export function AdditionalAnalyses({
     
     useEffect(() => {
         if (!siengeFile) {
-            onSiengeDataProcessed(null);
+            if(onSiengeDataProcessed) onSiengeDataProcessed(null);
             return;
         }
         
         const process = async () => {
             try {
                 const data = await readFileAsJson(siengeFile);
-                onSiengeDataProcessed(data);
+                if(onSiengeDataProcessed) onSiengeDataProcessed(data);
                 toast({ title: 'Planilha Sienge Processada', description: 'As análises de conciliação e revenda foram atualizadas.' });
             } catch (error: any) {
                 toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: error.message });
-                onSiengeDataProcessed(null);
+                if(onSiengeDataProcessed) onSiengeDataProcessed(null);
             }
         };
         process();
