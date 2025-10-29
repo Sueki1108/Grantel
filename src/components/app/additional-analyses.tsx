@@ -12,10 +12,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
 import { cfopDescriptions } from "@/lib/cfop";
-import type { ProcessedData, SpedInfo } from "@/lib/excel-processor";
+import type { ProcessedData, SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { cleanAndToStr } from "@/lib/utils";
-import { KeyChecker } from "./key-checker";
+import { KeyChecker, KeyCheckResult } from "./key-checker";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AllClassifications } from "./imobilizado-analysis";
 import { CfopValidator, CfopValidationData } from "./cfop-validator";
@@ -66,15 +66,14 @@ const normalizeKey = (key: string | undefined): string => {
 
 interface AdditionalAnalysesProps {
     processedData: ProcessedData;
-    onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData | null) => ProcessedData)) => void;
+    onProcessedDataChange: (fn: (prevData: ProcessedData | null) => ProcessedData) => void;
     siengeFile: File | null;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
-    onSiengeDataProcessed: (siengeData: any[] | null) => void;
     onClearSiengeFile: () => void;
     allXmlFiles: File[];
     spedFiles: File[];
     onSpedFilesChange: (files: File[]) => void;
-    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null, spedCorrections: any | null) => void;
+    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null) => void;
     competence: string | null;
     onExportSession: () => void;
     allPersistedClassifications: AllClassifications;
@@ -86,7 +85,6 @@ export function AdditionalAnalyses({
     onProcessedDataChange,
     siengeFile, 
     onSiengeFileChange,
-    onSiengeDataProcessed,
     onClearSiengeFile,
     allXmlFiles,
     spedFiles,
@@ -102,30 +100,31 @@ export function AdditionalAnalyses({
     const [isExporting, setIsExporting] = useState(false);
     const [resaleAnalysis, setResaleAnalysis] = useState<{ noteKeys: Set<string>; xmls: File[] } | null>(null);
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
+    const [siengeSheetData, setSiengeSheetData] = useState<any[] | null>(null);
 
 
     useEffect(() => {
         if (!siengeFile) {
-            onSiengeDataProcessed(null);
+            setSiengeSheetData(null);
             return;
         }
         
         const process = async () => {
             try {
                 const data = await readFileAsJson(siengeFile);
-                onSiengeDataProcessed(data);
+                setSiengeSheetData(data);
                 toast({ title: 'Planilha Sienge Processada', description: 'As análises de conciliação e revenda foram atualizadas.' });
             } catch (error: any) {
                 toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: error.message });
-                onSiengeDataProcessed(null);
+                setSiengeSheetData(null);
             }
         };
         process();
-    }, [siengeFile, toast, onSiengeDataProcessed]);
+    }, [siengeFile, toast]);
 
 
     const handleAnalyzeResale = () => {
-        if (!processedData.siengeSheetData) {
+        if (!siengeSheetData) {
             toast({ variant: 'destructive', title: "Dados incompletos", description: "Carregue a planilha Sienge primeiro." });
             return;
         }
@@ -139,7 +138,7 @@ export function AdditionalAnalyses({
     
         setTimeout(async () => {
             try {
-                const localSiengeData = processedData.siengeSheetData!;
+                const localSiengeData = siengeSheetData!;
                 const RESALE_CFOPS = ['1102', '2102', '1403', '2403'];
                 
                 const findSiengeHeader = (possibleNames: string[]): string | undefined => {
@@ -306,7 +305,7 @@ export function AdditionalAnalyses({
                             allPersistedClassifications={allPersistedClassifications}
                             onPersistAllClassifications={onPersistAllClassifications}
                             competence={competence}
-                            siengeSheetData={processedData.siengeSheetData}
+                            siengeSheetData={siengeSheetData}
                         />
                     )}
 
@@ -330,7 +329,7 @@ export function AdditionalAnalyses({
                                     onFileChange={onSiengeFileChange}
                                     onClearFile={onClearSiengeFile}
                                 />
-                                {!processedData.siengeSheetData ? (
+                                {!siengeSheetData ? (
                                     <div className="p-8 text-center text-muted-foreground mt-4">
                                         <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
                                         <h3 className="text-xl font-semibold mb-2">Aguardando dados Sienge</h3>
@@ -386,7 +385,7 @@ export type ReconciliationResults = {
 interface ReconciliationAnalysisProps {
     siengeFile: File | null;
     processedData: ProcessedData | null;
-    onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData | null) => ProcessedData)) => void;
+    onProcessedDataChange: (fn: (prevData: ProcessedData | null) => ProcessedData) => void;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
     allPersistedClassifications: AllClassifications;

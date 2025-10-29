@@ -550,26 +550,18 @@ export function AutomatorClientPage() {
             }
         }, 50);
     };
-
-    const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => {
-        setProcessedData(prevData => {
-            if (!prevData) {
-                return { sheets: {}, siengeSheetData: null, spedInfo: spedInfo || null, keyCheckResults: keyCheckResults || null, spedCorrections: spedCorrections ? [spedCorrections] : null, competence: null, resaleAnalysis: null };
-            }
-            return { ...prevData, spedInfo: spedInfo, keyCheckResults: keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : prevData.spedCorrections };
+    
+    const onSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null) => {
+        setProcessedData(prev => {
+            if (!prev) return null;
+            return {
+                ...prev,
+                spedInfo,
+                keyCheckResults,
+            };
         });
     }, []);
 
-    const handleSiengeDataProcessed = useCallback((siengeData: any[] | null) => {
-        setProcessedData(prevData => {
-            const baseData = prevData || { sheets: {}, spedInfo: null, siengeSheetData: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null };
-            return { ...baseData, siengeSheetData: siengeData };
-        });
-        if (siengeData) {
-            toast({ title: "Dados Sienge Processados", description: "As análises de conferência de impostos foram atualizadas." });
-        }
-    }, [toast]);
-    
     // =================================================================
     // UI CONTROL AND RENDER
     // =================================================================
@@ -700,7 +692,7 @@ export function AutomatorClientPage() {
                             )}
                             
                             {activeMainTab === 'nfse' && (
-                                !nfseTabDisabled ? <NfseAnalysis nfseFiles={xmlFiles.nfse} disregardedNotes={disregardedNotes} onDisregardedNotesChange={setDisregardedNfseNotes} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FilePieChart className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando ficheiros</h3><p>Carregue os XMLs de NFS-e na primeira aba para habilitar esta análise.</p></CardContent></Card>
+                                !nfseTabDisabled ? <NfseAnalysis nfseFiles={xmlFiles.nfse} disregardedNotes={disregardedNfseNotes} onDisregardedNotesChange={setDisregardedNfseNotes} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FilePieChart className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando ficheiros</h3><p>Carregue os XMLs de NFS-e na primeira aba para habilitar esta análise.</p></CardContent></Card>
                             )}
                             
                             {activeMainTab === 'imobilizado' && (
@@ -710,7 +702,7 @@ export function AutomatorClientPage() {
                              {activeMainTab === 'difal' && <DifalAnalysis /> }
                             
                             {activeMainTab === 'analyses' && (
-                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onSiengeDataProcessed={handleSiengeDataProcessed} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
+                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={onSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
                             )}
                          
                              {activeMainTab === 'pending' && (
