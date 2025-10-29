@@ -819,8 +819,12 @@ export function KeyChecker({
         link.setAttribute('download', correctionResult.fileName);
         document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        
+        // Use a timeout to ensure the link is removed after the browser has processed the click
+        setTimeout(() => {
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 100);
     };
     
     const copyToClipboard = (text: string) => {
@@ -1069,3 +1073,5 @@ export function KeyChecker({
         </div>
     );
 }
+
+    
