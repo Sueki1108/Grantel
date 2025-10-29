@@ -150,28 +150,40 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
 
     const handleSaveChanges = () => {
         if (!competence) return;
-
+    
         const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
         if (!updatedPersistedData[competence]) {
             updatedPersistedData[competence] = { classifications: {}, accountCodes: {} };
         }
-
+        if (!updatedPersistedData[competence].classifications) {
+            updatedPersistedData[competence].classifications = {};
+        }
+        if (!updatedPersistedData[competence].accountCodes) {
+            updatedPersistedData[competence].accountCodes = {};
+        }
+    
         initialItems.forEach(item => {
             const sessionClassification = sessionClassifications[item.id];
-            if (sessionClassification) {
-                 if (!updatedPersistedData[competence].classifications) updatedPersistedData[competence].classifications = {};
+            
+            // Se foi explicitamente classificado nesta sessão
+            if (sessionClassification && sessionClassification !== 'unclassified') {
                  updatedPersistedData[competence].classifications[item.uniqueItemId] = { classification: sessionClassification };
+            } else if (sessionClassification === 'unclassified') {
+                // Se foi revertido para "não classificado", removemos a classificação persistida para esta competência
+                if (updatedPersistedData[competence].classifications[item.uniqueItemId]) {
+                    delete updatedPersistedData[competence].classifications[item.uniqueItemId];
+                }
             }
-
+    
             const sessionCode = sessionAccountCodes[item.id];
             if (sessionCode !== undefined) { 
-                if (!updatedPersistedData[competence].accountCodes) updatedPersistedData[competence].accountCodes = {};
                 updatedPersistedData[competence].accountCodes[item.id] = { accountCode: sessionCode };
             }
         });
         
         onPersistData(updatedPersistedData);
         setHasChanges(false);
+        toast({title: 'Alterações guardadas!'});
     };
 
     const filteredItems = useMemo(() => {
