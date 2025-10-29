@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -5,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { Building, Download, List, Factory, Wrench, HardHat, RotateCcw, Save } from "lucide-react";
+import { Building, Download, List, Factory, Wrench, HardHat, RotateCcw, Save, Settings, X, PlusCircle, EyeOff } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -14,6 +15,10 @@ import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/comp
 import { RowSelectionState } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
 import * as React from 'react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { cfopDescriptions } from '@/lib/cfop';
+import { ScrollArea } from '../ui/scroll-area';
+import { Badge } from '../ui/badge';
 
 
 // Tipos
@@ -49,15 +54,17 @@ export interface AllClassifications {
     };
 }
 
+const IMOBILIZADO_CFOP_CONFIG_KEY = 'imobilizadoCfopConfig';
+const defaultImobilizadoCfops = ['1551', '2551', '1556', '2556'];
 
 interface ImobilizadoAnalysisProps {
-    items: ItemData[];
+    allItems: ItemData[]; // All valid items from the main validation
     competence: string | null; // ex: "2023-01_2023-02"
     onPersistData: (allDataToSave: AllClassifications) => void;
     allPersistedData: AllClassifications;
 }
 
-export function ImobilizadoAnalysis({ items: initialItems, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
+export function ImobilizadoAnalysis({ allItems: initialAllItems, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
     const [sessionClassifications, setSessionClassifications] = useState<Record<string, Classification>>({});
@@ -65,8 +72,70 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
     const [hasChanges, setHasChanges] = useState(false);
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
     const containerRef = React.useRef<HTMLDivElement>(null);
+    const [configuredCfops, setConfiguredCfops] = useState<string[]>(defaultImobilizadoCfops);
+    const [isCfopModalOpen, setIsCfopModalOpen] = useState(false);
+    const [newCfopInput, setNewCfopInput] = useState('');
+    const [isDisregardedModalOpen, setIsDisregardedModalOpen] = useState(false);
+
+    // ===============================================================
+    // CFOP Configuration Logic
+    // ===============================================================
+    useEffect(() => {
+        try {
+            const savedCfops = localStorage.getItem(IMOBILIZADO_CFOP_CONFIG_KEY);
+            if (savedCfops) {
+                setConfiguredCfops(JSON.parse(savedCfops));
+            }
+        } catch (e) {
+            console.error("Failed to load CFOP config from localStorage", e);
+        }
+    }, []);
+
+    const handleSaveCfopConfig = () => {
+        try {
+            localStorage.setItem(IMOBILIZADO_CFOP_CONFIG_KEY, JSON.stringify(configuredCfops));
+            toast({ title: 'Configuração de CFOPs guardada!' });
+            setIsCfopModalOpen(false);
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'Erro ao guardar configuração' });
+        }
+    };
+
+    const handleAddCfop = () => {
+        const cfopToAdd = newCfopInput.trim();
+        if (cfopToAdd && !configuredCfops.includes(cfopToAdd)) {
+            if (cfopDescriptions[parseInt(cfopToAdd, 10)]) {
+                setConfiguredCfops([...configuredCfops, cfopToAdd]);
+                setNewCfopInput('');
+            } else {
+                toast({ variant: 'destructive', title: 'CFOP Inválido', description: 'O código inserido não foi encontrado na lista de CFOPs.' });
+            }
+        }
+    };
+
+    const handleRemoveCfop = (cfopToRemove: string) => {
+        setConfiguredCfops(configuredCfops.filter(c => c !== cfopToRemove));
+    };
+
+    // Filter items based on configured CFOPs
+    const imobilizadoItems = useMemo(() => {
+        return (initialAllItems || []).filter(item => {
+            if (!item || !item.CFOP) return false;
+            return configuredCfops.includes(String(item.CFOP));
+        });
+    }, [initialAllItems, configuredCfops]);
+
+    const disregardedItems = useMemo(() => {
+        return (initialAllItems || []).filter(item => {
+            if (!item || !item.CFOP) return true; // Keep if no CFOP
+            return !configuredCfops.includes(String(item.CFOP));
+        });
+    }, [initialAllItems, configuredCfops]);
 
 
+    // ===============================================================
+    // Classification and Persistence Logic
+    // ===============================================================
     useEffect(() => {
         if (!competence) return;
         
@@ -74,7 +143,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         const initialCodes: Record<string, string> = {};
         const persistedForCompetence = allPersistedData[competence] || { classifications: {}, accountCodes: {} };
         
-        initialItems.forEach(item => {
+        imobilizadoItems.forEach(item => {
             let currentClassification = persistedForCompetence.classifications?.[item.uniqueItemId]?.classification;
             
             if (!currentClassification) {
@@ -101,7 +170,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         setHasChanges(false);
         setRowSelection({});
 
-    }, [competence, allPersistedData, initialItems]);
+    }, [competence, allPersistedData, imobilizadoItems]);
     
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -123,7 +192,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         const newClassifications = { ...sessionClassifications };
         
         itemsToUpdate.forEach(item => {
-            const itemsWithSameProductKey = initialItems.filter(i => i.uniqueItemId === item.uniqueItemId);
+            const itemsWithSameProductKey = imobilizadoItems.filter(i => i.uniqueItemId === item.uniqueItemId);
             itemsWithSameProductKey.forEach(i => {
                 newClassifications[i.id] = newClassification;
             });
@@ -162,14 +231,12 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             updatedPersistedData[competence].accountCodes = {};
         }
     
-        initialItems.forEach(item => {
+        imobilizadoItems.forEach(item => {
             const sessionClassification = sessionClassifications[item.id];
             
-            // Se foi explicitamente classificado nesta sessão
             if (sessionClassification && sessionClassification !== 'unclassified') {
                  updatedPersistedData[competence].classifications[item.uniqueItemId] = { classification: sessionClassification };
             } else if (sessionClassification === 'unclassified') {
-                // Se foi revertido para "não classificado", removemos a classificação persistida para esta competência
                 if (updatedPersistedData[competence].classifications[item.uniqueItemId]) {
                     delete updatedPersistedData[competence].classifications[item.uniqueItemId];
                 }
@@ -191,7 +258,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
             unclassified: [], imobilizado: [], 'uso-consumo': [], 'utilizado-em-obra': [],
         };
 
-        initialItems.forEach(item => {
+        imobilizadoItems.forEach(item => {
             let classification = sessionClassifications[item.id] || 'unclassified';
             if (!categories[classification]) {
                 classification = 'unclassified';
@@ -200,7 +267,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         });
 
         return categories;
-    }, [initialItems, sessionClassifications]);
+    }, [imobilizadoItems, sessionClassifications]);
     
     const handleDownload = (data: ItemData[], classification: Classification) => {
         if (data.length === 0) {
@@ -326,7 +393,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         return <DataTable columns={columns} data={data} rowSelection={rowSelection} setRowSelection={setRowSelection} tableRef={tableRef} />;
     };
 
-    if (!initialItems || initialItems.length === 0) {
+    if (!initialAllItems || initialAllItems.length === 0) {
         return (
             <Card>
                 <CardHeader>
@@ -377,9 +444,64 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
                                 <CardDescription>Classifique os itens. Clique nas linhas para selecionar múltiplos itens e use a barra de ações. Suas escolhas serão guardadas ao clicar no botão "Guardar Alterações".</CardDescription>
                             </div>
                         </div>
-                        <Button onClick={handleSaveChanges} disabled={!hasChanges}>
-                            <Save className="mr-2 h-4 w-4" /> Guardar Alterações
-                        </Button>
+                        <div className='flex items-center gap-2'>
+                             <Dialog open={isCfopModalOpen} onOpenChange={setIsCfopModalOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline"><Settings className="mr-2 h-4 w-4"/>Configurar CFOPs</Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>Configurar CFOPs para Análise de Imobilizado</DialogTitle>
+                                        <DialogDescription>
+                                            Adicione ou remova os CFOPs que devem ser considerados ao filtrar os itens para esta análise.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="flex items-center space-x-2 my-4">
+                                        <Input
+                                            placeholder="Adicionar novo CFOP"
+                                            value={newCfopInput}
+                                            onChange={(e) => setNewCfopInput(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && handleAddCfop()}
+                                        />
+                                        <Button onClick={handleAddCfop}><PlusCircle className="mr-2 h-4 w-4"/>Adicionar</Button>
+                                    </div>
+                                    <ScrollArea className="h-72 w-full rounded-md border p-4">
+                                        {configuredCfops.map(cfop => (
+                                            <div key={cfop} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                                <div>
+                                                    <Badge variant="secondary">{cfop}</Badge>
+                                                    <span className="ml-2 text-sm text-muted-foreground">{cfopDescriptions[parseInt(cfop, 10)] || "Descrição não encontrada"}</span>
+                                                </div>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveCfop(cfop)}>
+                                                    <X className="h-4 w-4"/>
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </ScrollArea>
+                                    <DialogFooter>
+                                        <Button variant="outline" onClick={() => setIsCfopModalOpen(false)}>Cancelar</Button>
+                                        <Button onClick={handleSaveCfopConfig}>Guardar e Fechar</Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                             <Dialog open={isDisregardedModalOpen} onOpenChange={setIsDisregardedModalOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="secondary"><EyeOff className="mr-2 h-4 w-4"/>Ver Itens Desconsiderados ({disregardedItems.length})</Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-4xl h-[80vh]">
+                                    <DialogHeader>
+                                        <DialogTitle>Itens Desconsiderados da Análise de Imobilizado</DialogTitle>
+                                        <DialogDescription>
+                                            Estes itens não estão a ser exibidos na análise principal porque o seu CFOP não está na lista configurada.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                     <DataTable columns={getColumnsWithCustomRender(disregardedItems, ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Descricao CFOP', 'Valor Total'])} data={disregardedItems} />
+                                </DialogContent>
+                            </Dialog>
+                            <Button onClick={handleSaveChanges} disabled={!hasChanges}>
+                                <Save className="mr-2 h-4 w-4" /> Guardar Alterações
+                            </Button>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -414,4 +536,6 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         </div>
     );
 }
+    
+
     
