@@ -64,6 +64,8 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
     const [sessionAccountCodes, setSessionAccountCodes] = useState<Record<string, string>>({});
     const [hasChanges, setHasChanges] = useState(false);
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+    const containerRef = React.useRef<HTMLDivElement>(null);
+
 
     useEffect(() => {
         if (!competence) return;
@@ -100,6 +102,21 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
         setRowSelection({});
 
     }, [competence, allPersistedData, initialItems]);
+    
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                if (Object.keys(rowSelection).length > 0) {
+                    setRowSelection({});
+                }
+            }
+        };
+
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [rowSelection]);
 
 
      const handleClassificationChange = (itemsToUpdate: ItemData[], newClassification: Classification) => {
@@ -322,7 +339,7 @@ export function ImobilizadoAnalysis({ items: initialItems, competence, onPersist
     const numSelected = Object.keys(rowSelection).length;
 
     return (
-        <div className='relative'>
+        <div className='relative' ref={containerRef}>
              {numSelected > 0 && (
                 <div className="sticky bottom-4 z-20 w-full flex justify-center">
                     <Card className="flex items-center gap-4 p-3 shadow-2xl animate-in fade-in-0 slide-in-from-bottom-5">
