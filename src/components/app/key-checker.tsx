@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { ScrollArea } from "../ui/scroll-area";
 
 
 // Types
@@ -414,6 +416,34 @@ const processSpedFileInBrowser = (spedFileContent: string, nfeData: any[], cteDa
     };
 };
 
+// Extracted display components to avoid re-declaration on render
+const ModificationDisplay = ({ logs }: { logs: ModificationLog[] }) => (
+    <ScrollArea className="h-full pr-4">
+        <div className="text-sm font-mono whitespace-pre-wrap space-y-4">
+            {logs.map((log, index) => (
+                <div key={index} className="p-2 rounded-md border">
+                    <p className="font-bold text-muted-foreground">Linha {log.lineNumber}:</p>
+                    <p className="text-red-600 dark:text-red-400"><b>Original:</b> {log.original}</p>
+                    <p className="text-green-600 dark:text-green-400"><b>Corrigida:</b> {log.corrected}</p>
+                </div>
+            ))}
+        </div>
+    </ScrollArea>
+);
+
+const RemovedLinesDisplay = ({ logs }: { logs: RemovedLineLog[] }) => (
+    <ScrollArea className="h-full pr-4">
+        <div className="text-sm font-mono whitespace-pre-wrap space-y-2">
+            {logs.map((log, index) => (
+                <div key={index} className="p-2 rounded-md border bg-yellow-100 dark:bg-yellow-900/30">
+                    <p><b>Removida (Linha {log.lineNumber}):</b> {log.line}</p>
+                </div>
+            ))}
+        </div>
+    </ScrollArea>
+);
+
+
 // Main Component
 interface KeyCheckerProps {
     chavesValidas: any[];
@@ -800,32 +830,6 @@ export function KeyChecker({
             toast({ variant: 'destructive', title: `Falha ao copiar` });
         });
     };
-
-    const ModificationDisplay = ({ logs }: { logs: ModificationLog[] }) => (
-        <div className="h-full overflow-y-auto pr-4">
-            <div className="text-sm font-mono whitespace-pre-wrap space-y-4">
-                {logs.map((log, index) => (
-                    <div key={index} className="p-2 rounded-md border">
-                        <p className="font-bold text-muted-foreground">Linha {log.lineNumber}:</p>
-                        <p className="text-red-600 dark:text-red-400"><b>Original:</b> {log.original}</p>
-                        <p className="text-green-600 dark:text-green-400"><b>Corrigida:</b> {log.corrected}</p>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-
-    const RemovedLinesDisplay = ({ logs }: { logs: RemovedLineLog[] }) => (
-        <div className="h-full overflow-y-auto pr-4">
-            <div className="text-sm font-mono whitespace-pre-wrap space-y-2">
-                {logs.map((log, index) => (
-                    <div key={index} className="p-2 rounded-md border bg-yellow-100 dark:bg-yellow-900/30">
-                        <p><b>Removida (Linha {log.lineNumber}):</b> {log.line}</p>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
 
     const modificationTabs: {
         id: keyof SpedCorrectionResult['modifications'];
