@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -12,7 +11,7 @@ import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { RowSelectionState } from '@tanstack/react-table';
+import { RowSelectionState, Table as ReactTable } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
 import * as React from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
@@ -58,13 +57,136 @@ const IMOBILIZADO_CFOP_CONFIG_KEY = 'imobilizadoCfopConfig';
 const defaultImobilizadoCfops = ['1551', '2551', '1556', '2556'];
 
 interface ImobilizadoAnalysisProps {
-    allItems: ItemData[]; // All valid items from the main validation
-    competence: string | null; // ex: "2023-01_2023-02"
+    items: ItemData[]; 
+    competence: string | null; 
     onPersistData: (allDataToSave: AllClassifications) => void;
     allPersistedData: AllClassifications;
 }
 
-export function ImobilizadoAnalysis({ allItems: initialAllItems, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
+interface ClassificationTableProps {
+    data: ItemData[];
+    classification: Classification;
+    rowSelection: RowSelectionState;
+    setRowSelection: React.Dispatch<React.SetStateAction<RowSelectionState>>;
+    tableRef: React.MutableRefObject<ReactTable<ItemData> | null>;
+    sessionAccountCodes: Record<string, string>;
+    handleAccountCodeChange: (itemLineId: string, code: string) => void;
+    handleClassificationChange: (itemsToUpdate: ItemData[], newClassification: Classification) => void;
+}
+
+
+const ClassificationTable: React.FC<ClassificationTableProps> = ({ 
+    data, 
+    classification, 
+    rowSelection, 
+    setRowSelection, 
+    tableRef, 
+    sessionAccountCodes,
+    handleAccountCodeChange,
+    handleClassificationChange
+}) => {
+
+    const columns = useMemo(() => {
+        const columnsToShow: (keyof ItemData)[] = ['Fornecedor', 'CPF/CNPJ do Emitente', 'Número da Nota', 'Descrição', 'CFOP', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
+        const baseColumns = getColumnsWithCustomRender(
+            data,
+            columnsToShow,
+            (row, id) => {
+                const value = row.getValue(id as any);
+                 if ((id === 'Valor Total' || id === 'Valor Unitário') && typeof value === 'number') {
+                    return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
+                }
+                return <div className="truncate max-w-xs">{String(value ?? '')}</div>;
+            }
+        );
+        
+        baseColumns.unshift({
+            id: 'select',
+            header: ({ table }) => (
+                <Checkbox
+                    checked={table.getIsAllPageRowsSelected()}
+                    onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
+                    aria-label="Selecionar todas"
+                />
+            ),
+            cell: ({ row }) => (
+                <Checkbox
+                    checked={row.getIsSelected()}
+                    onCheckedChange={(value) => row.toggleSelected(!!value)}
+                    aria-label="Selecionar linha"
+                    onClick={(e) => e.stopPropagation()}
+                />
+            ),
+            enableSorting: false,
+            enableHiding: false,
+        });
+
+        if (classification === 'imobilizado') {
+            baseColumns.push({
+                id: 'accountCode',
+                header: 'Código do Ativo',
+                cell: ({ row }: any) => {
+                    const item = row.original as ItemData;
+                    return (
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            <Input
+                                placeholder="Ex: 1.2.3.01.0001"
+                                value={sessionAccountCodes[item.id] || ''}
+                                onChange={(e) => handleAccountCodeChange(item.id, e.target.value)}
+                                className="h-8"
+                            />
+                        </div>
+                    );
+                }
+            });
+        }
+
+        baseColumns.push({
+            id: 'actions',
+            header: 'Ações Individuais',
+            cell: ({ row }: any) => {
+                const originalItem = row.original as ItemData;
+                const currentClassification = classification;
+
+                return (
+                     <TooltipProvider>
+                        <div className="flex gap-1 justify-center" onClick={(e) => e.stopPropagation()}>
+                            {currentClassification !== 'imobilizado' && (
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'imobilizado')}><Factory className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Imobilizado</p></TooltipContent></Tooltip>
+                            )}
+                            {currentClassification !== 'uso-consumo' && (
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'uso-consumo')}><Wrench className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Uso e Consumo</p></TooltipContent></Tooltip>
+                            )}
+                            {currentClassification !== 'utilizado-em-obra' && (
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'utilizado-em-obra')}><HardHat className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Utilizado em Obra</p></TooltipContent></Tooltip>
+                            )}
+                            {currentClassification !== 'unclassified' && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'unclassified')}>
+                                            <RotateCcw className="h-5 w-5 text-destructive" />
+                                        </Button>
+                                    </TooltipTrigger><TooltipContent><p>Reverter para Não Classificado</p></TooltipContent>
+                                </Tooltip>
+                            )}
+                        </div>
+                    </TooltipProvider>
+                );
+            }
+        });
+
+        return baseColumns;
+    }, [data, classification, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange]);
+    
+    if (!data || data.length === 0) {
+        return <div className="text-center text-muted-foreground p-8">Nenhum item nesta categoria.</div>;
+    }
+
+    return <DataTable columns={columns} data={data} rowSelection={rowSelection} setRowSelection={setRowSelection} tableRef={tableRef} />;
+}
+
+
+export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
     const [sessionClassifications, setSessionClassifications] = useState<Record<string, Classification>>({});
@@ -206,7 +328,7 @@ export function ImobilizadoAnalysis({ allItems: initialAllItems, competence, onP
         const table = tableRef.current;
         if (!table) return;
 
-        const selectedItems = table.getFilteredSelectedRowModel().rows.map(row => row.original);
+        const selectedItems = table.getFilteredSelectedRowModel().rows.map(row => row.original as ItemData);
         handleClassificationChange(selectedItems, newClassification);
         setRowSelection({}); 
     };
@@ -295,103 +417,7 @@ export function ImobilizadoAnalysis({ allItems: initialAllItems, competence, onP
         toast({ title: 'Download Iniciado' });
     };
 
-    const tableRef = React.useRef<any>(null);
-    
-    const renderTableFor = (data: ItemData[], classification: Classification) => {
-        if (!data || data.length === 0) {
-            return <div className="text-center text-muted-foreground p-8">Nenhum item nesta categoria.</div>;
-        }
-
-        const columnsToShow: (keyof ItemData)[] = ['Fornecedor', 'CPF/CNPJ do Emitente', 'Número da Nota', 'Descrição', 'CFOP', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
-        const columns = getColumnsWithCustomRender(
-            data,
-            columnsToShow,
-            (row, id) => {
-                const value = row.getValue(id as any);
-                 if ((id === 'Valor Total' || id === 'Valor Unitário') && typeof value === 'number') {
-                    return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
-                }
-                return <div className="truncate max-w-xs">{String(value ?? '')}</div>;
-            }
-        );
-        
-        columns.unshift({
-            id: 'select',
-            header: ({ table }) => (
-                <Checkbox
-                    checked={table.getIsAllPageRowsSelected()}
-                    onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
-                    aria-label="Selecionar todas"
-                />
-            ),
-            cell: ({ row }) => (
-                <Checkbox
-                    checked={row.getIsSelected()}
-                    onCheckedChange={(value) => row.toggleSelected(!!value)}
-                    aria-label="Selecionar linha"
-                    onClick={(e) => e.stopPropagation()}
-                />
-            ),
-            enableSorting: false,
-            enableHiding: false,
-        });
-
-        if (classification === 'imobilizado') {
-            columns.push({
-                id: 'accountCode',
-                header: 'Código do Ativo',
-                cell: ({ row }: any) => {
-                    const item = row.original as ItemData;
-                    return (
-                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            <Input
-                                placeholder="Ex: 1.2.3.01.0001"
-                                value={sessionAccountCodes[item.id] || ''}
-                                onChange={(e) => handleAccountCodeChange(item.id, e.target.value)}
-                                className="h-8"
-                            />
-                        </div>
-                    );
-                }
-            });
-        }
-
-        columns.push({
-            id: 'actions',
-            header: 'Ações Individuais',
-            cell: ({ row }: any) => {
-                const originalItem = row.original as ItemData;
-                const currentClassification = sessionClassifications[originalItem.id] || 'unclassified';
-
-                return (
-                     <TooltipProvider>
-                        <div className="flex gap-1 justify-center" onClick={(e) => e.stopPropagation()}>
-                            {currentClassification !== 'imobilizado' && (
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'imobilizado')}><Factory className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Imobilizado</p></TooltipContent></Tooltip>
-                            )}
-                            {currentClassification !== 'uso-consumo' && (
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'uso-consumo')}><Wrench className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Uso e Consumo</p></TooltipContent></Tooltip>
-                            )}
-                            {currentClassification !== 'utilizado-em-obra' && (
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'utilizado-em-obra')}><HardHat className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Utilizado em Obra</p></TooltipContent></Tooltip>
-                            )}
-                            {currentClassification !== 'unclassified' && (
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'unclassified')}>
-                                            <RotateCcw className="h-5 w-5 text-destructive" />
-                                        </Button>
-                                    </TooltipTrigger><TooltipContent><p>Reverter para Não Classificado</p></TooltipContent>
-                                </Tooltip>
-                            )}
-                        </div>
-                    </TooltipProvider>
-                );
-            }
-        });
-
-        return <DataTable columns={columns} data={data} rowSelection={rowSelection} setRowSelection={setRowSelection} tableRef={tableRef} />;
-    };
+    const tableRef = React.useRef<ReactTable<ItemData> | null>(null);
 
     if (!initialAllItems || initialAllItems.length === 0) {
         return (
@@ -515,19 +541,19 @@ export function ImobilizadoAnalysis({ allItems: initialAllItems, competence, onP
                             </TabsList>
 
                             <TabsContent value="unclassified" className="mt-6">
-                                {renderTableFor(filteredItems.unclassified, 'unclassified')}
+                                <ClassificationTable data={filteredItems.unclassified} classification='unclassified' {...{rowSelection, setRowSelection, tableRef, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange}} />
                             </TabsContent>
                             <TabsContent value="imobilizado" className="mt-6">
                                 <Button onClick={() => handleDownload(filteredItems.imobilizado, 'imobilizado')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                {renderTableFor(filteredItems.imobilizado, 'imobilizado')}
+                                <ClassificationTable data={filteredItems.imobilizado} classification='imobilizado' {...{rowSelection, setRowSelection, tableRef, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange}} />
                             </TabsContent>
                             <TabsContent value="uso-consumo" className="mt-6">
                                 <Button onClick={() => handleDownload(filteredItems['uso-consumo'], 'uso-consumo')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                {renderTableFor(filteredItems['uso-consumo'], 'uso-consumo')}
+                                <ClassificationTable data={filteredItems['uso-consumo']} classification='uso-consumo' {...{rowSelection, setRowSelection, tableRef, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange}} />
                             </TabsContent>
                             <TabsContent value="utilizado-em-obra" className="mt-6">
                                 <Button onClick={() => handleDownload(filteredItems['utilizado-em-obra'], 'utilizado-em-obra')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                {renderTableFor(filteredItems['utilizado-em-obra'], 'utilizado-em-obra')}
+                                <ClassificationTable data={filteredItems['utilizado-em-obra']} classification='utilizado-em-obra' {...{rowSelection, setRowSelection, tableRef, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange}} />
                             </TabsContent>
                         </Tabs>
                     </TooltipProvider>
@@ -536,6 +562,3 @@ export function ImobilizadoAnalysis({ allItems: initialAllItems, competence, onP
         </div>
     );
 }
-    
-
-    

@@ -137,13 +137,15 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 };
             });
 
+        const imobilizadoColumns = React.useMemo(() => getColumnsWithCustomRender(imobilizadoItems, Object.keys(imobilizadoItems[0] || {}).filter(k => k !== '__itemKey')), [imobilizadoItems]);
+
         if (imobilizadoItems.length > 0) {
             reportSections.push({
                 id: 'imobilizado',
                 title: 'Itens Classificados como Ativo Imobilizado',
                 description: 'Itens com valor > R$ 1.200,00 classificados manualmente como Ativo Imobilizado. Verifique se o código do ativo está correto.',
                 data: imobilizadoItems,
-                columns: getColumnsWithCustomRender(imobilizadoItems, Object.keys(imobilizadoItems[0] || {}).filter(k => k !== '__itemKey'))
+                columns: imobilizadoColumns,
             });
         }
         
@@ -168,12 +170,15 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 return acc;
             }, {} as Record<string, any[]>);
 
-            const cfopSubSections = Object.entries(groupedByCfop).map(([cfop, items]) => ({
-                id: `cfop_pending_${cfop}`,
-                title: `CFOP ${cfop}`,
-                data: items,
-                columns: getColumnsWithCustomRender(items, Object.keys(items[0] || {}).filter(k => k !== '__itemKey'))
-            }));
+            const cfopSubSections = Object.entries(groupedByCfop).map(([cfop, items]) => {
+                const columns = getColumnsWithCustomRender(items, Object.keys(items[0] || {}).filter(k => k !== '__itemKey'));
+                return {
+                    id: `cfop_pending_${cfop}`,
+                    title: `CFOP ${cfop}`,
+                    data: items,
+                    columns,
+                };
+            });
 
             reportSections.push({
                 id: 'cfop_issues',
@@ -192,6 +197,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const notFoundCte = notFoundInSped.filter(item => item.type === 'CTE').map(item => ({...item, '__itemKey': `notfound-${item.key}`}));
         
         if (notFoundInSped.length > 0) {
+            const nfeColumns = getColumnsWithCustomRender(notFoundNfe, Object.keys(notFoundNfe[0] || {}).filter(k => k !== '__itemKey'));
+            const cteColumns = getColumnsWithCustomRender(notFoundCte, Object.keys(notFoundCte[0] || {}).filter(k => k !== '__itemKey'));
             reportSections.push({
                 id: 'sped_not_found',
                 title: 'Notas não Lançadas',
@@ -199,8 +206,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 data: [],
                 columns: [],
                 subSections: [
-                    { id: 'nfe_not_found', title: 'NF-e', data: notFoundNfe, columns: getColumnsWithCustomRender(notFoundNfe, Object.keys(notFoundNfe[0] || {}).filter(k => k !== '__itemKey'))},
-                    { id: 'cte_not_found', title: 'CT-e', data: notFoundCte, columns: getColumnsWithCustomRender(notFoundCte, Object.keys(notFoundCte[0] || {}).filter(k => k !== '__itemKey'))}
+                    { id: 'nfe_not_found', title: 'NF-e', data: notFoundNfe, columns: nfeColumns},
+                    { id: 'cte_not_found', title: 'CT-e', data: notFoundCte, columns: cteColumns}
                 ]
             });
         }
@@ -209,6 +216,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const notInSheet = (processedData.keyCheckResults?.keysInTxtNotInSheet || []);
         const notInSheetNfe = notInSheet.filter(item => item.type === 'NFE').map(item => ({...item, '__itemKey': `notinSheet-${item.key}`}));
         const notInSheetCte = notInSheet.filter(item => item.type === 'CTE').map(item => ({...item, '__itemKey': `notinSheet-${item.key}`}));
+        const notInSheetNfeCols = getColumnsWithCustomRender(notInSheetNfe, Object.keys(notInSheetNfe[0] || {}).filter(k => k !== '__itemKey'));
+        const notInSheetCteCols = getColumnsWithCustomRender(notInSheetCte, Object.keys(notInSheetCte[0] || {}).filter(k => k !== '__itemKey'));
 
         if (notInSheet.length > 0) {
             reportSections.push({
@@ -218,8 +227,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 data: [],
                 columns: [],
                 subSections: [
-                    { id: 'nfe_not_in_sheet', title: 'NF-e', data: notInSheetNfe, columns: getColumnsWithCustomRender(notInSheetNfe, Object.keys(notInSheetNfe[0] || {}).filter(k => k !== '__itemKey'))},
-                    { id: 'cte_not_in_sheet', title: 'CT-e', data: notInSheetCte, columns: getColumnsWithCustomRender(notInSheetCte, Object.keys(notInSheetCte[0] || {}).filter(k => k !== '__itemKey'))}
+                    { id: 'nfe_not_in_sheet', title: 'NF-e', data: notInSheetNfe, columns: notInSheetNfeCols},
+                    { id: 'cte_not_in_sheet', title: 'CT-e', data: notInSheetCte, columns: notInSheetCteCols}
                 ]
             });
         }
@@ -227,13 +236,17 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
 
         // 5. SPED - Inconformidades (dividido em sub-secções)
         const { ufDivergences, ieDivergences, dateDivergences, valueDivergences } = processedData.keyCheckResults || {};
+        const ufCols = getColumnsWithCustomRender(ufDivergences || [], Object.keys(ufDivergences?.[0] || {}).filter(k => k !== '__itemKey'));
+        const ieCols = getColumnsWithCustomRender(ieDivergences || [], Object.keys(ieDivergences?.[0] || {}).filter(k => k !== '__itemKey'));
+        const dateCols = getColumnsWithCustomRender(dateDivergences || [], Object.keys(dateDivergences?.[0] || {}).filter(k => k !== '__itemKey'));
+        const valueCols = getColumnsWithCustomRender(valueDivergences || [], Object.keys(valueDivergences?.[0] || {}).filter(k => k !== '__itemKey'));
         
         if ((ufDivergences?.length || 0) > 0 || (ieDivergences?.length || 0) > 0 || (dateDivergences?.length || 0) > 0 || (valueDivergences?.length || 0) > 0) {
             const subSections = [
-                { id: 'uf', title: 'Divergência de UF', data: (ufDivergences || []).map(item => ({...item, '__itemKey': `uf-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(ufDivergences || [], Object.keys(ufDivergences?.[0] || {}).filter(k => k !== '__itemKey')) },
-                { id: 'ie', title: 'Divergência de IE', data: (ieDivergences || []).map(item => ({...item, '__itemKey': `ie-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(ieDivergences || [], Object.keys(ieDivergences?.[0] || {}).filter(k => k !== '__itemKey')) },
-                { id: 'date', title: 'Divergência de Data', data: (dateDivergences || []).map(item => ({...item, '__itemKey': `date-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(dateDivergences || [], Object.keys(dateDivergences?.[0] || {}).filter(k => k !== '__itemKey')) },
-                { id: 'value', title: 'Divergência de Valor', data: (valueDivergences || []).map(item => ({...item, '__itemKey': `value-${item['Chave de Acesso']}`})), columns: getColumnsWithCustomRender(valueDivergences || [], Object.keys(valueDivergences?.[0] || {}).filter(k => k !== '__itemKey')) },
+                { id: 'uf', title: 'Divergência de UF', data: (ufDivergences || []).map(item => ({...item, '__itemKey': `uf-${item['Chave de Acesso']}`})), columns: ufCols },
+                { id: 'ie', title: 'Divergência de IE', data: (ieDivergences || []).map(item => ({...item, '__itemKey': `ie-${item['Chave de Acesso']}`})), columns: ieCols },
+                { id: 'date', title: 'Divergência de Data', data: (dateDivergences || []).map(item => ({...item, '__itemKey': `date-${item['Chave de Acesso']}`})), columns: dateCols },
+                { id: 'value', title: 'Divergência de Valor', data: (valueDivergences || []).map(item => ({...item, '__itemKey': `value-${item['Chave de Acesso']}`})), columns: valueCols },
             ].filter(sub => sub.data.length > 0);
 
             reportSections.push({
@@ -285,7 +298,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                         'Corrigido': v.corrected || '(removida)',
                         '__itemKey': `spedmod-${key}-${i}`
                     }));
-                    return { id: `sped_mod_${key}`, title: detail?.title || key, data, columns: getColumnsWithCustomRender(data, ['Linha', 'Original', 'Corrigido']), description: detail?.description };
+                    const columns = getColumnsWithCustomRender(data, ['Linha', 'Original', 'Corrigido']);
+                    return { id: `sped_mod_${key}`, title: detail?.title || key, data, columns, description: detail?.description };
                 }
                 return null;
             }).filter(sub => sub !== null) as { id: string; title: string; data: any[]; columns: any[]; description?: string}[];
@@ -308,13 +322,14 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             'Ficheiro XML de Revenda': f.name,
             '__itemKey': `resale-${i}`
         }));
+        const resaleColumns = getColumnsWithCustomRender(resaleItems, Object.keys(resaleItems[0] || {}).filter(k => k !== '__itemKey'));
          if (resaleItems.length > 0) {
             reportSections.push({
                 id: 'resale_items',
                 title: 'Notas Fiscais de Revenda Identificadas',
                 description: 'Os seguintes XMLs foram identificados como operações de revenda, com base nos CFOPs correspondentes na planilha do Sienge.',
                 data: resaleItems,
-                columns: getColumnsWithCustomRender(resaleItems, Object.keys(resaleItems[0] || {}).filter(k => k !== '__itemKey'))
+                columns: resaleColumns
             });
         }
 
