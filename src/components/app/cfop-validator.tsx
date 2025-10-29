@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -113,9 +114,15 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         reconciledItems.forEach(item => {
             const itemKey = item['Chave de acesso'] + item.Item;
             const newStatus = validationStatus[itemKey];
+            const uniqueProductKey = getUniqueProductKey(item);
+            
             if (newStatus && newStatus !== 'unvalidated') {
-                const uniqueProductKey = getUniqueProductKey(item);
                 updatedPersistedData[competence].cfopValidations.classifications[uniqueProductKey] = { classification: newStatus };
+            } else if (newStatus === 'unvalidated') {
+                // Remove the classification if it's reverted to unvalidated
+                if (updatedPersistedData[competence].cfopValidations.classifications[uniqueProductKey]) {
+                    delete updatedPersistedData[competence].cfopValidations.classifications[uniqueProductKey];
+                }
             }
         });
         
@@ -254,7 +261,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                 </TooltipProvider>
             );
         }
-    }), [validationStatus, handleValidationChange]);
+    }), [validationStatus]);
     
     const statusColumn = useMemo(() => ({
         id: 'status',
@@ -392,3 +399,5 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         </div>
     );
 }
+
+    
