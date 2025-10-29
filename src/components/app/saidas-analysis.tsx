@@ -29,23 +29,17 @@ interface SaidaItem {
 
 interface SaidasAnalysisProps {
     saidasData: any[];
-    initialStatus: Record<number, SaidaStatus> | null;
+    statusMap: Record<number, SaidaStatus>;
     onStatusChange: (newStatus: Record<number, SaidaStatus>) => void;
     lastPeriodNumber: number;
     onLastPeriodNumberChange: (newNumber: number) => void;
 }
 
-export function SaidasAnalysis({ saidasData, initialStatus, onStatusChange, lastPeriodNumber, onLastPeriodNumberChange }: SaidasAnalysisProps) {
+export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeriodNumber, onLastPeriodNumberChange }: SaidasAnalysisProps) {
     const { toast } = useToast();
-    const [localStatusMap, setLocalStatusMap] = useState<Record<number, SaidaStatus>>(initialStatus || {});
     const [lastNumberInput, setLastNumberInput] = useState<string>(String(lastPeriodNumber || ''));
     const [rangeStart, setRangeStart] = useState('');
     const [rangeEnd, setRangeEnd] = useState('');
-
-
-    useEffect(() => {
-        setLocalStatusMap(initialStatus || {});
-    }, [initialStatus]);
 
     useEffect(() => {
         setLastNumberInput(String(lastPeriodNumber || ''));
@@ -97,7 +91,7 @@ export function SaidasAnalysis({ saidasData, initialStatus, onStatusChange, last
 
         for (let i = startSequence; i <= max; i++) {
             const existingNote = existingNotes.get(i);
-            const savedStatus = localStatusMap[i];
+            const savedStatus = statusMap[i];
 
             if (existingNote) {
                 const isXmlCancelled = existingNote['Status']?.toLowerCase() === 'canceladas';
@@ -109,11 +103,10 @@ export function SaidasAnalysis({ saidasData, initialStatus, onStatusChange, last
         }
         
         return { sequence: fullSequence, min, max, firstNoteAfterGap };
-    }, [saidasData, localStatusMap, lastPeriodNumber]);
+    }, [saidasData, statusMap, lastPeriodNumber]);
 
     const handleStatusChange = (numero: number, newStatus: SaidaStatus) => {
-        const newStatusMap = { ...localStatusMap, [numero]: newStatus };
-        setLocalStatusMap(newStatusMap);
+        const newStatusMap = { ...statusMap, [numero]: newStatus };
         onStatusChange(newStatusMap); // Notify parent
         toast({
             title: 'Status Alterado',
@@ -122,7 +115,6 @@ export function SaidasAnalysis({ saidasData, initialStatus, onStatusChange, last
     };
 
     const handleClearStatus = () => {
-        setLocalStatusMap({});
         onStatusChange({}); // Notify parent
         toast({
             title: 'Classificações Limpas',
@@ -143,14 +135,13 @@ export function SaidasAnalysis({ saidasData, initialStatus, onStatusChange, last
             return;
         }
 
-        const newStatusMap = { ...localStatusMap };
+        const newStatusMap = { ...statusMap };
         let count = 0;
         for (let i = start; i <= end; i++) {
             newStatusMap[i] = 'inutilizada';
             count++;
         }
 
-        setLocalStatusMap(newStatusMap);
         onStatusChange(newStatusMap);
 
         toast({
@@ -355,4 +346,3 @@ export function SaidasAnalysis({ saidasData, initialStatus, onStatusChange, last
         </Card>
     );
 }
-    
