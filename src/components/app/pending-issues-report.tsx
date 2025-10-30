@@ -209,15 +209,27 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const notFoundInSped = (processedData.keyCheckResults?.keysNotFoundInTxt || []);
         const notFoundColumns = ['Chave de acesso', 'Tipo', 'Número', 'Fornecedor', 'Emissão', 'Total'];
 
-        const formatNotFoundData = (item: any) => ({
-            'Chave de acesso': item.key,
-            'Tipo': item.type,
-            'Número': extractInvoiceNumber(item.key),
-            'Fornecedor': item.Fornecedor,
-            'Emissão': item.Emissão,
-            'Total': item.Total,
-            '__itemKey': `notfound-${item.key}`
-        });
+        const formatNotFoundData = (item: any) => {
+            let formattedDate = String(item.Emissão);
+            if (item.Emissão) {
+                try {
+                    const dateStr = String(item.Emissão).substring(0, 10);
+                    const [year, month, day] = dateStr.split('-');
+                    if (year && month && day) {
+                        formattedDate = `${day}/${month}/${year}`;
+                    }
+                } catch {}
+            }
+            return {
+                'Chave de acesso': item.key,
+                'Tipo': item.type,
+                'Número': extractInvoiceNumber(item.key),
+                'Fornecedor': item.Fornecedor,
+                'Emissão': formattedDate,
+                'Total': item.Total,
+                '__itemKey': `notfound-${item.key}`
+            };
+        };
 
         const notFoundNfe = notFoundInSped.filter(item => (item.type === 'NFE' || item.type === 'Saída')).map(formatNotFoundData);
         const notFoundCte = notFoundInSped.filter(item => item.type === 'CTE').map(formatNotFoundData);
@@ -470,7 +482,14 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 const validColumns = columns.filter(c => c.id !== '__itemKey');
                 const tableColumns = validColumns.map((col: any) => typeof col.header === 'function' ? col.id : col.header);
                 const tableAccessors = validColumns.map((col:any) => col.id);
-                const tableRows = exportData.map(row => tableAccessors.map((acc: string) => String(row[acc] ?? '')));
+                
+                const tableRows = exportData.map(row => tableAccessors.map((acc: string) => {
+                    const value = row[acc];
+                    if (typeof value === 'number' && (acc.toLowerCase().includes('valor') || acc.toLowerCase().includes('total'))) {
+                        return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    }
+                    return String(value ?? '');
+                }));
 
                 autoTable(doc, {
                     head: [tableColumns],
@@ -676,3 +695,5 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         </div>
     );
 }
+
+    
