@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -66,18 +67,14 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
     const [ignoredItems, setIgnoredItems] = React.useState<Set<string>>(new Set());
     const [exportOptions, setExportOptions] = React.useState<Record<string, boolean>>({});
     const [openCollapsibles, setOpenCollapsibles] = React.useState<Set<string>>(new Set());
-    const [currentClassifications, setCurrentClassifications] = React.useState(allPersistedClassifications);
+    const currentClassifications = allPersistedClassifications; // Directly use the prop
 
-     React.useEffect(() => {
-        setCurrentClassifications(allPersistedClassifications);
-    }, [allPersistedClassifications]);
 
     const handleForceUpdate = () => {
         try {
             const savedData = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
             const latestClassifications = savedData ? JSON.parse(savedData) : {};
-            setCurrentClassifications(latestClassifications);
-            onForceUpdate(latestClassifications);
+            onForceUpdate(latestClassifications); // Call parent to update its state
             toast({title: "Relatório Atualizado", description: "Os dados foram recarregados com as informações mais recentes."})
         } catch (e) {
             console.error("Failed to re-load classifications from localStorage", e);
