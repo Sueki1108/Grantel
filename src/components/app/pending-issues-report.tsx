@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from 'react';
@@ -19,6 +18,7 @@ import { Label } from '../ui/label';
 import { Checkbox } from '../ui/checkbox';
 import { getColumnsWithCustomRender } from '@/lib/columns-helper';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
+import { format } from 'date-fns';
 
 
 interface Section {
@@ -193,14 +193,15 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
 
         // 3. Notas não Lançadas
         const notFoundInSped = (processedData.keyCheckResults?.keysNotFoundInTxt || []);
+        const notFoundColumns = ['Chave de acesso', 'Tipo', 'Fornecedor', 'Emissão', 'Total'];
+
         const notFoundNfe = notFoundInSped.filter(item => (item.type === 'NFE' || item.type === 'Saída')).map(item => ({...item, '__itemKey': `notfound-${item.key}`}));
         const notFoundCte = notFoundInSped.filter(item => item.type === 'CTE').map(item => ({...item, '__itemKey': `notfound-${item.key}`}));
         
+        const nfeColumns = getColumnsWithCustomRender(notFoundNfe, notFoundColumns);
+        const cteColumns = getColumnsWithCustomRender(notFoundCte, notFoundColumns);
+        
         if (notFoundInSped.length > 0) {
-            const notFoundColumns = ['Chave de acesso', 'Tipo', 'Fornecedor', 'Emissão', 'Total'];
-            const nfeColumns = getColumnsWithCustomRender(notFoundNfe, notFoundColumns);
-            const cteColumns = getColumnsWithCustomRender(notFoundCte, notFoundColumns);
-            
             reportSections.push({
                 id: 'sped_not_found',
                 title: 'Notas não Lançadas',
@@ -215,7 +216,11 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         }
         
         // 4. SPED - Não na planilha
-        const notInSheet = (processedData.keyCheckResults?.keysInTxtNotInSheet || []);
+        const notInSheet = (processedData.keyCheckResults?.keysInTxtNotInSheet || []).map(item => {
+            const formattedDate = item.Emissão instanceof Date ? format(item.Emissão, 'dd/MM/yyyy') : item.Emissão;
+            return { ...item, Emissão: formattedDate };
+        });
+
         const notInSheetNfe = notInSheet.filter(item => item.type === 'NFE').map(item => ({...item, '__itemKey': `notinSheet-${item.key}`}));
         const notInSheetCte = notInSheet.filter(item => item.type === 'CTE').map(item => ({...item, '__itemKey': `notinSheet-${item.key}`}));
         const notInSheetNfeCols = getColumnsWithCustomRender(notInSheetNfe, Object.keys(notInSheetNfe[0] || {}).filter(k => k !== '__itemKey'));
@@ -282,16 +287,13 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 ...mods,
                 groupedCounters: groupedCounterModifications
             };
-            delete allModifications.blockCount;
-            delete allModifications.totalLineCount;
-            delete allModifications.count9900;
             
             const orderedModKeys: (keyof typeof allModifications)[] = ['groupedCounters', 'ieCorrection', 'cteSeriesCorrection', 'addressSpaces', 'truncation', 'unitStandardization', 'removed0190'];
 
              const subSections = orderedModKeys.map(key => {
-                const value = allModifications[key];
+                const value = allModifications[key as keyof typeof allModifications];
                 const detailKey = key === 'groupedCounters' ? 'count9900' : key;
-                const detail = modificationDetails[detailKey];
+                const detail = modificationDetails[detailKey as keyof typeof modificationDetails];
                 
                 if(Array.isArray(value) && value.length > 0) {
                     const data = value.map((v: any, i: number) => ({
@@ -301,7 +303,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                         '__itemKey': `spedmod-${key}-${i}`
                     }));
                     const columns = getColumnsWithCustomRender(data, ['Linha', 'Original', 'Corrigido']);
-                    return { id: `sped_mod_${key}`, title: detail?.title || key, data, columns, description: detail?.description };
+                    return { id: `sped_mod_${key}`, title: detail?.title || String(key), data, columns, description: detail?.description };
                 }
                 return null;
             }).filter(sub => sub !== null) as { id: string; title: string; data: any[]; columns: any[]; description?: string}[];
@@ -634,5 +636,3 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         </div>
     );
 }
-
-    
