@@ -65,15 +65,19 @@ const extractInvoiceNumber = (key: string): string => {
     return "N/A";
 };
 
+const formatCurrency = (value: any) => {
+    const num = parseFloat(String(value).replace(',', '.'));
+    if (isNaN(num)) return value;
+    return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+};
+
 
 export function PendingIssuesReport({ processedData, allPersistedClassifications, onForceUpdate }: PendingIssuesReportProps) {
     const { toast } = useToast();
     const [ignoredItems, setIgnoredItems] = React.useState<Set<string>>(new Set());
     const [exportOptions, setExportOptions] = React.useState<Record<string, boolean>>({});
     const [openCollapsibles, setOpenCollapsibles] = React.useState<Set<string>>(new Set());
-    const currentClassifications = allPersistedClassifications; 
-
-
+    
     const handleForceUpdate = () => {
         try {
             const savedData = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
@@ -85,7 +89,6 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             toast({variant: 'destructive', title: "Erro ao Atualizar", description: "Não foi possível recarregar as classificações."});
         }
     };
-
 
     const toggleCollapsible = (id: string) => {
         setOpenCollapsibles(prev => {
@@ -110,6 +113,10 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             return newSet;
         });
     };
+    
+    const currencyCellRenderer = (row: any, id: string) => (
+        <div className="text-right">{formatCurrency(row.original[id])}</div>
+    );
 
     const sections = React.useMemo((): Section[] => {
         if (!processedData) return [];
@@ -120,11 +127,11 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         // 1. Imobilizado
         const imobilizadoItems = (processedData.sheets?.['Imobilizados'] || [])
             .filter(item => {
-                const classification = currentClassifications[competenceKey]?.classifications?.[item.uniqueItemId]?.classification;
+                const classification = allPersistedClassifications[competenceKey]?.classifications?.[item.uniqueItemId]?.classification;
                 return classification === 'imobilizado';
             })
             .map(item => {
-                const persistedForCompetence = currentClassifications[competenceKey];
+                const persistedForCompetence = allPersistedClassifications[competenceKey];
                 const accountCode = persistedForCompetence?.accountCodes?.[item.id]?.accountCode;
                 const nfeHeader = (processedData.sheets['Notas Válidas'] || []).find(n => n['Chave Unica'] === item['Chave Unica']);
 
@@ -138,7 +145,14 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 };
             });
 
-        const imobilizadoColumns = getColumnsWithCustomRender(imobilizadoItems, Object.keys(imobilizadoItems[0] || {}).filter(k => k !== '__itemKey'));
+        const imobilizadoColumns = getColumnsWithCustomRender(
+            imobilizadoItems, 
+            Object.keys(imobilizadoItems[0] || {}).filter(k => k !== '__itemKey'),
+            (row, id) => {
+                if (id === 'Valor Total') return currencyCellRenderer(row, id);
+                return <div>{row.original[id]}</div>;
+            }
+        );
 
         if (imobilizadoItems.length > 0) {
             reportSections.push({
@@ -152,7 +166,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         
         // 2. CFOP Incorreto ou a Verificar
         const cfopValidationItems = processedData.reconciliationResults?.reconciled || [];
-        const cfopValidationsForCompetence = currentClassifications[competenceKey]?.cfopValidations?.classifications || {};
+        const cfopValidationsForCompetence = allPersistedClassifications[competenceKey]?.cfopValidations?.classifications || {};
         
         const cfopPendingItems = cfopValidationItems.filter(item => {
              const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
@@ -191,7 +205,6 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             });
         }
 
-
         // 3. Notas não Lançadas
         const notFoundInSped = (processedData.keyCheckResults?.keysNotFoundInTxt || []);
         const notFoundColumns = ['Chave de acesso', 'Tipo', 'Número', 'Fornecedor', 'Emissão', 'Total'];
@@ -208,9 +221,12 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             } catch {}
             
             return {
-                ...item,
+                'Chave de acesso': item.key,
+                'Tipo': item.type,
                 'Número': extractInvoiceNumber(item.key),
+                'Fornecedor': item.Fornecedor,
                 'Emissão': formattedDate,
+                'Total': item.Total,
                 '__itemKey': `notfound-${item.key}`
             };
         };
@@ -218,8 +234,14 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const notFoundNfe = notFoundInSped.filter(item => (item.type === 'NFE' || item.type === 'Saída')).map(formatNotFoundData);
         const notFoundCte = notFoundInSped.filter(item => item.type === 'CTE').map(formatNotFoundData);
         
-        const nfeColumns = getColumnsWithCustomRender(notFoundNfe, notFoundColumns);
-        const cteColumns = getColumnsWithCustomRender(notFoundCte, notFoundColumns);
+        const nfeColumns = getColumnsWithCustomRender(notFoundNfe, notFoundColumns, (row, id) => {
+            if (id === 'Total') return currencyCellRenderer(row, id);
+            return <div>{row.original[id]}</div>;
+        });
+        const cteColumns = getColumnsWithCustomRender(notFoundCte, notFoundColumns, (row, id) => {
+            if (id === 'Total') return currencyCellRenderer(row, id);
+            return <div>{row.original[id]}</div>;
+        });
         
         if (notFoundInSped.length > 0) {
             reportSections.push({
@@ -237,18 +259,23 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         
         // 4. SPED - Não na planilha
         const notInSheet = (processedData.keyCheckResults?.keysInTxtNotInSheet || []).map(item => {
-            const dateValue = item.Emissão;
-            let formattedDate = String(dateValue);
-            if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
-                formattedDate = format(dateValue, 'dd/MM/yyyy');
+            let formattedDate = String(item.Emissão);
+            if (item.Emissão instanceof Date && !isNaN(item.Emissão.getTime())) {
+                formattedDate = format(item.Emissão, 'dd/MM/yyyy');
             }
             return { ...item, Emissão: formattedDate, '__itemKey': `notinSheet-${item.key}` };
         });
 
         const notInSheetNfe = notInSheet.filter(item => item.type === 'NFE');
         const notInSheetCte = notInSheet.filter(item => item.type === 'CTE');
-        const notInSheetNfeCols = getColumnsWithCustomRender(notInSheetNfe, Object.keys(notInSheetNfe[0] || {}).filter(k => k !== '__itemKey'));
-        const notInSheetCteCols = getColumnsWithCustomRender(notInSheetCte, Object.keys(notInSheetCte[0] || {}).filter(k => k !== '__itemKey'));
+        const notInSheetNfeCols = getColumnsWithCustomRender(notInSheetNfe, Object.keys(notInSheetNfe[0] || {}).filter(k => k !== '__itemKey'), (row, id) => {
+             if (id === 'Total') return currencyCellRenderer(row, id);
+             return <div>{row.original[id]}</div>;
+        });
+        const notInSheetCteCols = getColumnsWithCustomRender(notInSheetCte, Object.keys(notInSheetCte[0] || {}).filter(k => k !== '__itemKey'), (row, id) => {
+             if (id === 'Total') return currencyCellRenderer(row, id);
+             return <div>{row.original[id]}</div>;
+        });
 
         if (notInSheet.length > 0) {
             reportSections.push({
@@ -264,13 +291,15 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             });
         }
 
-
         // 5. SPED - Inconformidades (dividido em sub-secções)
         const { ufDivergences, ieDivergences, dateDivergences, valueDivergences } = processedData.keyCheckResults || {};
         const ufCols = getColumnsWithCustomRender(ufDivergences || [], Object.keys(ufDivergences?.[0] || {}).filter(k => k !== '__itemKey'));
         const ieCols = getColumnsWithCustomRender(ieDivergences || [], Object.keys(ieDivergences?.[0] || {}).filter(k => k !== '__itemKey'));
         const dateCols = getColumnsWithCustomRender(dateDivergences || [], Object.keys(dateDivergences?.[0] || {}).filter(k => k !== '__itemKey'));
-        const valueCols = getColumnsWithCustomRender(valueDivergences || [], Object.keys(valueDivergences?.[0] || {}).filter(k => k !== '__itemKey'));
+        const valueCols = getColumnsWithCustomRender(valueDivergences || [], Object.keys(valueDivergences?.[0] || {}).filter(k => k !== '__itemKey'), (row, id) => {
+            if (id === 'Valor XML' || id === 'Valor SPED') return currencyCellRenderer(row, id);
+            return <div>{row.original[id]}</div>;
+        });
         
         if ((ufDivergences?.length || 0) > 0 || (ieDivergences?.length || 0) > 0 || (dateDivergences?.length || 0) > 0 || (valueDivergences?.length || 0) > 0) {
             const subSections = [
@@ -361,9 +390,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             });
         }
 
-
         return reportSections;
-    }, [processedData, currentClassifications]);
+    }, [processedData, allPersistedClassifications]);
 
     React.useEffect(() => {
         const initialOptions: Record<string, boolean> = {};
