@@ -118,6 +118,10 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         <div>{formatCurrency(row.original[id])}</div>
     );
 
+    const leftAlignedCellRenderer = (row: any, id: string) => (
+        <div className="text-left">{row.original[id]}</div>
+    );
+    
     const sections = React.useMemo((): Section[] => {
         if (!processedData) return [];
 
@@ -149,7 +153,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             imobilizadoItems, 
             Object.keys(imobilizadoItems[0] || {}).filter(k => k !== '__itemKey'),
             (row, id) => {
-                if (id === 'Valor Total') return currencyCellRenderer(row, id);
+                if (id === 'Valor Total') return leftAlignedCellRenderer(row, id);
                 return <div>{row.original[id]}</div>;
             }
         );
@@ -207,8 +211,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
 
         // 3. Notas não Lançadas
         const notFoundInSped = (processedData.keyCheckResults?.keysNotFoundInTxt || []);
-        const notFoundColumns = ['Chave de acesso', 'Tipo', 'Número', 'Fornecedor', 'Emissão', 'Total'];
-
+        
         const formatNotFoundData = (item: any) => {
             let formattedDate = String(item.Emissão);
             if (item.Emissão) {
@@ -234,12 +237,14 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const notFoundNfe = notFoundInSped.filter(item => (item.type === 'NFE' || item.type === 'Saída')).map(formatNotFoundData);
         const notFoundCte = notFoundInSped.filter(item => item.type === 'CTE').map(formatNotFoundData);
         
+        const notFoundColumns = ['Chave de acesso', 'Tipo', 'Número', 'Fornecedor', 'Emissão', 'Total'];
+
         const nfeColumns = getColumnsWithCustomRender(notFoundNfe, notFoundColumns, (row, id) => {
-            if (id === 'Total') return currencyCellRenderer(row, id);
+            if (id === 'Total') return leftAlignedCellRenderer(row, id);
             return <div>{row.original[id]}</div>;
         });
         const cteColumns = getColumnsWithCustomRender(notFoundCte, notFoundColumns, (row, id) => {
-            if (id === 'Total') return currencyCellRenderer(row, id);
+            if (id === 'Total') return leftAlignedCellRenderer(row, id);
             return <div>{row.original[id]}</div>;
         });
         
@@ -269,11 +274,11 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const notInSheetNfe = notInSheet.filter(item => item.type === 'NFE');
         const notInSheetCte = notInSheet.filter(item => item.type === 'CTE');
         const notInSheetNfeCols = getColumnsWithCustomRender(notInSheetNfe, Object.keys(notInSheetNfe[0] || {}).filter(k => k !== '__itemKey'), (row, id) => {
-             if (id === 'Total') return currencyCellRenderer(row, id);
+             if (id === 'Total') return leftAlignedCellRenderer(row, id);
              return <div>{row.original[id]}</div>;
         });
         const notInSheetCteCols = getColumnsWithCustomRender(notInSheetCte, Object.keys(notInSheetCte[0] || {}).filter(k => k !== '__itemKey'), (row, id) => {
-             if (id === 'Total') return currencyCellRenderer(row, id);
+             if (id === 'Total') return leftAlignedCellRenderer(row, id);
              return <div>{row.original[id]}</div>;
         });
 
@@ -297,7 +302,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const ieCols = getColumnsWithCustomRender(ieDivergences || [], Object.keys(ieDivergences?.[0] || {}).filter(k => k !== '__itemKey'));
         const dateCols = getColumnsWithCustomRender(dateDivergences || [], Object.keys(dateDivergences?.[0] || {}).filter(k => k !== '__itemKey'));
         const valueCols = getColumnsWithCustomRender(valueDivergences || [], Object.keys(valueDivergences?.[0] || {}).filter(k => k !== '__itemKey'), (row, id) => {
-            if (id === 'Valor XML' || id === 'Valor SPED') return currencyCellRenderer(row, id);
+            if (id === 'Valor XML' || id === 'Valor SPED') return leftAlignedCellRenderer(row, id);
             return <div>{row.original[id]}</div>;
         });
         
@@ -343,22 +348,38 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             
             const orderedModKeys: (keyof typeof allModifications)[] = ['groupedCounters', 'ieCorrection', 'cteSeriesCorrection', 'addressSpaces', 'truncation', 'unitStandardization', 'removed0190'];
 
-             const subSections = orderedModKeys.map(key => {
+            const subSections = orderedModKeys.flatMap(key => {
                 const value = allModifications[key as keyof typeof allModifications];
                 const detailKey = key === 'groupedCounters' ? 'count9900' : key;
                 const detail = modificationDetails[detailKey as keyof typeof modificationDetails];
                 
-                if(Array.isArray(value) && value.length > 0) {
-                    const data = value.map((v: any, i: number) => ({
-                        'Linha': v.lineNumber,
-                        'Original': v.original || v.line,
-                        'Corrigido': v.corrected || '(removida)',
-                        '__itemKey': `spedmod-${key}-${i}`
-                    }));
-                    const columns = getColumnsWithCustomRender(data, ['Linha', 'Original', 'Corrigido']);
-                    return { id: `sped_mod_${key}`, title: detail?.title || String(key), data, columns, description: detail?.description };
+                if(!Array.isArray(value) || value.length === 0) return [];
+                
+                if (key === 'ieCorrection') {
+                    const data = value.map((v: any, i: number) => {
+                        const originalParts = v.original.split('|');
+                        const correctedParts = v.corrected.split('|');
+                        return {
+                            'Linha': v.lineNumber,
+                            'CNPJ do Fornecedor': originalParts[5] || 'N/A',
+                            'Nome do Fornecedor': originalParts[3] || 'N/A',
+                            'IE Original': originalParts[7] || 'N/A',
+                            'IE Corrigida': correctedParts[7] || 'N/A',
+                            '__itemKey': `spedmod-${key}-${i}`
+                        };
+                    });
+                     const columns = getColumnsWithCustomRender(data, ['Linha', 'CNPJ do Fornecedor', 'Nome do Fornecedor', 'IE Original', 'IE Corrigida']);
+                    return [{ id: `sped_mod_${key}`, title: detail?.title || String(key), data, columns, description: detail?.description }];
                 }
-                return null;
+
+                const data = value.map((v: any, i: number) => ({
+                    'Linha': v.lineNumber,
+                    'Original': v.original || v.line,
+                    'Corrigido': v.corrected || '(removida)',
+                    '__itemKey': `spedmod-${key}-${i}`
+                }));
+                const columns = getColumnsWithCustomRender(data, ['Linha', 'Original', 'Corrigido']);
+                return [{ id: `sped_mod_${key}`, title: detail?.title || String(key), data, columns, description: detail?.description }];
             }).filter(sub => sub !== null) as { id: string; title: string; data: any[]; columns: any[]; description?: string}[];
             
             if (subSections.length > 0) {
@@ -485,8 +506,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 
                 const tableRows = exportData.map(row => tableAccessors.map((acc: string) => {
                     const value = row[acc];
-                    if (typeof value === 'number' && (acc.toLowerCase().includes('valor') || acc.toLowerCase().includes('total'))) {
-                        return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    if (typeof value === 'number' && (String(acc).toLowerCase().includes('valor') || String(acc).toLowerCase().includes('total'))) {
+                         return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                     return String(value ?? '');
                 }));
@@ -695,5 +716,3 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         </div>
     );
 }
-
-    
