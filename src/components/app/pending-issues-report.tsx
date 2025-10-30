@@ -137,7 +137,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 };
             });
 
-        const imobilizadoColumns = React.useMemo(() => getColumnsWithCustomRender(imobilizadoItems, Object.keys(imobilizadoItems[0] || {}).filter(k => k !== '__itemKey')), [imobilizadoItems]);
+        const imobilizadoColumns = getColumnsWithCustomRender(imobilizadoItems, Object.keys(imobilizadoItems[0] || {}).filter(k => k !== '__itemKey'));
 
         if (imobilizadoItems.length > 0) {
             reportSections.push({
