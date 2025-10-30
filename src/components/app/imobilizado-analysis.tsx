@@ -489,11 +489,9 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
                                 <TooltipProvider>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
-                                            <DialogTrigger asChild>
-                                                <Button variant="outline" size="icon">
-                                                    <Settings className="h-4 w-4" />
-                                                </Button>
-                                            </DialogTrigger>
+                                             <Button variant="outline" size="icon" onClick={() => setIsCfopModalOpen(true)}>
+                                                <Settings className="h-4 w-4" />
+                                            </Button>
                                         </TooltipTrigger>
                                         <TooltipContent>
                                             <p>Configurar CFOPs para Imobilizado</p>
