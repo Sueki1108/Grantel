@@ -197,8 +197,10 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const notFoundCte = notFoundInSped.filter(item => item.type === 'CTE').map(item => ({...item, '__itemKey': `notfound-${item.key}`}));
         
         if (notFoundInSped.length > 0) {
-            const nfeColumns = getColumnsWithCustomRender(notFoundNfe, Object.keys(notFoundNfe[0] || {}).filter(k => k !== '__itemKey'));
-            const cteColumns = getColumnsWithCustomRender(notFoundCte, Object.keys(notFoundCte[0] || {}).filter(k => k !== '__itemKey'));
+            const notFoundColumns = ['Chave de acesso', 'Tipo', 'Fornecedor', 'Emissão', 'Total'];
+            const nfeColumns = getColumnsWithCustomRender(notFoundNfe, notFoundColumns);
+            const cteColumns = getColumnsWithCustomRender(notFoundCte, notFoundColumns);
+            
             reportSections.push({
                 id: 'sped_not_found',
                 title: 'Notas não Lançadas',
@@ -632,3 +634,5 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         </div>
     );
 }
+
+    
