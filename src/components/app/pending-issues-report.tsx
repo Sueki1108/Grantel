@@ -119,7 +119,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
     );
 
     const leftAlignedCellRenderer = (row: any, id: string) => (
-        <div className="text-left">{row.original[id]}</div>
+        <div>{row.original[id]}</div>
     );
     
     const sections = React.useMemo((): Section[] => {
@@ -143,6 +143,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                     'Fornecedor': nfeHeader?.Fornecedor || item.Fornecedor || 'N/A',
                     'Número da Nota': item['Número da Nota'],
                     'Descrição': item['Descrição'],
+                    'Quantidade': item['Quantidade'],
+                    'Valor Unitário': item['Valor Unitário'],
                     'Valor Total': item['Valor Total'],
                     'Código do Ativo': accountCode || '(não definido)',
                     '__itemKey': `imobilizado-${item.id}`
@@ -153,8 +155,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             imobilizadoItems, 
             Object.keys(imobilizadoItems[0] || {}).filter(k => k !== '__itemKey'),
             (row, id) => {
-                if (id === 'Valor Total') return leftAlignedCellRenderer(row, id);
-                return <div>{row.original[id]}</div>;
+                if (id === 'Valor Total' || id === 'Valor Unitário') return currencyCellRenderer(row, id);
+                return leftAlignedCellRenderer(row, id);
             }
         );
 
@@ -240,12 +242,12 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const notFoundColumns = ['Chave de acesso', 'Tipo', 'Número', 'Fornecedor', 'Emissão', 'Total'];
 
         const nfeColumns = getColumnsWithCustomRender(notFoundNfe, notFoundColumns, (row, id) => {
-            if (id === 'Total') return leftAlignedCellRenderer(row, id);
-            return <div>{row.original[id]}</div>;
+            if (id === 'Total') return currencyCellRenderer(row, id);
+            return leftAlignedCellRenderer(row, id);
         });
         const cteColumns = getColumnsWithCustomRender(notFoundCte, notFoundColumns, (row, id) => {
-            if (id === 'Total') return leftAlignedCellRenderer(row, id);
-            return <div>{row.original[id]}</div>;
+            if (id === 'Total') return currencyCellRenderer(row, id);
+            return leftAlignedCellRenderer(row, id);
         });
         
         if (notFoundInSped.length > 0) {
@@ -264,22 +266,19 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         
         // 4. SPED - Não na planilha
         const notInSheet = (processedData.keyCheckResults?.keysInTxtNotInSheet || []).map(item => {
-            let formattedDate = String(item.Emissão);
-            if (item.Emissão instanceof Date && !isNaN(item.Emissão.getTime())) {
-                formattedDate = format(item.Emissão, 'dd/MM/yyyy');
-            }
+            const formattedDate = item.Emissão instanceof Date && !isNaN(item.Emissão.getTime()) ? format(item.Emissão, 'dd/MM/yyyy') : item.Emissão;
             return { ...item, Emissão: formattedDate, '__itemKey': `notinSheet-${item.key}` };
         });
 
         const notInSheetNfe = notInSheet.filter(item => item.type === 'NFE');
         const notInSheetCte = notInSheet.filter(item => item.type === 'CTE');
         const notInSheetNfeCols = getColumnsWithCustomRender(notInSheetNfe, Object.keys(notInSheetNfe[0] || {}).filter(k => k !== '__itemKey'), (row, id) => {
-             if (id === 'Total') return leftAlignedCellRenderer(row, id);
-             return <div>{row.original[id]}</div>;
+             if (id === 'Total') return currencyCellRenderer(row, id);
+             return leftAlignedCellRenderer(row, id);
         });
         const notInSheetCteCols = getColumnsWithCustomRender(notInSheetCte, Object.keys(notInSheetCte[0] || {}).filter(k => k !== '__itemKey'), (row, id) => {
-             if (id === 'Total') return leftAlignedCellRenderer(row, id);
-             return <div>{row.original[id]}</div>;
+             if (id === 'Total') return currencyCellRenderer(row, id);
+             return leftAlignedCellRenderer(row, id);
         });
 
         if (notInSheet.length > 0) {
@@ -298,12 +297,12 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
 
         // 5. SPED - Inconformidades (dividido em sub-secções)
         const { ufDivergences, ieDivergences, dateDivergences, valueDivergences } = processedData.keyCheckResults || {};
-        const ufCols = getColumnsWithCustomRender(ufDivergences || [], Object.keys(ufDivergences?.[0] || {}).filter(k => k !== '__itemKey'));
-        const ieCols = getColumnsWithCustomRender(ieDivergences || [], Object.keys(ieDivergences?.[0] || {}).filter(k => k !== '__itemKey'));
-        const dateCols = getColumnsWithCustomRender(dateDivergences || [], Object.keys(dateDivergences?.[0] || {}).filter(k => k !== '__itemKey'));
+        const ufCols = getColumnsWithCustomRender(ufDivergences || [], Object.keys(ufDivergences?.[0] || {}).filter(k => k !== '__itemKey'), leftAlignedCellRenderer);
+        const ieCols = getColumnsWithCustomRender(ieDivergences || [], Object.keys(ieDivergences?.[0] || {}).filter(k => k !== '__itemKey'), leftAlignedCellRenderer);
+        const dateCols = getColumnsWithCustomRender(dateDivergences || [], Object.keys(dateDivergences?.[0] || {}).filter(k => k !== '__itemKey'), leftAlignedCellRenderer);
         const valueCols = getColumnsWithCustomRender(valueDivergences || [], Object.keys(valueDivergences?.[0] || {}).filter(k => k !== '__itemKey'), (row, id) => {
-            if (id === 'Valor XML' || id === 'Valor SPED') return leftAlignedCellRenderer(row, id);
-            return <div>{row.original[id]}</div>;
+            if (id === 'Valor XML' || id === 'Valor SPED') return currencyCellRenderer(row, id);
+            return leftAlignedCellRenderer(row, id);
         });
         
         if ((ufDivergences?.length || 0) > 0 || (ieDivergences?.length || 0) > 0 || (dateDivergences?.length || 0) > 0 || (valueDivergences?.length || 0) > 0) {
@@ -358,17 +357,16 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                 if (key === 'ieCorrection') {
                     const data = value.map((v: any, i: number) => {
                         const originalParts = v.original.split('|');
-                        const correctedParts = v.corrected.split('|');
                         return {
                             'Linha': v.lineNumber,
                             'CNPJ do Fornecedor': originalParts[5] || 'N/A',
                             'Nome do Fornecedor': originalParts[3] || 'N/A',
                             'IE Original': originalParts[7] || 'N/A',
-                            'IE Corrigida': correctedParts[7] || 'N/A',
+                            'IE Corrigida': v.corrected.split('|')[7] || 'N/A',
                             '__itemKey': `spedmod-${key}-${i}`
                         };
                     });
-                     const columns = getColumnsWithCustomRender(data, ['Linha', 'CNPJ do Fornecedor', 'Nome do Fornecedor', 'IE Original', 'IE Corrigida']);
+                     const columns = getColumnsWithCustomRender(data, ['Linha', 'CNPJ do Fornecedor', 'Nome do Fornecedor', 'IE Original', 'IE Corrigida'], leftAlignedCellRenderer);
                     return [{ id: `sped_mod_${key}`, title: detail?.title || String(key), data, columns, description: detail?.description }];
                 }
 
@@ -378,7 +376,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                     'Corrigido': v.corrected || '(removida)',
                     '__itemKey': `spedmod-${key}-${i}`
                 }));
-                const columns = getColumnsWithCustomRender(data, ['Linha', 'Original', 'Corrigido']);
+                const columns = getColumnsWithCustomRender(data, ['Linha', 'Original', 'Corrigido'], leftAlignedCellRenderer);
                 return [{ id: `sped_mod_${key}`, title: detail?.title || String(key), data, columns, description: detail?.description }];
             }).filter(sub => sub !== null) as { id: string; title: string; data: any[]; columns: any[]; description?: string}[];
             
@@ -400,7 +398,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             'Ficheiro XML de Revenda': f.name,
             '__itemKey': `resale-${i}`
         }));
-        const resaleColumns = getColumnsWithCustomRender(resaleItems, Object.keys(resaleItems[0] || {}).filter(k => k !== '__itemKey'));
+        const resaleColumns = getColumnsWithCustomRender(resaleItems, Object.keys(resaleItems[0] || {}).filter(k => k !== '__itemKey'), leftAlignedCellRenderer);
          if (resaleItems.length > 0) {
             reportSections.push({
                 id: 'resale_items',
@@ -716,3 +714,5 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         </div>
     );
 }
+
+    
