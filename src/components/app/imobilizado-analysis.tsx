@@ -585,5 +585,3 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
     );
 }
     
-
-    
