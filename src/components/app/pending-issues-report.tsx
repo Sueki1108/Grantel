@@ -60,6 +60,10 @@ const modificationDetails: {
     totalLineCount: { title: 'Contador Total', description: 'A contagem total de linhas do ficheiro (registro 9999) foi recalculada para refletir o número final de linhas.' },
 };
 
+const extractInvoiceNumber = (key: string): string => {
+    if (key && key.length === 44 && /^\d+$/.test(key.substring(25, 34))) return String(parseInt(key.substring(25, 34), 10));
+    return "N/A";
+};
 
 
 export function PendingIssuesReport({ processedData, allPersistedClassifications, onForceUpdate }: PendingIssuesReportProps) {
@@ -67,14 +71,14 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
     const [ignoredItems, setIgnoredItems] = React.useState<Set<string>>(new Set());
     const [exportOptions, setExportOptions] = React.useState<Record<string, boolean>>({});
     const [openCollapsibles, setOpenCollapsibles] = React.useState<Set<string>>(new Set());
-    const currentClassifications = allPersistedClassifications; // Directly use the prop
+    const currentClassifications = allPersistedClassifications; 
 
 
     const handleForceUpdate = () => {
         try {
             const savedData = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
             const latestClassifications = savedData ? JSON.parse(savedData) : {};
-            onForceUpdate(latestClassifications); // Call parent to update its state
+            onForceUpdate(latestClassifications); 
             toast({title: "Relatório Atualizado", description: "Os dados foram recarregados com as informações mais recentes."})
         } catch (e) {
             console.error("Failed to re-load classifications from localStorage", e);
@@ -190,10 +194,29 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
 
         // 3. Notas não Lançadas
         const notFoundInSped = (processedData.keyCheckResults?.keysNotFoundInTxt || []);
-        const notFoundColumns = ['Chave de acesso', 'Tipo', 'Fornecedor', 'Emissão', 'Total'];
+        const notFoundColumns = ['Chave de acesso', 'Tipo', 'Número', 'Fornecedor', 'Emissão', 'Total'];
 
-        const notFoundNfe = notFoundInSped.filter(item => (item.type === 'NFE' || item.type === 'Saída')).map(item => ({...item, '__itemKey': `notfound-${item.key}`}));
-        const notFoundCte = notFoundInSped.filter(item => item.type === 'CTE').map(item => ({...item, '__itemKey': `notfound-${item.key}`}));
+        const formatNotFoundData = (item: any) => {
+            let formattedDate = 'N/A';
+            try {
+                if (item.Emissão && typeof item.Emissão === 'string') {
+                    const date = new Date(item.Emissão);
+                    if (!isNaN(date.getTime())) {
+                        formattedDate = format(date, 'dd/MM/yyyy');
+                    }
+                }
+            } catch {}
+            
+            return {
+                ...item,
+                'Número': extractInvoiceNumber(item.key),
+                'Emissão': formattedDate,
+                '__itemKey': `notfound-${item.key}`
+            };
+        };
+
+        const notFoundNfe = notFoundInSped.filter(item => (item.type === 'NFE' || item.type === 'Saída')).map(formatNotFoundData);
+        const notFoundCte = notFoundInSped.filter(item => item.type === 'CTE').map(formatNotFoundData);
         
         const nfeColumns = getColumnsWithCustomRender(notFoundNfe, notFoundColumns);
         const cteColumns = getColumnsWithCustomRender(notFoundCte, notFoundColumns);
@@ -215,12 +238,15 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         // 4. SPED - Não na planilha
         const notInSheet = (processedData.keyCheckResults?.keysInTxtNotInSheet || []).map(item => {
             const dateValue = item.Emissão;
-            const formattedDate = dateValue instanceof Date && !isNaN(dateValue.getTime()) ? format(dateValue, 'dd/MM/yyyy') : String(dateValue);
-            return { ...item, Emissão: formattedDate };
+            let formattedDate = String(dateValue);
+            if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
+                formattedDate = format(dateValue, 'dd/MM/yyyy');
+            }
+            return { ...item, Emissão: formattedDate, '__itemKey': `notinSheet-${item.key}` };
         });
 
-        const notInSheetNfe = notInSheet.filter(item => item.type === 'NFE').map(item => ({...item, '__itemKey': `notinSheet-${item.key}`}));
-        const notInSheetCte = notInSheet.filter(item => item.type === 'CTE').map(item => ({...item, '__itemKey': `notinSheet-${item.key}`}));
+        const notInSheetNfe = notInSheet.filter(item => item.type === 'NFE');
+        const notInSheetCte = notInSheet.filter(item => item.type === 'CTE');
         const notInSheetNfeCols = getColumnsWithCustomRender(notInSheetNfe, Object.keys(notInSheetNfe[0] || {}).filter(k => k !== '__itemKey'));
         const notInSheetCteCols = getColumnsWithCustomRender(notInSheetCte, Object.keys(notInSheetCte[0] || {}).filter(k => k !== '__itemKey'));
 
