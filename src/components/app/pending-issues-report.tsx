@@ -217,7 +217,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         
         // 4. SPED - Não na planilha
         const notInSheet = (processedData.keyCheckResults?.keysInTxtNotInSheet || []).map(item => {
-            const formattedDate = item.Emissão instanceof Date ? format(item.Emissão, 'dd/MM/yyyy') : item.Emissão;
+            const dateValue = item.Emissão;
+            const formattedDate = dateValue instanceof Date && !isNaN(dateValue.getTime()) ? format(dateValue, 'dd/MM/yyyy') : String(dateValue);
             return { ...item, Emissão: formattedDate };
         });
 
