@@ -115,7 +115,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
     };
     
     const currencyCellRenderer = (row: any, id: string) => (
-        <div className="text-right">{formatCurrency(row.original[id])}</div>
+        <div>{formatCurrency(row.original[id])}</div>
     );
 
     const sections = React.useMemo((): Section[] => {
@@ -209,27 +209,15 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const notFoundInSped = (processedData.keyCheckResults?.keysNotFoundInTxt || []);
         const notFoundColumns = ['Chave de acesso', 'Tipo', 'Número', 'Fornecedor', 'Emissão', 'Total'];
 
-        const formatNotFoundData = (item: any) => {
-            let formattedDate = 'N/A';
-            try {
-                if (item.Emissão && typeof item.Emissão === 'string') {
-                    const date = new Date(item.Emissão);
-                    if (!isNaN(date.getTime())) {
-                        formattedDate = format(date, 'dd/MM/yyyy');
-                    }
-                }
-            } catch {}
-            
-            return {
-                'Chave de acesso': item.key,
-                'Tipo': item.type,
-                'Número': extractInvoiceNumber(item.key),
-                'Fornecedor': item.Fornecedor,
-                'Emissão': formattedDate,
-                'Total': item.Total,
-                '__itemKey': `notfound-${item.key}`
-            };
-        };
+        const formatNotFoundData = (item: any) => ({
+            'Chave de acesso': item.key,
+            'Tipo': item.type,
+            'Número': extractInvoiceNumber(item.key),
+            'Fornecedor': item.Fornecedor,
+            'Emissão': item.Emissão,
+            'Total': item.Total,
+            '__itemKey': `notfound-${item.key}`
+        });
 
         const notFoundNfe = notFoundInSped.filter(item => (item.type === 'NFE' || item.type === 'Saída')).map(formatNotFoundData);
         const notFoundCte = notFoundInSped.filter(item => item.type === 'CTE').map(formatNotFoundData);
@@ -489,8 +477,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                     body: tableRows,
                     startY: (doc as any).lastAutoTable.finalY + 2,
                     theme: 'striped',
-                    headStyles: { fillColor: [41, 128, 185], cellPadding: 2, halign: 'center', minCellHeight: 10, fontSize: 8 },
-                    styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak' },
+                    headStyles: { fillColor: [41, 128, 185], cellPadding: 2, halign: 'left', minCellHeight: 10, fontSize: 8 },
+                    styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak', halign: 'left' },
                     columnStyles: { 0: { cellWidth: 'auto' } }
                 });
             }
