@@ -485,21 +485,21 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
                             </div>
                         </div>
                         <div className='flex items-center gap-2'>
-                             <Dialog open={isCfopModalOpen} onOpenChange={setIsCfopModalOpen}>
-                                <DialogTrigger asChild>
-                                    <TooltipProvider>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
+                            <Dialog open={isCfopModalOpen} onOpenChange={setIsCfopModalOpen}>
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <DialogTrigger asChild>
                                                 <Button variant="outline" size="icon">
-                                                    <Settings className="h-4 w-4"/>
+                                                    <Settings className="h-4 w-4" />
                                                 </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                                <p>Configurar CFOPs para Imobilizado</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                    </TooltipProvider>
-                                </DialogTrigger>
+                                            </DialogTrigger>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>Configurar CFOPs para Imobilizado</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
                                 <DialogContent>
                                     <DialogHeader>
                                         <DialogTitle>Configurar CFOPs para Análise de Imobilizado</DialogTitle>
@@ -519,7 +519,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
                                                     />
                                                     <Label htmlFor={`cfop-${cfop}`} className="flex flex-col">
                                                         <Badge variant="secondary">{cfop}</Badge>
-                                                        <span className="ml-2 text-xs text-muted-foreground">{cfopDescriptions[parseInt(cfop, 10)] || "Descrição não encontrada"}</span>
+                                                        <span className="ml-2 text-xs text-muted-foreground">{cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}</span>
                                                     </Label>
                                                 </div>
                                             </div>
