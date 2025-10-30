@@ -555,7 +555,7 @@ export function AutomatorClientPage() {
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => {
         setProcessedData(prevData => {
             if (!prevData) {
-                return { sheets: {}, siengeSheetData: null, spedInfo: spedInfo || null, keyCheckResults: keyCheckResults || null, spedCorrections: spedCorrections ? [spedCorrections] : null, competence: null, resaleAnalysis: null };
+                return { sheets: {}, spedInfo: spedInfo || null, siengeSheetData: null, keyCheckResults: keyCheckResults || null, spedCorrections: spedCorrections ? [spedCorrections] : null, competence: null, resaleAnalysis: null };
             }
             return { ...prevData, spedInfo: spedInfo, keyCheckResults: keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : prevData.spedCorrections };
         });
@@ -687,7 +687,7 @@ export function AutomatorClientPage() {
                             )}
 
                              {activeMainTab === 'saidas-nfe' && (
-                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} initialStatus={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
+                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
                             )}
                             
                             {activeMainTab === 'nfse' && (
@@ -701,7 +701,7 @@ export function AutomatorClientPage() {
                              {activeMainTab === 'difal' && <DifalAnalysis /> }
                             
                             {activeMainTab === 'analyses' && (
-                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
+                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onSiengeDataProcessed={(data) => setProcessedData(prev => prev ? ({...prev, siengeSheetData: data}) : null)} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
                             )}
                          
                              {activeMainTab === 'pending' && (
