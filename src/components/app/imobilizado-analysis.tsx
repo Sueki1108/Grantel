@@ -485,7 +485,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
                             </div>
                         </div>
                         <div className='flex items-center gap-2'>
-                            <Dialog open={isCfopModalOpen} onOpenChange={setIsCfopModalOpen}>
+                           <Dialog open={isCfopModalOpen} onOpenChange={setIsCfopModalOpen}>
                                 <TooltipProvider>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
@@ -584,4 +584,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
         </div>
     );
 }
+    
+
     
