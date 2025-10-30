@@ -668,7 +668,7 @@ interface KeyCheckerProps {
     chavesValidas: any[];
     spedFiles: File[];
     onFilesChange: (files: File[]) => void;
-    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null) => void;
+    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => void;
     initialSpedInfo: SpedInfo | null;
     initialKeyCheckResults: KeyCheckResult | null;
     nfeEntradaData: any[]; // Pass NFe data for IE correction
@@ -748,7 +748,7 @@ export function KeyChecker({
                 setResults(keyCheckResults);
                 setSpedInfo(spedInfo);
                 
-                onSpedProcessed(spedInfo, keyCheckResults);
+                onSpedProcessed(spedInfo, keyCheckResults, null);
                 
                 toast({ title: "Verificação concluída", description: "As chaves foram comparadas com sucesso. Prossiga para as abas de análise." });
 
@@ -768,7 +768,7 @@ export function KeyChecker({
         setSpedInfo(null);
         
         onFilesChange([]);
-        onSpedProcessed(null, null);
+        onSpedProcessed(null, null, null);
 
         const spedInput = document.getElementById('sped-upload') as HTMLInputElement;
         if (spedInput) spedInput.value = "";
@@ -790,6 +790,7 @@ export function KeyChecker({
                 const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
                 const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData);
                 setCorrectionResult(result);
+                onSpedProcessed(spedInfo, results, result);
                 toast({ title: "Correção Concluída", description: "O arquivo SPED foi analisado." });
             } catch (err: any) {
                 const errorResult: SpedCorrectionResult = {
@@ -801,6 +802,7 @@ export function KeyChecker({
                     log: [`ERRO FATAL: ${err.message}`]
                 };
                 setCorrectionResult(errorResult);
+                onSpedProcessed(spedInfo, results, errorResult);
                 toast({ variant: "destructive", title: "Erro na correção", description: err.message });
             } finally {
                 setIsCorrecting(false);
