@@ -776,13 +776,6 @@ export function KeyChecker({
         toast({ title: "Verificação limpa", description: "Os resultados e o arquivo da verificação SPED foram removidos." });
     };
 
-    useEffect(() => {
-        if (isCorrectionModalOpen && !correctionResult) {
-            handleCorrectSped();
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isCorrectionModalOpen]);
-
     const handleCorrectSped = useCallback(async () => {
         if (!spedFiles || spedFiles.length === 0) {
             toast({ variant: "destructive", title: "Arquivo faltando", description: "Por favor, carregue o arquivo SPED (.txt) primeiro." });
@@ -814,6 +807,13 @@ export function KeyChecker({
             setIsCorrecting(false);
         }
     }, [spedFiles, nfeEntradaData, cteData, onSpedProcessed, spedInfo, results, toast]);
+
+    useEffect(() => {
+        if (isCorrectionModalOpen) {
+            handleCorrectSped();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isCorrectionModalOpen]);
 
 
     const handleDownloadCorrected = () => {
@@ -930,8 +930,8 @@ export function KeyChecker({
                         </Button>
                          <Dialog open={isCorrectionModalOpen} onOpenChange={setIsCorrectionModalOpen}>
                             <DialogTrigger asChild>
-                                <Button disabled={isCorrecting || !spedFiles || spedFiles.length === 0} variant="secondary" className="w-full">
-                                    {isCorrecting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Corrigindo...</> : 'Corrigir e Baixar Arquivo SPED'}
+                                <Button variant="secondary" className="w-full">
+                                    Corrigir e Baixar Arquivo SPED
                                 </Button>
                             </DialogTrigger>
                            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
