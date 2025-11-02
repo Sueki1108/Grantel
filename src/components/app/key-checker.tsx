@@ -711,6 +711,7 @@ export function KeyChecker({
 
         setIsCorrecting(true);
         setCorrectionResult(null);
+        setIsCorrectionModalOpen(true);
 
         try {
             const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
@@ -734,12 +735,6 @@ export function KeyChecker({
             setIsCorrecting(false);
         }
     }, [spedFiles, nfeEntradaData, cteData, spedInfo, results, onSpedProcessed, toast]);
-
-    useEffect(() => {
-        if (isCorrectionModalOpen && spedFiles.length > 0) {
-            handleCorrectSped();
-        }
-    }, [isCorrectionModalOpen, spedFiles, handleCorrectSped]);
 
 
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -927,8 +922,8 @@ export function KeyChecker({
                         </Button>
                         <Dialog open={isCorrectionModalOpen} onOpenChange={setIsCorrectionModalOpen}>
                             <DialogTrigger asChild>
-                                <Button disabled={loading || !spedFiles || spedFiles.length === 0} variant="secondary" className="w-full">
-                                    Corrigir e Baixar Arquivo SPED
+                                <Button onClick={handleCorrectSped} disabled={loading || isCorrecting || !spedFiles || spedFiles.length === 0} variant="secondary" className="w-full">
+                                    {isCorrecting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Corrigindo...</> : 'Corrigir e Baixar Arquivo SPED'}
                                 </Button>
                             </DialogTrigger>
                            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
@@ -1079,3 +1074,5 @@ export function KeyChecker({
         </div>
     );
 }
+
+    
