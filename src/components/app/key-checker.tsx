@@ -776,39 +776,45 @@ export function KeyChecker({
         toast({ title: "Verificação limpa", description: "Os resultados e o arquivo da verificação SPED foram removidos." });
     };
 
-    const handleCorrectSped = async () => {
+    useEffect(() => {
+        if (isCorrectionModalOpen && !correctionResult) {
+            handleCorrectSped();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isCorrectionModalOpen]);
+
+    const handleCorrectSped = useCallback(async () => {
         if (!spedFiles || spedFiles.length === 0) {
             toast({ variant: "destructive", title: "Arquivo faltando", description: "Por favor, carregue o arquivo SPED (.txt) primeiro." });
+            setIsCorrectionModalOpen(false);
             return;
         }
         setIsCorrecting(true);
         setCorrectionResult(null);
-        setIsCorrectionModalOpen(true);
 
-        setTimeout(async () => {
-            try {
-                const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
-                const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData);
-                setCorrectionResult(result);
-                onSpedProcessed(spedInfo, results, result);
-                toast({ title: "Correção Concluída", description: "O arquivo SPED foi analisado." });
-            } catch (err: any) {
-                const errorResult: SpedCorrectionResult = {
-                    fileName: `erro_sped.txt`,
-                    error: err.message,
-                    linesRead: 0,
-                    linesModified: 0,
-                    modifications: { truncation: [], unitStandardization: [], removed0190: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [] },
-                    log: [`ERRO FATAL: ${err.message}`]
-                };
-                setCorrectionResult(errorResult);
-                onSpedProcessed(spedInfo, results, errorResult);
-                toast({ variant: "destructive", title: "Erro na correção", description: err.message });
-            } finally {
-                setIsCorrecting(false);
-            }
-        }, 50);
-    };
+        try {
+            const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
+            const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData);
+            setCorrectionResult(result);
+            onSpedProcessed(spedInfo, results, result);
+            toast({ title: "Correção Concluída", description: "O arquivo SPED foi analisado." });
+        } catch (err: any) {
+            const errorResult: SpedCorrectionResult = {
+                fileName: `erro_sped.txt`,
+                error: err.message,
+                linesRead: 0,
+                linesModified: 0,
+                modifications: { truncation: [], unitStandardization: [], removed0190: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [] },
+                log: [`ERRO FATAL: ${err.message}`]
+            };
+            setCorrectionResult(errorResult);
+            onSpedProcessed(spedInfo, results, errorResult);
+            toast({ variant: "destructive", title: "Erro na correção", description: err.message });
+        } finally {
+            setIsCorrecting(false);
+        }
+    }, [spedFiles, nfeEntradaData, cteData, onSpedProcessed, spedInfo, results, toast]);
+
 
     const handleDownloadCorrected = () => {
         if (!correctionResult || !correctionResult.fileContent) {
@@ -924,7 +930,7 @@ export function KeyChecker({
                         </Button>
                          <Dialog open={isCorrectionModalOpen} onOpenChange={setIsCorrectionModalOpen}>
                             <DialogTrigger asChild>
-                                <Button onClick={handleCorrectSped} disabled={isCorrecting || !spedFiles || spedFiles.length === 0} variant="secondary" className="w-full">
+                                <Button disabled={isCorrecting || !spedFiles || spedFiles.length === 0} variant="secondary" className="w-full">
                                     {isCorrecting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Corrigindo...</> : 'Corrigir e Baixar Arquivo SPED'}
                                 </Button>
                             </DialogTrigger>
