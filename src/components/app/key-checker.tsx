@@ -634,35 +634,6 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     return { keyCheckResults, spedInfo: currentSpedInfo, allSpedKeys };
 }
 
-
-// Extracted display components to avoid re-declaration on render
-const ModificationDisplay = ({ logs }: { logs: ModificationLog[] }) => (
-    <ScrollArea className="h-full pr-4">
-        <div className="text-sm font-mono whitespace-pre-wrap space-y-4">
-            {logs.map((log, index) => (
-                <div key={index} className="p-2 rounded-md border">
-                    <p className="font-bold text-muted-foreground">Linha {log.lineNumber}:</p>
-                    <p className="text-red-600 dark:text-red-400"><b>Original:</b> {log.original}</p>
-                    <p className="text-green-600 dark:text-green-400"><b>Corrigida:</b> {log.corrected}</p>
-                </div>
-            ))}
-        </div>
-    </ScrollArea>
-);
-
-const RemovedLinesDisplay = ({ logs }: { logs: RemovedLineLog[] }) => (
-    <ScrollArea className="h-full pr-4">
-        <div className="text-sm font-mono whitespace-pre-wrap space-y-2">
-            {logs.map((log, index) => (
-                <div key={index} className="p-2 rounded-md border bg-yellow-100 dark:bg-yellow-900/30">
-                    <p><b>Removida (Linha {log.lineNumber}):</b> {log.line}</p>
-                </div>
-            ))}
-        </div>
-    </ScrollArea>
-);
-
-
 // Main Component
 interface KeyCheckerProps {
     chavesValidas: any[];
@@ -694,7 +665,7 @@ export function KeyChecker({
     const [correctionResult, setCorrectionResult] = useState<SpedCorrectionResult | null>(null);
     const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
     const [isCorrecting, setIsCorrecting] = useState(false);
-
+    
     useEffect(() => {
         setResults(initialKeyCheckResults);
     }, [initialKeyCheckResults]);
@@ -702,39 +673,6 @@ export function KeyChecker({
     useEffect(() => {
         setSpedInfo(initialSpedInfo);
     }, [initialSpedInfo]);
-    
-    const handleCorrectSped = useCallback(async () => {
-        if (!spedFiles || spedFiles.length === 0) {
-            toast({ variant: "destructive", title: "Arquivo faltando", description: "Por favor, carregue o arquivo SPED (.txt) primeiro." });
-            return;
-        }
-
-        setIsCorrecting(true);
-        setCorrectionResult(null);
-        setIsCorrectionModalOpen(true);
-
-        try {
-            const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
-            const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData);
-            setCorrectionResult(result);
-            onSpedProcessed(spedInfo, results, result);
-            toast({ title: "Correção Concluída", description: "O arquivo SPED foi analisado." });
-        } catch (err: any) {
-            const errorResult: SpedCorrectionResult = {
-                fileName: `erro_sped.txt`,
-                error: err.message,
-                linesRead: 0,
-                linesModified: 0,
-                modifications: { truncation: [], unitStandardization: [], removed0190: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [] },
-                log: [`ERRO FATAL: ${err.message}`]
-            };
-            setCorrectionResult(errorResult);
-            onSpedProcessed(spedInfo, results, errorResult);
-            toast({ variant: "destructive", title: "Erro na correção", description: err.message });
-        } finally {
-            setIsCorrecting(false);
-        }
-    }, [spedFiles, nfeEntradaData, cteData, spedInfo, results, onSpedProcessed, toast]);
 
 
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -748,7 +686,6 @@ export function KeyChecker({
     const removeSpedFile = (fileToRemove: File) => {
         onFilesChange(spedFiles.filter(f => f !== fileToRemove));
     };
-
 
     const handleProcess = async () => {
         if (!spedFiles || spedFiles.length === 0) {
@@ -809,6 +746,37 @@ export function KeyChecker({
         toast({ title: "Verificação limpa", description: "Os resultados e o arquivo da verificação SPED foram removidos." });
     };
 
+    const handleCorrectSped = async () => {
+        if (isCorrecting || !spedFiles || spedFiles.length === 0) {
+            return;
+        }
+        setIsCorrectionModalOpen(true);
+        setIsCorrecting(true);
+        setCorrectionResult(null);
+
+        try {
+            const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
+            const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData);
+            setCorrectionResult(result);
+            onSpedProcessed(spedInfo, results, result);
+            toast({ title: "Correção Concluída", description: "O arquivo SPED foi analisado." });
+        } catch (err: any) {
+            const errorResult: SpedCorrectionResult = {
+                fileName: `erro_sped.txt`,
+                error: err.message,
+                linesRead: 0,
+                linesModified: 0,
+                modifications: { truncation: [], unitStandardization: [], removed0190: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [] },
+                log: [`ERRO FATAL: ${err.message}`]
+            };
+            setCorrectionResult(errorResult);
+            onSpedProcessed(spedInfo, results, errorResult);
+            toast({ variant: "destructive", title: "Erro na correção", description: err.message });
+        } finally {
+            setIsCorrecting(false);
+        }
+    };
+
     const handleDownloadCorrected = () => {
         if (!correctionResult || !correctionResult.fileContent) {
             toast({ variant: "destructive", title: "Nenhum resultado para baixar" });
@@ -835,6 +803,33 @@ export function KeyChecker({
             toast({ variant: 'destructive', title: `Falha ao copiar` });
         });
     };
+    
+    // Extracted display components to avoid re-declaration on render
+    const ModificationDisplay = ({ logs }: { logs: ModificationLog[] }) => (
+        <ScrollArea className="h-full pr-4">
+            <div className="text-sm font-mono whitespace-pre-wrap space-y-4">
+                {logs.map((log, index) => (
+                    <div key={index} className="p-2 rounded-md border">
+                        <p className="font-bold text-muted-foreground">Linha {log.lineNumber}:</p>
+                        <p className="text-red-600 dark:text-red-400"><b>Original:</b> {log.original}</p>
+                        <p className="text-green-600 dark:text-green-400"><b>Corrigida:</b> {log.corrected}</p>
+                    </div>
+                ))}
+            </div>
+        </ScrollArea>
+    );
+
+    const RemovedLinesDisplay = ({ logs }: { logs: RemovedLineLog[] }) => (
+        <ScrollArea className="h-full pr-4">
+            <div className="text-sm font-mono whitespace-pre-wrap space-y-2">
+                {logs.map((log, index) => (
+                    <div key={index} className="p-2 rounded-md border bg-yellow-100 dark:bg-yellow-900/30">
+                        <p><b>Removida (Linha {log.lineNumber}):</b> {log.line}</p>
+                    </div>
+                ))}
+            </div>
+        </ScrollArea>
+    );
 
     const modificationTabs: {
         id: keyof SpedCorrectionResult['modifications'];
@@ -850,7 +845,6 @@ export function KeyChecker({
         { id: 'removed0190', title: '0190 Removidos', description: 'Registos do tipo \'0190\' desnecessários (todos exceto \'un\' e \'pc\') foram removidos para limpar o ficheiro e evitar potenciais problemas.' },
     ];
     
-    // Agrupa as correções de contador para exibição
     const groupedCounterModifications = correctionResult ? [...correctionResult.modifications.blockCount, ...correctionResult.modifications.totalLineCount, ...correctionResult.modifications.count9900] : [];
 
 
@@ -921,11 +915,11 @@ export function KeyChecker({
                             {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando...</> : 'Verificar Chaves'}
                         </Button>
                         <Dialog open={isCorrectionModalOpen} onOpenChange={setIsCorrectionModalOpen}>
-                            <DialogTrigger asChild>
-                                <Button onClick={handleCorrectSped} disabled={loading || isCorrecting || !spedFiles || spedFiles.length === 0} variant="secondary" className="w-full">
+                           <DialogTrigger asChild>
+                                <Button onClick={handleCorrectSped} disabled={isCorrecting || loading || !spedFiles || spedFiles.length === 0} variant="secondary" className="w-full">
                                     {isCorrecting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Corrigindo...</> : 'Corrigir e Baixar Arquivo SPED'}
                                 </Button>
-                            </DialogTrigger>
+                           </DialogTrigger>
                            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
                                 <DialogHeader>
                                     <DialogTitle>Correção do Arquivo SPED</DialogTitle>
@@ -1074,5 +1068,3 @@ export function KeyChecker({
         </div>
     );
 }
-
-    
