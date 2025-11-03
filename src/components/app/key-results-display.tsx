@@ -54,9 +54,9 @@ const KeyItem = ({ keyInfo, isDuplicate }: KeyItemProps) => {
         if (dateValue instanceof Date) {
             if (isNaN(dateValue.getTime())) return 'Inválida';
             // Formata o objeto Date para DD/MM/YYYY
-            const day = String(dateValue.getDate()).padStart(2, '0');
-            const month = String(dateValue.getMonth() + 1).padStart(2, '0');
-            const year = dateValue.getFullYear();
+            const day = String(dateValue.getUTCDate()).padStart(2, '0');
+            const month = String(dateValue.getUTCMonth() + 1).padStart(2, '0');
+            const year = dateValue.getUTCFullYear();
             return `${day}/${month}/${year}`;
         }
 
@@ -402,5 +402,7 @@ export function KeyResultsDisplay({ results }: KeyResultsDisplayProps) {
         </Tabs>
     );
 }
+
+    
 
     

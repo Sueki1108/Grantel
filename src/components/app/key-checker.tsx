@@ -510,11 +510,12 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
         .map(spedDoc => {
              const participant = spedDoc.codPart ? participantData.get(spedDoc.codPart) : null;
              const isCte = spedDoc.reg === 'D100';
+             const spedDate = parseSpedDate(spedDoc.dtDoc);
              return {
                 key: spedDoc.key,
                 type: isCte ? 'CTE' : 'NFE',
                 Fornecedor: participant ? participant.nome : 'N/A',
-                Emissão: parseSpedDate(spedDoc.dtDoc),
+                Emissão: isNaN(spedDate.getTime()) ? spedDoc.dtDoc : spedDate,
                 Total: parseFloat(String(spedDoc.vlDoc || '0').replace(',', '.')),
             };
         });
@@ -906,3 +907,5 @@ export function KeyChecker({
         </div>
     );
 }
+
+    
