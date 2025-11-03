@@ -1,18 +1,20 @@
+"use strict";
 
-const functions = require("firebase-functions");
+const { https } = require("firebase-functions");
 const next = require("next");
 
 const isDev = process.env.NODE_ENV !== "production";
 
-const server = next({
+const nextjsServer = next({
   dev: isDev,
-  // Location of the Next.js project
-  conf: { distDir: ".next" },
+  conf: {
+    distDir: ".next",
+  },
 });
+const nextjsHandle = nextjsServer.getRequestHandler();
 
-const nextjsHandle = server.getRequestHandler();
-
-exports.server = functions.https.onRequest((req, res) => {
-  console.log("File: " + req.originalUrl);
-  return server.prepare().then(() => nextjsHandle(req, res));
+exports.server = https.onRequest((req, res) => {
+  return nextjsServer.prepare().then(() => {
+    return nextjsHandle(req, res);
+  });
 });
