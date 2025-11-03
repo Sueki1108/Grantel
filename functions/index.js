@@ -1,3 +1,4 @@
+"use strict";
 /**
  * Import function triggers from their respective submodules:
  *
@@ -18,7 +19,6 @@ const logger = require("firebase-functions/logger");
 //   response.send("Hello from Firebase!");
 // });
 
-const {https} = require('firebase-functions');
 const next = require('next');
 
 const isDev = process.env.NODE_ENV !== 'production';
@@ -31,7 +31,7 @@ const server = next({
 
 const nextjsHandle = server.getRequestHandler();
 
-exports.server = https.onRequest((req, res) => {
+exports.server = onRequest((req, res) => {
   // log the page.js file path
   // This log is output to the Firebase Functions logs
   console.log('File: ' + req.originalUrl);
