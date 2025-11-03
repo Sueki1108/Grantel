@@ -49,8 +49,20 @@ const KeyItem = ({ keyInfo, isDuplicate }: KeyItemProps) => {
     
     const formattedDate = useMemo(() => {
         if (!keyInfo.Emissão) return 'N/A';
+        
+        let dateValue = keyInfo.Emissão;
+        if (dateValue instanceof Date) {
+            if (isNaN(dateValue.getTime())) return 'Inválida';
+            // Formata o objeto Date para DD/MM/YYYY
+            const day = String(dateValue.getDate()).padStart(2, '0');
+            const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+            const year = dateValue.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
+
         try {
-            const dateStr = String(keyInfo.Emissão).substring(0, 10); // YYYY-MM-DD
+            // Tenta formatar se for uma string
+            const dateStr = String(dateValue).substring(0, 10); // YYYY-MM-DD
             const [year, month, day] = dateStr.split('-');
             if (!year || !month || !day) return 'Inválida';
             return `${day}/${month}/${year}`;
@@ -143,13 +155,22 @@ const KeyDisplayList = ({ keys, duplicateKeys, listName }: {
          const dataToDownload = keys.map(k => {
             let formattedDate = '';
             if (k.Emissão) {
-                try {
-                    const dateStr = String(k.Emissão).substring(0, 10);
-                    const [year, month, day] = dateStr.split('-');
-                    if (year && month && day) {
+                if (k.Emissão instanceof Date) {
+                    if (!isNaN(k.Emissão.getTime())) {
+                        const day = String(k.Emissão.getDate()).padStart(2, '0');
+                        const month = String(k.Emissão.getMonth() + 1).padStart(2, '0');
+                        const year = k.Emissão.getFullYear();
                         formattedDate = `${day}/${month}/${year}`;
                     }
-                } catch {}
+                } else {
+                    try {
+                        const dateStr = String(k.Emissão).substring(0, 10);
+                        const [year, month, day] = dateStr.split('-');
+                        if (year && month && day) {
+                            formattedDate = `${day}/${month}/${year}`;
+                        }
+                    } catch {}
+                }
             }
             return {
                 "Chave de acesso": k.key,
@@ -381,3 +402,5 @@ export function KeyResultsDisplay({ results }: KeyResultsDisplayProps) {
         </Tabs>
     );
 }
+
+    
