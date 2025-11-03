@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -238,12 +238,7 @@ export function AutomatorClientPage() {
     };
     
     const handleSiengeFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0] || null;
-        // When a new file is selected, clear the old processed data
-        if (file) {
-            setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
-        }
-        setSiengeFile(file);
+        setSiengeFile(e.target.files?.[0] || null);
     };
 
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>, category: 'nfeEntrada' | 'cte' | 'nfeSaida' | 'nfse') => {
@@ -565,16 +560,6 @@ export function AutomatorClientPage() {
             return { ...prevData, spedInfo: spedInfo, keyCheckResults: keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : prevData.spedCorrections };
         });
     }, []);
-
-    const handleSiengeDataProcessed = useCallback((siengeData: any[] | null) => {
-        setProcessedData(prevData => {
-            const baseData = prevData || { sheets: {}, spedInfo: null, siengeSheetData: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null };
-            return { ...baseData, siengeSheetData: siengeData };
-        });
-        if (siengeData) {
-            toast({ title: "Dados Sienge Processados", description: "As análises de conferência de impostos foram atualizadas." });
-        }
-    }, [toast]);
     
     // =================================================================
     // UI CONTROL AND RENDER
@@ -617,7 +602,7 @@ export function AutomatorClientPage() {
             </header>
 
             <main className="container mx-auto p-4 md:p-8">
-                <div className={cn("mx-auto space-y-8 max-w-screen-2xl")}>
+                <div className="mx-auto max-w-full space-y-8">
                     <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
                         <TabsList className="h-auto flex-wrap justify-start">
                              <TabsTrigger value="history" className="flex items-center gap-2">
@@ -702,7 +687,7 @@ export function AutomatorClientPage() {
                             )}
 
                              {activeMainTab === 'saidas-nfe' && (
-                                !saidasNfeTabDisabled && processedData ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
+                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
                             )}
                             
                             {activeMainTab === 'nfse' && (
@@ -716,7 +701,7 @@ export function AutomatorClientPage() {
                              {activeMainTab === 'difal' && <DifalAnalysis /> }
                             
                             {activeMainTab === 'analyses' && (
-                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onSiengeDataProcessed={handleSiengeDataProcessed} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
+                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
                             )}
                          
                              {activeMainTab === 'pending' && (
