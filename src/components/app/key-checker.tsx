@@ -746,35 +746,38 @@ export function KeyChecker({
         toast({ title: "Verificação limpa", description: "Os resultados e o arquivo da verificação SPED foram removidos." });
     };
     
-     const handleCorrectSped = useCallback(async () => {
-        if (isCorrecting || !spedFiles || spedFiles.length === 0) {
+    const handleCorrectSped = useCallback(async () => {
+        if (!spedFiles || spedFiles.length === 0) {
+            toast({ variant: "destructive", title: "Arquivo faltando", description: "Por favor, carregue o arquivo SPED (.txt) primeiro." });
             return;
         }
         setIsCorrecting(true);
         setCorrectionResult(null);
 
-        try {
-            const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
-            const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData);
-            setCorrectionResult(result);
-            onSpedProcessed(spedInfo, results, result);
-            toast({ title: "Correção Concluída", description: "O arquivo SPED foi analisado." });
-        } catch (err: any) {
-            const errorResult: SpedCorrectionResult = {
-                fileName: `erro_sped.txt`,
-                error: err.message,
-                linesRead: 0,
-                linesModified: 0,
-                modifications: { truncation: [], unitStandardization: [], removed0190: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [] },
-                log: [`ERRO FATAL: ${err.message}`]
-            };
-            setCorrectionResult(errorResult);
-            onSpedProcessed(spedInfo, results, errorResult);
-            toast({ variant: "destructive", title: "Erro na correção", description: err.message });
-        } finally {
-            setIsCorrecting(false);
-        }
-    }, [isCorrecting, spedFiles, nfeEntradaData, cteData, onSpedProcessed, spedInfo, results]);
+        setTimeout(async () => {
+            try {
+                const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
+                const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData);
+                setCorrectionResult(result);
+                onSpedProcessed(spedInfo, results, result);
+                toast({ title: "Correção Concluída", description: "O arquivo SPED foi analisado." });
+            } catch (err: any) {
+                const errorResult: SpedCorrectionResult = {
+                    fileName: `erro_sped.txt`,
+                    error: err.message,
+                    linesRead: 0,
+                    linesModified: 0,
+                    modifications: { truncation: [], unitStandardization: [], removed0190: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [] },
+                    log: [`ERRO FATAL: ${err.message}`]
+                };
+                setCorrectionResult(errorResult);
+                onSpedProcessed(spedInfo, results, errorResult);
+                toast({ variant: "destructive", title: "Erro na correção", description: err.message });
+            } finally {
+                setIsCorrecting(false);
+            }
+        }, 50);
+    }, [spedFiles, nfeEntradaData, cteData, onSpedProcessed, spedInfo, results, toast]);
 
     useEffect(() => {
         if (isCorrectionModalOpen && !correctionResult && !isCorrecting) {
@@ -1072,7 +1075,4 @@ export function KeyChecker({
         </div>
     );
 }
-
-    
-
     
