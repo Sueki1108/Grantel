@@ -662,9 +662,6 @@ export function KeyChecker({
     const [error, setError] = useState<string | null>(null);
     const [logs, setLogs] = useState<string[]>([]);
     const { toast } = useToast();
-    const [correctionResult, setCorrectionResult] = useState<SpedCorrectionResult | null>(null);
-    const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
-    const [isCorrecting, setIsCorrecting] = useState(false);
     
     useEffect(() => {
         setResults(initialKeyCheckResults);
@@ -687,6 +684,25 @@ export function KeyChecker({
         onFilesChange(spedFiles.filter(f => f !== fileToRemove));
     };
 
+    const handleDownloadCorrected = (correctionResult: SpedCorrectionResult) => {
+        if (!correctionResult || !correctionResult.fileContent) {
+            toast({ variant: "destructive", title: "Nenhum resultado para baixar" });
+            return;
+        }
+        const blob = new Blob([correctionResult.fileContent], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', correctionResult.fileName);
+        document.body.appendChild(link);
+        link.click();
+        
+        setTimeout(() => {
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 100);
+    };
+
     const handleProcess = async () => {
         if (!spedFiles || spedFiles.length === 0) {
             toast({ variant: "destructive", title: "Arquivo faltando", description: "Por favor, carregue o arquivo SPED (.txt)." });
@@ -705,26 +721,33 @@ export function KeyChecker({
                 const logFn = (message: string) => localLogs.push(`[${new Date().toLocaleTimeString()}] ${message}`);
 
                 const { keyCheckResults, spedInfo, error } = await checkSpedKeysInBrowser(chavesValidas, fileContents, logFn);
-                setLogs(localLogs);
                 
-                if (error) {
-                    throw new Error(error);
-                }
-
-                if (!keyCheckResults) {
-                     throw new Error("Não foi possível extrair as chaves do arquivo SPED. Verifique o formato do arquivo.");
-                }
+                if (error) throw new Error(error);
+                if (!keyCheckResults) throw new Error("Não foi possível extrair as chaves do arquivo SPED. Verifique o formato do arquivo.");
                 
                 setResults(keyCheckResults);
                 setSpedInfo(spedInfo);
                 
-                onSpedProcessed(spedInfo, keyCheckResults, null);
+                toast({ title: "Verificação de chaves concluída", description: "A iniciar a correção automática do SPED..." });
                 
-                toast({ title: "Verificação concluída", description: "As chaves foram comparadas com sucesso. Prossiga para as abas de análise." });
+                // Automatic correction and download
+                const correctionResult = processSpedFileInBrowser(fileContents[0], nfeEntradaData, cteData);
+                localLogs.push(...correctionResult.log);
+                setLogs(localLogs);
+
+                onSpedProcessed(spedInfo, keyCheckResults, correctionResult);
+
+                if (correctionResult.fileContent) {
+                    handleDownloadCorrected(correctionResult);
+                    toast({ title: "Correção e Download Concluídos", description: `Ficheiro ${correctionResult.fileName} descarregado com ${correctionResult.linesModified} modificações.` });
+                } else {
+                    throw new Error(correctionResult.error || "Falha ao gerar o ficheiro corrigido.");
+                }
 
             } catch (err: any) {
                 setError(err.message);
-                toast({ variant: "destructive", title: "Erro na verificação", description: err.message });
+                setLogs(prev => [...prev, `[ERRO FATAL] ${err.message}`]);
+                toast({ variant: "destructive", title: "Erro no Processamento", description: err.message });
             } finally {
                 setLoading(false);
             }
@@ -736,7 +759,6 @@ export function KeyChecker({
         setLogs([]);
         setError(null);
         setSpedInfo(null);
-        
         onFilesChange([]);
         onSpedProcessed(null, null, null);
 
@@ -746,64 +768,6 @@ export function KeyChecker({
         toast({ title: "Verificação limpa", description: "Os resultados e o arquivo da verificação SPED foram removidos." });
     };
     
-    const handleCorrectSped = useCallback(async () => {
-        if (!spedFiles || spedFiles.length === 0) {
-            toast({ variant: "destructive", title: "Arquivo faltando", description: "Por favor, carregue o arquivo SPED (.txt) primeiro." });
-            return;
-        }
-        setIsCorrecting(true);
-        setCorrectionResult(null);
-        
-        setTimeout(async () => {
-            try {
-                const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
-                const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData);
-                setCorrectionResult(result);
-                onSpedProcessed(spedInfo, results, result);
-                toast({ title: "Correção Concluída", description: "O arquivo SPED foi analisado." });
-            } catch (err: any) {
-                const errorResult: SpedCorrectionResult = {
-                    fileName: `erro_sped.txt`,
-                    error: err.message,
-                    linesRead: 0,
-                    linesModified: 0,
-                    modifications: { truncation: [], unitStandardization: [], removed0190: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [] },
-                    log: [`ERRO FATAL: ${err.message}`]
-                };
-                setCorrectionResult(errorResult);
-                onSpedProcessed(spedInfo, results, errorResult);
-                toast({ variant: "destructive", title: "Erro na correção", description: err.message });
-            } finally {
-                setIsCorrecting(false);
-            }
-        }, 50);
-    }, [spedFiles, nfeEntradaData, cteData, onSpedProcessed, spedInfo, results, toast]);
-
-    useEffect(() => {
-        if (isCorrectionModalOpen && !correctionResult && !isCorrecting) {
-            handleCorrectSped();
-        }
-    }, [isCorrectionModalOpen, correctionResult, isCorrecting, handleCorrectSped]);
-
-    const handleDownloadCorrected = () => {
-        if (!correctionResult || !correctionResult.fileContent) {
-            toast({ variant: "destructive", title: "Nenhum resultado para baixar" });
-            return;
-        }
-        const blob = new Blob([correctionResult.fileContent], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', correctionResult.fileName);
-        document.body.appendChild(link);
-        link.click();
-        
-        setTimeout(() => {
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }, 100);
-    };
-    
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text).then(() => {
             toast({ title: "Copiado", description: "O erro foi copiado para a área de transferência." });
@@ -811,49 +775,6 @@ export function KeyChecker({
             toast({ variant: 'destructive', title: `Falha ao copiar` });
         });
     };
-    
-    const ModificationDisplay = ({ logs }: { logs: ModificationLog[] }) => (
-        <ScrollArea className="h-full pr-4">
-            <div className="text-sm font-mono whitespace-pre-wrap space-y-4">
-                {logs.map((log, index) => (
-                    <div key={index} className="p-2 rounded-md border">
-                        <p className="font-bold text-muted-foreground">Linha {log.lineNumber}:</p>
-                        <p className="text-red-600 dark:text-red-400"><b>Original:</b> {log.original}</p>
-                        <p className="text-green-600 dark:text-green-400"><b>Corrigida:</b> {log.corrected}</p>
-                    </div>
-                ))}
-            </div>
-        </ScrollArea>
-    );
-
-    const RemovedLinesDisplay = ({ logs }: { logs: RemovedLineLog[] }) => (
-        <ScrollArea className="h-full pr-4">
-            <div className="text-sm font-mono whitespace-pre-wrap space-y-2">
-                {logs.map((log, index) => (
-                    <div key={index} className="p-2 rounded-md border bg-yellow-100 dark:bg-yellow-900/30">
-                        <p><b>Removida (Linha {log.lineNumber}):</b> {log.line}</p>
-                    </div>
-                ))}
-            </div>
-        </ScrollArea>
-    );
-
-    const modificationTabs: {
-        id: keyof SpedCorrectionResult['modifications'];
-        title: string;
-        description: string;
-    }[] = [
-        { id: 'count9900', title: 'Contadores', description: 'A contagem de linhas em cada bloco (registos x990) e a contagem total (9999) foram recalculadas para corresponder ao número real de linhas no ficheiro.' },
-        { id: 'ieCorrection', title: 'IE (NF-e)', description: 'A Inscrição Estadual (IE) de participantes (registo 0150) foi corrigida com base nos dados dos XMLs para garantir a conformidade.' },
-        { id: 'cteSeriesCorrection', title: 'Série (CT-e)', description: 'A série de CT-es (registo D100) foi corrigida com base nos dados dos XMLs de CTe para corresponder à série original.' },
-        { id: 'addressSpaces', title: 'Endereços', description: 'Espaços múltiplos no campo de complemento do endereço (registo 0150) foram substituídos por um único espaço para evitar erros de formatação.' },
-        { id: 'truncation', title: 'Truncamento', description: 'Campos de texto livre (ex: observações nos registos 0450, 0460, C110) foram limitados a 235 caracteres para evitar erros de importação.' },
-        { id: 'unitStandardization', title: 'Unidades', description: 'Unidades de medida de produtos (registos 0200, C170) foram padronizadas para \'un\' para manter a consistência e evitar erros.' },
-        { id: 'removed0190', title: '0190 Removidos', description: 'Registos do tipo \'0190\' desnecessários (todos exceto \'un\' e \'pc\') foram removidos para limpar o ficheiro e evitar potenciais problemas.' },
-    ];
-    
-    const groupedCounterModifications = correctionResult ? [...correctionResult.modifications.blockCount, ...correctionResult.modifications.totalLineCount, ...correctionResult.modifications.count9900] : [];
-
 
     return (
         <div className="space-y-8">
@@ -877,7 +798,7 @@ export function KeyChecker({
                         <UploadCloud className="h-8 w-8 text-primary" />
                         <div>
                             <CardTitle className="font-headline text-2xl">Carregar arquivo SPED</CardTitle>
-                            <CardDescription>Faça o upload do arquivo SPED (.txt) para comparar com as chaves válidas.</CardDescription>
+                            <CardDescription>Faça o upload do arquivo SPED (.txt) para comparar com as chaves válidas e gerar o ficheiro corrigido.</CardDescription>
                         </div>
                     </div>
                 </CardHeader>
@@ -919,98 +840,8 @@ export function KeyChecker({
                    
                     <div className="flex flex-col sm:flex-row gap-2">
                         <Button onClick={handleProcess} disabled={loading || !spedFiles || spedFiles.length === 0} className="w-full">
-                            {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando...</> : 'Verificar Chaves'}
+                            {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando...</> : 'Verificar, Corrigir e Baixar'}
                         </Button>
-                        <Dialog open={isCorrectionModalOpen} onOpenChange={setIsCorrectionModalOpen}>
-                           <DialogTrigger asChild>
-                                <Button variant="secondary" className="w-full" disabled={isCorrecting || loading || !spedFiles || spedFiles.length === 0}>
-                                    {isCorrecting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Corrigindo...</> : 'Corrigir e Baixar Arquivo SPED'}
-                                </Button>
-                           </DialogTrigger>
-                           <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
-                                <DialogHeader>
-                                    <DialogTitle>Correção do Arquivo SPED</DialogTitle>
-                                    <DialogDescription>
-                                        O arquivo foi processado. Verifique os logs e baixe a versão corrigida.
-                                    </DialogDescription>
-                                </DialogHeader>
-                                <div className="flex-grow overflow-hidden">
-                                {isCorrecting ? (
-                                    <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-                                ) : correctionResult ? (
-                                    <Tabs defaultValue="summary" className="flex flex-col h-full">
-                                         <TabsList className="grid w-full grid-cols-3">
-                                            <TabsTrigger value="summary">Resumo</TabsTrigger>
-                                            <TabsTrigger value="modifications">Modificações ({correctionResult.linesModified})</TabsTrigger>
-                                            <TabsTrigger value="full_log">Log Completo</TabsTrigger>
-                                        </TabsList>
-
-                                        <TabsContent value="summary" className="mt-4 flex-grow">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-center">
-                                                <div className="rounded-lg border bg-card p-4"><p className="text-sm font-medium text-muted-foreground">Linhas Lidas</p><p className="text-2xl font-bold">{correctionResult.linesRead}</p></div>
-                                                <div className="rounded-lg border bg-card p-4"><p className="text-sm font-medium text-muted-foreground">Linhas Modificadas</p><p className="text-2xl font-bold">{correctionResult.linesModified}</p></div>
-                                            </div>
-                                             <div className="mt-6 space-y-2 text-sm">
-                                                <p><strong className="text-primary">Contadores:</strong> {correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length} linhas corrigidas.</p>
-                                                <p><strong className="text-primary">Inscrição Estadual (NF-e):</strong> {correctionResult.modifications.ieCorrection.length} linhas corrigidas.</p>
-                                                <p><strong className="text-primary">Série (CT-e):</strong> {correctionResult.modifications.cteSeriesCorrection.length} linhas corrigidas.</p>
-                                                <p><strong className="text-primary">Endereços (Espaços):</strong> {correctionResult.modifications.addressSpaces.length} linhas corrigidas.</p>
-                                                <p><strong className="text-primary">Truncamento de Campos:</strong> {correctionResult.modifications.truncation.length} linhas corrigidas.</p>
-                                                <p><strong className="text-primary">Padronização de Unidades:</strong> {correctionResult.modifications.unitStandardization.length} linhas corrigidas.</p>
-                                                <p><strong className="text-primary">Registros 0190 Removidos:</strong> {correctionResult.modifications.removed0190.length} linhas removidas.</p>
-                                            </div>
-                                        </TabsContent>
-
-                                        <TabsContent value="modifications" className="mt-4 flex-grow overflow-hidden">
-                                            <Tabs defaultValue={modificationTabs[0].id} className="flex flex-col h-full">
-                                                <TabsList className="h-auto flex-wrap justify-start">
-                                                    <TabsTrigger value="count9900">Contadores ({groupedCounterModifications.length})</TabsTrigger>
-                                                    {modificationTabs.filter(tab => tab.id !== 'count9900').map(tab => (
-                                                        <TabsTrigger key={tab.id} value={tab.id}>{tab.title} ({(correctionResult.modifications[tab.id] as any[]).length})</TabsTrigger>
-                                                    ))}
-                                                </TabsList>
-                                                <div className="flex-grow overflow-hidden mt-2">
-                                                    <TabsContent value="count9900" className="h-full">
-                                                        <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger asChild><button><HelpCircle className="h-4 w-4"/></button></TooltipTrigger><TooltipContent><p>{modificationTabs.find(t => t.id === 'count9900')?.description}</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>A contagem de linhas de cada bloco e do ficheiro foi recalculada.</span>
-                                                        </div>
-                                                        <ModificationDisplay logs={groupedCounterModifications} />
-                                                    </TabsContent>
-                                                    
-                                                    {modificationTabs.filter(tab => tab.id !== 'count9900').map(tab => (
-                                                        <TabsContent key={tab.id} value={tab.id} className="h-full">
-                                                            <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                                <TooltipProvider><Tooltip><TooltipTrigger asChild><button><HelpCircle className="h-4 w-4"/></button></TooltipTrigger><TooltipContent><p>{tab.description}</p></TooltipContent></Tooltip></TooltipProvider>
-                                                                <span>{tab.description}</span>
-                                                            </div>
-                                                            {tab.id === 'removed0190' ? (
-                                                                <RemovedLinesDisplay logs={correctionResult.modifications[tab.id]} />
-                                                            ) : (
-                                                                <ModificationDisplay logs={correctionResult.modifications[tab.id]} />
-                                                            )}
-                                                        </TabsContent>
-                                                    ))}
-                                                </div>
-                                            </Tabs>
-                                        </TabsContent>
-
-                                        <TabsContent value="full_log" className="mt-4 flex-grow overflow-hidden">
-                                            <div className="h-full overflow-y-auto">
-                                                <LogDisplay logs={correctionResult.log} />
-                                            </div>
-                                        </TabsContent>
-                                    </Tabs>
-                                ) : null}
-                                </div>
-                                <DialogFooter className="pt-4 border-t">
-                                    <Button variant="outline" onClick={() => setIsCorrectionModalOpen(false)}>Fechar</Button>
-                                    <Button onClick={handleDownloadCorrected} disabled={!correctionResult || !!correctionResult.error}>
-                                        <Download className="mr-2 h-4 w-4" /> Baixar Arquivo Corrigido
-                                    </Button>
-                                </DialogFooter>
-                            </DialogContent>
-                        </Dialog>
                     </div>
                 </CardContent>
             </Card>
@@ -1075,5 +906,3 @@ export function KeyChecker({
         </div>
     );
 }
-
-    
