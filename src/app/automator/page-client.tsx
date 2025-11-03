@@ -238,12 +238,7 @@ export function AutomatorClientPage() {
     };
     
     const handleSiengeFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0] || null;
-        // When a new file is selected, clear the old processed data
-        if (file) {
-            setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
-        }
-        setSiengeFile(file);
+        setSiengeFile(e.target.files?.[0] || null);
     };
 
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>, category: 'nfeEntrada' | 'cte' | 'nfeSaida' | 'nfse') => {
@@ -588,7 +583,7 @@ export function AutomatorClientPage() {
     return (
         <div className="min-h-screen bg-background text-foreground">
             <header className="sticky top-0 z-20 w-full border-b bg-background/80 backdrop-blur-sm">
-                <div className="container mx-auto flex h-16 items-center justify-between px-4">
+                <div className="mx-auto flex h-16 items-center justify-between px-4">
                      <div className="flex items-center gap-4">
                         <Button asChild variant="outline" size="icon" title="Voltar ao início">
                             <Link href="/">
@@ -606,8 +601,8 @@ export function AutomatorClientPage() {
                 </div>
             </header>
 
-            <main className="container mx-auto p-4 md:p-8">
-                <div className="mx-auto max-w-full space-y-8">
+            <main className="px-4 md:px-8 py-8">
+                <div className="w-full space-y-8">
                     <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
                         <TabsList className="h-auto flex-wrap justify-start">
                              <TabsTrigger value="history" className="flex items-center gap-2">

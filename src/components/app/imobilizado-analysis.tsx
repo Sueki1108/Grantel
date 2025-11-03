@@ -109,7 +109,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
                 }
                 if (id === 'Fornecedor' && typeof value === 'string') {
-                     return <div className="max-w-[15ch] truncate" title={value}>{value}</div>;
+                     return <div title={value}>{value}</div>;
                 }
                  if (id === 'Número da Nota') {
                     return (
@@ -459,8 +459,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
 
     const onTabChange = (value: string) => {
         setRowSelection({}); // Clear selection when changing tabs
-        // Do not change the active tab here, let the Tabs component handle it.
-        // The user's request is to NOT jump tabs/pages. We achieve this by not re-filtering to 'unclassified'
         setActiveTab(value as Classification);
     };
 
