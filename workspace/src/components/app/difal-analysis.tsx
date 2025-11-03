@@ -6,18 +6,18 @@ import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown, CalendarIcon } from 'lucide-react';
+import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown, Calendar as CalendarIcon } from 'lucide-react';
 import JSZip from 'jszip';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Checkbox } from '../ui/checkbox';
-import { Label } from '../ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DataTable } from './data-table';
+import { DataTable } from '@/components/app/data-table';
 import { getColumnsWithCustomRender } from '@/lib/columns-helper';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Calendar } from '../ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 
 // ===============================================================
 // Types
