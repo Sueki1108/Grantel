@@ -1,4 +1,4 @@
-// Force redeployment
+// Force redeployment by adding a comment
 "use strict";
 
 const functions = require("firebase-functions");
