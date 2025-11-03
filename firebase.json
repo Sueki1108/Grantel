@@ -8,8 +8,7 @@
       }
     ],
     "predeploy": [
-      "npm --prefix . run build",
-      "npm --prefix functions install"
+      "npm --prefix . run build"
     ]
   },
   "functions": {
