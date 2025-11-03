@@ -264,10 +264,7 @@ export function AdditionalAnalyses({
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
 
     useEffect(() => {
-        if (!siengeFile) {
-            onSiengeDataProcessed(null);
-            return;
-        }
+        if (!siengeFile || processedData.siengeSheetData) return;
         
         const process = async () => {
             try {
@@ -280,7 +277,7 @@ export function AdditionalAnalyses({
             }
         };
         process();
-    }, [siengeFile, onSiengeDataProcessed, toast]);
+    }, [siengeFile, processedData.siengeSheetData, onSiengeDataProcessed, toast]);
 
 
     const handleAnalyzeResale = () => {
@@ -577,10 +574,8 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
     useEffect(() => {
         if (error) {
             toast({ variant: 'destructive', title: "Erro na Conciliação", description: error });
-        } else if (reconciliationResults) {
-            // onProcessedDataChange(prev => ({...(prev || { sheets: {} }), reconciliationResults}));
         }
-    }, [error, reconciliationResults, toast]);
+    }, [error, toast]);
     
      useEffect(() => {
         if (reconciliationResults?.otherSiengeItems) {
