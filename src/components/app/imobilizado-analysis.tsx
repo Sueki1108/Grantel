@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { Building, Download, List, Factory, Wrench, HardHat, RotateCcw, Save, Settings, X, EyeOff } from "lucide-react";
+import { Building, Download, List, Factory, Wrench, HardHat, RotateCcw, Save, Settings, X, EyeOff, Copy } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -87,16 +87,45 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
     handleAccountCodeChange,
     handleClassificationChange
 }) => {
+    const { toast } = useToast();
+
+    const copyToClipboard = (text: string | number, type: string) => {
+        const textToCopy = String(text);
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: textToCopy });
+        }).catch(() => {
+            toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
+        });
+    };
 
     const columns = useMemo(() => {
-        const columnsToShow: (keyof ItemData)[] = ['Fornecedor', 'CPF/CNPJ do Emitente', 'Número da Nota', 'Descrição', 'CFOP', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
+        const columnsToShow: (keyof ItemData)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
         const baseColumns = getColumnsWithCustomRender(
             data,
             columnsToShow,
             (row, id) => {
-                const value = row.getValue(id as any);
+                const value = row.original[id as keyof typeof row.original];
                  if ((id === 'Valor Total' || id === 'Valor Unitário') && typeof value === 'number') {
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
+                }
+                if (id === 'Fornecedor' && typeof value === 'string') {
+                     return <div className="max-w-[15ch] truncate" title={value}>{value}</div>;
+                }
+                 if (id === 'Número da Nota') {
+                    return (
+                        <div className="flex items-center gap-1 group justify-center">
+                            <span>{value}</span>
+                            <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(value, 'Número da Nota'); }}><Copy className="h-3 w-3" /></Button>
+                        </div>
+                    );
+                }
+                 if (id === 'Descrição') {
+                    return (
+                        <div className="flex items-center gap-1 group">
+                            <p className="truncate max-w-[200px]" title={value}>{value}</p>
+                            <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(value, 'Descrição'); }}><Copy className="h-3 w-3" /></Button>
+                        </div>
+                    );
                 }
                 return <div className="truncate max-w-xs">{String(value ?? '')}</div>;
             }
@@ -178,7 +207,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
         });
 
         return baseColumns;
-    }, [data, classification, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange]);
+    }, [data, classification, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange, toast]);
     
     if (!data || data.length === 0) {
         return <div className="text-center text-muted-foreground p-8">Nenhum item nesta categoria.</div>;
@@ -430,6 +459,8 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
 
     const onTabChange = (value: string) => {
         setRowSelection({}); // Clear selection when changing tabs
+        // Do not change the active tab here, let the Tabs component handle it.
+        // The user's request is to NOT jump tabs/pages. We achieve this by not re-filtering to 'unclassified'
         setActiveTab(value as Classification);
     };
 
