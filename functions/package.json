@@ -14,7 +14,9 @@
   "main": "index.js",
   "dependencies": {
     "firebase-functions": "^5.0.1",
-    "next": "^14.2.33"
+    "next": "^14.2.33",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "firebase-functions-test": "^3.2.0"

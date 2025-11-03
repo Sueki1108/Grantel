@@ -1,6 +1,6 @@
 "use strict";
 
-const { https } = require("firebase-functions");
+const { onRequest } = require("firebase-functions/v2/https");
 const next = require("next");
 
 const isDev = process.env.NODE_ENV !== "production";
@@ -13,7 +13,7 @@ const nextjsServer = next({
 });
 const nextjsHandle = nextjsServer.getRequestHandler();
 
-exports.server = https.onRequest((req, res) => {
+exports.server = onRequest((req, res) => {
   return nextjsServer.prepare().then(() => {
     return nextjsHandle(req, res);
   });
