@@ -809,7 +809,6 @@ export function KeyChecker({
         });
     };
     
-    // Extracted display components to avoid re-declaration on render
     const ModificationDisplay = ({ logs }: { logs: ModificationLog[] }) => (
         <ScrollArea className="h-full pr-4">
             <div className="text-sm font-mono whitespace-pre-wrap space-y-4">
@@ -921,7 +920,7 @@ export function KeyChecker({
                         </Button>
                         <Dialog open={isCorrectionModalOpen} onOpenChange={setIsCorrectionModalOpen}>
                            <DialogTrigger asChild>
-                                <Button disabled={isCorrecting || loading || !spedFiles || spedFiles.length === 0} variant="secondary" className="w-full">
+                                <Button variant="secondary" className="w-full" disabled={isCorrecting || loading || !spedFiles || spedFiles.length === 0}>
                                     {isCorrecting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Corrigindo...</> : 'Corrigir e Baixar Arquivo SPED'}
                                 </Button>
                            </DialogTrigger>
