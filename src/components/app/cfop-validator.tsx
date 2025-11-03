@@ -6,7 +6,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX, Copy, Save } from "lucide-react";
+import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX, Copy, Save, Settings } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from '../ui/badge';
@@ -16,6 +16,9 @@ import { cfopDescriptions } from '@/lib/cfop';
 import { RowSelectionState, Table as ReactTable } from '@tanstack/react-table';
 import { Card } from '../ui/card';
 import { Checkbox } from '../ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
+import { Label } from '../ui/label';
+import { ScrollArea } from '../ui/scroll-area';
 
 
 // Tipos
@@ -48,6 +51,8 @@ const columnNameMap: Record<string, string> = {
     'Sienge_CFOP': 'CFOP Sienge',
 };
 
+const CFOP_VALIDATION_XML_FILTER_KEY = 'cfopValidationXmlFilter';
+
 
 interface CfopValidatorProps {
     items: CfopValidationData[];
@@ -67,7 +72,32 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const [activeFilter, setActiveFilter] = useState<ValidationStatus | 'all'>('unvalidated');
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
+    // State for CFOP filtering modal
+    const [isCfopModalOpen, setIsCfopModalOpen] = useState(false);
+    const [includedXmlCfops, setIncludedXmlCfops] = useState<Set<string>>(new Set());
+    const [tempIncludedXmlCfops, setTempIncludedXmlCfops] = useState<Set<string>>(new Set());
+
     const reconciledItems = useMemo(() => items.filter(item => item && item.Observações?.startsWith('Conciliado')), [items]);
+    
+    const allXmlCfops = useMemo(() => {
+        const cfops = new Set(reconciledItems.map(item => item.CFOP).filter(Boolean));
+        return Array.from(cfops).sort((a,b) => parseInt(a, 10) - parseInt(b, 10));
+    }, [reconciledItems]);
+
+    // Load and initialize CFOP filter
+    useEffect(() => {
+        try {
+            const savedFilters = localStorage.getItem(CFOP_VALIDATION_XML_FILTER_KEY);
+            if (savedFilters) {
+                setIncludedXmlCfops(new Set(JSON.parse(savedFilters)));
+            } else {
+                setIncludedXmlCfops(new Set(allXmlCfops)); // Default to all included
+            }
+        } catch (e) {
+            console.error("Failed to load CFOP filters:", e);
+            setIncludedXmlCfops(new Set(allXmlCfops));
+        }
+    }, [allXmlCfops]);
 
 
     // Carrega o estado persistido na inicialização
@@ -119,7 +149,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             if (newStatus && newStatus !== 'unvalidated') {
                 updatedPersistedData[competence].cfopValidations.classifications[uniqueProductKey] = { classification: newStatus };
             } else if (newStatus === 'unvalidated') {
-                // Remove the classification if it's reverted to unvalidated
                 if (updatedPersistedData[competence].cfopValidations.classifications[uniqueProductKey]) {
                     delete updatedPersistedData[competence].cfopValidations.classifications[uniqueProductKey];
                 }
@@ -278,12 +307,14 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     }), [validationStatus]);
     
      const filteredAndGroupedItems = useMemo((): GroupedItems => {
-        // First, filter items based on the active tab's status
-        const filteredItems = activeFilter === 'all'
-            ? reconciledItems
-            : reconciledItems.filter(item => (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter);
+        // First, filter items based on the active tab's status AND the included XML CFOPs
+        const filteredItems = reconciledItems.filter(item => {
+            const statusOk = activeFilter === 'all' || (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter;
+            const cfopOk = includedXmlCfops.has(item.CFOP);
+            return statusOk && cfopOk;
+        });
         
-        // Then, group the filtered items by CFOP
+        // Then, group the filtered items by SIENGE CFOP
         const groups: GroupedItems = {};
         filteredItems.forEach(item => {
             const cfop = item.Sienge_CFOP;
@@ -294,7 +325,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         });
 
         return groups;
-    }, [reconciledItems, validationStatus, activeFilter]);
+    }, [reconciledItems, validationStatus, activeFilter, includedXmlCfops]);
     
     const [activeTabGroup, setActiveTabGroup] = useState<string>('');
     const tableRef = React.useRef<ReactTable<CfopValidationData> | null>(null);
@@ -320,6 +351,24 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         }
     };
     
+    const handleCfopFilterToggle = (cfop: string, checked: boolean) => {
+        const newSet = new Set(tempIncludedXmlCfops);
+        if (checked) newSet.add(cfop); else newSet.delete(cfop);
+        setTempIncludedXmlCfops(newSet);
+    };
+
+    const openCfopFilterModal = () => {
+        setTempIncludedXmlCfops(new Set(includedXmlCfops));
+        setIsCfopModalOpen(true);
+    };
+
+    const handleSaveCfopFilter = () => {
+        setIncludedXmlCfops(tempIncludedXmlCfops);
+        localStorage.setItem(CFOP_VALIDATION_XML_FILTER_KEY, JSON.stringify(Array.from(tempIncludedXmlCfops)));
+        setIsCfopModalOpen(false);
+        toast({ title: 'Filtro de CFOPs guardado!' });
+    };
+
     return (
         <div className="space-y-4 h-full flex flex-col relative">
              <div className="flex justify-between items-center">
@@ -333,6 +382,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                     </TabsList>
                 </Tabs>
                 <div className="flex gap-2 ml-4">
+                    <Button variant="outline" onClick={openCfopFilterModal} size="icon" title="Filtrar por CFOP do XML"><Settings className="h-4 w-4" /></Button>
                     <Button variant="outline" onClick={handleClearFilters} className='shrink-0'>
                         <FilterX className="mr-2 h-4 w-4" />
                         Limpar Filtros
@@ -358,7 +408,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                         return (
                             <TabsContent key={title} value={title} className='mt-4'>
                                  <div className='mb-4 p-3 border rounded-md bg-muted/50'>
-                                    <h3 className="text-lg font-semibold">CFOP {title}: <span className="font-normal">{description}</span></h3>
+                                    <h3 className="text-lg font-semibold">CFOP (Sienge) {title}: <span className="font-normal">{description}</span></h3>
                                 </div>
                                 <DataTable
                                     columns={fullColumns}
@@ -376,7 +426,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                      <div className="text-center p-8 text-muted-foreground">
                         <FileWarning className="mx-auto h-12 w-12 mb-4" />
                         <h3 className="text-xl font-semibold">Nenhum item encontrado</h3>
-                        <p>Não há itens com o status "{activeFilter}" para exibir.</p>
+                        <p>Não há itens com a combinação de status e filtros de CFOP selecionada.</p>
                      </div>
                 )}
             </div>
@@ -396,8 +446,41 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                     </Card>
                 </div>
             )}
+             
+            <Dialog open={isCfopModalOpen} onOpenChange={setIsCfopModalOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Filtrar por CFOP do XML</DialogTitle>
+                        <DialogDescription>
+                            Desmarque os CFOPs que deseja ocultar dos grupos de análise. A sua seleção será guardada para futuras sessões.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <ScrollArea className="h-96 w-full rounded-md border p-4">
+                        {allXmlCfops.map(cfop => (
+                            <div key={cfop} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                <div className='flex items-center space-x-2'>
+                                    <Checkbox
+                                        id={`cfop-filter-${cfop}`}
+                                        checked={tempIncludedXmlCfops.has(cfop)}
+                                        onCheckedChange={(checked) => handleCfopFilterToggle(cfop, !!checked)}
+                                    />
+                                    <Label htmlFor={`cfop-filter-${cfop}`} className="flex flex-col">
+                                        <Badge variant="secondary">{cfop}</Badge>
+                                        <span className="ml-2 text-xs text-muted-foreground">{cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}</span>
+                                    </Label>
+                                </div>
+                            </div>
+                        ))}
+                    </ScrollArea>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsCfopModalOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleSaveCfopFilter}>Guardar Filtro</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
 
     
+
