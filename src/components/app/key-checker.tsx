@@ -746,40 +746,37 @@ export function KeyChecker({
         toast({ title: "Verificação limpa", description: "Os resultados e o arquivo da verificação SPED foram removidos." });
     };
     
-    useEffect(() => {
-        const handleCorrectSped = async () => {
-            if (!isCorrectionModalOpen || isCorrecting || !spedFiles || spedFiles.length === 0) {
-                return;
-            }
-            
-            setIsCorrecting(true);
-            setCorrectionResult(null);
+    const handleCorrectSped = async () => {
+        if (isCorrecting || !spedFiles || spedFiles.length === 0) {
+            return;
+        }
+        
+        setIsCorrectionModalOpen(true);
+        setIsCorrecting(true);
+        setCorrectionResult(null);
 
-            try {
-                const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
-                const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData);
-                setCorrectionResult(result);
-                onSpedProcessed(spedInfo, results, result);
-                toast({ title: "Correção Concluída", description: "O arquivo SPED foi analisado." });
-            } catch (err: any) {
-                const errorResult: SpedCorrectionResult = {
-                    fileName: `erro_sped.txt`,
-                    error: err.message,
-                    linesRead: 0,
-                    linesModified: 0,
-                    modifications: { truncation: [], unitStandardization: [], removed0190: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [] },
-                    log: [`ERRO FATAL: ${err.message}`]
-                };
-                setCorrectionResult(errorResult);
-                onSpedProcessed(spedInfo, results, errorResult);
-                toast({ variant: "destructive", title: "Erro na correção", description: err.message });
-            } finally {
-                setIsCorrecting(false);
-            }
-        };
-
-        handleCorrectSped();
-    }, [isCorrectionModalOpen]); // Depende da abertura do modal
+        try {
+            const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
+            const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData);
+            setCorrectionResult(result);
+            onSpedProcessed(spedInfo, results, result);
+            toast({ title: "Correção Concluída", description: "O arquivo SPED foi analisado." });
+        } catch (err: any) {
+            const errorResult: SpedCorrectionResult = {
+                fileName: `erro_sped.txt`,
+                error: err.message,
+                linesRead: 0,
+                linesModified: 0,
+                modifications: { truncation: [], unitStandardization: [], removed0190: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [] },
+                log: [`ERRO FATAL: ${err.message}`]
+            };
+            setCorrectionResult(errorResult);
+            onSpedProcessed(spedInfo, results, errorResult);
+            toast({ variant: "destructive", title: "Erro na correção", description: err.message });
+        } finally {
+            setIsCorrecting(false);
+        }
+    };
 
     const handleDownloadCorrected = () => {
         if (!correctionResult || !correctionResult.fileContent) {
@@ -920,7 +917,7 @@ export function KeyChecker({
                         </Button>
                         <Dialog open={isCorrectionModalOpen} onOpenChange={setIsCorrectionModalOpen}>
                            <DialogTrigger asChild>
-                                <Button disabled={isCorrecting || loading || !spedFiles || spedFiles.length === 0} variant="secondary" className="w-full">
+                                <Button onClick={handleCorrectSped} disabled={isCorrecting || loading || !spedFiles || spedFiles.length === 0} variant="secondary" className="w-full">
                                     {isCorrecting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Corrigindo...</> : 'Corrigir e Baixar Arquivo SPED'}
                                 </Button>
                            </DialogTrigger>
@@ -1072,3 +1069,5 @@ export function KeyChecker({
         </div>
     );
 }
+
+    
