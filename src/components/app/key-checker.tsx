@@ -753,7 +753,7 @@ export function KeyChecker({
         }
         setIsCorrecting(true);
         setCorrectionResult(null);
-
+        
         setTimeout(async () => {
             try {
                 const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
@@ -1075,4 +1075,6 @@ export function KeyChecker({
         </div>
     );
 }
+    
+
     
