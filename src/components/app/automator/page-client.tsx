@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -158,7 +158,7 @@ export function AutomatorClientPage() {
             link.href = jsonString;
 
             const year = currentCompetence.substring(0,4);
-            const month = currentCompetence.substring(5,7);
+            const month = currentCompetence.substring(0,7);
             
             link.download = `Grantel - Backup Fiscal - ${month}.${year}.json`;
 
@@ -197,7 +197,7 @@ export function AutomatorClientPage() {
     };
 
     // =================================================================
-    // UI SETTINGS
+    // Memoized Competence
     // =================================================================
     const competence = useMemo(() => {
         const activePeriods = Object.keys(selectedPeriods).filter(p => selectedPeriods[p]);
@@ -256,7 +256,7 @@ export function AutomatorClientPage() {
     const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         setSiengeFile(file || null);
-
+    
         if (file) {
             try {
                 const reader = new FileReader();
@@ -264,7 +264,7 @@ export function AutomatorClientPage() {
                     try {
                         const data = event.target?.result;
                         if (!data) throw new Error("Não foi possível ler o conteúdo do ficheiro.");
-
+    
                         const workbook = XLSX.read(data, { type: 'array' });
                         const sheetName = workbook.SheetNames[0];
                         if (!sheetName) throw new Error("A planilha não contém nenhuma aba.");
@@ -273,16 +273,21 @@ export function AutomatorClientPage() {
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
                         
                         setProcessedData(prev => ({
-                            sheets: {}, 
-                            spedInfo: null, 
-                            keyCheckResults: null, 
-                            competence: null,
-                            ...prev, // Mantém dados existentes (chaves, sped, etc.)
+                            // If prev is null, create a new valid object
+                            sheets: prev?.sheets || {}, 
+                            spedInfo: prev?.spedInfo || null, 
+                            keyCheckResults: prev?.keyCheckResults || null, 
+                            competence: prev?.competence || null,
+                            // Add other necessary initial properties from ProcessedData interface
+                            reconciliationResults: prev?.reconciliationResults || null,
+                            resaleAnalysis: prev?.resaleAnalysis || null,
+                            spedCorrections: prev?.spedCorrections || null,
+                            // Now, add the new sienge data
                             siengeSheetData: jsonData
-                        } as ProcessedData));
+                        }));
                         
                         toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises avançadas.' });
-
+    
                     } catch (err: any) {
                          toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
                          setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
@@ -836,3 +841,5 @@ export function AutomatorClientPage() {
         </div>
     );
 }
+
+    

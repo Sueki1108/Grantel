@@ -39,7 +39,11 @@ const normalizeKey = (key: string | undefined): string => {
 function useReconciliation(processedData: ProcessedData | null): { reconciliationResults: ReconciliationResults, error: string | null } {
     
     return useMemo(() => {
-        const { sheets, siengeSheetData } = processedData || {};
+        if (!processedData) {
+            return { reconciliationResults: null, error: 'Dados processados não disponíveis.' };
+        }
+
+        const { sheets, siengeSheetData } = processedData;
         const allXmlItems = [
             ...(sheets?.['Itens Válidos'] || []),
             ...(sheets?.['CTEs Válidos'] || []).map(cte => ({
@@ -199,7 +203,7 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
 // ===============================================================
 
 interface AdditionalAnalysesProps {
-    processedData: ProcessedData;
+    processedData: ProcessedData | null;
     onProcessedDataChange: (fn: (prevData: ProcessedData | null) => ProcessedData) => void;
     siengeFile: File | null;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
@@ -237,7 +241,7 @@ export function AdditionalAnalyses({
 
 
     const handleAnalyzeResale = () => {
-        if (!processedData.siengeSheetData) {
+        if (!processedData?.siengeSheetData) {
             toast({ variant: 'destructive', title: "Dados incompletos", description: "Carregue a planilha Sienge primeiro." });
             return;
         }
@@ -400,7 +404,7 @@ export function AdditionalAnalyses({
                 </TabsList>
                 
                 <div className="mt-6">
-                    {activeTab === 'sped' && (
+                    {activeTab === 'sped' && processedData && (
                         <KeyChecker 
                             chavesValidas={processedData.sheets['Chaves Válidas'] || []}
                             spedFiles={spedFiles}
@@ -430,7 +434,7 @@ export function AdditionalAnalyses({
                             siengeFile={siengeFile}
                             onSiengeFileChange={onSiengeFileChange}
                             onClearSiengeFile={onClearSiengeFile}
-                            siengeSheetData={processedData.siengeSheetData}
+                            siengeSheetData={processedData?.siengeSheetData}
                         />
                     )}
 
@@ -454,7 +458,7 @@ export function AdditionalAnalyses({
                                     onFileChange={onSiengeFileChange}
                                     onClearFile={onClearSiengeFile}
                                 />
-                                {!processedData.siengeSheetData ? (
+                                {!processedData?.siengeSheetData ? (
                                     <div className="p-8 text-center text-muted-foreground mt-4">
                                         <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
                                         <h3 className="text-xl font-semibold mb-2">Aguardando dados Sienge</h3>
@@ -846,7 +850,5 @@ function SiengeTaxCheck({ siengeFile, onSiengeFileChange, onClearSiengeFile, sie
         </Card>
     );
 }
-
-    
 
     
