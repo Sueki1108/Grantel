@@ -70,10 +70,14 @@ const getFullCfopDescription = (cfopCode: string | number): string => {
 };
 
 const getUniversalProductKey = (item: CfopValidationData): string => {
-    // Chave universal do produto, baseada na descrição do CFOP para agrupar naturezas iguais.
     const siengeCfop = item['Sienge_CFOP'] || '';
     const cfopDescription = getFullCfopDescription(siengeCfop).toLowerCase();
     
+    // EXCEPTION: Handle specific CFOPs like '1653' and '2653' individually
+    if (siengeCfop.endsWith('653')) {
+        return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${siengeCfop}`;
+    }
+
     return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${cfopDescription}`;
 };
 
@@ -397,11 +401,17 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     };
 
     const openCfopFilterModal = (siengeCfopGroup: string) => {
-        const allXmlCfopsForGroup = allGroupedItems[siengeCfopGroup]?.xmlCfops || new Set();
+        // Get CFOPs ONLY from items currently visible in the table for this status filter
+        const currentItemsInTab = allGroupedItems[siengeCfopGroup]?.items.filter(item => {
+             return activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
+        }) || [];
+        
+        const allXmlCfopsForGroup = new Set(currentItemsInTab.map(i => i.CFOP).filter(Boolean));
         const currentFilters = perTabCfopFilters[siengeCfopGroup] || allXmlCfopsForGroup;
         
         setCurrentEditingCfopGroup(siengeCfopGroup);
-        setTempIncludedXmlCfops(new Set(currentFilters));
+        // Intersect the current filters with the available ones to avoid showing stale filters
+        setTempIncludedXmlCfops(new Set([...currentFilters].filter(cfop => allXmlCfopsForGroup.has(cfop))));
         setIsCfopModalOpen(true);
     };
 
@@ -420,6 +430,14 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         setIsCfopModalOpen(false);
         toast({ title: 'Filtro de CFOP guardado!' });
     };
+    
+    const xmlCfopsForCurrentModal = useMemo(() => {
+        if (!currentEditingCfopGroup) return new Set<string>();
+        const currentItemsInTab = allGroupedItems[currentEditingCfopGroup]?.items.filter(item => {
+             return activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
+        }) || [];
+        return new Set(currentItemsInTab.map(i => i.CFOP).filter(Boolean));
+    }, [currentEditingCfopGroup, allGroupedItems, activeFilter, validationStatus]);
 
     return (
         <div className="space-y-4 h-full flex flex-col relative">
@@ -509,12 +527,12 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                         <DialogHeader>
                             <DialogTitle>Filtrar CFOPs do XML para o Grupo {currentEditingCfopGroup}</DialogTitle>
                             <DialogDescription>
-                                Desmarque os CFOPs do XML que deseja ocultar da visualização deste grupo.
+                                Desmarque os CFOPs do XML que deseja ocultar da visualização deste grupo. A lista mostra apenas os CFOPs dos itens atualmente visíveis.
                             </DialogDescription>
                         </DialogHeader>
                         <ScrollArea className="h-96 w-full rounded-md border p-4">
-                            {(allGroupedItems[currentEditingCfopGroup]?.xmlCfops || new Set()).size > 0 ? (
-                                Array.from(allGroupedItems[currentEditingCfopGroup].xmlCfops).sort().map(cfop => (
+                            {xmlCfopsForCurrentModal.size > 0 ? (
+                                Array.from(xmlCfopsForCurrentModal).sort().map(cfop => (
                                     <div key={cfop} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
                                         <div className='flex items-center space-x-2'>
                                             <Checkbox
@@ -530,7 +548,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                                     </div>
                                 ))
                             ) : (
-                                <p className="text-muted-foreground text-center">Nenhum CFOP do XML encontrado neste grupo.</p>
+                                <p className="text-muted-foreground text-center">Nenhum CFOP do XML encontrado para os itens visíveis.</p>
                             )}
                         </ScrollArea>
                         <DialogFooter>
@@ -543,3 +561,4 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         </div>
     );
 }
+
