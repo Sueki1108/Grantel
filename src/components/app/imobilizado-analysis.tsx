@@ -109,7 +109,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
                 }
                 if (id === 'Fornecedor' && typeof value === 'string') {
-                     return <div title={value}>{value}</div>;
+                     return <div className="truncate max-w-[120px]" title={value}>{value}</div>;
                 }
                  if (id === 'Número da Nota') {
                     return (
@@ -122,8 +122,8 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
                  if (id === 'Descrição') {
                     return (
                         <div className="flex items-center gap-1 group">
-                            <p className="truncate max-w-[200px]" title={value}>{value}</p>
-                            <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(value, 'Descrição'); }}><Copy className="h-3 w-3" /></Button>
+                            <p className="truncate max-w-[200px]" title={String(row.original['Descrição'])}>{value}</p>
+                            <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(String(row.original['Descrição']), 'Descrição'); }}><Copy className="h-3 w-3" /></Button>
                         </div>
                     );
                 }
@@ -274,11 +274,21 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
 
     // Filter items based on the exclusion list
     const imobilizadoItems = useMemo(() => {
-        return (initialAllItems || []).filter(item => {
-            if (!item || !item.CFOP) return false;
-            return !excludedCfops.has(String(item.CFOP));
-        });
-    }, [initialAllItems, excludedCfops]);
+        if (!initialAllItems) return [];
+        const nfeHeaderMap = new Map((processedData?.sheets?.['Notas Válidas'] || []).map(n => [n['Chave Unica'], n]));
+        return initialAllItems
+            .map(item => {
+                const header = nfeHeaderMap.get(item['Chave Unica']);
+                return {
+                    ...item,
+                    Fornecedor: header?.Fornecedor || item.Fornecedor || 'N/A',
+                }
+            })
+            .filter(item => {
+                if (!item || !item.CFOP) return false;
+                return !excludedCfops.has(String(item.CFOP));
+            });
+    }, [initialAllItems, excludedCfops, processedData]);
 
     const disregardedItems = useMemo(() => {
         return (initialAllItems || []).filter(item => {
@@ -334,17 +344,17 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
 
 
     useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
                 if (Object.keys(rowSelection).length > 0) {
                     setRowSelection({});
                 }
             }
         };
 
-        document.addEventListener("mousedown", handleClickOutside);
+        document.addEventListener('keydown', handleKeyDown);
         return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
         };
     }, [rowSelection]);
     
@@ -360,6 +370,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
 
         setSessionClassifications(newClassifications);
         setHasChanges(true);
+        setActiveTab(newClassification); // Stay on the same tab
     };
 
     const handleBulkClassification = (newClassification: Classification) => {
@@ -618,3 +629,4 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
     
 
     
+
