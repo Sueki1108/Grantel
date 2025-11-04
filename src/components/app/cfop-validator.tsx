@@ -64,9 +64,17 @@ interface CfopValidatorProps {
     competence: string | null;
 }
 
-const getUniqueProductKey = (item: CfopValidationData): string => {
-    return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+const getUniversalProductKey = (item: CfopValidationData): string => {
+    // Chave universal do produto (ignora região do CFOP)
+    const siengeCfopNature = (item['Sienge_CFOP'] || '').slice(-3);
+    return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${siengeCfopNature}`;
 };
+
+const getItemLineKey = (item: CfopValidationData): string => {
+    // Chave única para a linha da tabela
+    return item['Chave de acesso'] + item.Item;
+};
+
 
 export function CfopValidator({ items, allPersistedClassifications, onPersistAllClassifications, competence }: CfopValidatorProps) {
     const { toast } = useToast();
@@ -75,7 +83,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const [activeFilter, setActiveFilter] = useState<ValidationStatus | 'all'>('unvalidated');
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
-    // State for per-tab CFOP filtering modal
     const [isCfopModalOpen, setIsCfopModalOpen] = useState(false);
     const [perTabCfopFilters, setPerTabCfopFilters] = useState<Record<string, Set<string>>>({});
     const [currentEditingCfopGroup, setCurrentEditingCfopGroup] = useState<string | null>(null);
@@ -83,7 +90,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
     const reconciledItems = useMemo(() => items.filter(item => item && item.Observações?.startsWith('Conciliado')), [items]);
     
-    // Load and initialize CFOP filters from local storage
     useEffect(() => {
         try {
             const savedFiltersRaw = localStorage.getItem(CFOP_VALIDATION_PER_TAB_FILTER_KEY);
@@ -101,33 +107,24 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     }, []);
 
 
-    // Carrega o estado persistido na inicialização
     useEffect(() => {
         if (!competence) return;
         const initialStatus: Record<string, ValidationStatus> = {};
 
         reconciledItems.forEach(item => {
-            const uniqueProductKey = getUniqueProductKey(item);
-            let classification: ValidationStatus | undefined = 'unvalidated';
+            const universalProductKey = getUniversalProductKey(item);
+            let classification: ValidationStatus | undefined = undefined;
 
-            // Check current competence first
-            const persistedForCompetence = (allPersistedClassifications && allPersistedClassifications[competence]?.cfopValidations) || {};
-            classification = persistedForCompetence.classifications?.[uniqueProductKey]?.classification as ValidationStatus;
-
-            // If not found, check other competences
-            if (!classification || classification === 'unvalidated') {
-                for (const otherCompetence in allPersistedClassifications) {
-                    if (otherCompetence !== competence) {
-                        const historicClassification = allPersistedClassifications[otherCompetence]?.cfopValidations?.classifications?.[uniqueProductKey]?.classification as ValidationStatus;
-                        if (historicClassification && historicClassification !== 'unvalidated') {
-                            classification = historicClassification;
-                            break;
-                        }
-                    }
+            // Look through all past competences for a classification
+            for (const otherCompetence in allPersistedClassifications) {
+                const historicClassification = allPersistedClassifications[otherCompetence]?.cfopValidations?.classifications?.[universalProductKey]?.classification as ValidationStatus;
+                if (historicClassification && historicClassification !== 'unvalidated') {
+                    classification = historicClassification;
+                    break;
                 }
             }
             
-            initialStatus[item['Chave de acesso'] + item.Item] = classification || 'unvalidated';
+            initialStatus[getItemLineKey(item)] = classification || 'unvalidated';
         });
 
         setValidationStatus(initialStatus);
@@ -137,13 +134,12 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
      const handleValidationChange = (itemsToUpdate: CfopValidationData[], newStatus: ValidationStatus) => {
         const newValidationStatus = { ...validationStatus };
-        const productKeysToUpdate = new Set(itemsToUpdate.map(getUniqueProductKey));
+        const productKeysToUpdate = new Set(itemsToUpdate.map(getUniversalProductKey));
 
         reconciledItems.forEach(item => {
-            const productKey = getUniqueProductKey(item);
-            if (productKeysToUpdate.has(productKey)) {
-                const itemKey = item['Chave de acesso'] + item.Item;
-                newValidationStatus[itemKey] = newStatus;
+            const universalProductKey = getUniversalProductKey(item);
+            if (productKeysToUpdate.has(universalProductKey)) {
+                newValidationStatus[getItemLineKey(item)] = newStatus;
             }
         });
 
@@ -164,15 +160,15 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         }
 
         reconciledItems.forEach(item => {
-            const itemKey = item['Chave de acesso'] + item.Item;
-            const newStatus = validationStatus[itemKey];
-            const uniqueProductKey = getUniqueProductKey(item);
+            const newStatus = validationStatus[getItemLineKey(item)];
+            const universalProductKey = getUniversalProductKey(item);
             
             if (newStatus && newStatus !== 'unvalidated') {
-                updatedPersistedData[competence].cfopValidations.classifications[uniqueProductKey] = { classification: newStatus };
+                updatedPersistedData[competence].cfopValidations.classifications[universalProductKey] = { classification: newStatus };
             } else if (newStatus === 'unvalidated') {
-                if (updatedPersistedData[competence].cfopValidations.classifications[uniqueProductKey]) {
-                    delete updatedPersistedData[competence].cfopValidations.classifications[uniqueProductKey];
+                // Remove from current competence if it exists
+                if (updatedPersistedData[competence].cfopValidations.classifications[universalProductKey]) {
+                    delete updatedPersistedData[competence].cfopValidations.classifications[universalProductKey];
                 }
             }
         });
@@ -219,7 +215,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         );
     };
 
-    // Colunas da Tabela
     const columns = useMemo(() => {
         const baseColumns = getColumnsWithCustomRender(
             reconciledItems,
@@ -298,15 +293,15 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         header: 'Ações',
         cell: ({ row }: any) => {
             const item = row.original;
-            const currentStatus = validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated';
+            const currentStatus = validationStatus[getItemLineKey(item)] || 'unvalidated';
             return (
                 <TooltipProvider>
                     <div className="flex gap-2 justify-center" onClick={(e) => e.stopPropagation()}>
-                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'correct' ? 'default' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'correct')}}><ThumbsUp className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Correto</p></TooltipContent></Tooltip>
-                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'incorrect' ? 'destructive' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'incorrect')}}><ThumbsDown className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Incorreto</p></TooltipContent></Tooltip>
-                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'verify' ? 'secondary' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'verify')}}><Search className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificar</p></TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'correct' ? 'default' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'correct')}}><ThumbsUp className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Correto (e todos iguais)</p></TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'incorrect' ? 'destructive' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'incorrect')}}><ThumbsDown className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Incorreto (e todos iguais)</p></TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'verify' ? 'secondary' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'verify')}}><Search className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificar (e todos iguais)</p></TooltipContent></Tooltip>
                         {currentStatus !== 'unvalidated' && (
-                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'unvalidated')}}><RotateCcw className="h-5 w-5 text-muted-foreground" /></Button></TooltipTrigger><TooltipContent><p>Reverter para Pendente</p></TooltipContent></Tooltip>
+                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'unvalidated')}}><RotateCcw className="h-5 w-5 text-muted-foreground" /></Button></TooltipTrigger><TooltipContent><p>Reverter para Pendente (e todos iguais)</p></TooltipContent></Tooltip>
                         )}
                     </div>
                 </TooltipProvider>
@@ -318,7 +313,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         id: 'status',
         header: 'Status',
         cell: ({ row }: any) => {
-            const currentStatus = validationStatus[row.original['Chave de acesso'] + row.original.Item] || 'unvalidated';
+            const currentStatus = validationStatus[getItemLineKey(row.original)] || 'unvalidated';
             switch(currentStatus) {
                 case 'correct': return <Badge variant="default" className='bg-green-600 hover:bg-green-700'><CheckCircle className="h-4 w-4 mr-1" /> Correto</Badge>;
                 case 'incorrect': return <Badge variant="destructive"><AlertTriangle className="h-4 w-4 mr-1" /> Incorreto</Badge>;
@@ -348,22 +343,17 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
     const fullColumns = useMemo(() => [ ...columns, statusColumn, actionColumn], [columns, statusColumn, actionColumn]);
     
-    // This memo calculates which tabs should be visible based on the activeFilter (e.g., 'unvalidated').
-    // It ignores the per-tab CFOP filter to decide tab visibility.
     const visibleGroupTitles = useMemo(() => {
         return Object.keys(allGroupedItems).filter(siengeCfop => {
-            if (activeFilter === 'all') return true; // Show all groups if filter is 'all'
+            if (activeFilter === 'all') return true; 
             
-            // Check if any item in this group matches the active status filter
             return allGroupedItems[siengeCfop].items.some(item => 
-                (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter
+                (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter
             );
         }).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
     }, [allGroupedItems, validationStatus, activeFilter]);
 
 
-    // This memo prepares the data for the currently visible tab.
-    // It filters the items based on BOTH the activeFilter and the perTabCfopFilters.
     const itemsForActiveTab = useMemo(() => {
         if (!activeTabGroup || !allGroupedItems[activeTabGroup]) {
             return [];
@@ -373,7 +363,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         const includedXmlCfopsForTab = perTabCfopFilters[activeTabGroup] || groupData.xmlCfops;
 
         return groupData.items.filter(item => {
-            const statusOk = activeFilter === 'all' || (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter;
+            const statusOk = activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
             const cfopOk = includedXmlCfopsForTab.has(item.CFOP);
             return statusOk && cfopOk;
         });
@@ -419,7 +409,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         const newPerTabFilters = { ...perTabCfopFilters, [currentEditingCfopGroup]: tempIncludedXmlCfops };
         setPerTabCfopFilters(newPerTabFilters);
 
-        // Serialize Set to Array for localStorage
         const serializableFilters: Record<string, string[]> = {};
         for (const key in newPerTabFilters) {
             serializableFilters[key] = Array.from(newPerTabFilters[key]);
@@ -458,7 +447,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                     <TabsList className="h-auto flex-wrap justify-start">
                          {visibleGroupTitles.map(title => (
                             <TabsTrigger key={title} value={title}>
-                                {title} ({allGroupedItems[title].items.filter(item => activeFilter === 'all' || (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter).length})
+                                {title} ({allGroupedItems[title].items.filter(item => (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter).length})
                             </TabsTrigger>
                         ))}
                     </TabsList>
@@ -490,7 +479,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                          <div className="text-center p-8 text-muted-foreground">
                             <FileWarning className="mx-auto h-12 w-12 mb-4" />
                             <h3 className="text-xl font-semibold">Nenhum item encontrado</h3>
-                            <p>Não há itens com o status "{activeFilter}" selecionado.</p>
+                            <p>Não há itens com o status "{activeFilter}" para os CFOPs selecionados.</p>
                          </div>
                     )}
                 </Tabs>
