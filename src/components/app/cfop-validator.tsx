@@ -104,13 +104,30 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     // Carrega o estado persistido na inicialização
     useEffect(() => {
         if (!competence) return;
-
-        const persistedForCompetence = (allPersistedClassifications && allPersistedClassifications[competence]?.cfopValidations) || {};
         const initialStatus: Record<string, ValidationStatus> = {};
 
         reconciledItems.forEach(item => {
             const uniqueProductKey = getUniqueProductKey(item);
-            initialStatus[item['Chave de acesso'] + item.Item] = persistedForCompetence.classifications?.[uniqueProductKey]?.classification as ValidationStatus || 'unvalidated';
+            let classification: ValidationStatus | undefined = 'unvalidated';
+
+            // Check current competence first
+            const persistedForCompetence = (allPersistedClassifications && allPersistedClassifications[competence]?.cfopValidations) || {};
+            classification = persistedForCompetence.classifications?.[uniqueProductKey]?.classification as ValidationStatus;
+
+            // If not found, check other competences
+            if (!classification || classification === 'unvalidated') {
+                for (const otherCompetence in allPersistedClassifications) {
+                    if (otherCompetence !== competence) {
+                        const historicClassification = allPersistedClassifications[otherCompetence]?.cfopValidations?.classifications?.[uniqueProductKey]?.classification as ValidationStatus;
+                        if (historicClassification && historicClassification !== 'unvalidated') {
+                            classification = historicClassification;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            initialStatus[item['Chave de acesso'] + item.Item] = classification || 'unvalidated';
         });
 
         setValidationStatus(initialStatus);
@@ -120,10 +137,14 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
      const handleValidationChange = (itemsToUpdate: CfopValidationData[], newStatus: ValidationStatus) => {
         const newValidationStatus = { ...validationStatus };
-        
-        itemsToUpdate.forEach(item => {
-            const itemKey = item['Chave de acesso'] + item.Item;
-            newValidationStatus[itemKey] = newStatus;
+        const productKeysToUpdate = new Set(itemsToUpdate.map(getUniqueProductKey));
+
+        reconciledItems.forEach(item => {
+            const productKey = getUniqueProductKey(item);
+            if (productKeysToUpdate.has(productKey)) {
+                const itemKey = item['Chave de acesso'] + item.Item;
+                newValidationStatus[itemKey] = newStatus;
+            }
         });
 
         setValidationStatus(newValidationStatus);
