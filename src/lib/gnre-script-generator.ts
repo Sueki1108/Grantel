@@ -290,9 +290,6 @@ def run_automation_for_item(driver, item_data, vencimento, data_pagamento):
 
         print("9. Baixando PDF da Guia...")
         try:
-            WebDriverWait(driver, TIMEOUT).until(
-                EC.invisibility_of_element_located((By.ID, 'load-overlay'))
-            )
             botao_baixar = WebDriverWait(driver, TIMEOUT).until(
                 EC.element_to_be_clickable((By.ID, ID_BOTAO_BAIXAR))
             )
