@@ -25,32 +25,6 @@ import { CfopValidator, CfopValidationData } from "./cfop-validator";
 // ===============================================================
 // Tipos
 // ===============================================================
-const readFileAsJson = (file: File): Promise<any[]> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const data = event.target?.result;
-                if (!data) {
-                    throw new Error("Não foi possível ler o conteúdo do arquivo.");
-                }
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                if (!sheetName) {
-                    throw new Error("A planilha não contém nenhuma aba.");
-                }
-                const worksheet = workbook.Sheets[sheetName];
-                const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-                resolve(jsonData);
-            } catch (err: any) {
-                reject(err);
-            }
-        };
-        reader.onerror = (error) => reject(error);
-        reader.readAsArrayBuffer(file);
-    });
-};
-
 
 // ===============================================================
 // Constantes e Helpers
@@ -229,7 +203,6 @@ interface AdditionalAnalysesProps {
     onProcessedDataChange: (fn: (prevData: ProcessedData | null) => ProcessedData) => void;
     siengeFile: File | null;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
-    onSiengeDataProcessed: (data: any[] | null) => void;
     onClearSiengeFile: () => void;
     allXmlFiles: File[];
     spedFiles: File[];
@@ -246,7 +219,6 @@ export function AdditionalAnalyses({
     onProcessedDataChange,
     siengeFile, 
     onSiengeFileChange,
-    onSiengeDataProcessed,
     onClearSiengeFile,
     allXmlFiles,
     spedFiles,
@@ -262,22 +234,6 @@ export function AdditionalAnalyses({
     const [isExporting, setIsExporting] = useState(false);
     const [resaleAnalysis, setResaleAnalysis] = useState<{ noteKeys: Set<string>; xmls: File[] } | null>(null);
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
-
-    useEffect(() => {
-        if (!siengeFile || processedData.siengeSheetData) return;
-        
-        const process = async () => {
-            try {
-                const data = await readFileAsJson(siengeFile);
-                onSiengeDataProcessed(data);
-                toast({ title: 'Planilha Sienge Processada', description: 'As análises de conciliação e revenda foram atualizadas.' });
-            } catch (error: any) {
-                toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: error.message });
-                onSiengeDataProcessed(null);
-            }
-        };
-        process();
-    }, [siengeFile, processedData.siengeSheetData, onSiengeDataProcessed, toast]);
 
 
     const handleAnalyzeResale = () => {
@@ -463,7 +419,6 @@ export function AdditionalAnalyses({
                             onSiengeFileChange={onSiengeFileChange}
                             onClearSiengeFile={onClearSiengeFile}
                             processedData={processedData}
-                            onSiengeDataProcessed={onSiengeDataProcessed}
                             allPersistedClassifications={allPersistedClassifications}
                             onPersistAllClassifications={onPersistAllClassifications}
                             competence={competence}
@@ -556,7 +511,6 @@ interface ReconciliationAnalysisProps {
     siengeFile: File | null;
     processedData: ProcessedData | null;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
-    onSiengeDataProcessed: (data: any[] | null) => void;
     onClearSiengeFile: () => void;
     allPersistedClassifications: AllClassifications;
     onPersistAllClassifications: (allData: AllClassifications) => void;
@@ -564,7 +518,7 @@ interface ReconciliationAnalysisProps {
 }
 
 
-function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, onSiengeDataProcessed, processedData, allPersistedClassifications, onPersistAllClassifications, competence }: ReconciliationAnalysisProps) {
+function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, processedData, allPersistedClassifications, onPersistAllClassifications, competence }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState("reconciled");
     const [activeOtherTab, setActiveOtherTab] = useState<string>('');
@@ -892,5 +846,7 @@ function SiengeTaxCheck({ siengeFile, onSiengeFileChange, onClearSiengeFile, sie
         </Card>
     );
 }
+
+    
 
     

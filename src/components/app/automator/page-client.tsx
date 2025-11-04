@@ -1,8 +1,7 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -237,13 +236,44 @@ export function AutomatorClientPage() {
         }
     };
     
-    const handleSiengeFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0] || null;
-        // When a new file is selected, clear the old processed data
+    const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        setSiengeFile(file || null);
+
         if (file) {
-            setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
+            try {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = event.target?.result;
+                        if (!data) {
+                            throw new Error("Não foi possível ler o conteúdo do arquivo.");
+                        }
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const sheetName = workbook.SheetNames[0];
+                        if (!sheetName) {
+                            throw new Error("A planilha não contém nenhuma aba.");
+                        }
+                        const worksheet = workbook.Sheets[sheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+                        
+                        setProcessedData(prev => prev ? { ...prev, siengeSheetData: jsonData } : { sheets: {}, siengeSheetData: jsonData, spedInfo: null, keyCheckResults: null, competence: null });
+
+                        toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises avançadas.' });
+
+                    } catch (err: any) {
+                         toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
+                         setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
+                    }
+                };
+                reader.onerror = (error) => { throw error };
+                reader.readAsArrayBuffer(file);
+            } catch (error: any) {
+                 toast({ variant: 'destructive', title: 'Erro ao Ler Ficheiro Sienge', description: error.message });
+            }
+        } else {
+             setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
         }
-        setSiengeFile(file);
     };
 
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>, category: 'nfeEntrada' | 'cte' | 'nfeSaida' | 'nfse') => {
@@ -706,7 +736,7 @@ export function AutomatorClientPage() {
                              {activeMainTab === 'difal' && <DifalAnalysis /> }
                             
                             {activeMainTab === 'analyses' && (
-                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onSiengeDataProcessed={(data) => setProcessedData(prev => prev ? { ...prev, siengeSheetData: data } : null)} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
+                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
                             )}
                          
                              {activeMainTab === 'pending' && (
@@ -781,3 +811,4 @@ export function AutomatorClientPage() {
     );
 }
 
+    
