@@ -33,7 +33,7 @@ export const GNRE_DEFAULT_CONFIGS: GnreConfig = {
     "RAZAO_SOCIAL_ALVO": "GRANTEL ENGENHARIA LTDA",
     "ENDERECO_ALVO": "RUA PARANAGUA, 78",
     "CEP_ALVO": "83410390",
-    "MUNICIPIO_ALVO_EMITENTE": "05805", // Código para Colombo - PR
+    "MUNICIPIO_ALVO_EMITENTE": "4105805", // Código para Colombo - PR
     "TELEFONE_ALVO": "4133386454",
     "RECEITA_ALVO": "100102",
     "CNPJ_DESTINATARIO": "81732042000119",
@@ -55,7 +55,7 @@ export function generateGnreScript(
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.common.exceptions import WebDriverException, NoSuchElementException
+from selenium.common.exceptions import WebDriverException, NoSuchElementException, TimeoutException
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -136,7 +136,7 @@ ID_BOTAO_VALIDAR = "validar"
 ID_BOTAO_BAIXAR = "baixar"
 ID_BOTAO_NOVA_GUIA = "novaGuia"
 
-TIMEOUT = 15 # Tempo máximo de espera
+TIMEOUT = 20 # Tempo máximo de espera aumentado
 
 def run_automation_for_item(driver, item_data, vencimento, data_pagamento):
     # Executa a automação de uma GNRE, usando dados da nota fiscal.
@@ -151,7 +151,8 @@ def run_automation_for_item(driver, item_data, vencimento, data_pagamento):
 
     try:
         driver.get(URL_SITE)
-        time.sleep(3) 
+        WebDriverWait(driver, TIMEOUT).until(EC.presence_of_element_located((By.ID, ID_DROPDOWN_UF)))
+        time.sleep(1) # Pausa extra para garantir que a página está totalmente interativa
 
         print(f"1. Selecionando UF Favorecida: {UF_ALVO}...")
         dropdown_element = driver.find_element(By.ID, ID_DROPDOWN_UF)
@@ -190,26 +191,31 @@ def run_automation_for_item(driver, item_data, vencimento, data_pagamento):
         campo_razao_social_element.send_keys(Keys.TAB)
 
         driver.find_element(By.ID, ID_CAMPO_ENDERECO).send_keys(ENDERECO_ALVO)
-        campo_telefone_element = driver.find_element(By.ID, ID_CAMPO_TELEFONE)
-        driver.execute_script(f"arguments[0].value = '{TELEFONE_ALVO}';", campo_telefone_element)
-        campo_telefone_element.send_keys(Keys.TAB)
+        
+        # Inserção do CEP via JS para evitar máscara automática
+        campo_cep_element = driver.find_element(By.ID, ID_CAMPO_CEP)
+        driver.execute_script(f"arguments[0].value = '{CEP_ALVO}';", campo_cep_element)
+        # Dispara o evento 'change' para que o site processe a mudança e carregue os municípios
+        driver.execute_script("arguments[0].dispatchEvent(new Event('change', {'bubbles': true}));", campo_cep_element)
+        time.sleep(1) # Pausa para o JavaScript da página reagir
 
         WebDriverWait(driver, TIMEOUT).until(
             EC.visibility_of_element_located((By.ID, ID_DROPDOWN_UF_EMITENTE))
         )
         select_uf_emitente = Select(driver.find_element(By.ID, ID_DROPDOWN_UF_EMITENTE))
         select_uf_emitente.select_by_value(UF_ALVO_EMITENTE)
-        
-        campo_cep_element = driver.find_element(By.ID, ID_CAMPO_CEP)
-        campo_cep_element.send_keys(CEP_ALVO)
-        campo_cep_element.send_keys(Keys.TAB)
-        time.sleep(1) # Pausa para o JavaScript da página reagir
+        time.sleep(1) # Pausa crucial após selecionar a UF para carregar os municípios
 
+        # Espera explícita para que a opção do município esteja presente no DOM
         WebDriverWait(driver, TIMEOUT).until(
             EC.presence_of_element_located((By.XPATH, f"//select[@id='{ID_DROPDOWN_MUNICIPIO_EMITENTE}']/option[@value='{MUNICIPIO_ALVO_EMITENTE}']"))
         )
         select_municipio_emitente = Select(driver.find_element(By.ID, ID_DROPDOWN_MUNICIPIO_EMITENTE))
         select_municipio_emitente.select_by_value(MUNICIPIO_ALVO_EMITENTE)
+
+        campo_telefone_element = driver.find_element(By.ID, ID_CAMPO_TELEFONE)
+        driver.execute_script(f"arguments[0].value = '{TELEFONE_ALVO}';", campo_telefone_element)
+        campo_telefone_element.send_keys(Keys.TAB)
 
         print("4. Preenchendo Receita, Vencimento e Valor Principal...")
 
@@ -284,6 +290,9 @@ def run_automation_for_item(driver, item_data, vencimento, data_pagamento):
 
         print("9. Baixando PDF da Guia...")
         try:
+            WebDriverWait(driver, TIMEOUT).until(
+                EC.invisibility_of_element_located((By.ID, 'load-overlay'))
+            )
             botao_baixar = WebDriverWait(driver, TIMEOUT).until(
                 EC.element_to_be_clickable((By.ID, ID_BOTAO_BAIXAR))
             )
@@ -291,13 +300,17 @@ def run_automation_for_item(driver, item_data, vencimento, data_pagamento):
             print(f"\\nSUCESSO! Guia para a chave {CHAVE_ACESSO_ALVO} baixada. Aguardando 4 segundos...")
             time.sleep(4)
 
+        except TimeoutException:
+            print("AVISO: Timeout ao esperar o botão de baixar. A guia pode ter sido gerada mas o botão não ficou clicável.")
+            return False
         except Exception as e:
             print(f"AVISO: Não foi possível clicar no botão 'Baixar PDF'. Verifique o download manual.")
+            return False
 
         return True 
 
-    except NoSuchElementException:
-        print(f"FALHA CRÍTICA: Não foi possível encontrar um elemento na página. Automação encerrada para a nota {CHAVE_ACESSO_ALVO}.")
+    except NoSuchElementException as e:
+        print(f"FALHA CRÍTICA: Não foi possível encontrar um elemento na página. Automação encerrada para a nota {CHAVE_ACESSO_ALVO}. Detalhe: {e.msg}")
         return False
     except Exception as e:
         print(f"OCORREU UM ERRO INESPERADO para a nota {CHAVE_ACESSO_ALVO}: {e}")
@@ -334,7 +347,6 @@ def main_loop():
         
         service = ChromeService(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
-        driver.implicitly_wait(TIMEOUT)
         
         print(f"Navegador iniciado com sucesso! Downloads serão salvos em: {download_dir if download_dir else 'diretório padrão'}")
 
@@ -377,8 +389,7 @@ def main_loop():
 
 if __name__ == '__main__':
     main_loop()
-
 `;
 
-    return `${seleniumImports}${gnreListContent}${configVars}${automationFunction}`;
+    return `${seleniumImports}\n${gnreListContent}\n${configVars}\n${automationFunction}`;
 }
