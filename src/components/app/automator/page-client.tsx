@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -31,6 +31,8 @@ import { ImobilizadoAnalysis, type AllClassifications } from "@/components/app/i
 import { HistoryAnalysis, type SessionData } from "@/components/app/history-analysis";
 import { DifalAnalysis } from "@/components/app/difal-analysis";
 import { PendingIssuesReport } from "@/components/app/pending-issues-report";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -76,11 +78,17 @@ export function AutomatorClientPage() {
     const [isPreProcessing, setIsPreProcessing] = useState(false);
     
     const [activeMainTab, setActiveMainTab] = useState("history");
+    const [isWideMode, setIsWideMode] = useState(false);
+
 
     // =================================================================
-    // PERSISTENCE (localStorage)
+    // UI SETTINGS & PERSISTENCE
     // =================================================================
     useEffect(() => {
+        // Load UI settings from localStorage on initial load
+        const wideMode = localStorage.getItem('ui-widemode') === 'true';
+        setIsWideMode(wideMode);
+        
         // Load imobilizado classifications from localStorage
         try {
             const savedImobilizado = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
@@ -89,6 +97,15 @@ export function AutomatorClientPage() {
             console.error("Failed to load imobilizado classifications from localStorage", e);
         }
     }, []);
+
+    const handleWideModeChange = (checked: boolean) => {
+        setIsWideMode(checked);
+        localStorage.setItem('ui-widemode', String(checked));
+        toast({
+            title: "Configurações salvas",
+            description: `O modo amplo foi ${checked ? 'ativado' : 'desativado'}.`,
+        });
+    };
 
     const handlePersistImobilizado = (allDataToSave: AllClassifications) => {
         setImobilizadoClassifications(allDataToSave);
@@ -246,19 +263,24 @@ export function AutomatorClientPage() {
                 reader.onload = (event) => {
                     try {
                         const data = event.target?.result;
-                        if (!data) {
-                            throw new Error("Não foi possível ler o conteúdo do arquivo.");
-                        }
+                        if (!data) throw new Error("Não foi possível ler o conteúdo do ficheiro.");
+
                         const workbook = XLSX.read(data, { type: 'array' });
                         const sheetName = workbook.SheetNames[0];
-                        if (!sheetName) {
-                            throw new Error("A planilha não contém nenhuma aba.");
-                        }
+                        if (!sheetName) throw new Error("A planilha não contém nenhuma aba.");
+                        
                         const worksheet = workbook.Sheets[sheetName];
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
                         
-                        setProcessedData(prev => prev ? { ...prev, siengeSheetData: jsonData } : { sheets: {}, siengeSheetData: jsonData, spedInfo: null, keyCheckResults: null, competence: null });
-
+                        setProcessedData(prev => ({
+                            sheets: {}, 
+                            spedInfo: null, 
+                            keyCheckResults: null, 
+                            competence: null,
+                            ...prev, // Mantém dados existentes (chaves, sped, etc.)
+                            siengeSheetData: jsonData
+                        } as ProcessedData));
+                        
                         toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises avançadas.' });
 
                     } catch (err: any) {
@@ -631,13 +653,17 @@ export function AutomatorClientPage() {
                         </div>
                      </div>
                      <div className="flex items-center gap-2">
+                         <div className="flex items-center space-x-2">
+                            <Switch id="wide-mode-switch" checked={isWideMode} onCheckedChange={handleWideModeChange} />
+                            <Label htmlFor="wide-mode-switch">Modo Amplo</Label>
+                        </div>
                         <ThemeToggle />
                      </div>
                 </div>
             </header>
 
             <main className="container mx-auto p-4 md:p-8">
-                <div className={cn("mx-auto space-y-8 max-w-screen-2xl")}>
+                <div className={cn("mx-auto space-y-8", isWideMode ? "max-w-full" : "max-w-screen-2xl")}>
                     <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
                         <TabsList className="h-auto flex-wrap justify-start">
                              <TabsTrigger value="history" className="flex items-center gap-2">
@@ -722,7 +748,7 @@ export function AutomatorClientPage() {
                             )}
 
                              {activeMainTab === 'saidas-nfe' && (
-                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} initialStatus={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
+                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
                             )}
                             
                             {activeMainTab === 'nfse' && (
