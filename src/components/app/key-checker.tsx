@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -481,9 +482,9 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 key = parts[9];
                 docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12], vlDesc: parts[14] };
             // CT-e (D100)
-            } else if (reg === 'D100' && parts.length > 11 && parts[10]?.length === 44) {
+            } else if (reg === 'D100' && parts.length > 17 && parts[10]?.length === 44) {
                 key = parts[10];
-                 docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[17] };
+                 docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
             }
 
             if (key && docData) {
