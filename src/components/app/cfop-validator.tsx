@@ -69,11 +69,11 @@ const getFullCfopDescription = (cfopCode: string | number): string => {
     return cfopDescriptions[code as keyof typeof cfopDescriptions] || "Descrição não encontrada";
 };
 
-// Universal key based on the nature of the operation (last 3 digits of CFOP)
+// Universal key based on the nature of the operation (full description of CFOP)
 const getUniversalProductKey = (item: CfopValidationData): string => {
     const siengeCfop = item['Sienge_CFOP'] || '';
 
-    // EXCEPTION: Handle specific CFOPs like '1653' and '2653' individually based on their full description
+    // EXCEPTION: Handle specific CFOPs like '1653' and '2653' individually.
     const fullDescription = getFullCfopDescription(siengeCfop).toLowerCase();
 
     return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${fullDescription}`;
@@ -375,6 +375,15 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
     }, [activeTabGroup, allGroupedItems, validationStatus, activeFilter, perTabCfopFilters]);
     
+    const itemsInActiveTabBeforeXmlFilter = useMemo(() => {
+        if (!activeTabGroup || !allGroupedItems[activeTabGroup]) {
+            return [];
+        }
+        return allGroupedItems[activeTabGroup].items.filter(item => {
+            return activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
+        });
+    }, [activeTabGroup, allGroupedItems, validationStatus, activeFilter]);
+    
     
     useEffect(() => {
         if (visibleGroupTitles.length > 0 && !visibleGroupTitles.includes(activeTabGroup)) {
@@ -414,11 +423,15 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     
     const openCfopFilterModal = (siengeCfopGroup: string) => {
         if (!allGroupedItems[siengeCfopGroup]) return;
-        const allXmlCfopsForGroup = allGroupedItems[siengeCfopGroup].xmlCfops;
-        const currentFiltersForGroup = perTabCfopFilters[siengeCfopGroup] || allXmlCfopsForGroup;
+
+        const currentVisibleItems = itemsInActiveTabBeforeXmlFilter.filter(item => item.Sienge_CFOP === siengeCfopGroup);
+        const allXmlCfopsForVisibleItems = new Set(currentVisibleItems.map(item => item.CFOP));
+        const currentFiltersForGroup = perTabCfopFilters[siengeCfopGroup] || allGroupedItems[siengeCfopGroup].xmlCfops;
+
+        const intersectionOfFilters = new Set([...allXmlCfopsForVisibleItems].filter(x => currentFiltersForGroup.has(x)));
         
         setCurrentEditingCfopGroup(siengeCfopGroup);
-        setTempIncludedXmlCfops(currentFiltersForGroup);
+        setTempIncludedXmlCfops(intersectionOfFilters);
         setIsCfopModalOpen(true);
     };
 
@@ -474,11 +487,14 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
              <div className="flex-grow overflow-y-auto">
                 <Tabs value={activeTabGroup} onValueChange={setActiveTabGroup} className="w-full">
                     <TabsList className="h-auto flex-wrap justify-start">
-                         {visibleGroupTitles.map(title => (
-                            <TabsTrigger key={title} value={title}>
-                                {title} ({allGroupedItems[title].items.filter(item => (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter).length})
-                            </TabsTrigger>
-                        ))}
+                         {visibleGroupTitles.map(title => {
+                            const count = (allGroupedItems[title].items || []).filter(item => (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter).length;
+                            return (
+                                <TabsTrigger key={title} value={title}>
+                                    {title} ({count})
+                                </TabsTrigger>
+                            )
+                        })}
                     </TabsList>
 
                     {visibleGroupTitles.length > 0 ? (
@@ -540,25 +556,29 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                             </DialogDescription>
                         </DialogHeader>
                         <ScrollArea className="h-96 w-full rounded-md border p-4">
-                            {allGroupedItems[currentEditingCfopGroup] && allGroupedItems[currentEditingCfopGroup].xmlCfops.size > 0 ? (
-                                Array.from(allGroupedItems[currentEditingCfopGroup].xmlCfops).sort().map(cfop => (
-                                    <div key={cfop} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
-                                        <div className='flex items-center space-x-2'>
-                                            <Checkbox
-                                                id={`cfop-filter-${cfop}`}
-                                                checked={tempIncludedXmlCfops.has(cfop)}
-                                                onCheckedChange={(checked) => handleCfopFilterToggle(cfop, !!checked)}
-                                            />
-                                            <Label htmlFor={`cfop-filter-${cfop}`} className="flex flex-col">
-                                                <Badge variant="secondary">{cfop}</Badge>
-                                                <span className="ml-2 text-xs text-muted-foreground">{cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}</span>
-                                            </Label>
+                            {(() => {
+                                const visibleItems = itemsInActiveTabBeforeXmlFilter.filter(item => item.Sienge_CFOP === currentEditingCfopGroup);
+                                const cfopsForModal = new Set(visibleItems.map(item => item.CFOP));
+
+                                if (cfopsForModal.size > 0) {
+                                    return Array.from(cfopsForModal).sort().map(cfop => (
+                                        <div key={cfop} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                            <div className='flex items-center space-x-2'>
+                                                <Checkbox
+                                                    id={`cfop-filter-${cfop}`}
+                                                    checked={tempIncludedXmlCfops.has(cfop)}
+                                                    onCheckedChange={(checked) => handleCfopFilterToggle(cfop, !!checked)}
+                                                />
+                                                <Label htmlFor={`cfop-filter-${cfop}`} className="flex flex-col">
+                                                    <Badge variant="secondary">{cfop}</Badge>
+                                                    <span className="ml-2 text-xs text-muted-foreground">{cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}</span>
+                                                </Label>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-muted-foreground text-center">Nenhum CFOP do XML encontrado para os itens visíveis.</p>
-                            )}
+                                    ))
+                                }
+                                return <p className="text-muted-foreground text-center">Nenhum CFOP do XML encontrado para os itens visíveis.</p>;
+                            })()}
                         </ScrollArea>
                         <DialogFooter>
                             <Button variant="outline" onClick={() => setIsCfopModalOpen(false)}>Cancelar</Button>
