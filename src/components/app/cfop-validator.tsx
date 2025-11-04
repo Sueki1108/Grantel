@@ -326,37 +326,47 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const tableRef = React.useRef<ReactTable<CfopValidationData> | null>(null);
 
     const fullColumns = useMemo(() => [ ...columns, statusColumn, actionColumn], [columns, statusColumn, actionColumn]);
+    
+    // This memo calculates which tabs should be visible based on the activeFilter (e.g., 'unvalidated').
+    // It ignores the per-tab CFOP filter to decide tab visibility.
+    const visibleGroupTitles = useMemo(() => {
+        return Object.keys(allGroupedItems).filter(siengeCfop => {
+            if (activeFilter === 'all') return true; // Show all groups if filter is 'all'
+            
+            // Check if any item in this group matches the active status filter
+            return allGroupedItems[siengeCfop].items.some(item => 
+                (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter
+            );
+        }).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    }, [allGroupedItems, validationStatus, activeFilter]);
 
-    // Apply both status and per-tab CFOP filters
-    const filteredAndGroupedItems = useMemo(() => {
-        const filteredGroups: GroupedItems = {};
 
-        for (const siengeCfop in allGroupedItems) {
-            const groupData = allGroupedItems[siengeCfop];
-            const includedXmlCfopsForTab = perTabCfopFilters[siengeCfop] || groupData.xmlCfops;
-
-            const filteredItems = groupData.items.filter(item => {
-                const statusOk = activeFilter === 'all' || (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter;
-                const cfopOk = includedXmlCfopsForTab.has(item.CFOP);
-                return statusOk && cfopOk;
-            });
-
-            if (filteredItems.length > 0) {
-                filteredGroups[siengeCfop] = { ...groupData, items: filteredItems };
-            }
+    // This memo prepares the data for the currently visible tab.
+    // It filters the items based on BOTH the activeFilter and the perTabCfopFilters.
+    const itemsForActiveTab = useMemo(() => {
+        if (!activeTabGroup || !allGroupedItems[activeTabGroup]) {
+            return [];
         }
-        return filteredGroups;
-    }, [allGroupedItems, validationStatus, activeFilter, perTabCfopFilters]);
 
-    const sortedGroupTitles = useMemo(() => Object.keys(filteredAndGroupedItems).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)), [filteredAndGroupedItems]);
+        const groupData = allGroupedItems[activeTabGroup];
+        const includedXmlCfopsForTab = perTabCfopFilters[activeTabGroup] || groupData.xmlCfops;
 
+        return groupData.items.filter(item => {
+            const statusOk = activeFilter === 'all' || (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter;
+            const cfopOk = includedXmlCfopsForTab.has(item.CFOP);
+            return statusOk && cfopOk;
+        });
+
+    }, [activeTabGroup, allGroupedItems, validationStatus, activeFilter, perTabCfopFilters]);
+    
+    
     useEffect(() => {
-        if (sortedGroupTitles.length > 0 && !sortedGroupTitles.includes(activeTabGroup)) {
-            setActiveTabGroup(sortedGroupTitles[0]);
-        } else if (sortedGroupTitles.length === 0) {
+        if (visibleGroupTitles.length > 0 && !visibleGroupTitles.includes(activeTabGroup)) {
+            setActiveTabGroup(visibleGroupTitles[0]);
+        } else if (visibleGroupTitles.length === 0) {
             setActiveTabGroup('');
         }
-    }, [sortedGroupTitles, activeTabGroup]);
+    }, [visibleGroupTitles, activeTabGroup]);
 
     const numSelected = Object.keys(rowSelection).length;
     
@@ -425,40 +435,44 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
              <div className="flex-grow overflow-y-auto">
                 <Tabs value={activeTabGroup} onValueChange={setActiveTabGroup} className="w-full">
                     <TabsList className="h-auto flex-wrap justify-start">
-                         {sortedGroupTitles.map(title => (
+                         {visibleGroupTitles.map(title => (
                             <TabsTrigger key={title} value={title}>
-                                {title} ({filteredAndGroupedItems[title].items.length})
+                                {title} ({allGroupedItems[title].items.filter(item => activeFilter === 'all' || (validationStatus[item['Chave de acesso'] + item.Item] || 'unvalidated') === activeFilter).length})
                             </TabsTrigger>
                         ))}
                     </TabsList>
 
-                    {sortedGroupTitles.map(title => {
-                         const description = cfopDescriptions[parseInt(title, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-                        return (
-                            <TabsContent key={title} value={title} className='mt-4'>
-                                 <div className='mb-4 p-3 border rounded-md bg-muted/50 flex justify-between items-center'>
-                                    <h3 className="text-lg font-semibold">CFOP (Sienge) {title}: <span className="font-normal">{description}</span></h3>
-                                     <Button variant="outline" onClick={() => openCfopFilterModal(title)} size="icon" title="Filtrar por CFOP do XML nesta aba"><Settings className="h-4 w-4" /></Button>
-                                </div>
-                                <DataTable
-                                    columns={fullColumns}
-                                    data={filteredAndGroupedItems[title].items}
-                                    rowSelection={rowSelection}
-                                    setRowSelection={setRowSelection}
-                                    tableRef={tableRef}
-                                />
-                            </TabsContent>
-                        )
-                    })}
+                    {visibleGroupTitles.length > 0 ? (
+                         <TabsContent key={activeTabGroup} value={activeTabGroup} className='mt-4'>
+                             {(() => {
+                                 const title = activeTabGroup;
+                                 if (!title) return null;
+                                 const description = cfopDescriptions[parseInt(title, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+                                return (
+                                    <>
+                                         <div className='mb-4 p-3 border rounded-md bg-muted/50 flex justify-between items-center'>
+                                            <h3 className="text-lg font-semibold">CFOP (Sienge) {title}: <span className="font-normal">{description}</span></h3>
+                                             <Button variant="outline" onClick={() => openCfopFilterModal(title)} size="icon" title="Filtrar por CFOP do XML nesta aba"><Settings className="h-4 w-4" /></Button>
+                                        </div>
+                                        <DataTable
+                                            columns={fullColumns}
+                                            data={itemsForActiveTab}
+                                            rowSelection={rowSelection}
+                                            setRowSelection={setRowSelection}
+                                            tableRef={tableRef}
+                                        />
+                                    </>
+                                )
+                            })()}
+                        </TabsContent>
+                    ) : (
+                         <div className="text-center p-8 text-muted-foreground">
+                            <FileWarning className="mx-auto h-12 w-12 mb-4" />
+                            <h3 className="text-xl font-semibold">Nenhum item encontrado</h3>
+                            <p>Não há itens com o status "{activeFilter}" selecionado.</p>
+                         </div>
+                    )}
                 </Tabs>
-                
-                {sortedGroupTitles.length === 0 && (
-                     <div className="text-center p-8 text-muted-foreground">
-                        <FileWarning className="mx-auto h-12 w-12 mb-4" />
-                        <h3 className="text-xl font-semibold">Nenhum item encontrado</h3>
-                        <p>Não há itens com a combinação de status e filtros de CFOP selecionada.</p>
-                     </div>
-                )}
             </div>
 
             {numSelected > 0 && (
@@ -517,5 +531,3 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         </div>
     );
 }
-
-    
