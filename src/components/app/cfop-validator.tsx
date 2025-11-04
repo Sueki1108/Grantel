@@ -69,20 +69,18 @@ const getFullCfopDescription = (cfopCode: string | number): string => {
     return cfopDescriptions[code as keyof typeof cfopDescriptions] || "Descrição não encontrada";
 };
 
+// Universal key based on the nature of the operation (last 3 digits of CFOP)
 const getUniversalProductKey = (item: CfopValidationData): string => {
     const siengeCfop = item['Sienge_CFOP'] || '';
-    const cfopDescription = getFullCfopDescription(siengeCfop).toLowerCase();
 
-    // EXCEPTION: Handle specific CFOPs like '1653' and '2653' individually
-    if (siengeCfop.endsWith('653')) {
-        return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${siengeCfop}`;
-    }
+    // EXCEPTION: Handle specific CFOPs like '1653' and '2653' individually based on their full description
+    const fullDescription = getFullCfopDescription(siengeCfop).toLowerCase();
 
-    return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${cfopDescription}`;
+    return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${fullDescription}`;
 };
 
 const getItemLineKey = (item: CfopValidationData): string => {
-    // Chave única para a linha da tabela
+    // Unique key for the table row
     return item['Chave de acesso'] + item.Item;
 };
 
@@ -329,9 +327,11 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     }), [validationStatus]);
     
     const allGroupedItems = useMemo((): GroupedItems => {
+        if (!reconciledItems) return {};
         const groups: GroupedItems = {};
         reconciledItems.forEach(item => {
             const siengeCfop = item.Sienge_CFOP;
+            if (!siengeCfop) return;
             if (!groups[siengeCfop]) {
                 groups[siengeCfop] = { items: [], xmlCfops: new Set() };
             }
@@ -384,6 +384,19 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         }
     }, [visibleGroupTitles, activeTabGroup]);
 
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                if (Object.keys(rowSelection).length > 0) {
+                    setRowSelection({});
+                }
+            }
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [rowSelection]);
+
+
     const numSelected = Object.keys(rowSelection).length;
     
     const handleClearFilters = () => {
@@ -398,25 +411,14 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         if (checked) newSet.add(cfop); else newSet.delete(cfop);
         setTempIncludedXmlCfops(newSet);
     };
-
-    const xmlCfopsForCurrentModal = useMemo(() => {
-        if (!currentEditingCfopGroup) return new Set<string>();
-        const currentItemsInTab = allGroupedItems[currentEditingCfopGroup]?.items.filter(item => {
-             return activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
-        }) || [];
-        return new Set(currentItemsInTab.map(i => i.CFOP).filter(Boolean));
-    }, [currentEditingCfopGroup, allGroupedItems, activeFilter, validationStatus]);
-
+    
     const openCfopFilterModal = (siengeCfopGroup: string) => {
-        const currentlyVisibleItemsInTab = itemsForActiveTab;
-        const availableXmlCfops = new Set(currentlyVisibleItemsInTab.map(i => i.CFOP).filter(Boolean));
-
-        const currentFiltersForGroup = perTabCfopFilters[siengeCfopGroup] || allGroupedItems[siengeCfopGroup].xmlCfops;
-
-        const relevantFilters = new Set([...currentFiltersForGroup].filter(cfop => availableXmlCfops.has(cfop)));
-
+        if (!allGroupedItems[siengeCfopGroup]) return;
+        const allXmlCfopsForGroup = allGroupedItems[siengeCfopGroup].xmlCfops;
+        const currentFiltersForGroup = perTabCfopFilters[siengeCfopGroup] || allXmlCfopsForGroup;
+        
         setCurrentEditingCfopGroup(siengeCfopGroup);
-        setTempIncludedXmlCfops(relevantFilters);
+        setTempIncludedXmlCfops(currentFiltersForGroup);
         setIsCfopModalOpen(true);
     };
 
@@ -435,6 +437,16 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         setIsCfopModalOpen(false);
         toast({ title: 'Filtro de CFOP guardado!' });
     };
+
+    if (!reconciledItems || reconciledItems.length === 0) {
+        return (
+             <div className="text-center p-8 text-muted-foreground">
+                <FileWarning className="mx-auto h-12 w-12 mb-4" />
+                <h3 className="text-xl font-semibold">Nenhum item conciliado</h3>
+                <p>Execute a validação e carregue a planilha do Sienge para iniciar a conciliação e validação de CFOPs.</p>
+             </div>
+        );
+    }
 
     return (
         <div className="space-y-4 h-full flex flex-col relative">
@@ -528,8 +540,8 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                             </DialogDescription>
                         </DialogHeader>
                         <ScrollArea className="h-96 w-full rounded-md border p-4">
-                            {xmlCfopsForCurrentModal.size > 0 ? (
-                                Array.from(xmlCfopsForCurrentModal).sort().map(cfop => (
+                            {allGroupedItems[currentEditingCfopGroup] && allGroupedItems[currentEditingCfopGroup].xmlCfops.size > 0 ? (
+                                Array.from(allGroupedItems[currentEditingCfopGroup].xmlCfops).sort().map(cfop => (
                                     <div key={cfop} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
                                         <div className='flex items-center space-x-2'>
                                             <Checkbox
