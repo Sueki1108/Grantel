@@ -72,7 +72,7 @@ const getFullCfopDescription = (cfopCode: string | number): string => {
 const getUniversalProductKey = (item: CfopValidationData): string => {
     const siengeCfop = item['Sienge_CFOP'] || '';
     const cfopDescription = getFullCfopDescription(siengeCfop).toLowerCase();
-    
+
     // EXCEPTION: Handle specific CFOPs like '1653' and '2653' individually
     if (siengeCfop.endsWith('653')) {
         return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${siengeCfop}`;
@@ -177,7 +177,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             if (newStatus && newStatus !== 'unvalidated') {
                 updatedPersistedData[competence].cfopValidations.classifications[universalProductKey] = { classification: newStatus };
             } else if (newStatus === 'unvalidated') {
-                // Remove from current competence if it exists
                 if (updatedPersistedData[competence].cfopValidations.classifications[universalProductKey]) {
                     delete updatedPersistedData[competence].cfopValidations.classifications[universalProductKey];
                 }
@@ -400,18 +399,24 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         setTempIncludedXmlCfops(newSet);
     };
 
-    const openCfopFilterModal = (siengeCfopGroup: string) => {
-        // Get CFOPs ONLY from items currently visible in the table for this status filter
-        const currentItemsInTab = allGroupedItems[siengeCfopGroup]?.items.filter(item => {
+    const xmlCfopsForCurrentModal = useMemo(() => {
+        if (!currentEditingCfopGroup) return new Set<string>();
+        const currentItemsInTab = allGroupedItems[currentEditingCfopGroup]?.items.filter(item => {
              return activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
         }) || [];
-        
-        const allXmlCfopsForGroup = new Set(currentItemsInTab.map(i => i.CFOP).filter(Boolean));
-        const currentFilters = perTabCfopFilters[siengeCfopGroup] || allXmlCfopsForGroup;
-        
+        return new Set(currentItemsInTab.map(i => i.CFOP).filter(Boolean));
+    }, [currentEditingCfopGroup, allGroupedItems, activeFilter, validationStatus]);
+
+    const openCfopFilterModal = (siengeCfopGroup: string) => {
+        const currentlyVisibleItemsInTab = itemsForActiveTab;
+        const availableXmlCfops = new Set(currentlyVisibleItemsInTab.map(i => i.CFOP).filter(Boolean));
+
+        const currentFiltersForGroup = perTabCfopFilters[siengeCfopGroup] || allGroupedItems[siengeCfopGroup].xmlCfops;
+
+        const relevantFilters = new Set([...currentFiltersForGroup].filter(cfop => availableXmlCfops.has(cfop)));
+
         setCurrentEditingCfopGroup(siengeCfopGroup);
-        // Intersect the current filters with the available ones to avoid showing stale filters
-        setTempIncludedXmlCfops(new Set([...currentFilters].filter(cfop => allXmlCfopsForGroup.has(cfop))));
+        setTempIncludedXmlCfops(relevantFilters);
         setIsCfopModalOpen(true);
     };
 
@@ -430,14 +435,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         setIsCfopModalOpen(false);
         toast({ title: 'Filtro de CFOP guardado!' });
     };
-    
-    const xmlCfopsForCurrentModal = useMemo(() => {
-        if (!currentEditingCfopGroup) return new Set<string>();
-        const currentItemsInTab = allGroupedItems[currentEditingCfopGroup]?.items.filter(item => {
-             return activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
-        }) || [];
-        return new Set(currentItemsInTab.map(i => i.CFOP).filter(Boolean));
-    }, [currentEditingCfopGroup, allGroupedItems, activeFilter, validationStatus]);
 
     return (
         <div className="space-y-4 h-full flex flex-col relative">
@@ -561,4 +558,3 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         </div>
     );
 }
-
