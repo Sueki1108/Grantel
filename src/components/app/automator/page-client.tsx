@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -158,7 +158,7 @@ export function AutomatorClientPage() {
             link.href = jsonString;
 
             const year = currentCompetence.substring(0,4);
-            const month = currentCompetence.substring(0,7);
+            const month = currentCompetence.substring(5,7);
             
             link.download = `Grantel - Backup Fiscal - ${month}.${year}.json`;
 
@@ -290,7 +290,11 @@ export function AutomatorClientPage() {
     
                     } catch (err: any) {
                          toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
-                         setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
+                         setProcessedData(prev => {
+                            if (!prev) return null;
+                            const { siengeSheetData, ...rest } = prev;
+                            return rest as ProcessedData;
+                         });
                     }
                 };
                 reader.onerror = (error) => { throw error };
@@ -299,7 +303,11 @@ export function AutomatorClientPage() {
                  toast({ variant: 'destructive', title: 'Erro ao Ler Ficheiro Sienge', description: error.message });
             }
         } else {
-             setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
+             setProcessedData(prev => {
+                if (!prev) return null;
+                const { siengeSheetData, ...rest } = prev;
+                return rest as ProcessedData;
+             });
         }
     };
 
@@ -616,10 +624,8 @@ export function AutomatorClientPage() {
 
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => {
         setProcessedData(prevData => {
-            if (!prevData) {
-                return { sheets: {}, siengeSheetData: null, spedInfo: spedInfo || null, keyCheckResults: keyCheckResults || null, spedCorrections: spedCorrections ? [spedCorrections] : null, competence: null, resaleAnalysis: null };
-            }
-            return { ...prevData, spedInfo: spedInfo, keyCheckResults: keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : prevData.spedCorrections };
+            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null };
+            return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections };
         });
     }, []);
     
@@ -753,7 +759,7 @@ export function AutomatorClientPage() {
                             )}
 
                              {activeMainTab === 'saidas-nfe' && (
-                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
+                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} initialStatus={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
                             )}
                             
                             {activeMainTab === 'nfse' && (
@@ -841,5 +847,3 @@ export function AutomatorClientPage() {
         </div>
     );
 }
-
-    

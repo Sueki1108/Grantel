@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -351,13 +350,11 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const visibleGroupTitles = useMemo(() => {
         return Object.keys(allGroupedItems).filter(siengeCfop => {
             if (activeFilter === 'all') return true; 
-            
             return allGroupedItems[siengeCfop].items.some(item => 
                 (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter
             );
         }).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
     }, [allGroupedItems, validationStatus, activeFilter]);
-
 
     const itemsForActiveTab = useMemo(() => {
         if (!activeTabGroup || !allGroupedItems[activeTabGroup]) {
@@ -374,16 +371,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         });
 
     }, [activeTabGroup, allGroupedItems, validationStatus, activeFilter, perTabCfopFilters]);
-    
-    const itemsInActiveTabBeforeXmlFilter = useMemo(() => {
-        if (!activeTabGroup || !allGroupedItems[activeTabGroup]) {
-            return [];
-        }
-        return allGroupedItems[activeTabGroup].items.filter(item => {
-            return activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
-        });
-    }, [activeTabGroup, allGroupedItems, validationStatus, activeFilter]);
-    
     
     useEffect(() => {
         if (visibleGroupTitles.length > 0 && !visibleGroupTitles.includes(activeTabGroup)) {
@@ -424,14 +411,13 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const openCfopFilterModal = (siengeCfopGroup: string) => {
         if (!allGroupedItems[siengeCfopGroup]) return;
 
-        const currentVisibleItems = itemsInActiveTabBeforeXmlFilter.filter(item => item.Sienge_CFOP === siengeCfopGroup);
-        const allXmlCfopsForVisibleItems = new Set(currentVisibleItems.map(item => item.CFOP));
-        const currentFiltersForGroup = perTabCfopFilters[siengeCfopGroup] || allGroupedItems[siengeCfopGroup].xmlCfops;
-
-        const intersectionOfFilters = new Set([...allXmlCfopsForVisibleItems].filter(x => currentFiltersForGroup.has(x)));
+        const allItemsInGroup = allGroupedItems[siengeCfopGroup].items;
+        const allXmlCfopsForGroup = new Set(allItemsInGroup.map(item => item.CFOP));
         
+        const currentFiltersForGroup = perTabCfopFilters[siengeCfopGroup] || allXmlCfopsForGroup;
+
         setCurrentEditingCfopGroup(siengeCfopGroup);
-        setTempIncludedXmlCfops(intersectionOfFilters);
+        setTempIncludedXmlCfops(new Set(currentFiltersForGroup));
         setIsCfopModalOpen(true);
     };
 
@@ -488,12 +474,19 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                 <Tabs value={activeTabGroup} onValueChange={setActiveTabGroup} className="w-full">
                     <TabsList className="h-auto flex-wrap justify-start">
                          {visibleGroupTitles.map(title => {
-                            const count = (allGroupedItems[title].items || []).filter(item => (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter).length;
-                            return (
-                                <TabsTrigger key={title} value={title}>
-                                    {title} ({count})
-                                </TabsTrigger>
-                            )
+                            const count = allGroupedItems[title].items.filter(item => {
+                                 if (activeFilter === 'all') return true;
+                                 return (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
+                            }).length;
+
+                            if (count > 0) {
+                                return (
+                                    <TabsTrigger key={title} value={title}>
+                                        {title} ({count})
+                                    </TabsTrigger>
+                                )
+                            }
+                            return null;
                         })}
                     </TabsList>
 
@@ -552,13 +545,13 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                         <DialogHeader>
                             <DialogTitle>Filtrar CFOPs do XML para o Grupo {currentEditingCfopGroup}</DialogTitle>
                             <DialogDescription>
-                                Desmarque os CFOPs do XML que deseja ocultar da visualização deste grupo. A lista mostra apenas os CFOPs dos itens atualmente visíveis.
+                                Desmarque os CFOPs do XML que deseja ocultar da visualização deste grupo. A lista mostra todos os CFOPs existentes no XML para este grupo do Sienge.
                             </DialogDescription>
                         </DialogHeader>
                         <ScrollArea className="h-96 w-full rounded-md border p-4">
                             {(() => {
-                                const visibleItems = itemsInActiveTabBeforeXmlFilter.filter(item => item.Sienge_CFOP === currentEditingCfopGroup);
-                                const cfopsForModal = new Set(visibleItems.map(item => item.CFOP));
+                                const allItemsInGroup = allGroupedItems[currentEditingCfopGroup]?.items || [];
+                                const cfopsForModal = new Set(allItemsInGroup.map(item => item.CFOP));
 
                                 if (cfopsForModal.size > 0) {
                                     return Array.from(cfopsForModal).sort().map(cfop => (
