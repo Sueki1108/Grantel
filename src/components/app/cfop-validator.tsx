@@ -64,10 +64,17 @@ interface CfopValidatorProps {
     competence: string | null;
 }
 
+const getFullCfopDescription = (cfopCode: string | number): string => {
+    const code = parseInt(String(cfopCode), 10);
+    return cfopDescriptions[code as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+};
+
 const getUniversalProductKey = (item: CfopValidationData): string => {
-    // Chave universal do produto (ignora região do CFOP)
-    const siengeCfopNature = (item['Sienge_CFOP'] || '').slice(-3);
-    return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${siengeCfopNature}`;
+    // Chave universal do produto, baseada na descrição do CFOP para agrupar naturezas iguais.
+    const siengeCfop = item['Sienge_CFOP'] || '';
+    const cfopDescription = getFullCfopDescription(siengeCfop).toLowerCase();
+    
+    return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${cfopDescription}`;
 };
 
 const getItemLineKey = (item: CfopValidationData): string => {
@@ -190,11 +197,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         setRowSelection({}); // Limpa a seleção após a ação
     };
 
-    const getFullCfopDescription = (cfopCode: string | number): string => {
-        const code = parseInt(String(cfopCode), 10);
-        return cfopDescriptions[code as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-    };
-    
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text).then(() => {
             toast({ title: "Copiado", description: `"${text}" copiado para a área de transferência.` });
