@@ -275,20 +275,12 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
     // Filter items based on the exclusion list
     const imobilizadoItems = useMemo(() => {
         if (!initialAllItems) return [];
-        const nfeHeaderMap = new Map((processedData?.sheets?.['Notas Válidas'] || []).map(n => [n['Chave Unica'], n]));
         return initialAllItems
-            .map(item => {
-                const header = nfeHeaderMap.get(item['Chave Unica']);
-                return {
-                    ...item,
-                    Fornecedor: header?.Fornecedor || item.Fornecedor || 'N/A',
-                }
-            })
             .filter(item => {
                 if (!item || !item.CFOP) return false;
                 return !excludedCfops.has(String(item.CFOP));
             });
-    }, [initialAllItems, excludedCfops, processedData]);
+    }, [initialAllItems, excludedCfops]);
 
     const disregardedItems = useMemo(() => {
         return (initialAllItems || []).filter(item => {
@@ -624,9 +616,3 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
         </div>
     );
 }
-    
-
-    
-
-    
-
