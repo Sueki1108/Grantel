@@ -273,16 +273,14 @@ export function AutomatorClientPage() {
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
                         
                         setProcessedData(prev => ({
-                            // If prev is null, create a new valid object
-                            sheets: prev?.sheets || {}, 
-                            spedInfo: prev?.spedInfo || null, 
-                            keyCheckResults: prev?.keyCheckResults || null, 
-                            competence: prev?.competence || null,
-                            // Add other necessary initial properties from ProcessedData interface
-                            reconciliationResults: prev?.reconciliationResults || null,
-                            resaleAnalysis: prev?.resaleAnalysis || null,
-                            spedCorrections: prev?.spedCorrections || null,
-                            // Now, add the new sienge data
+                            sheets: {}, 
+                            spedInfo: null, 
+                            keyCheckResults: null, 
+                            competence: null,
+                            reconciliationResults: null,
+                            resaleAnalysis: null,
+                            spedCorrections: null,
+                            ...prev,
                             siengeSheetData: jsonData
                         }));
                         
@@ -759,7 +757,7 @@ export function AutomatorClientPage() {
                             )}
 
                              {activeMainTab === 'saidas-nfe' && (
-                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} initialStatus={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
+                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
                             )}
                             
                             {activeMainTab === 'nfse' && (
