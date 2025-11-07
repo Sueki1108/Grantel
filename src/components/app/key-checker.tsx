@@ -1115,9 +1115,6 @@ export function KeyChecker({
                                 <AlertDescription>{error}</AlertDescription>
                             </div>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(error)}>
-                            <Copy className="h-4 w-4" />
-                        </Button>
                     </div>
                 </Alert>
             )}
@@ -1149,9 +1146,3 @@ export function KeyChecker({
         </div>
     );
 }
-
-    
-
-    
-
-```
