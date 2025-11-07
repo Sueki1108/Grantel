@@ -766,8 +766,8 @@ export function KeyChecker({
 
         setTimeout(async () => {
             try {
-                const ieDivergentKeys = new Set(results.ieDivergences.map(d => d['Chave de Acesso']));
-                const ufDivergentKeys = new Set(results.ufDivergences.map(d => d['Chave de Acesso']));
+                const ieDivergentKeys = new Set(results.ieDivergences?.map(d => d['Chave de Acesso']) || []);
+                const ufDivergentKeys = new Set(results.ufDivergences?.map(d => d['Chave de Acesso']) || []);
                 const divergentKeys = new Set([...ieDivergentKeys].filter(key => ufDivergentKeys.has(key)));
                 
                 const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
@@ -839,6 +839,38 @@ export function KeyChecker({
                     </AccordionItem>
                 ))}
             </Accordion>
+        );
+    };
+
+    const ModificationDisplay = ({ logs }: { logs: ModificationLog[] }) => {
+        if (!logs || logs.length === 0) return <p className="text-muted-foreground text-center p-4">Nenhuma modificação deste tipo.</p>;
+        return (
+            <ScrollArea className="h-[calc(80vh-280px)] pr-4">
+                <div className="text-sm font-mono whitespace-pre-wrap space-y-4">
+                    {logs.map((log, index) => (
+                        <div key={index} className="p-2 rounded-md border">
+                            <p className="font-bold text-muted-foreground">Linha {log.lineNumber}:</p>
+                            <p className="text-red-600 dark:text-red-400"><b>Original:</b> {log.original}</p>
+                            <p className="text-green-600 dark:text-green-400"><b>Corrigida:</b> {log.corrected}</p>
+                        </div>
+                    ))}
+                </div>
+            </ScrollArea>
+        );
+    };
+    
+    const RemovedLinesDisplay = ({ logs }: { logs: RemovedLineLog[] }) => {
+        if (!logs || logs.length === 0) return <p className="text-muted-foreground text-center p-4">Nenhuma linha deste tipo foi removida.</p>;
+        return (
+            <ScrollArea className="h-[calc(80vh-280px)] pr-4">
+                <div className="text-sm font-mono whitespace-pre-wrap space-y-2">
+                    {logs.map((log, index) => (
+                        <div key={index} className="p-2 rounded-md border bg-yellow-100 dark:bg-yellow-900/30">
+                            <p><b>Removida (Linha {log.lineNumber}):</b> {log.line}</p>
+                        </div>
+                    ))}
+                </div>
+            </ScrollArea>
         );
     };
 
@@ -969,7 +1001,7 @@ export function KeyChecker({
                                                 <div className="rounded-lg border bg-card p-4"><p className="text-sm font-medium text-muted-foreground">Linhas Modificadas</p><p className="text-2xl font-bold">{correctionResult.linesModified}</p></div>
                                             </div>
                                              <div className="mt-6 space-y-2 text-sm">
-                                                <p><strong className="text-primary">Remoção por Divergência:</strong> {Object.values(correctionResult.modifications.divergenceRemoval).reduce((acc, curr) => acc + 1 + curr.childrenLines.length, 0)} linhas removidas.</p>
+                                                <p><strong className="text-primary">Remoção por Divergência:</strong> {Object.values(correctionResult.modifications.divergenceRemoval).reduce((acc: any, curr: any) => acc + 1 + curr.childrenLines.length, 0)} linhas removidas.</p>
                                                 <p><strong className="text-primary">Contadores:</strong> {correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length} linhas corrigidas.</p>
                                                 <p><strong className="text-primary">Inscrição Estadual (NF-e):</strong> {correctionResult.modifications.ieCorrection.length} linhas corrigidas.</p>
                                                 <p><strong className="text-primary">Série (CT-e):</strong> {correctionResult.modifications.cteSeriesCorrection.length} linhas corrigidas.</p>
@@ -1073,6 +1105,23 @@ export function KeyChecker({
                 </CardContent>
             </Card>
 
+            {error && (
+                <Alert variant="destructive" className="mt-4">
+                    <div className="flex justify-between items-start">
+                        <div className="flex">
+                            <FileWarning className="h-4 w-4" />
+                            <div className="ml-3">
+                                <AlertTitle>Erro</AlertTitle>
+                                <AlertDescription>{error}</AlertDescription>
+                            </div>
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(error)}>
+                            <Copy className="h-4 w-4" />
+                        </Button>
+                    </div>
+                </Alert>
+            )}
+
             {results && (
                 <Card className="shadow-lg">
                     <CardHeader>
@@ -1104,3 +1153,5 @@ export function KeyChecker({
     
 
     
+
+```
