@@ -36,6 +36,7 @@ export type KeyInfo = {
     destIE?: string;
     destUF?: string;
     destCNPJ?: string;
+    tomadorCNPJ?: string;
     emitCNPJ?: string;
     emitName?: string;
     emitIE?: string;
@@ -132,7 +133,12 @@ const readFileAsTextWithEncoding = (file: File): Promise<string> => {
     });
 };
 
-const processSpedFileInBrowser = (spedFileContent: string, nfeData: any[], cteData: any[]): SpedCorrectionResult => {
+const processSpedFileInBrowser = (
+    spedFileContent: string, 
+    nfeData: any[], 
+    cteData: any[],
+    divergentKeys: Set<string>
+): SpedCorrectionResult => {
     const log: string[] = [];
     const modifications: SpedCorrectionResult['modifications'] = {
         truncation: [],
@@ -144,6 +150,7 @@ const processSpedFileInBrowser = (spedFileContent: string, nfeData: any[], cteDa
         count9900: [],
         blockCount: [],
         totalLineCount: [],
+        divergenceRemoval: [],
     };
     const _log = (message: string) => log.push(`[${new Date().toLocaleTimeString()}] ${message}`);
 
@@ -153,7 +160,7 @@ const processSpedFileInBrowser = (spedFileContent: string, nfeData: any[], cteDa
     if (nfeData && nfeData.length > 0) {
         nfeData.forEach(nota => {
             const cnpj = cleanAndToStr(nota.emitCNPJ || nota['CPF/CNPJ do Fornecedor']);
-            const ie = cleanAndToStr(nota.emitIE); // IE do emitente
+            const ie = cleanAndToStr(nota.emitIE);
             if (cnpj && ie && !cnpjToIeMap.has(cnpj)) {
                cnpjToIeMap.set(cnpj, ie);
             }
@@ -186,15 +193,50 @@ const processSpedFileInBrowser = (spedFileContent: string, nfeData: any[], cteDa
     const MAX_CHARS_TRUNCATION = 235;
     const UNIT_FIELD_CONFIG: Record<string, number> = { '0200': 6, 'C170': 6 };
     
-    // Step 1: Initial filtering and modifications
-    for (let i = 0; i < lines.length; i++) {
-        let originalLine = lines[i];
+    // Step 0: Remove divergent records and their children
+    const filteredLines: string[] = [];
+    let isInsideDivergentBlock = false;
+    _log(`Iniciando verificação de remoção para ${divergentKeys.size} chaves com divergência de IE/UF.`);
+
+    for(let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line) continue;
+
+        const parts = line.split('|');
+        const regType = parts[1];
+
+        if (regType === 'C100' || regType === 'D100') {
+            isInsideDivergentBlock = false; // Reset on a new main record
+            const keyIndex = regType === 'C100' ? 9 : 10;
+            const key = parts.length > keyIndex ? cleanAndToStr(parts[keyIndex]) : '';
+            
+            if (key && divergentKeys.has(key)) {
+                isInsideDivergentBlock = true;
+                _log(`Divergência encontrada na linha ${i+1}. Removendo registo ${regType} e seus filhos.`);
+                modifications.divergenceRemoval.push({ lineNumber: i + 1, line: line });
+                linesModifiedCount++;
+            }
+        }
+        
+        if (isInsideDivergentBlock) {
+             if (regType !== 'C100' && regType !== 'D100') {
+                 modifications.divergenceRemoval.push({ lineNumber: i + 1, line: line });
+             }
+            continue; // Skip this line and all children until next C100/D100
+        }
+        
+        filteredLines.push(line);
+    }
+     _log(`Remoção concluída. ${modifications.divergenceRemoval.length} linhas removidas devido a divergências.`);
+
+    // Step 1: Initial filtering and modifications on the already filtered lines
+    for (let i = 0; i < filteredLines.length; i++) {
+        let originalLine = filteredLines[i];
         if (!originalLine) continue; // Skip empty lines
         
         const parts = originalLine.split('|');
         const codeType = parts[1];
 
-        // Rule: Remove all 0190 records except for specific ones.
         if (codeType === '0190') {
             const lineToKeep1 = '|0190|un|Unidade|';
             const lineToKeep2 = '|0190|pc|Peça|';
@@ -205,14 +247,13 @@ const processSpedFileInBrowser = (spedFileContent: string, nfeData: any[], cteDa
                 if (!modifications.removed0190.find(log => log.line === originalLine)) {
                     linesModifiedCount++;
                 }
-                continue; // Do not add this line to modifiedLines
+                continue;
             }
         }
         
         let currentLine = originalLine;
         let lineWasModified = false;
         
-        // Rule: IE Correction (for 0150 records)
         if (codeType === '0150' && parts.length > 7 && cnpjToIeMap.size > 0) {
             const cnpj = cleanAndToStr(parts[5]);
             const spedIE = cleanAndToStr(parts[7]);
@@ -225,7 +266,6 @@ const processSpedFileInBrowser = (spedFileContent: string, nfeData: any[], cteDa
             }
         }
 
-        // Rule: CT-e Series Correction (for D100 records)
         if (codeType === 'D100' && parts.length > 10 && cteKeyToSeriesMap.size > 0) {
             const cteKey = cleanAndToStr(parts[10]);
             const correctSeries = cteKeyToSeriesMap.get(cteKey);
@@ -240,7 +280,6 @@ const processSpedFileInBrowser = (spedFileContent: string, nfeData: any[], cteDa
             }
         }
         
-        // Rule: Address Space
         if (codeType === '0150' && parts.length > 12) {
             const addressComplement = parts[12] || '';
             if (/\s{2,}/.test(addressComplement)) {
@@ -251,7 +290,6 @@ const processSpedFileInBrowser = (spedFileContent: string, nfeData: any[], cteDa
             }
         }
 
-        // Rule: Unit Standardization (Anything that is not 'un' becomes 'un')
         if (codeType) {
             const unitFieldIndex = UNIT_FIELD_CONFIG[codeType];
             if (unitFieldIndex && parts.length > unitFieldIndex) {
@@ -265,7 +303,6 @@ const processSpedFileInBrowser = (spedFileContent: string, nfeData: any[], cteDa
             }
         }
 
-        // Rule: Truncation
         if (codeType && TRUNCATION_CODES.has(codeType)) {
             const lastPipeIndex = currentLine.lastIndexOf('|');
             const secondLastPipeIndex = currentLine.lastIndexOf('|', lastPipeIndex - 1);
@@ -317,7 +354,6 @@ const processSpedFileInBrowser = (spedFileContent: string, nfeData: any[], cteDa
             count9900For0190Index = index;
         }
 
-        // Block openers start with a letter/number and end with '001'
         if (reg.match(/^[A-Z0-9]001$/)) {
             const block = reg.charAt(0);
             if (!blockCounters[block]) {
@@ -333,7 +369,6 @@ const processSpedFileInBrowser = (spedFileContent: string, nfeData: any[], cteDa
         }
     });
     
-    // Correct 9900 for 0190
     if (count9900For0190Index !== -1) {
         const originalLine = modifiedLines[count9900For0190Index];
         const parts = originalLine.split('|');
@@ -357,7 +392,6 @@ const processSpedFileInBrowser = (spedFileContent: string, nfeData: any[], cteDa
         if (blockInfo.counterIndex !== undefined) {
             const originalLine = modifiedLines[blockInfo.counterIndex];
             const originalParts = originalLine.split('|');
-            // The number of lines in a block is the difference in index + 1
             const expectedCount = blockInfo.counterIndex - blockInfo.startIndex + 1;
 
             if (originalParts.length > 2 && parseInt(originalParts[2], 10) !== expectedCount) {
@@ -477,14 +511,13 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             }
 
             let key: string | undefined, docData: any;
-            // NF-e (C100)
+
             if (reg === 'C100' && parts.length > 9 && parts[9]?.length === 44) {
                 key = parts[9];
                 docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12], vlDesc: parts[14] };
-            // CT-e (D100)
             } else if (reg === 'D100' && parts.length > 17 && parts[10]?.length === 44) {
                 key = parts[10];
-                 docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
+                docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
             }
 
             if (key && docData) {
@@ -537,54 +570,47 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
         const docType = nota.type === 'CTE' ? 'CTE' : 'NFE';
         const divergenceMessages: string[] = [];
 
-        // Date Check
-        const xmlDateStr = nota.Emissão as string; // Already in YYYY-MM-DD from processor
+        const xmlDateStr = nota.Emissão as string;
         const spedDateStr = spedDoc.dtDoc ? `${spedDoc.dtDoc.substring(4, 8)}-${spedDoc.dtDoc.substring(2, 4)}-${spedDoc.dtDoc.substring(0, 2)}` : '';
 
-        // Base object for consolidated view
         const baseDivergence: ConsolidatedDivergence = {
-            'Tipo': docType,
-            'Chave de Acesso': nota.key,
+            'Tipo': docType, 'Chave de Acesso': nota.key,
             'Data Emissão XML': xmlDateStr ? `${xmlDateStr.substring(8,10)}/${xmlDateStr.substring(5,7)}/${xmlDateStr.substring(0,4)}` : 'Inválida',
             'Data Emissão SPED': spedDoc.dtDoc ? `${spedDoc.dtDoc.substring(0, 2)}/${spedDoc.dtDoc.substring(2, 4)}/${spedDoc.dtDoc.substring(4, 8)}` : 'Inválida',
             'Data Entrada/Saída SPED': spedDoc.dtES ? `${spedDoc.dtES.substring(0, 2)}/${spedDoc.dtES.substring(2, 4)}/${spedDoc.dtES.substring(4, 8)}` : 'Inválida',
-            'Valor XML': 0,
-            'Valor SPED': 0,
-            'UF no XML': 'N/A',
-            'IE no XML': 'N/A',
-            'Resumo das Divergências': '',
+            'Valor XML': 0, 'Valor SPED': 0,
+            'UF no XML': 'N/A', 'IE no XML': 'N/A', 'Resumo das Divergências': '',
         };
         
-        if (xmlDateStr && spedDateStr && xmlDateStr !== spedDateStr) {
-            divergenceMessages.push("Data");
-        }
+        if (xmlDateStr && spedDateStr && xmlDateStr !== spedDateStr) divergenceMessages.push("Data");
 
-        // Value Check
         const xmlValue = nota.Total || (nota.type === 'CTE' ? nota['Valor da Prestação'] : 0) || 0;
         let spedValue = parseFloat(String(spedDoc.vlDoc || '0').replace(',', '.'));
         
         baseDivergence['Valor XML'] = xmlValue;
         baseDivergence['Valor SPED'] = spedValue;
-        if (Math.abs(xmlValue - spedValue) > 0.01) {
-            divergenceMessages.push("Valor");
-        }
+        if (Math.abs(xmlValue - spedValue) > 0.01) divergenceMessages.push("Valor");
         
-        // UF/IE Check (for NFE destined to Grantel)
-        const xmlIE = cleanAndToStr(nota.destIE);
-        const xmlUF = nota.destUF?.trim().toUpperCase();
-        baseDivergence['IE no XML'] = xmlIE || 'Em branco';
-        baseDivergence['UF no XML'] = xmlUF || 'Em branco';
-
         if (docType === 'NFE' && cleanAndToStr(nota.destCNPJ) === GRANTEL_CNPJ) {
-            if (xmlUF !== GRANTEL_UF) {
-                divergenceMessages.push("UF");
-            }
-            if (xmlIE !== GRANTEL_IE) {
-                divergenceMessages.push("IE");
-            }
+             const xmlIE = cleanAndToStr(nota.destIE);
+             const xmlUF = nota.destUF?.trim().toUpperCase();
+             baseDivergence['IE no XML'] = xmlIE || 'Em branco';
+             baseDivergence['UF no XML'] = xmlUF || 'Em branco';
+            if (xmlUF !== GRANTEL_UF) divergenceMessages.push("UF");
+            if (xmlIE !== GRANTEL_IE) divergenceMessages.push("IE");
+        } else if (docType === 'CTE' && cleanAndToStr(nota.tomadorCNPJ) === GRANTEL_CNPJ) {
+             const participant = spedDoc.codPart ? participantData.get(spedDoc.codPart) : null;
+             if(participant) {
+                 const spedIE = cleanAndToStr(participant.ie);
+                 const spedUF = participant.uf?.trim().toUpperCase();
+                 baseDivergence['IE no XML'] = spedIE || 'Em branco';
+                 baseDivergence['UF no XML'] = spedUF || 'Em branco';
+                if (spedUF !== GRANTEL_UF) divergenceMessages.push("UF");
+                if (spedIE !== GRANTEL_IE) divergenceMessages.push("IE");
+             }
         }
 
-        // If any divergence was found, add to the consolidated map
+
         if (divergenceMessages.length > 0) {
             baseDivergence['Resumo das Divergências'] = divergenceMessages.join(', ');
             consolidatedDivergencesMap.set(nota.key, baseDivergence);
@@ -593,22 +619,10 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
 
     const consolidatedDivergences = Array.from(consolidatedDivergencesMap.values());
     
-    // Create specific divergence lists from the consolidated one
-    const dateDivergences = consolidatedDivergences
-        .filter(d => d['Resumo das Divergências'].includes('Data'))
-        .map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'Data Emissão XML': d['Data Emissão XML'], 'Data Emissão SPED': d['Data Emissão SPED'], 'Data Entrada/Saída SPED': d['Data Entrada/Saída SPED'] }));
-
-    const valueDivergences = consolidatedDivergences
-        .filter(d => d['Resumo das Divergências'].includes('Valor'))
-        .map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'Valor XML': d['Valor XML'], 'Valor SPED': d['Valor SPED'] }));
-    
-    const ufDivergences = consolidatedDivergences
-        .filter(d => d['Resumo das Divergências'].includes('UF'))
-        .map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'CNPJ do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitCNPJ || '', 'Nome do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitName || '', 'UF no XML': d['UF no XML'] }));
-
-    const ieDivergences = consolidatedDivergences
-        .filter(d => d['Resumo das Divergências'].includes('IE'))
-        .map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'CNPJ do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitCNPJ || '', 'Nome do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitName || '', 'IE no XML': d['IE no XML'] }));
+    const dateDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('Data')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'Data Emissão XML': d['Data Emissão XML'], 'Data Emissão SPED': d['Data Emissão SPED'], 'Data Entrada/Saída SPED': d['Data Entrada/Saída SPED'] }));
+    const valueDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('Valor')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'Valor XML': d['Valor XML'], 'Valor SPED': d['Valor SPED'] }));
+    const ufDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('UF')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'CNPJ do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitCNPJ || '', 'Nome do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitName || '', 'UF no XML': d['UF no XML'] }));
+    const ieDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('IE')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'CNPJ do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitCNPJ || '', 'Nome do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitName || '', 'IE no XML': d['IE no XML'] }));
 
     logFn(`- ${ufDivergences.length} divergências de UF encontradas.`);
     logFn(`- ${ieDivergences.length} divergências de IE encontradas.`);
@@ -620,16 +634,8 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     const allSpedKeys: SpedKeyObject[] = [...spedDocData.keys()].map(key => ({ key, foundInSped: true }));
     
     const keyCheckResults: KeyCheckResult = { 
-        keysNotFoundInTxt, 
-        keysInTxtNotInSheet, 
-        duplicateKeysInSheet, 
-        duplicateKeysInTxt, 
-        validKeys,
-        dateDivergences,
-        valueDivergences,
-        ufDivergences,
-        ieDivergences,
-        consolidatedDivergences,
+        keysNotFoundInTxt, keysInTxtNotInSheet, duplicateKeysInSheet, duplicateKeysInTxt, validKeys,
+        dateDivergences, valueDivergences, ufDivergences, ieDivergences, consolidatedDivergences,
     };
 
     return { keyCheckResults, spedInfo: currentSpedInfo, allSpedKeys };
@@ -643,8 +649,8 @@ interface KeyCheckerProps {
     onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => void;
     initialSpedInfo: SpedInfo | null;
     initialKeyCheckResults: KeyCheckResult | null;
-    nfeEntradaData: any[]; // Pass NFe data for IE correction
-    cteData: any[]; // Pass CTe data for series correction
+    nfeEntradaData: any[];
+    cteData: any[];
 }
 
 export function KeyChecker({ 
@@ -733,7 +739,7 @@ export function KeyChecker({
                 setResults(keyCheckResults);
                 setSpedInfo(spedInfo);
                 
-                onSpedProcessed(spedInfo, keyCheckResults, null); // Pass null for corrections initially
+                onSpedProcessed(spedInfo, keyCheckResults, null); 
                 
                 toast({ title: "Verificação concluída", description: "As chaves foram comparadas com sucesso. Prossiga para as abas de análise." });
 
@@ -752,14 +758,23 @@ export function KeyChecker({
             toast({ variant: "destructive", title: "Arquivo faltando", description: "Por favor, carregue o arquivo SPED (.txt) primeiro." });
             return;
         }
+        if (!results) {
+             toast({ variant: "destructive", title: "Análise prévia necessária", description: "Execute a 'Verificação de Chaves' primeiro para identificar as divergências." });
+            return;
+        }
+
         setLoading('correct');
         setCorrectionResult(null);
         setIsCorrectionModalOpen(true);
 
         setTimeout(async () => {
             try {
+                const divergentKeys = new Set(
+                    [...results.ieDivergences, ...results.ufDivergences].map(d => d['Chave de Acesso'])
+                );
+                
                 const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
-                const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData);
+                const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData, divergentKeys);
                 
                 setCorrectionResult(result);
                 onSpedProcessed(spedInfo, results, result);
@@ -771,7 +786,7 @@ export function KeyChecker({
                     error: err.message,
                     linesRead: 0,
                     linesModified: 0,
-                    modifications: { truncation: [], unitStandardization: [], removed0190: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [] },
+                    modifications: { truncation: [], unitStandardization: [], removed0190: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [], divergenceRemoval: [] },
                     log: [`ERRO FATAL: ${err.message}`]
                 });
                 toast({ variant: "destructive", title: "Erro na correção", description: err.message });
@@ -898,7 +913,7 @@ export function KeyChecker({
                         </Button>
                          <Dialog open={isCorrectionModalOpen} onOpenChange={setIsCorrectionModalOpen}>
                             <DialogTrigger asChild>
-                                <Button onClick={handleCorrectSped} disabled={loading !== null || !spedFiles || spedFiles.length === 0} variant="secondary" className="w-full">
+                                <Button onClick={handleCorrectSped} disabled={loading !== null || !spedFiles || spedFiles.length === 0 || !results} variant="secondary" className="w-full">
                                     {loading === 'correct' ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Corrigindo...</> : 'Corrigir SPED'}
                                 </Button>
                             </DialogTrigger>
@@ -926,6 +941,7 @@ export function KeyChecker({
                                                 <div className="rounded-lg border bg-card p-4"><p className="text-sm font-medium text-muted-foreground">Linhas Modificadas</p><p className="text-2xl font-bold">{correctionResult.linesModified}</p></div>
                                             </div>
                                              <div className="mt-6 space-y-2 text-sm">
+                                                <p><strong className="text-primary">Remoção por Divergência:</strong> {correctionResult.modifications.divergenceRemoval.length} linhas removidas.</p>
                                                 <p><strong className="text-primary">Contadores:</strong> {correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length} linhas corrigidas.</p>
                                                 <p><strong className="text-primary">Inscrição Estadual (NF-e):</strong> {correctionResult.modifications.ieCorrection.length} linhas corrigidas.</p>
                                                 <p><strong className="text-primary">Série (CT-e):</strong> {correctionResult.modifications.cteSeriesCorrection.length} linhas corrigidas.</p>
@@ -937,8 +953,9 @@ export function KeyChecker({
                                         </TabsContent>
 
                                         <TabsContent value="modifications" className="mt-4 flex-grow overflow-hidden">
-                                            <Tabs defaultValue="counters" className="flex flex-col h-full">
+                                            <Tabs defaultValue="divergenceRemoval" className="flex flex-col h-full">
                                                 <TabsList className="h-auto flex-wrap justify-start">
+                                                    <TabsTrigger value="divergenceRemoval">Remoção por Divergência ({correctionResult.modifications.divergenceRemoval.length})</TabsTrigger>
                                                     <TabsTrigger value="counters">Contadores ({correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length})</TabsTrigger>
                                                     <TabsTrigger value="ie">IE (NF-e) ({correctionResult.modifications.ieCorrection.length})</TabsTrigger>
                                                     <TabsTrigger value="cte_series">Série (CT-e) ({correctionResult.modifications.cteSeriesCorrection.length})</TabsTrigger>
@@ -948,6 +965,13 @@ export function KeyChecker({
                                                     <TabsTrigger value="removed">0190 Removidos ({correctionResult.modifications.removed0190.length})</TabsTrigger>
                                                 </TabsList>
                                                 <div className="flex-grow overflow-hidden mt-2">
+                                                    <TabsContent value="divergenceRemoval" className="h-full">
+                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
+                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos C100/D100 e seus filhos que apresentavam divergência de IE/UF foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <span>Registos removidos por divergência de cadastro (IE/UF).</span>
+                                                        </div>
+                                                        <RemovedLinesDisplay logs={correctionResult.modifications.divergenceRemoval} />
+                                                    </TabsContent>
                                                     <TabsContent value="counters" className="h-full">
                                                          <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
                                                             <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>A contagem de linhas em cada bloco (registros x990) e a contagem total (9999) foram recalculadas.</p></TooltipContent></Tooltip></TooltipProvider>
@@ -1009,12 +1033,12 @@ export function KeyChecker({
                                 </div>
                                 <DialogFooter className="pt-4 border-t">
                                     <Button variant="outline" onClick={() => setIsCorrectionModalOpen(false)}>Fechar</Button>
+                                    <Button onClick={handleDownloadCorrected} disabled={!correctionResult || !!correctionResult.error}>
+                                        <Download className="mr-2 h-4 w-4" /> Baixar Arquivo Corrigido
+                                    </Button>
                                 </DialogFooter>
                             </DialogContent>
                         </Dialog>
-                         <Button onClick={handleDownloadCorrected} disabled={!correctionResult || !!correctionResult.error} variant="default">
-                            <Download className="mr-2 h-4 w-4" /> Baixar Arquivo Corrigido
-                        </Button>
                     </div>
                 </CardContent>
             </Card>
@@ -1079,3 +1103,4 @@ export function KeyChecker({
         </div>
     );
 }
+
