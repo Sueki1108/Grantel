@@ -676,7 +676,6 @@ export function KeyChecker({
     const [spedInfo, setSpedInfo] = useState<SpedInfo | null>(initialSpedInfo);
     const [loading, setLoading] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [logs, setLogs] = useState<string[]>([]);
     const { toast } = useToast();
     const [correctionResult, setCorrectionResult] = useState<SpedCorrectionResult | null>(null);
     const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
@@ -734,17 +733,13 @@ export function KeyChecker({
         setLoading('verify');
         setResults(null);
         setError(null);
-        setLogs([]);
         setCorrectionResult(null);
 
         setTimeout(async () => {
             try {
                 const fileContents = await Promise.all(spedFiles.map(file => readFileAsTextWithEncoding(file)));
-                const localLogs: string[] = [];
-                const logFn = (message: string) => localLogs.push(`[${new Date().toLocaleTimeString()}] ${message}`);
-
-                const { keyCheckResults, spedInfo, error } = await checkSpedKeysInBrowser(chavesValidas, fileContents, logFn);
-                setLogs(localLogs);
+                
+                const { keyCheckResults, spedInfo, error } = await checkSpedKeysInBrowser(chavesValidas, fileContents, () => {});
                 
                 if (error) throw new Error(error);
                 if (!keyCheckResults) throw new Error("Não foi possível extrair as chaves do arquivo SPED.");
@@ -758,7 +753,6 @@ export function KeyChecker({
 
             } catch (err: any) {
                 setError(err.message);
-                setLogs(prev => [...prev, `[ERRO FATAL] ${err.message}`]);
                 toast({ variant: "destructive", title: "Erro na Verificação", description: err.message });
             } finally {
                 setLoading(null);
@@ -811,7 +805,6 @@ export function KeyChecker({
 
     const handleClearVerification = () => {
         setResults(null);
-        setLogs([]);
         setError(null);
         setSpedInfo(null);
         setCorrectionResult(null);
@@ -959,43 +952,43 @@ export function KeyChecker({
                          <Button onClick={handleVerify} disabled={loading !== null || !spedFiles || spedFiles.length === 0} className="w-full">
                             {loading === 'verify' ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verificando...</> : 'Verificar Chaves'}
                         </Button>
-                         <Dialog open={isCorrectionModalOpen} onOpenChange={setIsCorrectionModalOpen}>
+                         <Dialog>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" size="icon" className="shrink-0">
+                                    <Settings className="h-5 w-5" />
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>Configurar Correções do SPED</DialogTitle>
+                                    <DialogDescription>
+                                        Selecione quais correções automáticas deseja aplicar ao ficheiro SPED.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4 py-4">
+                                    {Object.entries(correctionConfigLabels).map(([key, label]) => (
+                                        <div key={key} className="flex items-center space-x-2">
+                                            <Checkbox
+                                                id={key}
+                                                checked={correctionConfig[key as keyof SpedCorrectionConfig]}
+                                                onCheckedChange={(checked) => {
+                                                    setCorrectionConfig(prev => ({...prev, [key]: !!checked}))
+                                                }}
+                                            />
+                                            <Label htmlFor={key} className="text-sm font-medium leading-none cursor-pointer">
+                                                {label}
+                                            </Label>
+                                        </div>
+                                    ))}
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                        <Dialog open={isCorrectionModalOpen} onOpenChange={setIsCorrectionModalOpen}>
                             <DialogTrigger asChild>
                                 <Button onClick={handleCorrectSped} disabled={loading !== null || !spedFiles || spedFiles.length === 0 || !results} variant="secondary" className="w-full">
                                     {loading === 'correct' ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Corrigindo...</> : 'Corrigir SPED'}
                                 </Button>
                             </DialogTrigger>
-                             <Dialog>
-                                <DialogTrigger asChild>
-                                     <Button variant="outline" size="icon" className="shrink-0">
-                                        <Settings className="h-5 w-5" />
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                    <DialogHeader>
-                                        <DialogTitle>Configurar Correções do SPED</DialogTitle>
-                                        <DialogDescription>
-                                            Selecione quais correções automáticas deseja aplicar ao ficheiro SPED.
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="space-y-4 py-4">
-                                        {Object.entries(correctionConfigLabels).map(([key, label]) => (
-                                            <div key={key} className="flex items-center space-x-2">
-                                                <Checkbox
-                                                    id={key}
-                                                    checked={correctionConfig[key as keyof SpedCorrectionConfig]}
-                                                    onCheckedChange={(checked) => {
-                                                        setCorrectionConfig(prev => ({...prev, [key]: !!checked}))
-                                                    }}
-                                                />
-                                                <Label htmlFor={key} className="text-sm font-medium leading-none cursor-pointer">
-                                                    {label}
-                                                </Label>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </DialogContent>
-                            </Dialog>
                            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
                                 <DialogHeader>
                                     <DialogTitle>Correção do Arquivo SPED</DialogTitle>
@@ -1124,39 +1117,6 @@ export function KeyChecker({
                 </CardContent>
             </Card>
 
-            {(logs.length > 0 || error) && (
-                <Card className="shadow-lg">
-                     <CardHeader>
-                        <div className="flex items-center gap-3">
-                            <Terminal className="h-8 w-8 text-primary" />
-                            <div>
-                                <CardTitle className="font-headline text-2xl">Análise de Processamento (Verificação)</CardTitle>
-                                <CardDescription>Logs detalhados da execução da verificação de chaves no navegador.</CardDescription>
-                            </div>
-                        </div>
-                    </CardHeader>
-                     <CardContent>
-                        {error && (
-                            <Alert variant="destructive" className="mb-4">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex">
-                                        <FileWarning className="h-4 w-4" />
-                                        <div className="ml-3">
-                                            <AlertTitle>Erro</AlertTitle>
-                                            <AlertDescription>{error}</AlertDescription>
-                                        </div>
-                                    </div>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(error)}>
-                                        <Copy className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            </Alert>
-                        )}
-                        <LogDisplay logs={logs} />
-                    </CardContent>
-                </Card>
-            )}
-
             {results && (
                 <Card className="shadow-lg">
                     <CardHeader>
@@ -1184,9 +1144,3 @@ export function KeyChecker({
         </div>
     );
 }
-
-    
-
-    
-
-    
