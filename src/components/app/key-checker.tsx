@@ -367,113 +367,64 @@ const processSpedFileInBrowser = (
     }
     
     if (config.fixCounters) {
-        _log("Iniciando a recontagem de linhas dos blocos (registros x990), bloco 0 (0990) e total (9999).");
+        _log("Iniciando a recontagem de linhas dos blocos e registos.");
         
-        let block0Count = 0;
-        let block0990Index = -1;
-        const blockCounters: { [block: string]: { startIndex: number, counterIndex?: number } } = {};
-        let finalLineCounterIndex = -1;
-        let count0190 = 0;
-        let count9900For0190Index = -1;
+        const recordCounts: { [reg: string]: number } = {};
+        const blockLineCounts: { [block: string]: number } = {};
 
-        modifiedLines.forEach((line, index) => {
+        modifiedLines.forEach(line => {
             if (!line) return;
             const parts = line.split('|');
-            if (parts.length < 2) return;
-            const reg = parts[1];
-            if (!reg) return;
+            const regType = parts[1];
+            if (regType) {
+                recordCounts[regType] = (recordCounts[regType] || 0) + 1;
 
-            if (reg.startsWith('0')) {
-                block0Count++;
-                if (reg === '0990') {
-                    block0990Index = index;
-                }
-            }
-
-            if (reg === '0190') count0190++;
-            if (reg === '9900' && parts[2] === '0190') count9900For0190Index = index;
-
-            if (reg.match(/^[A-Z0-9]001$/)) {
-                const block = reg.charAt(0);
-                if (!blockCounters[block]) blockCounters[block] = { startIndex: index };
-            } else if (reg.endsWith('990') && reg !== '0990' && reg !== '9990') {
-                const block = reg.charAt(0);
-                if (blockCounters[block]) blockCounters[block].counterIndex = index;
-            } else if (reg === '9999') {
-                finalLineCounterIndex = index;
+                const blockChar = regType.charAt(0);
+                blockLineCounts[blockChar] = (blockLineCounts[blockChar] || 0) + 1;
             }
         });
-        
-        if (count9900For0190Index !== -1) {
-            const originalLine = modifiedLines[count9900For0190Index];
-            const parts = originalLine.split('|');
-            if (parts.length > 3 && parseInt(parts[3], 10) !== count0190) {
-                const oldVal = parts[3];
-                parts[3] = String(count0190);
-                const correctedLine = parts.join('|');
-                modifiedLines[count9900For0190Index] = correctedLine;
-                modifications.count9900.push({ lineNumber: count9900For0190Index + 1, original: `Contador |9900|0190|: ${oldVal}`, corrected: `Contador |9900|0190| corrigido para: ${count0190}` });
-                linesModifiedCount++;
-            }
-        }
-        
-        // Update block 0 counter
-        if (block0990Index !== -1) {
-            const originalLine = modifiedLines[block0990Index];
-            const parts = originalLine.split('|');
-            if (parts.length > 2 && parseInt(parts[2], 10) !== block0Count) {
-                 const oldVal = parts[2];
-                 parts[2] = String(block0Count);
-                 const correctedLine = parts.join('|');
-                 modifiedLines[block0990Index] = correctedLine;
 
-                 modifications.blockCount.push({
-                     lineNumber: block0990Index + 1,
-                     original: `Contador Bloco |0990|: ${oldVal}`,
-                     corrected: `Contador Bloco |0990| corrigido para: ${block0Count}`
-                 });
-                 linesModifiedCount++;
-            }
-        }
+        for (let i = 0; i < modifiedLines.length; i++) {
+            let line = modifiedLines[i];
+            if (!line) continue;
+            const parts = line.split('|');
+            const regType = parts[1];
 
-        // Update other block counters
-        for (const block in blockCounters) {
-            const blockInfo = blockCounters[block];
-            if (blockInfo.counterIndex !== undefined) {
-                const originalLine = modifiedLines[blockInfo.counterIndex];
-                const originalParts = originalLine.split('|');
-                const expectedCount = blockInfo.counterIndex - blockInfo.startIndex + 1;
-
-                if (originalParts.length > 2 && parseInt(originalParts[2], 10) !== expectedCount) {
-                    const oldVal = originalParts[2];
-                    originalParts[2] = String(expectedCount);
-                    const correctedLine = originalParts.join('|');
-                    modifiedLines[blockInfo.counterIndex] = correctedLine;
-                    
-                    if (!modifications.blockCount.some(m => m.original.includes(`block-${block}`))) {
-                        modifications.blockCount.push({ lineNumber: blockInfo.counterIndex + 1, original: `Contador Bloco |${block}990|: ${oldVal}`, corrected: `Contador Bloco |${block}990| corrigido para: ${expectedCount}` });
-                        linesModifiedCount++;
-                    }
+            if (regType && regType.endsWith('990')) {
+                const blockChar = regType.charAt(0);
+                const expectedCount = blockLineCounts[blockChar] || 0;
+                if (parts.length > 2 && parseInt(parts[2]) !== expectedCount) {
+                    const originalLine = line;
+                    parts[2] = String(expectedCount);
+                    const correctedLine = parts.join('|');
+                    modifiedLines[i] = correctedLine;
+                    modifications.blockCount.push({ lineNumber: i + 1, original: originalLine, corrected: correctedLine });
+                    linesModifiedCount++;
+                }
+            } else if (regType === '9900' && parts.length > 3) {
+                const countedReg = parts[2];
+                const expectedCount = recordCounts[countedReg] || 0;
+                if (parseInt(parts[3]) !== expectedCount) {
+                    const originalLine = line;
+                    parts[3] = String(expectedCount);
+                    const correctedLine = parts.join('|');
+                    modifiedLines[i] = correctedLine;
+                    modifications.count9900.push({ lineNumber: i + 1, original: originalLine, corrected: correctedLine });
+                    linesModifiedCount++;
+                }
+            } else if (regType === '9999') {
+                const expectedTotal = modifiedLines.length;
+                if (parts.length > 2 && parseInt(parts[2]) !== expectedTotal) {
+                    const originalLine = line;
+                    parts[2] = String(expectedTotal);
+                    const correctedLine = parts.join('|');
+                    modifiedLines[i] = correctedLine;
+                    modifications.totalLineCount.push({ lineNumber: i + 1, original: originalLine, corrected: correctedLine });
+                    linesModifiedCount++;
                 }
             }
         }
-
-        if (finalLineCounterIndex !== -1) {
-            const totalLines = modifiedLines.length;
-            const originalLine = modifiedLines[finalLineCounterIndex];
-            const originalParts = originalLine.split('|');
-
-            if (originalParts.length > 2 && parseInt(originalParts[2], 10) !== totalLines) {
-                const oldVal = originalParts[2];
-                originalParts[2] = String(totalLines);
-                const correctedLine = originalParts.join('|');
-                modifiedLines[finalLineCounterIndex] = correctedLine;
-
-                modifications.totalLineCount.push({ lineNumber: finalLineCounterIndex + 1, original: `Contador Total |9999|: ${oldVal}`, corrected: `Contador Total |9999| corrigido para: ${totalLines}` });
-                linesModifiedCount++;
-            }
-        }
-         _log(`Recontagem de linhas concluída.`);
+         _log(`Recontagem de linhas e registos concluída.`);
     }
 
     _log(`Processamento concluído. Total de linhas lidas: ${lines.length}. Total de linhas com modificações: ${linesModifiedCount}.`);
@@ -845,32 +796,6 @@ export function KeyChecker({
         
         toast({ title: "Verificação limpa", description: "Os resultados e o arquivo da verificação SPED foram removidos." });
     };
-
-    const ModificationDisplay = ({ logs }: { logs: ModificationLog[] }) => (
-        <ScrollArea className="h-[calc(80vh-250px)] pr-4">
-            <div className="text-sm font-mono whitespace-pre-wrap space-y-4">
-                {logs.map((log, index) => (
-                    <div key={index} className="p-2 rounded-md border">
-                        <p className="font-bold text-muted-foreground">Linha {log.lineNumber}:</p>
-                        <p className="text-red-600 dark:text-red-400"><b>Original:</b> {log.original}</p>
-                        <p className="text-green-600 dark:text-green-400"><b>Corrigida:</b> {log.corrected}</p>
-                    </div>
-                ))}
-            </div>
-        </ScrollArea>
-    );
-
-    const RemovedLinesDisplay = ({ logs }: { logs: RemovedLineLog[] }) => (
-        <ScrollArea className="h-[calc(80vh-250px)] pr-4">
-            <div className="text-sm font-mono whitespace-pre-wrap space-y-2">
-                {logs.map((log, index) => (
-                    <div key={index} className="p-2 rounded-md border bg-yellow-100 dark:bg-yellow-900/30">
-                        <p><b>Removida (Linha {log.lineNumber}):</b> {log.line}</p>
-                    </div>
-                ))}
-            </div>
-        </ScrollArea>
-    );
     
     const DivergenceRemovalDisplay = ({ logData }: { logData: DivergenceRemovalLog }) => {
         const entries = Object.entries(logData);
@@ -1165,5 +1090,7 @@ export function KeyChecker({
         </div>
     );
 }
+
+    
 
     
