@@ -25,6 +25,9 @@ import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/comp
 import { ScrollArea } from "../ui/scroll-area";
 import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
+import { DataTable } from "./data-table";
+import { getColumns } from "@/lib/columns-helper";
 
 
 // Types
@@ -101,6 +104,14 @@ type RemovedLineLog = {
     line: string;
 };
 
+type DivergenceRemovalLog = {
+    [key: string]: {
+        parentLine: RemovedLineLog;
+        childrenLines: RemovedLineLog[];
+    };
+};
+
+
 const GRANTEL_CNPJ = "81732042000119";
 const GRANTEL_IE = "9015130668";
 const GRANTEL_UF = "PR";
@@ -174,7 +185,7 @@ const processSpedFileInBrowser = (
         count9900: [],
         blockCount: [],
         totalLineCount: [],
-        divergenceRemoval: [],
+        divergenceRemoval: {},
     };
     const _log = (message: string) => log.push(`[${new Date().toLocaleTimeString()}] ${message}`);
 
@@ -221,6 +232,7 @@ const processSpedFileInBrowser = (
     if (config.removeDivergent) {
         const filteredLines: string[] = [];
         let isInsideDivergentBlock = false;
+        let currentDivergentKey: string | null = null;
         _log(`Iniciando verificação de remoção para ${divergentKeys.size} chaves com divergência.`);
 
         for(let i = 0; i < lines.length; i++) {
@@ -232,26 +244,32 @@ const processSpedFileInBrowser = (
 
             if (regType === 'C100' || regType === 'D100') {
                 isInsideDivergentBlock = false;
+                currentDivergentKey = null;
                 const keyIndex = regType === 'C100' ? 9 : 10;
                 const key = parts.length > keyIndex ? cleanAndToStr(parts[keyIndex]) : '';
                 
                 if (key && divergentKeys.has(key)) {
                     isInsideDivergentBlock = true;
-                    modifications.divergenceRemoval.push({ lineNumber: i + 1, line: line });
+                    currentDivergentKey = key;
+                    modifications.divergenceRemoval[key] = {
+                        parentLine: { lineNumber: i + 1, line: line },
+                        childrenLines: []
+                    };
                     linesModifiedCount++;
                 }
             }
             
             if (isInsideDivergentBlock) {
-                 if (regType !== 'C100' && regType !== 'D100') {
-                     modifications.divergenceRemoval.push({ lineNumber: i + 1, line: line });
+                 if (currentDivergentKey && regType !== 'C100' && regType !== 'D100') {
+                     modifications.divergenceRemoval[currentDivergentKey].childrenLines.push({ lineNumber: i + 1, line: line });
                  }
                 continue; 
             }
             
             filteredLines.push(line);
         }
-         _log(`Remoção concluída. ${modifications.divergenceRemoval.length} linhas removidas devido a divergências.`);
+         const totalRemoved = Object.values(modifications.divergenceRemoval).reduce((acc, curr) => acc + 1 + curr.childrenLines.length, 0);
+         _log(`Remoção concluída. ${totalRemoved} linhas removidas devido a ${Object.keys(modifications.divergenceRemoval).length} chaves com divergência.`);
         intermediateLines = filteredLines;
     }
 
@@ -781,7 +799,7 @@ export function KeyChecker({
                     error: err.message,
                     linesRead: 0,
                     linesModified: 0,
-                    modifications: { truncation: [], unitStandardization: [], removed0190: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [], divergenceRemoval: [] },
+                    modifications: { truncation: [], unitStandardization: [], removed0190: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [], divergenceRemoval: {} },
                     log: [`ERRO FATAL: ${err.message}`]
                 });
                 toast({ variant: "destructive", title: "Erro na correção", description: err.message });
@@ -839,6 +857,41 @@ export function KeyChecker({
             </div>
         </ScrollArea>
     );
+    
+    const DivergenceRemovalDisplay = ({ logData }: { logData: DivergenceRemovalLog }) => {
+        const entries = Object.entries(logData);
+        if (entries.length === 0) {
+            return <p className="text-muted-foreground text-center p-4">Nenhuma linha removida por divergência.</p>
+        }
+        return (
+            <Accordion type="single" collapsible className="w-full">
+                {entries.map(([key, value]) => (
+                     <AccordionItem value={key} key={key}>
+                        <AccordionTrigger>
+                            <div className="flex flex-col text-left">
+                                <span className="font-semibold">Chave: {key}</span>
+                                <span className="text-sm text-muted-foreground">Total de {1 + value.childrenLines.length} linhas removidas</span>
+                            </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                             <div className="p-2 border rounded-md font-mono text-xs">
+                                <p className="font-bold border-b pb-1 mb-1">Linha Principal (L: {value.parentLine.lineNumber})</p>
+                                <p className="text-red-600">{value.parentLine.line}</p>
+                                {value.childrenLines.length > 0 && (
+                                     <>
+                                        <p className="font-bold border-b pb-1 mb-1 mt-2">Registos Filhos ({value.childrenLines.length})</p>
+                                        {value.childrenLines.map(child => (
+                                            <p key={child.lineNumber} className="text-red-600/80">L{child.lineNumber}: {child.line}</p>
+                                        ))}
+                                    </>
+                                )}
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
+                ))}
+            </Accordion>
+        );
+    };
 
     return (
         <div className="space-y-8">
@@ -967,7 +1020,7 @@ export function KeyChecker({
                                                 <div className="rounded-lg border bg-card p-4"><p className="text-sm font-medium text-muted-foreground">Linhas Modificadas</p><p className="text-2xl font-bold">{correctionResult.linesModified}</p></div>
                                             </div>
                                              <div className="mt-6 space-y-2 text-sm">
-                                                <p><strong className="text-primary">Remoção por Divergência:</strong> {correctionResult.modifications.divergenceRemoval.length} linhas removidas.</p>
+                                                <p><strong className="text-primary">Remoção por Divergência:</strong> {Object.values(correctionResult.modifications.divergenceRemoval).reduce((acc, curr) => acc + 1 + curr.childrenLines.length, 0)} linhas removidas.</p>
                                                 <p><strong className="text-primary">Contadores:</strong> {correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length} linhas corrigidas.</p>
                                                 <p><strong className="text-primary">Inscrição Estadual (NF-e):</strong> {correctionResult.modifications.ieCorrection.length} linhas corrigidas.</p>
                                                 <p><strong className="text-primary">Série (CT-e):</strong> {correctionResult.modifications.cteSeriesCorrection.length} linhas corrigidas.</p>
@@ -981,7 +1034,7 @@ export function KeyChecker({
                                         <TabsContent value="modifications" className="mt-4 flex-grow overflow-hidden">
                                             <Tabs defaultValue="divergenceRemoval" className="flex flex-col h-full">
                                                 <TabsList className="h-auto flex-wrap justify-start">
-                                                    <TabsTrigger value="divergenceRemoval">Remoção por Divergência ({correctionResult.modifications.divergenceRemoval.length})</TabsTrigger>
+                                                    <TabsTrigger value="divergenceRemoval">Remoção por Divergência ({Object.keys(correctionResult.modifications.divergenceRemoval).length})</TabsTrigger>
                                                     <TabsTrigger value="counters">Contadores ({correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length})</TabsTrigger>
                                                     <TabsTrigger value="ie">IE (NF-e) ({correctionResult.modifications.ieCorrection.length})</TabsTrigger>
                                                     <TabsTrigger value="cte_series">Série (CT-e) ({correctionResult.modifications.cteSeriesCorrection.length})</TabsTrigger>
@@ -996,7 +1049,9 @@ export function KeyChecker({
                                                             <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos C100/D100 e seus filhos que apresentavam divergência de IE/UF foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
                                                             <span>Registos removidos por divergência de cadastro (IE/UF).</span>
                                                         </div>
-                                                        <RemovedLinesDisplay logs={correctionResult.modifications.divergenceRemoval} />
+                                                        <ScrollArea className="h-[calc(80vh-280px)] pr-4">
+                                                          <DivergenceRemovalDisplay logData={correctionResult.modifications.divergenceRemoval} />
+                                                        </ScrollArea>
                                                     </TabsContent>
                                                     <TabsContent value="counters" className="h-full">
                                                          <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
@@ -1129,5 +1184,7 @@ export function KeyChecker({
         </div>
     );
 }
+
+    
 
     
