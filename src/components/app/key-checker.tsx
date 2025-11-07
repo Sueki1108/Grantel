@@ -389,37 +389,47 @@ const processSpedFileInBrowser = (
             if (!line) continue;
             const parts = line.split('|');
             const regType = parts[1];
-
-            if (regType && regType.endsWith('990')) {
-                const blockChar = regType.charAt(0);
-                const expectedCount = blockLineCounts[blockChar] || 0;
-                if (parts.length > 2 && parseInt(parts[2]) !== expectedCount) {
+            
+            // Corrige o totalizador do bloco 0 (registro 0990)
+            if (regType === '0990') {
+                 const expectedCount = blockLineCounts['0'] || 0;
+                 if (parts.length > 2 && parseInt(parts[2], 10) !== expectedCount) {
                     const originalLine = line;
                     parts[2] = String(expectedCount);
-                    const correctedLine = parts.join('|');
-                    modifiedLines[i] = correctedLine;
-                    modifications.blockCount.push({ lineNumber: i + 1, original: originalLine, corrected: correctedLine });
+                    modifiedLines[i] = parts.join('|');
+                    modifications.blockCount.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
+                    linesModifiedCount++;
+                 }
+            // Corrige totalizadores de outros blocos (C990, D990, etc.)
+            } else if (regType && regType.endsWith('990') && regType !== '0990') {
+                const blockChar = regType.charAt(0);
+                const expectedCount = blockLineCounts[blockChar] || 0;
+                if (parts.length > 2 && parseInt(parts[2], 10) !== expectedCount) {
+                    const originalLine = line;
+                    parts[2] = String(expectedCount);
+                    modifiedLines[i] = parts.join('|');
+                    modifications.blockCount.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
                     linesModifiedCount++;
                 }
+            // Corrige totalizadores de registos (9900) para todos os tipos (C100, C170, C190, etc.)
             } else if (regType === '9900' && parts.length > 3) {
                 const countedReg = parts[2];
                 const expectedCount = recordCounts[countedReg] || 0;
-                if (parseInt(parts[3]) !== expectedCount) {
+                if (parseInt(parts[3], 10) !== expectedCount) {
                     const originalLine = line;
                     parts[3] = String(expectedCount);
-                    const correctedLine = parts.join('|');
-                    modifiedLines[i] = correctedLine;
-                    modifications.count9900.push({ lineNumber: i + 1, original: originalLine, corrected: correctedLine });
+                    modifiedLines[i] = parts.join('|');
+                    modifications.count9900.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
                     linesModifiedCount++;
                 }
+            // Corrige o totalizador geral do ficheiro (9999)
             } else if (regType === '9999') {
                 const expectedTotal = modifiedLines.length;
-                if (parts.length > 2 && parseInt(parts[2]) !== expectedTotal) {
+                if (parts.length > 2 && parseInt(parts[2], 10) !== expectedTotal) {
                     const originalLine = line;
                     parts[2] = String(expectedTotal);
-                    const correctedLine = parts.join('|');
-                    modifiedLines[i] = correctedLine;
-                    modifications.totalLineCount.push({ lineNumber: i + 1, original: originalLine, corrected: correctedLine });
+                    modifiedLines[i] = parts.join('|');
+                    modifications.totalLineCount.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
                     linesModifiedCount++;
                 }
             }
