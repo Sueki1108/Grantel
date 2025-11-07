@@ -782,9 +782,9 @@ export function KeyChecker({
 
         setTimeout(async () => {
             try {
-                const divergentKeys = new Set(
-                    [...results.ieDivergences, ...results.ufDivergences].map(d => d['Chave de Acesso'])
-                );
+                const ieDivergentKeys = new Set(results.ieDivergences.map(d => d['Chave de Acesso']));
+                const ufDivergentKeys = new Set(results.ufDivergences.map(d => d['Chave de Acesso']));
+                const divergentKeys = new Set([...ieDivergentKeys].filter(key => ufDivergentKeys.has(key)));
                 
                 const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
                 const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData, divergentKeys, correctionConfig);
@@ -1184,6 +1184,8 @@ export function KeyChecker({
         </div>
     );
 }
+
+    
 
     
 
