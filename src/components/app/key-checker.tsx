@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -287,7 +286,7 @@ const processSpedFileInBrowser = (
         for (let i = 0; i < intermediateLines.length; i++) {
             const line = intermediateLines[i];
             const parts = line.split('|');
-            if (parts.length > 2 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
+            if (parts.length > 1 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
                 modifications.removed0200.push({ lineNumber: i + 1, line });
                 linesModifiedCount++;
                 continue; // Skip this line
@@ -813,8 +812,8 @@ export function KeyChecker({
 
         setTimeout(async () => {
             try {
-                const ieDivergentKeys = new Set((results.ieDivergences || []).map(d => d['Chave de Acesso']));
-                const ufDivergentKeys = new Set((results.ufDivergences || []).map(d => d['Chave de Acesso']));
+                const ieDivergentKeys = new Set(results.ieDivergences.map(d => d['Chave de Acesso']));
+                const ufDivergentKeys = new Set(results.ufDivergences.map(d => d['Chave de Acesso']));
                 
                 const divergentKeys = new Set([...ieDivergentKeys].filter(key => ufDivergentKeys.has(key)));
                 
