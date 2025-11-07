@@ -26,8 +26,6 @@ import { ScrollArea } from "../ui/scroll-area";
 import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
-import { DataTable } from "./data-table";
-import { getColumns } from "@/lib/columns-helper";
 
 
 // Types
@@ -125,6 +123,8 @@ export type SpedCorrectionConfig = {
     fixTruncation: boolean;
     fixUnits: boolean;
     remove0190: boolean;
+    removeUnusedProducts: boolean;
+    removeUnusedParticipants: boolean;
 };
 
 const correctionConfigLabels: Record<keyof SpedCorrectionConfig, string> = {
@@ -136,6 +136,8 @@ const correctionConfigLabels: Record<keyof SpedCorrectionConfig, string> = {
     fixTruncation: "Limitar Campos de Texto a 235 Caracteres",
     fixUnits: "Padronizar Unidades de Medida para 'un'",
     remove0190: "Remover Registos 0190 Desnecessários",
+    removeUnusedProducts: "Remover Produtos (0200) Não Utilizados em Itens (C170)",
+    removeUnusedParticipants: "Remover Participantes (0150) Não Utilizados (C100/D100)"
 };
 
 
@@ -179,6 +181,8 @@ const processSpedFileInBrowser = (
         truncation: [],
         unitStandardization: [],
         removed0190: [],
+        removed0200: [],
+        removed0150: [],
         addressSpaces: [],
         ieCorrection: [],
         cteSeriesCorrection: [],
@@ -222,10 +226,6 @@ const processSpedFileInBrowser = (
 
     const lines = spedFileContent.split(/\r?\n/);
     let linesModifiedCount = 0;
-
-    const TRUNCATION_CODES = new Set(['0450', '0460', 'C110']);
-    const MAX_CHARS_TRUNCATION = 235;
-    const UNIT_FIELD_CONFIG: Record<string, number> = { '0200': 6, 'C170': 6 };
     
     let intermediateLines: string[] = lines;
 
@@ -269,11 +269,73 @@ const processSpedFileInBrowser = (
             filteredLines.push(line);
         }
          const totalRemoved = Object.values(modifications.divergenceRemoval).reduce((acc, curr) => acc + 1 + curr.childrenLines.length, 0);
-         _log(`Remoção concluída. ${totalRemoved} linhas removidas devido a ${Object.keys(modifications.divergenceRemoval).length} chaves com divergência.`);
+         _log(`Remoção por divergência concluída. ${totalRemoved} linhas removidas devido a ${Object.keys(modifications.divergenceRemoval).length} chaves com divergência.`);
+        intermediateLines = filteredLines;
+    }
+
+    if (config.removeUnusedProducts) {
+        _log("Iniciando remoção de produtos (0200) não utilizados.");
+        const usedProductCodes = new Set<string>();
+        intermediateLines.forEach(line => {
+            if (line.startsWith('|C170|')) {
+                const parts = line.split('|');
+                if (parts.length > 2 && parts[2]) {
+                    usedProductCodes.add(parts[2]);
+                }
+            }
+        });
+
+        const filteredLines: string[] = [];
+        for (let i = 0; i < intermediateLines.length; i++) {
+            const line = intermediateLines[i];
+            if (line.startsWith('|0200|')) {
+                const parts = line.split('|');
+                if (parts.length > 2 && !usedProductCodes.has(parts[2])) {
+                    modifications.removed0200.push({ lineNumber: i + 1, line });
+                    linesModifiedCount++;
+                    continue; // Skip this line
+                }
+            }
+            filteredLines.push(line);
+        }
+        _log(`Remoção de produtos não utilizados concluída. ${modifications.removed0200.length} registos 0200 removidos.`);
+        intermediateLines = filteredLines;
+    }
+    
+     if (config.removeUnusedParticipants) {
+        _log("Iniciando remoção de participantes (0150) não utilizados.");
+        const usedParticipantCodes = new Set<string>();
+        intermediateLines.forEach(line => {
+            if (line.startsWith('|C100|') || line.startsWith('|D100|')) {
+                const parts = line.split('|');
+                if (parts.length > 4 && parts[4]) {
+                    usedParticipantCodes.add(parts[4]);
+                }
+            }
+        });
+
+        const filteredLines: string[] = [];
+        for (let i = 0; i < intermediateLines.length; i++) {
+            const line = intermediateLines[i];
+            if (line.startsWith('|0150|')) {
+                const parts = line.split('|');
+                if (parts.length > 2 && !usedParticipantCodes.has(parts[2])) {
+                    modifications.removed0150.push({ lineNumber: i + 1, line });
+                    linesModifiedCount++;
+                    continue; // Skip this line
+                }
+            }
+            filteredLines.push(line);
+        }
+        _log(`Remoção de participantes não utilizados concluída. ${modifications.removed0150.length} registos 0150 removidos.`);
         intermediateLines = filteredLines;
     }
 
     let modifiedLines: string[] = [];
+    const TRUNCATION_CODES = new Set(['0450', '0460', 'C110']);
+    const MAX_CHARS_TRUNCATION = 235;
+    const UNIT_FIELD_CONFIG: Record<string, number> = { '0200': 6, 'C170': 6 };
+
     for (let i = 0; i < intermediateLines.length; i++) {
         let originalLine = intermediateLines[i];
         if (!originalLine) continue;
@@ -390,7 +452,6 @@ const processSpedFileInBrowser = (
             const parts = line.split('|');
             const regType = parts[1];
             
-            // Corrige o totalizador do bloco 0 (registro 0990)
             if (regType === '0990') {
                  const expectedCount = blockLineCounts['0'] || 0;
                  if (parts.length > 2 && parseInt(parts[2], 10) !== expectedCount) {
@@ -400,7 +461,6 @@ const processSpedFileInBrowser = (
                     modifications.blockCount.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
                     linesModifiedCount++;
                  }
-            // Corrige totalizadores de outros blocos (C990, D990, etc.)
             } else if (regType && regType.endsWith('990') && regType !== '0990') {
                 const blockChar = regType.charAt(0);
                 const expectedCount = blockLineCounts[blockChar] || 0;
@@ -411,7 +471,6 @@ const processSpedFileInBrowser = (
                     modifications.blockCount.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
                     linesModifiedCount++;
                 }
-            // Corrige totalizadores de registos (9900) para todos os tipos (C100, C170, C190, etc.)
             } else if (regType === '9900' && parts.length > 3) {
                 const countedReg = parts[2];
                 const expectedCount = recordCounts[countedReg] || 0;
@@ -422,7 +481,6 @@ const processSpedFileInBrowser = (
                     modifications.count9900.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
                     linesModifiedCount++;
                 }
-            // Corrige o totalizador geral do ficheiro (9999)
             } else if (regType === '9999') {
                 const expectedTotal = modifiedLines.length;
                 if (parts.length > 2 && parseInt(parts[2], 10) !== expectedTotal) {
@@ -452,7 +510,6 @@ const processSpedFileInBrowser = (
 const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: string[], logFn: (message: string) => void): Promise<{
     keyCheckResults?: KeyCheckResult;
     spedInfo?: SpedInfo | null;
-    allSpedKeys?: SpedKeyObject[];
     error?: string;
 }> => {
     logFn("Iniciando verificação de chaves SPED no navegador.");
@@ -628,16 +685,13 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     logFn(`- ${dateDivergences.length} divergências de data encontradas.`);
     logFn(`- ${valueDivergences.length} divergências de valor encontradas.`);
     logFn(`- Total de ${consolidatedDivergences.length} chaves com alguma divergência.`);
-
-
-    const allSpedKeys: SpedKeyObject[] = [...spedDocData.keys()].map(key => ({ key, foundInSped: true }));
     
     const keyCheckResults: KeyCheckResult = { 
         keysNotFoundInTxt, keysInTxtNotInSheet, duplicateKeysInSheet, duplicateKeysInTxt, validKeys,
         dateDivergences, valueDivergences, ufDivergences, ieDivergences, consolidatedDivergences,
     };
 
-    return { keyCheckResults, spedInfo: currentSpedInfo, allSpedKeys };
+    return { keyCheckResults, spedInfo: currentSpedInfo };
 }
 
 // Main Component
@@ -671,7 +725,8 @@ export function KeyChecker({
     const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
     const [correctionConfig, setCorrectionConfig] = useState<SpedCorrectionConfig>({
         removeDivergent: true, fixCounters: true, fixIE: true, fixCteSeries: true,
-        fixAddressSpaces: true, fixTruncation: true, fixUnits: true, remove0190: true
+        fixAddressSpaces: true, fixTruncation: true, fixUnits: true, remove0190: true,
+        removeUnusedProducts: true, removeUnusedParticipants: true
     });
     
     useEffect(() => {
@@ -766,8 +821,9 @@ export function KeyChecker({
 
         setTimeout(async () => {
             try {
-                const ieDivergentKeys = new Set(results.ieDivergences?.map(d => d['Chave de Acesso']) || []);
-                const ufDivergentKeys = new Set(results.ufDivergences?.map(d => d['Chave de Acesso']) || []);
+                const ieDivergentKeys = new Set(results.ieDivergences?.map(d => d['Chave de Acesso']));
+                const ufDivergentKeys = new Set(results.ufDivergences?.map(d => d['Chave de Acesso']));
+                
                 const divergentKeys = new Set([...ieDivergentKeys].filter(key => ufDivergentKeys.has(key)));
                 
                 const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
@@ -783,7 +839,7 @@ export function KeyChecker({
                     error: err.message,
                     linesRead: 0,
                     linesModified: 0,
-                    modifications: { truncation: [], unitStandardization: [], removed0190: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [], divergenceRemoval: {} },
+                    modifications: { truncation: [], unitStandardization: [], removed0190: [], removed0200: [], removed0150: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [], divergenceRemoval: {} },
                     log: [`ERRO FATAL: ${err.message}`]
                 });
                 toast({ variant: "destructive", title: "Erro na correção", description: err.message });
@@ -859,7 +915,7 @@ export function KeyChecker({
         );
     };
     
-    const RemovedLinesDisplay = ({ logs }: { logs: RemovedLineLog[] }) => {
+    const RemovedLinesDisplay = ({ logs, logType }: { logs: RemovedLineLog[], logType: string }) => {
         if (!logs || logs.length === 0) return <p className="text-muted-foreground text-center p-4">Nenhuma linha deste tipo foi removida.</p>;
         return (
             <ScrollArea className="h-[calc(80vh-280px)] pr-4">
@@ -953,6 +1009,7 @@ export function KeyChecker({
                                         Selecione quais correções automáticas deseja aplicar ao ficheiro SPED.
                                     </DialogDescription>
                                 </DialogHeader>
+                                <ScrollArea className="h-96 pr-6">
                                 <div className="space-y-4 py-4">
                                     {Object.entries(correctionConfigLabels).map(([key, label]) => (
                                         <div key={key} className="flex items-center space-x-2">
@@ -969,6 +1026,7 @@ export function KeyChecker({
                                         </div>
                                     ))}
                                 </div>
+                                </ScrollArea>
                             </DialogContent>
                         </Dialog>
                         <Dialog open={isCorrectionModalOpen} onOpenChange={setIsCorrectionModalOpen}>
@@ -989,7 +1047,7 @@ export function KeyChecker({
                                     <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
                                 ) : correctionResult ? (
                                     <Tabs defaultValue="summary" className="flex flex-col h-full">
-                                         <TabsList className="grid w-full grid-cols-3">
+                                        <TabsList className="grid w-full grid-cols-3">
                                             <TabsTrigger value="summary">Resumo</TabsTrigger>
                                             <TabsTrigger value="modifications">Modificações ({correctionResult.linesModified})</TabsTrigger>
                                             <TabsTrigger value="full_log">Log Completo</TabsTrigger>
@@ -998,11 +1056,13 @@ export function KeyChecker({
                                         <TabsContent value="summary" className="mt-4 flex-grow">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-center">
                                                 <div className="rounded-lg border bg-card p-4"><p className="text-sm font-medium text-muted-foreground">Linhas Lidas</p><p className="text-2xl font-bold">{correctionResult.linesRead}</p></div>
-                                                <div className="rounded-lg border bg-card p-4"><p className="text-sm font-medium text-muted-foreground">Linhas Modificadas</p><p className="text-2xl font-bold">{correctionResult.linesModified}</p></div>
+                                                <div className="rounded-lg border bg-card p-4"><p className="text-sm font-medium text-muted-foreground">Linhas Modificadas/Removidas</p><p className="text-2xl font-bold">{correctionResult.linesModified}</p></div>
                                             </div>
                                              <div className="mt-6 space-y-2 text-sm">
-                                                <p><strong className="text-primary">Remoção por Divergência:</strong> {Object.values(correctionResult.modifications.divergenceRemoval).reduce((acc: any, curr: any) => acc + 1 + curr.childrenLines.length, 0)} linhas removidas.</p>
-                                                <p><strong className="text-primary">Contadores:</strong> {correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length} linhas corrigidas.</p>
+                                                <p><strong className="text-primary">Remoção por Divergência (IE/UF):</strong> {Object.values(correctionResult.modifications.divergenceRemoval).reduce((acc: any, curr: any) => acc + 1 + curr.childrenLines.length, 0)} linhas removidas.</p>
+                                                <p><strong className="text-primary">Produtos Não Utilizados (0200):</strong> {correctionResult.modifications.removed0200.length} registos removidos.</p>
+                                                <p><strong className="text-primary">Participantes Não Utilizados (0150):</strong> {correctionResult.modifications.removed0150.length} registos removidos.</p>
+                                                <p><strong className="text-primary">Contadores (9900/x990/9999):</strong> {correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length} linhas corrigidas.</p>
                                                 <p><strong className="text-primary">Inscrição Estadual (NF-e):</strong> {correctionResult.modifications.ieCorrection.length} linhas corrigidas.</p>
                                                 <p><strong className="text-primary">Série (CT-e):</strong> {correctionResult.modifications.cteSeriesCorrection.length} linhas corrigidas.</p>
                                                 <p><strong className="text-primary">Endereços (Espaços):</strong> {correctionResult.modifications.addressSpaces.length} linhas corrigidas.</p>
@@ -1015,74 +1075,54 @@ export function KeyChecker({
                                         <TabsContent value="modifications" className="mt-4 flex-grow overflow-hidden">
                                             <Tabs defaultValue="divergenceRemoval" className="flex flex-col h-full">
                                                 <TabsList className="h-auto flex-wrap justify-start">
-                                                    <TabsTrigger value="divergenceRemoval">Remoção por Divergência ({Object.keys(correctionResult.modifications.divergenceRemoval).length})</TabsTrigger>
-                                                    <TabsTrigger value="counters">Contadores ({correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length})</TabsTrigger>
-                                                    <TabsTrigger value="ie">IE (NF-e) ({correctionResult.modifications.ieCorrection.length})</TabsTrigger>
-                                                    <TabsTrigger value="cte_series">Série (CT-e) ({correctionResult.modifications.cteSeriesCorrection.length})</TabsTrigger>
-                                                    <TabsTrigger value="address">Endereços ({correctionResult.modifications.addressSpaces.length})</TabsTrigger>
-                                                    <TabsTrigger value="truncation">Truncamento ({correctionResult.modifications.truncation.length})</TabsTrigger>
-                                                    <TabsTrigger value="units">Unidades ({correctionResult.modifications.unitStandardization.length})</TabsTrigger>
-                                                    <TabsTrigger value="removed">0190 Removidos ({correctionResult.modifications.removed0190.length})</TabsTrigger>
+                                                    <TabsTrigger value="divergenceRemoval">Divergência ({Object.keys(correctionResult.modifications.divergenceRemoval).length})</TabsTrigger>
+                                                    <TabsTrigger value="removed0150">Part. (0150) Removidos ({correctionResult.modifications.removed0150.length})</TabsTrigger>
+                                                    <TabsTrigger value="removed0200">Prod. (0200) Removidos ({correctionResult.modifications.removed0200.length})</TabsTrigger>
+                                                    <TabsTrigger value="removed0190">0190 Removidos ({correctionResult.modifications.removed0190.length})</TabsTrigger>
+                                                    <TabsTrigger value="counters">Contadores</TabsTrigger>
+                                                    <TabsTrigger value="ie">IE (NF-e)</TabsTrigger>
+                                                    <TabsTrigger value="cte_series">Série (CT-e)</TabsTrigger>
+                                                    <TabsTrigger value="address">Endereços</TabsTrigger>
+                                                    <TabsTrigger value="truncation">Truncamento</TabsTrigger>
+                                                    <TabsTrigger value="units">Unidades</TabsTrigger>
                                                 </TabsList>
                                                 <div className="flex-grow overflow-hidden mt-2">
                                                     <TabsContent value="divergenceRemoval" className="h-full">
                                                          <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
                                                             <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos C100/D100 e seus filhos que apresentavam divergência de IE/UF foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Registos removidos por divergência de cadastro (IE/UF).</span>
+                                                            <span>Registos removidos por divergência de cadastro (IE e UF).</span>
                                                         </div>
                                                         <ScrollArea className="h-[calc(80vh-280px)] pr-4">
                                                           <DivergenceRemovalDisplay logData={correctionResult.modifications.divergenceRemoval} />
                                                         </ScrollArea>
                                                     </TabsContent>
-                                                    <TabsContent value="counters" className="h-full">
-                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>A contagem de linhas em cada bloco (registros x990) e a contagem total (9999) foram recalculadas.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Contagem de linhas de cada bloco e do ficheiro recalculada.</span>
-                                                        </div>
-                                                        <ModificationDisplay logs={[...correctionResult.modifications.blockCount, ...correctionResult.modifications.totalLineCount, ...correctionResult.modifications.count9900]} />
-                                                    </TabsContent>
-                                                    <TabsContent value="ie" className="h-full">
-                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>A Inscrição Estadual (IE) de participantes (registo 0150) foi corrigida com base nos dados dos XMLs.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>IE do participante corrigida com base nos XMLs.</span>
-                                                        </div>
-                                                        <ModificationDisplay logs={correctionResult.modifications.ieCorrection} />
-                                                    </TabsContent>
-                                                    <TabsContent value="cte_series" className="h-full">
-                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>A série de CT-es (registo D100) foi corrigida com base nos dados dos XMLs de CTe.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Série do CT-e (D100) corrigida com base nos XMLs.</span>
-                                                        </div>
-                                                        <ModificationDisplay logs={correctionResult.modifications.cteSeriesCorrection} />
-                                                    </TabsContent>
-                                                    <TabsContent value="address" className="h-full">
-                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Espaços múltiplos no campo de complemento do endereço (registro 0150) foram substituídos por um único espaço.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Espaços múltiplos no complemento do endereço foram corrigidos.</span>
-                                                        </div>
-                                                        <ModificationDisplay logs={correctionResult.modifications.addressSpaces} />
-                                                    </TabsContent>
-                                                    <TabsContent value="truncation" className="h-full">
-                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Campos de texto livre (ex: observações) foram limitados a 235 caracteres para evitar erros de importação.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Campos de texto livre (observações) foram limitados a 235 caracteres.</span>
-                                                        </div>
-                                                        <ModificationDisplay logs={correctionResult.modifications.truncation} />
-                                                    </TabsContent>
-                                                    <TabsContent value="units" className="h-full">
+                                                    <TabsContent value="removed0150" className="h-full">
                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Unidades de medida de produtos foram padronizadas para 'un' para manter a consistência.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                            <span>Unidades de medida de produtos foram padronizadas para 'un'.</span>
+                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de participantes (0150) que não estavam associados a nenhum documento fiscal (C100/D100) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <span>Participantes não utilizados foram removidos.</span>
                                                         </div>
-                                                        <ModificationDisplay logs={correctionResult.modifications.unitStandardization} />
+                                                        <RemovedLinesDisplay logs={correctionResult.modifications.removed0150} logType="0150" />
                                                     </TabsContent>
-                                                     <TabsContent value="removed" className="h-full">
+                                                    <TabsContent value="removed0200" className="h-full">
+                                                        <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
+                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de produtos (0200) que não foram utilizados em nenhum item de nota fiscal (C170) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <span>Produtos não utilizados foram removidos.</span>
+                                                        </div>
+                                                        <RemovedLinesDisplay logs={correctionResult.modifications.removed0200} logType="0200" />
+                                                    </TabsContent>
+                                                    <TabsContent value="removed0190" className="h-full">
                                                          <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registros do tipo '0190' desnecessários (todos exceto os definidos) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registros do tipo '0190' desnecessários (todos exceto 'un' e 'pc') foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
                                                             <span>Registros '0190' desnecessários foram removidos.</span>
                                                         </div>
-                                                        <RemovedLinesDisplay logs={correctionResult.modifications.removed0190} />
+                                                        <RemovedLinesDisplay logs={correctionResult.modifications.removed0190} logType="0190" />
                                                     </TabsContent>
+                                                    <TabsContent value="counters" className="h-full"><ModificationDisplay logs={[...correctionResult.modifications.blockCount, ...correctionResult.modifications.totalLineCount, ...correctionResult.modifications.count9900]} /></TabsContent>
+                                                    <TabsContent value="ie" className="h-full"><ModificationDisplay logs={correctionResult.modifications.ieCorrection} /></TabsContent>
+                                                    <TabsContent value="cte_series" className="h-full"><ModificationDisplay logs={correctionResult.modifications.cteSeriesCorrection} /></TabsContent>
+                                                    <TabsContent value="address" className="h-full"><ModificationDisplay logs={correctionResult.modifications.addressSpaces} /></TabsContent>
+                                                    <TabsContent value="truncation" className="h-full"><ModificationDisplay logs={correctionResult.modifications.truncation} /></TabsContent>
+                                                    <TabsContent value="units" className="h-full"><ModificationDisplay logs={correctionResult.modifications.unitStandardization} /></TabsContent>
                                                 </div>
                                             </Tabs>
                                         </TabsContent>
