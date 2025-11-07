@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -227,7 +228,7 @@ const processSpedFileInBrowser = (
     
     let intermediateLines: string[] = lines;
 
-    if (config.removeDivergent) {
+    if (config.removeDivergent && divergentKeys.size > 0) {
         const filteredLines: string[] = [];
         let isInsideDivergentBlock = false;
         let currentDivergentKey: string | null = null;
@@ -275,24 +276,20 @@ const processSpedFileInBrowser = (
         _log("Iniciando remoção de produtos (0200) não utilizados.");
         const usedProductCodes = new Set<string>();
         intermediateLines.forEach(line => {
-            if (line.startsWith('|C170|')) {
-                const parts = line.split('|');
-                if (parts.length > 2 && parts[2]) {
-                    usedProductCodes.add(parts[2]);
-                }
+            const parts = line.split('|');
+            if (parts.length > 2 && parts[1] === 'C170' && parts[2]) {
+                usedProductCodes.add(parts[2]);
             }
         });
 
         const filteredLines: string[] = [];
         for (let i = 0; i < intermediateLines.length; i++) {
             const line = intermediateLines[i];
-            if (line.startsWith('|0200|')) {
-                const parts = line.split('|');
-                if (parts.length > 2 && !usedProductCodes.has(parts[2])) {
-                    modifications.removed0200.push({ lineNumber: i + 1, line });
-                    linesModifiedCount++;
-                    continue; // Skip this line
-                }
+            const parts = line.split('|');
+            if (parts.length > 2 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
+                modifications.removed0200.push({ lineNumber: i + 1, line });
+                linesModifiedCount++;
+                continue; // Skip this line
             }
             filteredLines.push(line);
         }
@@ -304,24 +301,20 @@ const processSpedFileInBrowser = (
         _log("Iniciando remoção de participantes (0150) não utilizados.");
         const usedParticipantCodes = new Set<string>();
         intermediateLines.forEach(line => {
-            if (line.startsWith('|C100|') || line.startsWith('|D100|')) {
-                const parts = line.split('|');
-                if (parts.length > 4 && parts[4]) {
-                    usedParticipantCodes.add(parts[4]);
-                }
+            const parts = line.split('|');
+            if (parts.length > 4 && (parts[1] === 'C100' || parts[1] === 'D100') && parts[4]) {
+                usedParticipantCodes.add(parts[4]);
             }
         });
 
         const filteredLines: string[] = [];
         for (let i = 0; i < intermediateLines.length; i++) {
             const line = intermediateLines[i];
-            if (line.startsWith('|0150|')) {
-                const parts = line.split('|');
-                if (parts.length > 2 && !usedParticipantCodes.has(parts[2])) {
-                    modifications.removed0150.push({ lineNumber: i + 1, line });
-                    linesModifiedCount++;
-                    continue; // Skip this line
-                }
+            const parts = line.split('|');
+            if (parts.length > 2 && parts[1] === '0150' && !usedParticipantCodes.has(parts[2])) {
+                modifications.removed0150.push({ lineNumber: i + 1, line });
+                linesModifiedCount++;
+                continue; // Skip this line
             }
             filteredLines.push(line);
         }
@@ -821,6 +814,7 @@ export function KeyChecker({
             try {
                 const ieDivergentKeys = new Set(results.ieDivergences?.map(d => d['Chave de Acesso']));
                 const ufDivergentKeys = new Set(results.ufDivergences?.map(d => d['Chave de Acesso']));
+                
                 const divergentKeys = new Set([...ieDivergentKeys].filter(key => ufDivergentKeys.has(key)));
                 
                 const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
@@ -1183,4 +1177,3 @@ export function KeyChecker({
         </div>
     );
 }
-
