@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { KeyRound, FileText, Loader2, Download, FileWarning, UploadCloud, Terminal, Search, Trash2, Copy, ShieldCheck, HelpCircle, X, FileUp, Upload } from "lucide-react";
+import { KeyRound, FileText, Loader2, Download, FileWarning, UploadCloud, Terminal, Search, Trash2, Copy, ShieldCheck, HelpCircle, X, FileUp, Upload, Settings } from "lucide-react";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
 import { LogDisplay } from "@/components/app/log-display";
 import { formatCnpj, cleanAndToStr, parseSpedDate } from "@/lib/utils";
@@ -23,6 +23,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { ScrollArea } from "../ui/scroll-area";
+import { Checkbox } from "../ui/checkbox";
+import { Label } from "../ui/label";
 
 
 // Types
@@ -99,10 +101,31 @@ type RemovedLineLog = {
     line: string;
 };
 
-
 const GRANTEL_CNPJ = "81732042000119";
 const GRANTEL_IE = "9015130668";
 const GRANTEL_UF = "PR";
+
+export type SpedCorrectionConfig = {
+    removeDivergent: boolean;
+    fixCounters: boolean;
+    fixIE: boolean;
+    fixCteSeries: boolean;
+    fixAddressSpaces: boolean;
+    fixTruncation: boolean;
+    fixUnits: boolean;
+    remove0190: boolean;
+};
+
+const correctionConfigLabels: Record<keyof SpedCorrectionConfig, string> = {
+    removeDivergent: "Remover Registos com Divergência de IE/UF",
+    fixCounters: "Recalcular Contadores de Linhas e Blocos",
+    fixIE: "Corrigir Inscrição Estadual (IE) de Participantes (NF-e)",
+    fixCteSeries: "Corrigir Série de CT-e",
+    fixAddressSpaces: "Corrigir Espaços Duplos em Endereços",
+    fixTruncation: "Limitar Campos de Texto a 235 Caracteres",
+    fixUnits: "Padronizar Unidades de Medida para 'un'",
+    remove0190: "Remover Registos 0190 Desnecessários",
+};
 
 
 // =================================================================
@@ -137,7 +160,8 @@ const processSpedFileInBrowser = (
     spedFileContent: string, 
     nfeData: any[], 
     cteData: any[],
-    divergentKeys: Set<string>
+    divergentKeys: Set<string>,
+    config: SpedCorrectionConfig
 ): SpedCorrectionResult => {
     const log: string[] = [];
     const modifications: SpedCorrectionResult['modifications'] = {
@@ -154,10 +178,10 @@ const processSpedFileInBrowser = (
     };
     const _log = (message: string) => log.push(`[${new Date().toLocaleTimeString()}] ${message}`);
 
-    _log(`Iniciando processamento do arquivo no navegador.`);
+    _log(`Iniciando processamento do arquivo SPED com as seguintes configurações: ${JSON.stringify(config)}`);
 
     const cnpjToIeMap = new Map<string, string>();
-    if (nfeData && nfeData.length > 0) {
+    if (config.fixIE && nfeData && nfeData.length > 0) {
         nfeData.forEach(nota => {
             const cnpj = cleanAndToStr(nota.emitCNPJ || nota['CPF/CNPJ do Fornecedor']);
             const ie = cleanAndToStr(nota.emitIE);
@@ -167,11 +191,11 @@ const processSpedFileInBrowser = (
         });
          _log(`Mapa de referência CNPJ x IE (NF-e) criado com ${cnpjToIeMap.size} entradas.`);
     } else {
-        _log("AVISO: Dados de 'Notas Válidas' não disponíveis. A correção de IE para NF-e não será executada.");
+        _log("AVISO: Correção de IE para NF-e desativada ou dados não disponíveis.");
     }
     
     const cteKeyToSeriesMap = new Map<string, string>();
-    if (cteData && cteData.length > 0) {
+    if (config.fixCteSeries && cteData && cteData.length > 0) {
         cteData.forEach(cte => {
             const key = cleanAndToStr(cte['Chave de acesso']);
             const series = cleanAndToStr(cte['Série']);
@@ -181,72 +205,72 @@ const processSpedFileInBrowser = (
         });
         _log(`Mapa de referência Chave CT-e x Série criado com ${cteKeyToSeriesMap.size} entradas.`);
     } else {
-         _log("AVISO: Dados de 'CTEs Válidos' não disponíveis. A correção de Série para CT-e não será executada.");
+         _log("AVISO: Correção de Série para CT-e desativada ou dados não disponíveis.");
     }
 
 
     const lines = spedFileContent.split(/\r?\n/);
-    let modifiedLines: string[] = [];
     let linesModifiedCount = 0;
 
     const TRUNCATION_CODES = new Set(['0450', '0460', 'C110']);
     const MAX_CHARS_TRUNCATION = 235;
     const UNIT_FIELD_CONFIG: Record<string, number> = { '0200': 6, 'C170': 6 };
     
-    // Step 0: Remove divergent records and their children
-    const filteredLines: string[] = [];
-    let isInsideDivergentBlock = false;
-    _log(`Iniciando verificação de remoção para ${divergentKeys.size} chaves com divergência de IE/UF.`);
+    let intermediateLines: string[] = lines;
 
-    for(let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line) continue;
+    if (config.removeDivergent) {
+        const filteredLines: string[] = [];
+        let isInsideDivergentBlock = false;
+        _log(`Iniciando verificação de remoção para ${divergentKeys.size} chaves com divergência.`);
 
-        const parts = line.split('|');
-        const regType = parts[1];
+        for(let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (!line) continue;
 
-        if (regType === 'C100' || regType === 'D100') {
-            isInsideDivergentBlock = false; // Reset on a new main record
-            const keyIndex = regType === 'C100' ? 9 : 10;
-            const key = parts.length > keyIndex ? cleanAndToStr(parts[keyIndex]) : '';
-            
-            if (key && divergentKeys.has(key)) {
-                isInsideDivergentBlock = true;
-                _log(`Divergência encontrada na linha ${i+1}. Removendo registo ${regType} e seus filhos.`);
-                modifications.divergenceRemoval.push({ lineNumber: i + 1, line: line });
-                linesModifiedCount++;
+            const parts = line.split('|');
+            const regType = parts[1];
+
+            if (regType === 'C100' || regType === 'D100') {
+                isInsideDivergentBlock = false;
+                const keyIndex = regType === 'C100' ? 9 : 10;
+                const key = parts.length > keyIndex ? cleanAndToStr(parts[keyIndex]) : '';
+                
+                if (key && divergentKeys.has(key)) {
+                    isInsideDivergentBlock = true;
+                    modifications.divergenceRemoval.push({ lineNumber: i + 1, line: line });
+                    linesModifiedCount++;
+                }
             }
+            
+            if (isInsideDivergentBlock) {
+                 if (regType !== 'C100' && regType !== 'D100') {
+                     modifications.divergenceRemoval.push({ lineNumber: i + 1, line: line });
+                 }
+                continue; 
+            }
+            
+            filteredLines.push(line);
         }
-        
-        if (isInsideDivergentBlock) {
-             if (regType !== 'C100' && regType !== 'D100') {
-                 modifications.divergenceRemoval.push({ lineNumber: i + 1, line: line });
-             }
-            continue; // Skip this line and all children until next C100/D100
-        }
-        
-        filteredLines.push(line);
+         _log(`Remoção concluída. ${modifications.divergenceRemoval.length} linhas removidas devido a divergências.`);
+        intermediateLines = filteredLines;
     }
-     _log(`Remoção concluída. ${modifications.divergenceRemoval.length} linhas removidas devido a divergências.`);
 
-    // Step 1: Initial filtering and modifications on the already filtered lines
-    for (let i = 0; i < filteredLines.length; i++) {
-        let originalLine = filteredLines[i];
-        if (!originalLine) continue; // Skip empty lines
+    let modifiedLines: string[] = [];
+    for (let i = 0; i < intermediateLines.length; i++) {
+        let originalLine = intermediateLines[i];
+        if (!originalLine) continue;
         
         const parts = originalLine.split('|');
         const codeType = parts[1];
-
-        if (codeType === '0190') {
+        
+        if (config.remove0190 && codeType === '0190') {
             const lineToKeep1 = '|0190|un|Unidade|';
             const lineToKeep2 = '|0190|pc|Peça|';
             const trimmedLine = originalLine.trim();
 
             if (trimmedLine !== lineToKeep1 && trimmedLine !== lineToKeep2) {
                 modifications.removed0190.push({ lineNumber: i + 1, line: originalLine });
-                if (!modifications.removed0190.find(log => log.line === originalLine)) {
-                    linesModifiedCount++;
-                }
+                if (!modifications.removed0190.find(log => log.line === originalLine)) linesModifiedCount++;
                 continue;
             }
         }
@@ -254,7 +278,7 @@ const processSpedFileInBrowser = (
         let currentLine = originalLine;
         let lineWasModified = false;
         
-        if (codeType === '0150' && parts.length > 7 && cnpjToIeMap.size > 0) {
+        if (config.fixIE && codeType === '0150' && parts.length > 7 && cnpjToIeMap.size > 0) {
             const cnpj = cleanAndToStr(parts[5]);
             const spedIE = cleanAndToStr(parts[7]);
             const correctIE = cnpjToIeMap.get(cnpj);
@@ -266,7 +290,7 @@ const processSpedFileInBrowser = (
             }
         }
 
-        if (codeType === 'D100' && parts.length > 10 && cteKeyToSeriesMap.size > 0) {
+        if (config.fixCteSeries && codeType === 'D100' && parts.length > 10 && cteKeyToSeriesMap.size > 0) {
             const cteKey = cleanAndToStr(parts[10]);
             const correctSeries = cteKeyToSeriesMap.get(cteKey);
             if (correctSeries) {
@@ -280,7 +304,7 @@ const processSpedFileInBrowser = (
             }
         }
         
-        if (codeType === '0150' && parts.length > 12) {
+        if (config.fixAddressSpaces && codeType === '0150' && parts.length > 12) {
             const addressComplement = parts[12] || '';
             if (/\s{2,}/.test(addressComplement)) {
                 parts[12] = addressComplement.replace(/\s+/g, ' ').trim();
@@ -290,7 +314,7 @@ const processSpedFileInBrowser = (
             }
         }
 
-        if (codeType) {
+        if (config.fixUnits && codeType) {
             const unitFieldIndex = UNIT_FIELD_CONFIG[codeType];
             if (unitFieldIndex && parts.length > unitFieldIndex) {
                 const currentUnit = (parts[unitFieldIndex] || '').trim().toLowerCase();
@@ -303,7 +327,7 @@ const processSpedFileInBrowser = (
             }
         }
 
-        if (codeType && TRUNCATION_CODES.has(codeType)) {
+        if (config.fixTruncation && codeType && TRUNCATION_CODES.has(codeType)) {
             const lastPipeIndex = currentLine.lastIndexOf('|');
             const secondLastPipeIndex = currentLine.lastIndexOf('|', lastPipeIndex - 1);
             if (lastPipeIndex > secondLastPipeIndex && secondLastPipeIndex > -1) {
@@ -317,125 +341,92 @@ const processSpedFileInBrowser = (
             }
         }
         
-        if (lineWasModified && originalLine !== currentLine) {
-            if (!modifications.truncation.find(log => log.original === originalLine) &&
-                !modifications.unitStandardization.find(log => log.original === originalLine) &&
-                !modifications.addressSpaces.find(log => log.original === originalLine) &&
-                !modifications.ieCorrection.find(log => log.original === originalLine) &&
-                !modifications.cteSeriesCorrection.find(log => log.original === originalLine)
-            ) {
+        if (lineWasModified && originalLine !== currentLine && !modifications.truncation.some(log => log.original === originalLine) && !modifications.unitStandardization.some(log => log.original === originalLine) && !modifications.addressSpaces.some(log => log.original === originalLine) && !modifications.ieCorrection.some(log => log.original === originalLine) && !modifications.cteSeriesCorrection.some(log => log.original === originalLine)) {
                  linesModifiedCount++;
-            }
         }
 
         modifiedLines.push(currentLine);
     }
     
-    // Step 2: Recalculate counters
-    _log("Iniciando a recontagem de linhas dos blocos (registros x990) e total (9999).");
-    const blockCounters: { [block: string]: { startIndex: number, counterIndex?: number } } = {};
-    let finalLineCounterIndex = -1;
-    let count0190 = 0;
-    let count9900For0190Index = -1;
+    if (config.fixCounters) {
+        _log("Iniciando a recontagem de linhas dos blocos (registros x990) e total (9999).");
+        const blockCounters: { [block: string]: { startIndex: number, counterIndex?: number } } = {};
+        let finalLineCounterIndex = -1;
+        let count0190 = 0;
+        let count9900For0190Index = -1;
 
-    modifiedLines.forEach((line, index) => {
-        if (!line) return;
-        const parts = line.split('|');
-        if (parts.length < 2) return;
+        modifiedLines.forEach((line, index) => {
+            if (!line) return;
+            const parts = line.split('|');
+            if (parts.length < 2) return;
 
-        const reg = parts[1];
-        if(!reg) return;
+            const reg = parts[1];
+            if(!reg) return;
 
-        if (reg === '0190') {
-            count0190++;
-        }
-
-        if (reg === '9900' && parts[2] === '0190') {
-            count9900For0190Index = index;
-        }
-
-        if (reg.match(/^[A-Z0-9]001$/)) {
-            const block = reg.charAt(0);
-            if (!blockCounters[block]) {
-                blockCounters[block] = { startIndex: index };
+            if (reg === '0190') count0190++;
+            if (reg === '9900' && parts[2] === '0190') count9900For0190Index = index;
+            if (reg.match(/^[A-Z0-9]001$/)) {
+                const block = reg.charAt(0);
+                if (!blockCounters[block]) blockCounters[block] = { startIndex: index };
+            } else if (reg.endsWith('990') && reg !== '9990') { 
+                const block = reg.charAt(0);
+                if (blockCounters[block]) blockCounters[block].counterIndex = index;
+            } else if (reg === '9999') {
+                finalLineCounterIndex = index;
             }
-        } else if (reg.endsWith('990') && reg !== '9990') { // Block closers
-            const block = reg.charAt(0);
-            if (blockCounters[block]) {
-                blockCounters[block].counterIndex = index;
+        });
+        
+        if (count9900For0190Index !== -1) {
+            const originalLine = modifiedLines[count9900For0190Index];
+            const parts = originalLine.split('|');
+            if (parts.length > 3 && parseInt(parts[3], 10) !== count0190) {
+                const oldVal = parts[3];
+                parts[3] = String(count0190);
+                const correctedLine = parts.join('|');
+                modifiedLines[count9900For0190Index] = correctedLine;
+                modifications.count9900.push({ lineNumber: count9900For0190Index + 1, original: `Contador |9900|0190|: ${oldVal}`, corrected: `Contador |9900|0190| corrigido para: ${count0190}` });
+                linesModifiedCount++;
             }
-        } else if (reg === '9999') {
-            finalLineCounterIndex = index;
         }
-    });
-    
-    if (count9900For0190Index !== -1) {
-        const originalLine = modifiedLines[count9900For0190Index];
-        const parts = originalLine.split('|');
-        if (parts.length > 3 && parseInt(parts[3], 10) !== count0190) {
-            const oldVal = parts[3];
-            parts[3] = String(count0190);
-            const correctedLine = parts.join('|');
-            modifiedLines[count9900For0190Index] = correctedLine;
-            modifications.count9900.push({
-                lineNumber: count9900For0190Index + 1,
-                original: `Contador |9900|0190|: ${oldVal}`,
-                corrected: `Contador |9900|0190| corrigido para: ${count0190}`
-            });
-            linesModifiedCount++;
-        }
-    }
 
 
-    for (const block in blockCounters) {
-        const blockInfo = blockCounters[block];
-        if (blockInfo.counterIndex !== undefined) {
-            const originalLine = modifiedLines[blockInfo.counterIndex];
-            const originalParts = originalLine.split('|');
-            const expectedCount = blockInfo.counterIndex - blockInfo.startIndex + 1;
+        for (const block in blockCounters) {
+            const blockInfo = blockCounters[block];
+            if (blockInfo.counterIndex !== undefined) {
+                const originalLine = modifiedLines[blockInfo.counterIndex];
+                const originalParts = originalLine.split('|');
+                const expectedCount = blockInfo.counterIndex - blockInfo.startIndex + 1;
 
-            if (originalParts.length > 2 && parseInt(originalParts[2], 10) !== expectedCount) {
-                const oldVal = originalParts[2];
-                originalParts[2] = String(expectedCount);
-                const correctedLine = originalParts.join('|');
-                modifiedLines[blockInfo.counterIndex] = correctedLine;
-                
-                const modificationKey = `block-${block}`;
-                if (!modifications.blockCount.some(m => m.original.includes(modificationKey))) {
-                    modifications.blockCount.push({
-                        lineNumber: blockInfo.counterIndex + 1,
-                        original: `Contador Bloco |${block}990|: ${oldVal}`,
-                        corrected: `Contador Bloco |${block}990| corrigido para: ${expectedCount}`
-                    });
-                    linesModifiedCount++;
+                if (originalParts.length > 2 && parseInt(originalParts[2], 10) !== expectedCount) {
+                    const oldVal = originalParts[2];
+                    originalParts[2] = String(expectedCount);
+                    const correctedLine = originalParts.join('|');
+                    modifiedLines[blockInfo.counterIndex] = correctedLine;
+                    
+                    if (!modifications.blockCount.some(m => m.original.includes(`block-${block}`))) {
+                        modifications.blockCount.push({ lineNumber: blockInfo.counterIndex + 1, original: `Contador Bloco |${block}990|: ${oldVal}`, corrected: `Contador Bloco |${block}990| corrigido para: ${expectedCount}` });
+                        linesModifiedCount++;
+                    }
                 }
             }
         }
-    }
 
-    if (finalLineCounterIndex !== -1) {
-        const totalLines = modifiedLines.length;
-        const originalLine = modifiedLines[finalLineCounterIndex];
-        const originalParts = originalLine.split('|');
+        if (finalLineCounterIndex !== -1) {
+            const totalLines = modifiedLines.length;
+            const originalLine = modifiedLines[finalLineCounterIndex];
+            const originalParts = originalLine.split('|');
 
-        if (originalParts.length > 2 && parseInt(originalParts[2], 10) !== totalLines) {
-            const oldVal = originalParts[2];
-            originalParts[2] = String(totalLines);
-            const correctedLine = originalParts.join('|');
-            modifiedLines[finalLineCounterIndex] = correctedLine;
+            if (originalParts.length > 2 && parseInt(originalParts[2], 10) !== totalLines) {
+                const oldVal = originalParts[2];
+                originalParts[2] = String(totalLines);
+                const correctedLine = originalParts.join('|');
+                modifiedLines[finalLineCounterIndex] = correctedLine;
 
-            modifications.totalLineCount.push({
-                lineNumber: finalLineCounterIndex + 1,
-                original: `Contador Total |9999|: ${oldVal}`,
-                corrected: `Contador Total |9999| corrigido para: ${totalLines}`
-            });
-            linesModifiedCount++;
+                modifications.totalLineCount.push({ lineNumber: finalLineCounterIndex + 1, original: `Contador Total |9999|: ${oldVal}`, corrected: `Contador Total |9999| corrigido para: ${totalLines}` });
+                linesModifiedCount++;
+            }
         }
-    }
-
-
-     if (modifications.blockCount.length > 0 || modifications.totalLineCount.length > 0) {
-        _log(`Recontagem de linhas concluída.`);
+         _log(`Recontagem de linhas concluída.`);
     }
 
     _log(`Processamento concluído. Total de linhas lidas: ${lines.length}. Total de linhas com modificações: ${linesModifiedCount}.`);
@@ -671,6 +662,10 @@ export function KeyChecker({
     const { toast } = useToast();
     const [correctionResult, setCorrectionResult] = useState<SpedCorrectionResult | null>(null);
     const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
+    const [correctionConfig, setCorrectionConfig] = useState<SpedCorrectionConfig>({
+        removeDivergent: true, fixCounters: true, fixIE: true, fixCteSeries: true,
+        fixAddressSpaces: true, fixTruncation: true, fixUnits: true, remove0190: true
+    });
     
     useEffect(() => {
         setResults(initialKeyCheckResults);
@@ -774,7 +769,7 @@ export function KeyChecker({
                 );
                 
                 const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
-                const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData, divergentKeys);
+                const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData, divergentKeys, correctionConfig);
                 
                 setCorrectionResult(result);
                 onSpedProcessed(spedInfo, results, result);
@@ -917,6 +912,37 @@ export function KeyChecker({
                                     {loading === 'correct' ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Corrigindo...</> : 'Corrigir SPED'}
                                 </Button>
                             </DialogTrigger>
+                             <Dialog>
+                                <DialogTrigger asChild>
+                                     <Button variant="outline" size="icon" className="shrink-0">
+                                        <Settings className="h-5 w-5" />
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>Configurar Correções do SPED</DialogTitle>
+                                        <DialogDescription>
+                                            Selecione quais correções automáticas deseja aplicar ao ficheiro SPED.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="space-y-4 py-4">
+                                        {Object.entries(correctionConfigLabels).map(([key, label]) => (
+                                            <div key={key} className="flex items-center space-x-2">
+                                                <Checkbox
+                                                    id={key}
+                                                    checked={correctionConfig[key as keyof SpedCorrectionConfig]}
+                                                    onCheckedChange={(checked) => {
+                                                        setCorrectionConfig(prev => ({...prev, [key]: !!checked}))
+                                                    }}
+                                                />
+                                                <Label htmlFor={key} className="text-sm font-medium leading-none cursor-pointer">
+                                                    {label}
+                                                </Label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </DialogContent>
+                            </Dialog>
                            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
                                 <DialogHeader>
                                     <DialogTitle>Correção do Arquivo SPED</DialogTitle>
@@ -1104,3 +1130,4 @@ export function KeyChecker({
     );
 }
 
+    
