@@ -277,7 +277,7 @@ const processSpedFileInBrowser = (
         const usedProductCodes = new Set<string>();
         intermediateLines.forEach(line => {
             const parts = line.split('|');
-            if (parts.length > 3 && parts[1] === 'C170' && parts[2]) {
+            if (parts.length > 2 && parts[1] === 'C170' && parts[2]) {
                 usedProductCodes.add(parts[2]);
             }
         });
@@ -444,7 +444,7 @@ const processSpedFileInBrowser = (
             const regType = parts[1];
             
             if (regType === '0990') {
-                 const expectedCount = (blockLineCounts['0'] || 0) + 1; // +1 for 0990 itself
+                 const expectedCount = (blockLineCounts['0'] || 0);
                  if (parts.length > 2 && parseInt(parts[2], 10) !== expectedCount) {
                     const originalLine = line;
                     parts[2] = String(expectedCount);
@@ -473,7 +473,7 @@ const processSpedFileInBrowser = (
                     linesModifiedCount++;
                 }
             } else if (regType === '9999') {
-                const expectedTotal = modifiedLines.length;
+                const expectedTotal = modifiedLines.length + 1; // +1 for the 9999 line itself
                 if (parts.length > 2 && parseInt(parts[2], 10) !== expectedTotal) {
                     const originalLine = line;
                     parts[2] = String(expectedTotal);
@@ -814,7 +814,7 @@ export function KeyChecker({
             try {
                 const ieDivergentKeys = new Set((results.ieDivergences || []).map(d => d['Chave de Acesso']));
                 const ufDivergentKeys = new Set((results.ufDivergences || []).map(d => d['Chave de Acesso']));
-
+                
                 const divergentKeys = new Set([...ieDivergentKeys].filter(key => ufDivergentKeys.has(key)));
                 
                 const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
