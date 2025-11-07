@@ -25,6 +25,7 @@ import { ScrollArea } from "../ui/scroll-area";
 import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
+import { LogDisplay } from "@/components/app/log-display";
 
 
 // Types
@@ -444,7 +445,7 @@ const processSpedFileInBrowser = (
             const regType = parts[1];
             
             if (regType === '0990') {
-                 const expectedCount = (blockLineCounts['0'] || 0);
+                 const expectedCount = blockLineCounts['0'] || 0;
                  if (parts.length > 2 && parseInt(parts[2], 10) !== expectedCount) {
                     const originalLine = line;
                     parts[2] = String(expectedCount);
@@ -454,7 +455,7 @@ const processSpedFileInBrowser = (
                  }
             } else if (regType && regType.endsWith('990') && regType !== '0990') {
                 const blockChar = regType.charAt(0);
-                const expectedCount = (blockLineCounts[blockChar] || 0);
+                const expectedCount = blockLineCounts[blockChar] || 0;
                 if (parts.length > 2 && parseInt(parts[2], 10) !== expectedCount) {
                     const originalLine = line;
                     parts[2] = String(expectedCount);
@@ -473,7 +474,7 @@ const processSpedFileInBrowser = (
                     linesModifiedCount++;
                 }
             } else if (regType === '9999') {
-                const expectedTotal = modifiedLines.length + 1; // +1 for the 9999 line itself
+                const expectedTotal = modifiedLines.length;
                 if (parts.length > 2 && parseInt(parts[2], 10) !== expectedTotal) {
                     const originalLine = line;
                     parts[2] = String(expectedTotal);
