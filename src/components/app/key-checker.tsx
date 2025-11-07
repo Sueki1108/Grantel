@@ -40,7 +40,7 @@ export type KeyInfo = {
     // Campos adicionais para verificação
     destIE?: string;
     destUF?: string;
-    destCNPJ?: string;
+destCNPJ?: string;
     tomadorCNPJ?: string;
     emitCNPJ?: string;
     emitName?: string;
@@ -367,7 +367,10 @@ const processSpedFileInBrowser = (
     }
     
     if (config.fixCounters) {
-        _log("Iniciando a recontagem de linhas dos blocos (registros x990) e total (9999).");
+        _log("Iniciando a recontagem de linhas dos blocos (registros x990), bloco 0 (0990) e total (9999).");
+        
+        let block0Count = 0;
+        let block0990Index = -1;
         const blockCounters: { [block: string]: { startIndex: number, counterIndex?: number } } = {};
         let finalLineCounterIndex = -1;
         let count0190 = 0;
@@ -377,16 +380,23 @@ const processSpedFileInBrowser = (
             if (!line) return;
             const parts = line.split('|');
             if (parts.length < 2) return;
-
             const reg = parts[1];
-            if(!reg) return;
+            if (!reg) return;
+
+            if (reg.startsWith('0')) {
+                block0Count++;
+                if (reg === '0990') {
+                    block0990Index = index;
+                }
+            }
 
             if (reg === '0190') count0190++;
             if (reg === '9900' && parts[2] === '0190') count9900For0190Index = index;
+
             if (reg.match(/^[A-Z0-9]001$/)) {
                 const block = reg.charAt(0);
                 if (!blockCounters[block]) blockCounters[block] = { startIndex: index };
-            } else if (reg.endsWith('990') && reg !== '9990') { 
+            } else if (reg.endsWith('990') && reg !== '0990' && reg !== '9990') {
                 const block = reg.charAt(0);
                 if (blockCounters[block]) blockCounters[block].counterIndex = index;
             } else if (reg === '9999') {
@@ -406,8 +416,27 @@ const processSpedFileInBrowser = (
                 linesModifiedCount++;
             }
         }
+        
+        // Update block 0 counter
+        if (block0990Index !== -1) {
+            const originalLine = modifiedLines[block0990Index];
+            const parts = originalLine.split('|');
+            if (parts.length > 2 && parseInt(parts[2], 10) !== block0Count) {
+                 const oldVal = parts[2];
+                 parts[2] = String(block0Count);
+                 const correctedLine = parts.join('|');
+                 modifiedLines[block0990Index] = correctedLine;
 
+                 modifications.blockCount.push({
+                     lineNumber: block0990Index + 1,
+                     original: `Contador Bloco |0990|: ${oldVal}`,
+                     corrected: `Contador Bloco |0990| corrigido para: ${block0Count}`
+                 });
+                 linesModifiedCount++;
+            }
+        }
 
+        // Update other block counters
         for (const block in blockCounters) {
             const blockInfo = blockCounters[block];
             if (blockInfo.counterIndex !== undefined) {
@@ -816,14 +845,6 @@ export function KeyChecker({
         
         toast({ title: "Verificação limpa", description: "Os resultados e o arquivo da verificação SPED foram removidos." });
     };
-    
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text).then(() => {
-            toast({ title: "Copiado", description: "O erro foi copiado para a área de transferência." });
-        }).catch(() => {
-            toast({ variant: 'destructive', title: `Falha ao copiar` });
-        });
-    };
 
     const ModificationDisplay = ({ logs }: { logs: ModificationLog[] }) => (
         <ScrollArea className="h-[calc(80vh-250px)] pr-4">
@@ -1144,3 +1165,5 @@ export function KeyChecker({
         </div>
     );
 }
+
+    
