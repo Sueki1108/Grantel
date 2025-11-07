@@ -1,4 +1,3 @@
-
 "use client";
 
 // Types
@@ -211,6 +210,7 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const emit = infCte.getElementsByTagName('emit')[0];
     const rem = infCte.getElementsByTagName('rem')[0];
     const dest = infCte.getElementsByTagName('dest')[0];
+    const toma = infCte.getElementsByTagName('toma04')[0] || infCte.getElementsByTagName('toma4')[0] || infCte.getElementsByTagName('toma')[0]; // Tomador
     const vPrest = infCte.getElementsByTagName('vPrest')[0];
 
     if (!ide || !emit || !rem || !dest || !vPrest) {
@@ -229,6 +229,15 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     
     const status = getCteTagValue(infProt, 'cStat') === '100' ? 'Autorizadas' : 'Canceladas';
 
+    let tomadorCnpj = '';
+    if (toma) {
+        tomadorCnpj = getCteTagValue(toma, 'CNPJ');
+    }
+    if (!tomadorCnpj) {
+        // Fallback para o destinatário se o tomador não for encontrado
+        tomadorCnpj = getCteTagValue(dest, 'CNPJ');
+    }
+
     const notaCte = {
         'Chave de acesso': chaveAcesso,
         'Número': nCT,
@@ -241,6 +250,7 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'CPF/CNPJ do Remetente': getCteTagValue(rem, 'CNPJ'),
         'Destinatário': getCteTagValue(dest, 'xNome'),
         'CPF/CNPJ do Destinatário': getCteTagValue(dest, 'CNPJ'),
+        'tomadorCNPJ': tomadorCnpj, // Adicionando CNPJ do tomador
         'Valor da Prestação': parseFloat(vTPrest) || 0,
         'Status': status,
         'Chave Unica': cleanAndToStr(nCT) + cleanAndToStr(emitCNPJ),

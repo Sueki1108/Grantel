@@ -27,7 +27,20 @@ export interface SpedCorrectionResult {
     error?: string;
     linesRead: number;
     linesModified: number;
-    modifications: any;
+    modifications: {
+        truncation: any[];
+        unitStandardization: any[];
+        removed0190: any[];
+        removed0200: any[];
+        removed0150: any[];
+        addressSpaces: any[];
+        ieCorrection: any[];
+        cteSeriesCorrection: any[];
+        count9900: any[];
+        blockCount: any[];
+        totalLineCount: any[];
+        divergenceRemoval: any;
+    };
     log: string[];
 }
 
@@ -260,6 +273,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const chavesValidasCte = notasValidas.filter(n => !n['destUF']).map(row => ({ // Apenas CT-e
         "Chave de acesso": cleanAndToStr(row["Chave de acesso"]), "Tipo": "CTE", "Fornecedor": row["Fornecedor"],
         "Emissão": String(row["Emissão"]).substring(0, 10), "Total": row['Valor da Prestação'] || 0,
+        "tomadorCNPJ": cleanAndToStr(row['CPF/CNPJ do Destinatário']) // Simplificando para tomador
     }));
 
     const chavesValidasSaida = saidasValidas.map(row => ({
@@ -290,17 +304,9 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         }
         const cfopCode = parseInt(cleanAndToStr(row['CFOP']), 10);
         const fullDescription = cfopDescriptions[cfopCode] || 'Descrição não encontrada';
-        const shortDescription = fullDescription.split(' ').slice(0, 3).join(' ');
-
-        const newRow: { [key: string]: any } = {};
-        const cfopIndex = Object.keys(row).indexOf('CFOP');
-
-        Object.keys(row).forEach((key, index) => {
-            newRow[key] = row[key];
-            if (index === cfopIndex) {
-                 newRow['Descricao CFOP'] = shortDescription;
-            }
-        });
+        
+        // Retornar a descrição completa agora
+        const newRow: { [key: string]: any } = { ...row, 'Descricao CFOP': fullDescription };
         return newRow;
     };
     
@@ -329,5 +335,6 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         keyCheckResults: null,
         resaleAnalysis: null,
         spedCorrections: null,
+        reconciliationResults: null,
     };
 }
