@@ -32,6 +32,7 @@ export interface CfopValidationData extends Record<string, any> {
     'Descrição': string; // Descrição do item no XML
     'CFOP': string; // CFOP do XML
     'CST do ICMS'?: string; // CST do ICMS do XML
+    'pICMS'?: number; // Alíquota de ICMS do XML
 }
 
 type ValidationStatus = 'unvalidated' | 'correct' | 'incorrect' | 'verify';
@@ -52,6 +53,7 @@ const columnNameMap: Record<string, string> = {
     'CFOP': 'CFOP XML',
     'CST do ICMS': 'CST XML',
     'Sienge_CFOP': 'CFOP Sienge',
+    'pICMS': 'Alíq. ICMS (%)'
 };
 
 const CFOP_VALIDATION_FILTERS_KEY = 'cfopValidationFilters_v1';
@@ -225,7 +227,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const columns = useMemo(() => {
         const baseColumns = getColumnsWithCustomRender(
             reconciledItems,
-            ['Fornecedor', 'Número da Nota', 'Descrição', 'Sienge_Descrição', 'CFOP', 'CST do ICMS', 'Sienge_CFOP'],
+            ['Fornecedor', 'Número da Nota', 'Descrição', 'Sienge_Descrição', 'CFOP', 'CST do ICMS', 'Sienge_CFOP', 'pICMS'],
             (row: any, id: string) => {
                 const value = row.original[id];
                  const isCfopColumn = id === 'CFOP' || id === 'Sienge_CFOP';
@@ -260,6 +262,9 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                 if (id === 'Número da Nota') {
                      return <div className="text-center">{String(value ?? '')}</div>;
                 }
+                 if (id === 'pICMS') {
+                    return <div className="text-center">{typeof value === 'number' ? `${value.toFixed(2)}%` : 'N/A'}</div>;
+                }
                 return <div>{String(value ?? '')}</div>;
             }
         ).map(col => ({
@@ -289,7 +294,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             ),
             enableSorting: false,
             enableHiding: false,
-        });
+        }));
 
         return baseColumns;
 
@@ -349,7 +354,15 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const [activeTabGroup, setActiveTabGroup] = useState<string>('');
     const tableRef = React.useRef<ReactTable<CfopValidationData> | null>(null);
 
-    const fullColumns = useMemo(() => [ ...columns, statusColumn, actionColumn], [columns, statusColumn, actionColumn]);
+    const fullColumns = useMemo(() => {
+        const tempCols = [...columns];
+        const pICMSIndex = tempCols.findIndex(c => c.id === 'Sienge_CFOP');
+        if (pICMSIndex !== -1) {
+            // This is just to ensure order, the column is already defined in baseColumns
+        }
+        tempCols.push(statusColumn, actionColumn);
+        return tempCols;
+    }, [columns, statusColumn, actionColumn]);
     
     const visibleGroupTitles = useMemo(() => {
         return Object.keys(allGroupedItems).filter(siengeCfop => {
