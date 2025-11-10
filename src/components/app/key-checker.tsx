@@ -302,8 +302,10 @@ const processSpedFileInBrowser = (
         const usedParticipantCodes = new Set<string>();
         intermediateLines.forEach(line => {
             const parts = line.split('|');
-            if (parts.length > 4 && (parts[1] === 'C100' || parts[1] === 'D100') && parts[4]) {
+            if (parts[1] === 'C100' && parts.length > 4 && parts[4]) {
                 usedParticipantCodes.add(parts[4]);
+            } else if (parts[1] === 'D100' && parts.length > 3 && parts[3]) {
+                 usedParticipantCodes.add(parts[3]);
             }
         });
 
@@ -812,8 +814,8 @@ export function KeyChecker({
 
         setTimeout(async () => {
             try {
-                const ieDivergentKeys = new Set(results.ieDivergences.map(d => d['Chave de Acesso']));
-                const ufDivergentKeys = new Set(results.ufDivergences.map(d => d['Chave de Acesso']));
+                const ieDivergentKeys = new Set((results.ieDivergences || []).map(d => d['Chave de Acesso']));
+                const ufDivergentKeys = new Set((results.ufDivergences || []).map(d => d['Chave de Acesso']));
                 
                 const divergentKeys = new Set([...ieDivergentKeys].filter(key => ufDivergentKeys.has(key)));
                 
@@ -1177,3 +1179,4 @@ export function KeyChecker({
         </div>
     );
 }
+```
