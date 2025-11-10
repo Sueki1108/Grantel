@@ -294,7 +294,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             ),
             enableSorting: false,
             enableHiding: false,
-        }));
+        });
 
         return baseColumns;
 
@@ -356,10 +356,6 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
     const fullColumns = useMemo(() => {
         const tempCols = [...columns];
-        const pICMSIndex = tempCols.findIndex(c => c.id === 'Sienge_CFOP');
-        if (pICMSIndex !== -1) {
-            // This is just to ensure order, the column is already defined in baseColumns
-        }
         tempCols.push(statusColumn, actionColumn);
         return tempCols;
     }, [columns, statusColumn, actionColumn]);
