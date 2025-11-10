@@ -31,6 +31,8 @@ import { ImobilizadoAnalysis, type AllClassifications } from "@/components/app/i
 import { HistoryAnalysis, type SessionData } from "@/components/app/history-analysis";
 import { DifalAnalysis } from "@/components/app/difal-analysis";
 import { PendingIssuesReport } from "@/components/app/pending-issues-report";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -76,11 +78,17 @@ export function AutomatorClientPage() {
     const [isPreProcessing, setIsPreProcessing] = useState(false);
     
     const [activeMainTab, setActiveMainTab] = useState("history");
+    const [isWideMode, setIsWideMode] = useState(false);
+
 
     // =================================================================
-    // PERSISTENCE (localStorage)
+    // UI SETTINGS & PERSISTENCE
     // =================================================================
     useEffect(() => {
+        // Load UI settings from localStorage on initial load
+        const wideMode = localStorage.getItem('ui-widemode') === 'true';
+        setIsWideMode(wideMode);
+        
         // Load imobilizado classifications from localStorage
         try {
             const savedImobilizado = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
@@ -89,6 +97,15 @@ export function AutomatorClientPage() {
             console.error("Failed to load imobilizado classifications from localStorage", e);
         }
     }, []);
+
+    const handleWideModeChange = (checked: boolean) => {
+        setIsWideMode(checked);
+        localStorage.setItem('ui-widemode', String(checked));
+        toast({
+            title: "Configurações salvas",
+            description: `O modo amplo foi ${checked ? 'ativado' : 'desativado'}.`,
+        });
+    };
 
     const handlePersistImobilizado = (allDataToSave: AllClassifications) => {
         setImobilizadoClassifications(allDataToSave);
@@ -180,7 +197,7 @@ export function AutomatorClientPage() {
     };
 
     // =================================================================
-    // UI SETTINGS
+    // Memoized Competence
     // =================================================================
     const competence = useMemo(() => {
         const activePeriods = Object.keys(selectedPeriods).filter(p => selectedPeriods[p]);
@@ -239,7 +256,7 @@ export function AutomatorClientPage() {
     const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         setSiengeFile(file || null);
-
+    
         if (file) {
             try {
                 const reader = new FileReader();
@@ -247,7 +264,7 @@ export function AutomatorClientPage() {
                     try {
                         const data = event.target?.result;
                         if (!data) throw new Error("Não foi possível ler o conteúdo do ficheiro.");
-
+    
                         const workbook = XLSX.read(data, { type: 'array' });
                         const sheetName = workbook.SheetNames[0];
                         if (!sheetName) throw new Error("A planilha não contém nenhuma aba.");
@@ -256,19 +273,26 @@ export function AutomatorClientPage() {
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
                         
                         setProcessedData(prev => ({
+                            sheets: {}, 
+                            spedInfo: null, 
+                            keyCheckResults: null, 
+                            competence: null,
+                            reconciliationResults: null,
+                            resaleAnalysis: null,
+                            spedCorrections: null,
                             ...prev,
-                            sheets: prev?.sheets || {},
-                            spedInfo: prev?.spedInfo || null,
-                            keyCheckResults: prev?.keyCheckResults || null,
-                            competence: prev?.competence || null,
                             siengeSheetData: jsonData
-                        } as ProcessedData));
+                        }));
                         
                         toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises avançadas.' });
-
+    
                     } catch (err: any) {
                          toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
-                         setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
+                         setProcessedData(prev => {
+                            if (!prev) return null;
+                            const { siengeSheetData, ...rest } = prev;
+                            return rest as ProcessedData;
+                         });
                     }
                 };
                 reader.onerror = (error) => { throw error };
@@ -277,7 +301,11 @@ export function AutomatorClientPage() {
                  toast({ variant: 'destructive', title: 'Erro ao Ler Ficheiro Sienge', description: error.message });
             }
         } else {
-             setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
+             setProcessedData(prev => {
+                if (!prev) return null;
+                const { siengeSheetData, ...rest } = prev;
+                return rest as ProcessedData;
+             });
         }
     };
 
@@ -594,10 +622,8 @@ export function AutomatorClientPage() {
 
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => {
         setProcessedData(prevData => {
-            if (!prevData) {
-                return { sheets: {}, siengeSheetData: null, spedInfo: spedInfo || null, keyCheckResults: keyCheckResults || null, spedCorrections: spedCorrections ? [spedCorrections] : null, competence: null, resaleAnalysis: null };
-            }
-            return { ...prevData, spedInfo: spedInfo, keyCheckResults: keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : prevData.spedCorrections };
+            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null };
+            return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections };
         });
     }, []);
     
@@ -635,14 +661,18 @@ export function AutomatorClientPage() {
                            <h1 className="text-xl font-bold font-headline">Fluxo de Validação</h1>
                         </div>
                      </div>
-                     <div className="flex items-center gap-2">
+                     <div className="flex items-center gap-4">
+                         <div className="flex items-center space-x-2">
+                            <Switch id="wide-mode-switch" checked={isWideMode} onCheckedChange={handleWideModeChange} />
+                            <Label htmlFor="wide-mode-switch">Modo Amplo</Label>
+                        </div>
                         <ThemeToggle />
                      </div>
                 </div>
             </header>
 
-            <main className="container mx-auto p-4 md:p-8">
-                <div className={cn("mx-auto space-y-8 max-w-screen-2xl")}>
+            <main className="p-4 md:p-8">
+                <div className={cn("space-y-8", isWideMode ? "w-full" : "container mx-auto")}>
                     <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
                         <TabsList className="h-auto flex-wrap justify-start">
                              <TabsTrigger value="history" className="flex items-center gap-2">
@@ -741,7 +771,7 @@ export function AutomatorClientPage() {
                              {activeMainTab === 'difal' && <DifalAnalysis /> }
                             
                             {activeMainTab === 'analyses' && (
-                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onClearSiengeFile={() => {setSiengeFile(null); setProcessedData(p => p ? {...p, siengeSheetData: null} : null)}} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
+                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
                             )}
                          
                              {activeMainTab === 'pending' && (
