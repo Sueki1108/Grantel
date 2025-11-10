@@ -169,18 +169,18 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
 
         // Extrai todos os campos de <imposto> e seus filhos
         if (imposto) {
-            // Specific extraction for pICMS and CST
-            const icmsGroup = imposto.querySelector('ICMS');
-            if (icmsGroup) {
-                const icmsDetails = icmsGroup.children[0]; // Gets ICMS00, ICMS10, etc.
-                if (icmsDetails) {
-                    const pICMSTag = icmsDetails.querySelector('pICMS');
-                    if (pICMSTag && pICMSTag.textContent) {
-                        item['pICMS'] = parseFloat(pICMSTag.textContent) || 0;
-                    }
-                    const cstTag = icmsDetails.querySelector('CST');
-                    if(cstTag && cstTag.textContent) {
-                        item['CST do ICMS'] = cstTag.textContent;
+            for (const taxGroup of Array.from(imposto.children)) { // ICMS, PIS, COFINS
+                const taxDetails = taxGroup.children[0]; // ICMS00, PISAliq, etc.
+                if (taxDetails) {
+                    for (const taxField of Array.from(taxDetails.children)) { // CST, vBC, pICMS, etc.
+                        const tagName = taxField.tagName;
+                        const textContent = taxField.textContent;
+                        
+                        if (tagName === 'CST' || tagName === 'CSOSN') {
+                             item['CST do ICMS'] = textContent;
+                        } else if (tagName === 'pICMS') {
+                             item['pICMS'] = textContent ? parseFloat(textContent) : 0;
+                        }
                     }
                 }
             }
