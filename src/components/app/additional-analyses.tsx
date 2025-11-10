@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FileSearch, Sheet, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Building, Save, Database, FileJson, MinusCircle } from "lucide-react";
+import { FileSearch, Sheet, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Building, Save, Database, FileJson, MinusCircle, TicketPercent } from "lucide-react";
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -20,6 +20,7 @@ import { KeyChecker, KeyCheckResult } from "./key-checker";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AllClassifications } from "./imobilizado-analysis";
 import { CfopValidator, CfopValidationData } from "./cfop-validator";
+import { DifalTab } from "./difal-tab";
 
 
 // ===============================================================
@@ -390,10 +391,11 @@ export function AdditionalAnalyses({
              </Card>
             
              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-1 md:grid-cols-4">
+                <TabsList className="grid w-full grid-cols-1 md:grid-cols-5">
                     <TabsTrigger value="sped">Verificação SPED</TabsTrigger>
                     <TabsTrigger value="reconciliation">Conciliação Itens (XML vs Sienge)</TabsTrigger>
                     <TabsTrigger value="tax_check">Conferência Sienge</TabsTrigger>
+                    <TabsTrigger value="difal">DIFAL</TabsTrigger>
                     <TabsTrigger value="resale_export">Exportação de Revenda (Sienge)</TabsTrigger>
                 </TabsList>
                 
@@ -430,6 +432,13 @@ export function AdditionalAnalyses({
                             onSiengeFileChange={onSiengeFileChange}
                             onClearSiengeFile={onClearSiengeFile}
                             siengeSheetData={processedData?.siengeSheetData}
+                        />
+                    )}
+                    
+                    {activeTab === 'difal' && (
+                        <DifalTab 
+                            reconciledItems={reconciliationResults?.reconciled || []}
+                            cfopValidations={allPersistedClassifications[competence || '']?.cfopValidations?.classifications || {}}
                         />
                     )}
 
