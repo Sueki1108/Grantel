@@ -12,42 +12,61 @@ import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/comp
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { CfopValidationData } from './cfop-validator';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
+import { AllClassifications } from "./imobilizado-analysis";
 
 
 interface DifalTabProps {
     reconciledItems: CfopValidationData[];
-    cfopValidations: {
-        [uniqueProductKey: string]: {
-            classification: 'correct' | 'incorrect' | 'verify';
-        };
-    };
+    allPersistedClassifications: AllClassifications;
 }
 
 const getUniversalProductKey = (item: CfopValidationData): string => {
     const siengeCfop = item['Sienge_CFOP'] || '';
-    return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${siengeCfop}`;
+    const fullDescription = getFullCfopDescription(siengeCfop).toLowerCase();
+    return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${fullDescription}`;
 };
 
 const getItemLineKey = (item: CfopValidationData): string => {
     return item['Chave de acesso'] + item.Item;
 };
 
+// Re-use cfopDescriptions from cfop.ts as it's not exported from cfop-validator
+const getFullCfopDescription = (cfopCode: string | number): string => {
+    const code = parseInt(String(cfopCode), 10);
+    // You'll need to import or have access to cfopDescriptions here
+    const cfopDescriptions: { [key: number]: string } = {
+        2551: 'Compra de bem p/ o ativo imobilizado',
+        2556: 'Compra de material p/ uso ou consumo',
+        // Add other descriptions as needed
+    };
+    return cfopDescriptions[code as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+};
 
-export function DifalTab({ reconciledItems, cfopValidations }: DifalTabProps) {
+
+export function DifalTab({ reconciledItems, allPersistedClassifications }: DifalTabProps) {
     const [disregardedItems, setDisregardedItems] = useState<Set<string>>(new Set());
 
     const difalItems = useMemo(() => {
         return reconciledItems.filter(item => {
             if (!item) return false;
-            
-            const uniqueProductKey = getUniversalProductKey(item);
-            const cfopStatus = cfopValidations[uniqueProductKey]?.classification;
-            
+
+            const universalProductKey = getUniversalProductKey(item);
+            let isCorrect = false;
+
+            // Search through all competences for a 'correct' classification
+            for (const competence in allPersistedClassifications) {
+                const classification = allPersistedClassifications[competence]?.cfopValidations?.classifications?.[universalProductKey]?.classification;
+                if (classification === 'correct') {
+                    isCorrect = true;
+                    break;
+                }
+            }
+
             const isDifalCfop = item.Sienge_CFOP === '2551' || item.Sienge_CFOP === '2556';
             
-            return cfopStatus === 'correct' && isDifalCfop;
+            return isCorrect && isDifalCfop;
         });
-    }, [reconciledItems, cfopValidations]);
+    }, [reconciledItems, allPersistedClassifications]);
     
     const handleToggleDisregard = (itemKey: string) => {
         setDisregardedItems(prev => {
@@ -123,7 +142,7 @@ export function DifalTab({ reconciledItems, cfopValidations }: DifalTabProps) {
                              <div className="text-center p-8 text-muted-foreground">
                                 <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
                                 <h3 className="text-xl font-semibold">Nenhum item encontrado</h3>
-                                <p>Não foram encontrados itens conciliados com CFOP 2551/2556 e status "Correto".</p>
+                                <p>Não foram encontrados itens conciliados com CFOP 2551/2556 e status "Correto" no seu histórico de validações.</p>
                             </div>
                         )}
                     </TabsContent>
