@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX, Copy, Save, Settings } from "lucide-react";
+import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX, Copy, Save, Settings, Dot } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from '../ui/badge';
@@ -40,6 +40,7 @@ interface GroupedItems {
   [siengeCfop: string]: {
     items: CfopValidationData[];
     xmlCfops: Set<string>;
+    xmlCsts: Set<string>;
   };
 }
 
@@ -53,7 +54,7 @@ const columnNameMap: Record<string, string> = {
     'Sienge_CFOP': 'CFOP Sienge',
 };
 
-const CFOP_VALIDATION_PER_TAB_FILTER_KEY = 'cfopValidationPerTabFilters';
+const CFOP_VALIDATION_FILTERS_KEY = 'cfopValidationFilters_v1';
 
 
 interface CfopValidatorProps {
@@ -91,26 +92,30 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const [activeFilter, setActiveFilter] = useState<ValidationStatus | 'all'>('unvalidated');
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
-    const [isCfopModalOpen, setIsCfopModalOpen] = useState(false);
-    const [perTabCfopFilters, setPerTabCfopFilters] = useState<Record<string, Set<string>>>({});
-    const [currentEditingCfopGroup, setCurrentEditingCfopGroup] = useState<string | null>(null);
-    const [tempIncludedXmlCfops, setTempIncludedXmlCfops] = useState<Set<string>>(new Set());
+    const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+    const [perTabFilters, setPerTabFilters] = useState<Record<string, { cfops: Set<string>, csts: Set<string> }>>({});
+    const [currentEditingGroup, setCurrentEditingGroup] = useState<string | null>(null);
+    const [tempIncludedCfops, setTempIncludedCfops] = useState<Set<string>>(new Set());
+    const [tempIncludedCsts, setTempIncludedCsts] = useState<Set<string>>(new Set());
 
     const reconciledItems = useMemo(() => items.filter(item => item && item.Observações?.startsWith('Conciliado')), [items]);
     
     useEffect(() => {
         try {
-            const savedFiltersRaw = localStorage.getItem(CFOP_VALIDATION_PER_TAB_FILTER_KEY);
+            const savedFiltersRaw = localStorage.getItem(CFOP_VALIDATION_FILTERS_KEY);
             if (savedFiltersRaw) {
                 const savedFilters = JSON.parse(savedFiltersRaw);
-                const restoredFilters: Record<string, Set<string>> = {};
+                const restoredFilters: Record<string, { cfops: Set<string>, csts: Set<string> }> = {};
                 for (const key in savedFilters) {
-                    restoredFilters[key] = new Set(savedFilters[key]);
+                    restoredFilters[key] = {
+                        cfops: new Set(savedFilters[key].cfops || []),
+                        csts: new Set(savedFilters[key].csts || []),
+                    };
                 }
-                setPerTabCfopFilters(restoredFilters);
+                setPerTabFilters(restoredFilters);
             }
         } catch (e) {
-            console.error("Failed to load CFOP filters:", e);
+            console.error("Failed to load CFOP/CST filters:", e);
         }
     }, []);
 
@@ -332,12 +337,11 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             const siengeCfop = item.Sienge_CFOP;
             if (!siengeCfop) return;
             if (!groups[siengeCfop]) {
-                groups[siengeCfop] = { items: [], xmlCfops: new Set() };
+                groups[siengeCfop] = { items: [], xmlCfops: new Set(), xmlCsts: new Set() };
             }
             groups[siengeCfop].items.push(item);
-            if (item.CFOP) {
-                groups[siengeCfop].xmlCfops.add(item.CFOP);
-            }
+            if (item.CFOP) groups[siengeCfop].xmlCfops.add(item.CFOP);
+            if (item['CST do ICMS']) groups[siengeCfop].xmlCsts.add(item['CST do ICMS']);
         });
         return groups;
     }, [reconciledItems]);
@@ -362,15 +366,17 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         }
 
         const groupData = allGroupedItems[activeTabGroup];
-        const includedXmlCfopsForTab = perTabCfopFilters[activeTabGroup] || groupData.xmlCfops;
+        const includedCfops = perTabFilters[activeTabGroup]?.cfops || groupData.xmlCfops;
+        const includedCsts = perTabFilters[activeTabGroup]?.csts || groupData.xmlCsts;
 
         return groupData.items.filter(item => {
             const statusOk = activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
-            const cfopOk = includedXmlCfopsForTab.has(item.CFOP);
-            return statusOk && cfopOk;
+            const cfopOk = includedCfops.has(item.CFOP);
+            const cstOk = includedCsts.has(item['CST do ICMS'] || '');
+            return statusOk && cfopOk && cstOk;
         });
 
-    }, [activeTabGroup, allGroupedItems, validationStatus, activeFilter, perTabCfopFilters]);
+    }, [activeTabGroup, allGroupedItems, validationStatus, activeFilter, perTabFilters]);
     
     useEffect(() => {
         if (visibleGroupTitles.length > 0 && !visibleGroupTitles.includes(activeTabGroup)) {
@@ -401,40 +407,41 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             tableRef.current.setGlobalFilter('');
         }
     };
-    
-    const handleCfopFilterToggle = (cfop: string, checked: boolean) => {
-        const newSet = new Set(tempIncludedXmlCfops);
-        if (checked) newSet.add(cfop); else newSet.delete(cfop);
-        setTempIncludedXmlCfops(newSet);
-    };
-    
-    const openCfopFilterModal = (siengeCfopGroup: string) => {
+
+    const openFilterModal = (siengeCfopGroup: string) => {
         if (!allGroupedItems[siengeCfopGroup]) return;
+        const groupData = allGroupedItems[siengeCfopGroup];
+        const currentFilters = perTabFilters[siengeCfopGroup];
 
-        const allItemsInGroup = allGroupedItems[siengeCfopGroup].items;
-        const allXmlCfopsForGroup = new Set(allItemsInGroup.map(item => item.CFOP));
-        
-        const currentFiltersForGroup = perTabCfopFilters[siengeCfopGroup] || allXmlCfopsForGroup;
-
-        setCurrentEditingCfopGroup(siengeCfopGroup);
-        setTempIncludedXmlCfops(new Set(currentFiltersForGroup));
-        setIsCfopModalOpen(true);
+        setCurrentEditingGroup(siengeCfopGroup);
+        setTempIncludedCfops(currentFilters?.cfops || groupData.xmlCfops);
+        setTempIncludedCsts(currentFilters?.csts || groupData.xmlCsts);
+        setIsFilterModalOpen(true);
     };
 
-    const handleSaveCfopFilter = () => {
-        if (!currentEditingCfopGroup) return;
+    const handleSaveFilters = () => {
+        if (!currentEditingGroup) return;
 
-        const newPerTabFilters = { ...perTabCfopFilters, [currentEditingCfopGroup]: tempIncludedXmlCfops };
-        setPerTabCfopFilters(newPerTabFilters);
+        const newPerTabFilters = { 
+            ...perTabFilters, 
+            [currentEditingGroup]: {
+                cfops: tempIncludedCfops,
+                csts: tempIncludedCsts,
+            } 
+        };
+        setPerTabFilters(newPerTabFilters);
 
-        const serializableFilters: Record<string, string[]> = {};
+        const serializableFilters: Record<string, { cfops: string[], csts: string[] }> = {};
         for (const key in newPerTabFilters) {
-            serializableFilters[key] = Array.from(newPerTabFilters[key]);
+            serializableFilters[key] = {
+                cfops: Array.from(newPerTabFilters[key].cfops),
+                csts: Array.from(newPerTabFilters[key].csts),
+            };
         }
-        localStorage.setItem(CFOP_VALIDATION_PER_TAB_FILTER_KEY, JSON.stringify(serializableFilters));
+        localStorage.setItem(CFOP_VALIDATION_FILTERS_KEY, JSON.stringify(serializableFilters));
 
-        setIsCfopModalOpen(false);
-        toast({ title: 'Filtro de CFOP guardado!' });
+        setIsFilterModalOpen(false);
+        toast({ title: 'Filtros guardados!' });
     };
 
     if (!reconciledItems || reconciledItems.length === 0) {
@@ -446,6 +453,13 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
              </div>
         );
     }
+
+    const currentTabFilters = perTabFilters[activeTabGroup];
+    const allCfopsForTab = allGroupedItems[activeTabGroup]?.xmlCfops;
+    const allCstsForTab = allGroupedItems[activeTabGroup]?.xmlCsts;
+    const isCfopFilterActive = currentTabFilters && allCfopsForTab && currentTabFilters.cfops.size < allCfopsForTab.size;
+    const isCstFilterActive = currentTabFilters && allCstsForTab && currentTabFilters.csts.size < allCstsForTab.size;
+    const isAnyFilterActive = isCfopFilterActive || isCstFilterActive;
 
     return (
         <div className="space-y-4 h-full flex flex-col relative">
@@ -500,7 +514,10 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                                     <>
                                          <div className='mb-4 p-3 border rounded-md bg-muted/50 flex justify-between items-center'>
                                             <h3 className="text-lg font-semibold">CFOP (Sienge) {title}: <span className="font-normal">{description}</span></h3>
-                                             <Button variant="outline" onClick={() => openCfopFilterModal(title)} size="icon" title="Filtrar por CFOP do XML nesta aba"><Settings className="h-4 w-4" /></Button>
+                                             <Button variant="outline" onClick={() => openFilterModal(title)} size="icon" title="Filtrar por CFOP e CST do XML" className={isAnyFilterActive ? 'relative text-blue-600 border-blue-600 hover:text-blue-700' : ''}>
+                                                <Settings className="h-4 w-4" />
+                                                {isAnyFilterActive && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span></span>}
+                                            </Button>
                                         </div>
                                         <DataTable
                                             columns={fullColumns}
@@ -539,43 +556,59 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                 </div>
             )}
              
-             {currentEditingCfopGroup && (
-                <Dialog open={isCfopModalOpen} onOpenChange={setIsCfopModalOpen}>
-                    <DialogContent>
+             {currentEditingGroup && (
+                <Dialog open={isFilterModalOpen} onOpenChange={setIsFilterModalOpen}>
+                    <DialogContent className="max-w-4xl">
                         <DialogHeader>
-                            <DialogTitle>Filtrar CFOPs do XML para o Grupo {currentEditingCfopGroup}</DialogTitle>
+                            <DialogTitle>Filtrar CFOPs e CSTs para o Grupo {currentEditingGroup}</DialogTitle>
                             <DialogDescription>
-                                Desmarque os CFOPs do XML que deseja ocultar da visualização deste grupo. A lista mostra todos os CFOPs existentes no XML para este grupo do Sienge.
+                                Desmarque os itens que deseja ocultar da visualização deste grupo.
                             </DialogDescription>
                         </DialogHeader>
-                        <ScrollArea className="h-96 w-full rounded-md border p-4">
-                            {(() => {
-                                const allItemsInGroup = allGroupedItems[currentEditingCfopGroup]?.items || [];
-                                const cfopsForModal = new Set(allItemsInGroup.map(item => item.CFOP));
-
-                                if (cfopsForModal.size > 0) {
-                                    return Array.from(cfopsForModal).sort().map(cfop => (
-                                        <div key={cfop} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
-                                            <div className='flex items-center space-x-2'>
-                                                <Checkbox
-                                                    id={`cfop-filter-${cfop}`}
-                                                    checked={tempIncludedXmlCfops.has(cfop)}
-                                                    onCheckedChange={(checked) => handleCfopFilterToggle(cfop, !!checked)}
-                                                />
-                                                <Label htmlFor={`cfop-filter-${cfop}`} className="flex flex-col">
-                                                    <Badge variant="secondary">{cfop}</Badge>
-                                                    <span className="ml-2 text-xs text-muted-foreground">{cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}</span>
-                                                </Label>
-                                            </div>
+                        <Tabs defaultValue="cfop" className="w-full">
+                            <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="cfop">Filtro por CFOP</TabsTrigger>
+                                <TabsTrigger value="cst">Filtro por CST</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="cfop" className="mt-4">
+                                <ScrollArea className="h-96 w-full rounded-md border p-4">
+                                {Array.from(allGroupedItems[currentEditingGroup]?.xmlCfops || []).sort().map(cfop => (
+                                    <div key={cfop} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                        <div className='flex items-center space-x-2'>
+                                            <Checkbox
+                                                id={`cfop-filter-${cfop}`}
+                                                checked={tempIncludedCfops.has(cfop)}
+                                                onCheckedChange={(checked) => setTempIncludedCfops(prev => { const n = new Set(prev); if(checked) n.add(cfop); else n.delete(cfop); return n; })}
+                                            />
+                                            <Label htmlFor={`cfop-filter-${cfop}`} className="flex flex-col">
+                                                <Badge variant="secondary">{cfop}</Badge>
+                                                <span className="ml-2 text-xs text-muted-foreground">{getFullCfopDescription(cfop)}</span>
+                                            </Label>
                                         </div>
-                                    ))
-                                }
-                                return <p className="text-muted-foreground text-center">Nenhum CFOP do XML encontrado para os itens visíveis.</p>;
-                            })()}
-                        </ScrollArea>
+                                    </div>
+                                ))}
+                                </ScrollArea>
+                            </TabsContent>
+                             <TabsContent value="cst" className="mt-4">
+                                <ScrollArea className="h-96 w-full rounded-md border p-4">
+                                {Array.from(allGroupedItems[currentEditingGroup]?.xmlCsts || []).sort().map(cst => (
+                                    <div key={cst} className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted">
+                                        <Checkbox
+                                            id={`cst-filter-${cst}`}
+                                            checked={tempIncludedCsts.has(cst)}
+                                            onCheckedChange={(checked) => setTempIncludedCsts(prev => { const n = new Set(prev); if(checked) n.add(cst); else n.delete(cst); return n; })}
+                                        />
+                                        <Label htmlFor={`cst-filter-${cst}`} className="flex flex-col">
+                                            <Badge variant="outline">{cst || "Sem CST"}</Badge>
+                                        </Label>
+                                    </div>
+                                ))}
+                                </ScrollArea>
+                            </TabsContent>
+                        </Tabs>
                         <DialogFooter>
-                            <Button variant="outline" onClick={() => setIsCfopModalOpen(false)}>Cancelar</Button>
-                            <Button onClick={handleSaveCfopFilter}>Guardar Filtro</Button>
+                            <Button variant="outline" onClick={() => setIsFilterModalOpen(false)}>Cancelar</Button>
+                            <Button onClick={handleSaveFilters}>Guardar Filtros</Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
