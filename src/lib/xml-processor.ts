@@ -166,13 +166,12 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         if (!item['CFOP']) item['CFOP'] = getTagValue(prod, 'CFOP');
         if (!item['NCM']) item['NCM'] = getTagValue(prod, 'NCM');
 
-
-        // Extrai todos os campos de <imposto> e seus filhos
         if (imposto) {
-            for (const taxGroup of Array.from(imposto.children)) { // ICMS, PIS, COFINS
-                const taxDetails = taxGroup.children[0]; // ICMS00, PISAliq, etc.
+            const icmsGroup = imposto.getElementsByTagNameNS(NFE_NAMESPACE, 'ICMS')[0];
+            if (icmsGroup) {
+                const taxDetails = icmsGroup.children[0]; // ex: ICMS00, ICMS10, etc.
                 if (taxDetails) {
-                    for (const taxField of Array.from(taxDetails.children)) { // CST, vBC, pICMS, etc.
+                     for (const taxField of Array.from(taxDetails.children)) {
                         const tagName = taxField.tagName;
                         const textContent = taxField.textContent;
                         
@@ -217,6 +216,14 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const rem = infCte.getElementsByTagName('rem')[0];
     const dest = infCte.getElementsByTagName('dest')[0];
     const vPrest = infCte.getElementsByTagName('vPrest')[0];
+    
+    // Tomador pode não existir, então verificamos
+    const toma = infCte.getElementsByTagName('toma3')[0] || infCte.getElementsByTagName('toma4')[0];
+    let tomadorCnpj = '';
+    if(toma) {
+        tomadorCnpj = getCteTagValue(toma, 'CNPJ');
+    }
+
 
     if (!ide || !emit || !rem || !dest || !vPrest) {
         log("AVISO: Estrutura do XML CTe incompleta. Faltam tags filhas de <infCte> como ide, emit, rem, dest, ou vPrest.");
@@ -249,6 +256,7 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'Valor da Prestação': parseFloat(vTPrest) || 0,
         'Status': status,
         'Chave Unica': cleanAndToStr(nCT) + cleanAndToStr(emitCNPJ),
+        'tomadorCNPJ': tomadorCnpj
     };
 
     return { cte: [notaCte], nfe: [], itens: [], saidas: [], itensSaidas: [] };
@@ -315,28 +323,33 @@ export const processNfseForPeriodDetection = async (files: File[]): Promise<stri
     }
 
     for (const file of files) {
-        const xmlText = await readFileAsText(file);
-        const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
-        const root = xmlDoc.documentElement;
+        try {
+            const xmlText = await readFileAsText(file);
+            const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
+            const root = xmlDoc.documentElement;
+            
+            if (root.querySelector('parsererror')) continue;
 
-        const dateStr = findValue(root, ["data_nfse", "DataEmissao", "dhEmi"]);
-        if (dateStr) {
-            // Handle different date formats, e.g., DD/MM/YYYY or YYYY-MM-DD
-            let date: Date;
-            if (dateStr.includes('/')) {
-                const parts = dateStr.split(' ')[0].split('/');
-                if(parts.length === 3) {
-                    date = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+            const dateStr = findValue(root, ["data_nfse", "DataEmissao", "dhEmi"]);
+            if (dateStr) {
+                let date: Date;
+                if (dateStr.includes('/')) {
+                    const parts = dateStr.split(' ')[0].split('/');
+                    if(parts.length === 3) {
+                        date = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+                    } else {
+                        date = new Date('invalid');
+                    }
                 } else {
-                    date = new Date('invalid');
+                    date = new Date(dateStr);
                 }
-            } else {
-                date = new Date(dateStr);
-            }
 
-            if (!isNaN(date.getTime())) {
-                dates.push(date.toISOString());
+                if (!isNaN(date.getTime())) {
+                    dates.push(date.toISOString());
+                }
             }
+        } catch (e) {
+            // Ignore files that fail to parse during period detection
         }
     }
     return dates;
@@ -372,15 +385,13 @@ export const processUploadedXmls = async (files: File[], log: LogFunction = () =
 
             let parsedResult: Partial<XmlData> | null = null;
             
-            // Detect if it's NFe, CTe or a Cancellation Event and parse accordingly
-             if (xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'procEventoNFe').length > 0 || xmlDoc.getElementsByTagName('procEventoCTe').length > 0) {
+            if (xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'procEventoNFe').length > 0 || xmlDoc.getElementsByTagName('procEventoCTe').length > 0) {
                 parsedResult = parseCancelEvent(xmlDoc, log);
             } else if (xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'nfeProc').length > 0) {
                 parsedResult = parseNFe(xmlDoc, log);
-            } else if (xmlDoc.getElementsByTagName('cteProc').length > 0) { // Check without namespace for CTe
+            } else if (xmlDoc.getElementsByTagName('cteProc').length > 0) {
                 parsedResult = parseCTe(xmlDoc, log);
             } else {
-                // It might be an NFS-e, but this function is only for NFe/CTe, so we just log a warning.
                 log(`AVISO: Arquivo ${file.name} não parece ser NFe, CTe ou Evento padrão. Será ignorado nesta função.`);
             }
             
