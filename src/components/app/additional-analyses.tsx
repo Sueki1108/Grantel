@@ -36,9 +36,48 @@ const normalizeKey = (key: string | undefined): string => {
 }
 
 
-function useReconciliation(processedData: ProcessedData | null): { reconciliationResults: ReconciliationResults, error: string | null } {
-    
-    return useMemo(() => {
+// ===============================================================
+// Componente Principal
+// ===============================================================
+
+interface AdditionalAnalysesProps {
+    processedData: ProcessedData | null;
+    onProcessedDataChange: (fn: (prevData: ProcessedData | null) => ProcessedData) => void;
+    siengeFile: File | null;
+    onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
+    onClearSiengeFile: () => void;
+    allXmlFiles: File[];
+    spedFiles: File[];
+    onSpedFilesChange: (files: File[]) => void;
+    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null, spedCorrections: SpedCorrectionResult | null) => void;
+    competence: string | null;
+    onExportSession: () => void;
+    allPersistedClassifications: AllClassifications;
+    onPersistAllClassifications: (allData: AllClassifications) => void;
+}
+
+export function AdditionalAnalyses({ 
+    processedData, 
+    onProcessedDataChange,
+    siengeFile, 
+    onSiengeFileChange,
+    onClearSiengeFile,
+    allXmlFiles,
+    spedFiles,
+    onSpedFilesChange,
+    onSpedProcessed,
+    competence,
+    onExportSession,
+    allPersistedClassifications,
+    onPersistAllClassifications,
+}: AdditionalAnalysesProps) {
+    const { toast } = useToast();
+    const [activeTab, setActiveTab] = useState("sped");
+    const [isExporting, setIsExporting] = useState(false);
+    const [resaleAnalysis, setResaleAnalysis] = useState<{ noteKeys: Set<string>; xmls: File[] } | null>(null);
+    const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
+
+    const { reconciliationResults, error: reconciliationError } = useMemo(() => {
         if (!processedData) {
             return { reconciliationResults: null, error: 'Dados processados não disponíveis.' };
         }
@@ -193,51 +232,6 @@ function useReconciliation(processedData: ProcessedData | null): { reconciliatio
             return { reconciliationResults: null, error: err.message };
         }
     }, [processedData]);
-    
-    return reconciliationResults;
-}
-
-
-// ===============================================================
-// Componente Principal
-// ===============================================================
-
-interface AdditionalAnalysesProps {
-    processedData: ProcessedData | null;
-    onProcessedDataChange: (fn: (prevData: ProcessedData | null) => ProcessedData) => void;
-    siengeFile: File | null;
-    onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
-    onClearSiengeFile: () => void;
-    allXmlFiles: File[];
-    spedFiles: File[];
-    onSpedFilesChange: (files: File[]) => void;
-    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null, spedCorrections: SpedCorrectionResult | null) => void;
-    competence: string | null;
-    onExportSession: () => void;
-    allPersistedClassifications: AllClassifications;
-    onPersistAllClassifications: (allData: AllClassifications) => void;
-}
-
-export function AdditionalAnalyses({ 
-    processedData, 
-    onProcessedDataChange,
-    siengeFile, 
-    onSiengeFileChange,
-    onClearSiengeFile,
-    allXmlFiles,
-    spedFiles,
-    onSpedFilesChange,
-    onSpedProcessed,
-    competence,
-    onExportSession,
-    allPersistedClassifications,
-    onPersistAllClassifications,
-}: AdditionalAnalysesProps) {
-    const { toast } = useToast();
-    const [activeTab, setActiveTab] = useState("sped");
-    const [isExporting, setIsExporting] = useState(false);
-    const [resaleAnalysis, setResaleAnalysis] = useState<{ noteKeys: Set<string>; xmls: File[] } | null>(null);
-    const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
 
 
     const handleAnalyzeResale = () => {
@@ -422,7 +416,8 @@ export function AdditionalAnalyses({
                             siengeFile={siengeFile}
                             onSiengeFileChange={onSiengeFileChange}
                             onClearSiengeFile={onClearSiengeFile}
-                            processedData={processedData}
+                            reconciliationResults={reconciliationResults}
+                            error={reconciliationError}
                             allPersistedClassifications={allPersistedClassifications}
                             onPersistAllClassifications={onPersistAllClassifications}
                             competence={competence}
@@ -513,7 +508,8 @@ export type ReconciliationResults = {
 
 interface ReconciliationAnalysisProps {
     siengeFile: File | null;
-    processedData: ProcessedData | null;
+    reconciliationResults: ReconciliationResults;
+    error: string | null;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
     allPersistedClassifications: AllClassifications;
@@ -522,12 +518,10 @@ interface ReconciliationAnalysisProps {
 }
 
 
-function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, processedData, allPersistedClassifications, onPersistAllClassifications, competence }: ReconciliationAnalysisProps) {
+function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error, allPersistedClassifications, onPersistAllClassifications, competence }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState("reconciled");
     const [activeOtherTab, setActiveOtherTab] = useState<string>('');
-    
-    const { reconciliationResults, error } = useReconciliation(processedData);
     
     useEffect(() => {
         if (error) {
@@ -850,5 +844,7 @@ function SiengeTaxCheck({ siengeFile, onSiengeFileChange, onClearSiengeFile, sie
         </Card>
     );
 }
+
+    
 
     
