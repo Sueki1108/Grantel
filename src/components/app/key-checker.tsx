@@ -286,7 +286,7 @@ const processSpedFileInBrowser = (
         for (let i = 0; i < intermediateLines.length; i++) {
             const line = intermediateLines[i];
             const parts = line.split('|');
-            if (parts.length > 1 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
+            if (parts.length > 2 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
                 modifications.removed0200.push({ lineNumber: i + 1, line });
                 linesModifiedCount++;
                 continue; // Skip this line
@@ -302,10 +302,8 @@ const processSpedFileInBrowser = (
         const usedParticipantCodes = new Set<string>();
         intermediateLines.forEach(line => {
             const parts = line.split('|');
-            if (parts[1] === 'C100' && parts.length > 4 && parts[4]) {
+            if (parts.length > 4 && (parts[1] === 'C100' || parts[1] === 'D100') && parts[4]) {
                 usedParticipantCodes.add(parts[4]);
-            } else if (parts[1] === 'D100' && parts.length > 3 && parts[3]) {
-                 usedParticipantCodes.add(parts[3]);
             }
         });
 
@@ -566,7 +564,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12], vlDesc: parts[14] };
             } else if (reg === 'D100' && parts.length > 17 && parts[10]?.length === 44) {
                 key = parts[10];
-                docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
+                docData = { key, reg, indOper: parts[2], codPart: parts[3], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
             }
 
             if (key && docData) {
@@ -814,8 +812,8 @@ export function KeyChecker({
 
         setTimeout(async () => {
             try {
-                const ieDivergentKeys = new Set((results.ieDivergences || []).map(d => d['Chave de Acesso']));
-                const ufDivergentKeys = new Set((results.ufDivergences || []).map(d => d['Chave de Acesso']));
+                const ieDivergentKeys = new Set(results.ieDivergences?.map(d => d['Chave de Acesso']));
+                const ufDivergentKeys = new Set(results.ufDivergences?.map(d => d['Chave de Acesso']));
                 
                 const divergentKeys = new Set([...ieDivergentKeys].filter(key => ufDivergentKeys.has(key)));
                 
