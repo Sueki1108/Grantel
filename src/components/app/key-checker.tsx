@@ -306,8 +306,10 @@ const processSpedFileInBrowser = (
             if (parts.length > 4) {
                  if (parts[1] === 'C100' && parts[4]) {
                      usedParticipantCodes.add(parts[4]);
-                 } else if (parts[1] === 'D100' && parts[3]) {
-                     usedParticipantCodes.add(parts[3]);
+                 } else if (parts[1] === 'D100') {
+                    // For D100, check both Remetente (index 3) and Destinatário (index 4)
+                    if (parts[3]) usedParticipantCodes.add(parts[3]);
+                    if (parts[4]) usedParticipantCodes.add(parts[4]);
                  }
             }
         });
@@ -569,7 +571,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12], vlDesc: parts[14] };
             } else if (reg === 'D100' && parts.length > 17 && parts[10]?.length === 44) {
                 key = parts[10];
-                docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
+                docData = { key, reg, indOper: parts[2], codPartRemet: parts[3], codPartDest: parts[4], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
             }
 
             if (key && docData) {
@@ -593,7 +595,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     const keysInTxtNotInSheet = [...spedDocData.values()]
         .filter(spedDoc => !chavesValidasMap.has(spedDoc.key))
         .map(spedDoc => {
-             const participant = spedDoc.codPart ? participantData.get(spedDoc.codPart) : null;
+             const participant = spedDoc.codPart || spedDoc.codPartRemet ? participantData.get(spedDoc.codPart || spedDoc.codPartRemet) : null;
              const isCte = spedDoc.reg === 'D100';
              const spedDate = parseSpedDate(spedDoc.dtDoc);
              return {
@@ -651,7 +653,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             if (xmlUF !== GRANTEL_UF) divergenceMessages.push("UF");
             if (xmlIE !== GRANTEL_IE) divergenceMessages.push("IE");
         } else if (docType === 'CTE' && cleanAndToStr(nota.tomadorCNPJ) === GRANTEL_CNPJ) {
-             const participant = spedDoc.codPart ? participantData.get(spedDoc.codPart) : null;
+             const participant = spedDoc.codPartDest ? participantData.get(spedDoc.codPartDest) : null;
              if(participant) {
                  const spedIE = cleanAndToStr(participant.ie);
                  const spedUF = participant.uf?.trim().toUpperCase();
@@ -1183,3 +1185,4 @@ export function KeyChecker({
     );
 }
 
+```
