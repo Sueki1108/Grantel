@@ -361,14 +361,24 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         return tempCols;
     }, [columns, statusColumn, actionColumn]);
     
-    const visibleGroupTitles = useMemo(() => {
-        return Object.keys(allGroupedItems).filter(siengeCfop => {
-            if (activeFilter === 'all') return true; 
-            return allGroupedItems[siengeCfop].items.some(item => 
-                (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter
+    const { visibleGroupTitles, statusCounts } = useMemo(() => {
+        const counts: Record<ValidationStatus | 'all', number> = { all: 0, unvalidated: 0, correct: 0, incorrect: 0, verify: 0 };
+        const visibleGroups = Object.keys(allGroupedItems).filter(siengeCfop => {
+            const hasItemsForFilter = allGroupedItems[siengeCfop].items.some(item => 
+                activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter
             );
+            return hasItemsForFilter;
         }).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-    }, [allGroupedItems, validationStatus, activeFilter]);
+
+        reconciledItems.forEach(item => {
+            const status = validationStatus[getItemLineKey(item)] || 'unvalidated';
+            counts.all++;
+            counts[status]++;
+        });
+
+        return { visibleGroupTitles: visibleGroups, statusCounts: counts };
+    }, [allGroupedItems, validationStatus, activeFilter, reconciledItems]);
+
 
     const itemsForActiveTab = useMemo(() => {
         if (!activeTabGroup || !allGroupedItems[activeTabGroup]) {
@@ -421,16 +431,39 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             tableRef.current.setGlobalFilter('');
         }
     };
+    
+     const { filterOptionsForModal } = useMemo(() => {
+        if (!currentEditingGroup || !allGroupedItems[currentEditingGroup]) {
+            return { filterOptionsForModal: { cfops: [], csts: [], picms: [] }};
+        }
+
+        const visibleItemsInGroup = allGroupedItems[currentEditingGroup].items.filter(item => 
+            activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter
+        );
+        
+        const cfops = new Set(visibleItemsInGroup.map(item => item.CFOP).filter(Boolean));
+        const csts = new Set(visibleItemsInGroup.map(item => item['CST do ICMS'] || '').filter(c => c !== ''));
+        const picms = new Set(visibleItemsInGroup.map(item => String(item['pICMS'] || '0')).filter(p => p !== '0'));
+        
+        return {
+            filterOptionsForModal: {
+                cfops: Array.from(cfops).sort(),
+                csts: Array.from(csts).sort(),
+                picms: Array.from(picms).sort((a,b) => parseFloat(a) - parseFloat(b)),
+            }
+        };
+    }, [currentEditingGroup, allGroupedItems, activeFilter, validationStatus]);
+
 
     const openFilterModal = (siengeCfopGroup: string) => {
         if (!allGroupedItems[siengeCfopGroup]) return;
-        const groupData = allGroupedItems[siengeCfopGroup];
         const currentFilters = perTabFilters[siengeCfopGroup];
 
         setCurrentEditingGroup(siengeCfopGroup);
-        setTempIncludedCfops(currentFilters?.cfops || groupData.xmlCfops);
-        setTempIncludedCsts(currentFilters?.csts || groupData.xmlCsts);
-        setTempIncludedPIcms(currentFilters?.picms || groupData.xmlPIcms);
+        // Initialize temps with existing filters OR all available options if no filters are set
+        setTempIncludedCfops(currentFilters?.cfops || new Set(filterOptionsForModal.cfops));
+        setTempIncludedCsts(currentFilters?.csts || new Set(filterOptionsForModal.csts));
+        setTempIncludedPIcms(currentFilters?.picms || new Set(filterOptionsForModal.picms));
         setIsFilterModalOpen(true);
     };
 
@@ -472,12 +505,9 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     }
 
     const currentTabFilters = perTabFilters[activeTabGroup];
-    const allCfopsForTab = allGroupedItems[activeTabGroup]?.xmlCfops;
-    const allCstsForTab = allGroupedItems[activeTabGroup]?.xmlCsts;
-    const allPIcmsForTab = allGroupedItems[activeTabGroup]?.xmlPIcms;
-    const isCfopFilterActive = currentTabFilters && allCfopsForTab && currentTabFilters.cfops.size < allCfopsForTab.size;
-    const isCstFilterActive = currentTabFilters && allCstsForTab && currentTabFilters.csts.size < allCstsForTab.size;
-    const isPIcmsFilterActive = currentTabFilters && allPIcmsForTab && currentTabFilters.picms.size < allPIcmsForTab.size;
+    const isCfopFilterActive = currentTabFilters && filterOptionsForModal.cfops && currentTabFilters.cfops.size < filterOptionsForModal.cfops.length;
+    const isCstFilterActive = currentTabFilters && filterOptionsForModal.csts && currentTabFilters.csts.size < filterOptionsForModal.csts.length;
+    const isPIcmsFilterActive = currentTabFilters && filterOptionsForModal.picms && currentTabFilters.picms.size < filterOptionsForModal.picms.length;
     const isAnyFilterActive = isCfopFilterActive || isCstFilterActive || isPIcmsFilterActive;
 
     return (
@@ -485,11 +515,11 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
              <div className="flex justify-between items-center">
                 <Tabs defaultValue="unvalidated" value={activeFilter} onValueChange={(value) => setActiveFilter(value as any)} className="w-full">
                     <TabsList className="grid w-full grid-cols-5">
-                        <TabsTrigger value="all">Todos</TabsTrigger>
-                        <TabsTrigger value="unvalidated">Pendentes</TabsTrigger>
-                        <TabsTrigger value="correct">Corretos</TabsTrigger>
-                        <TabsTrigger value="incorrect">Incorretos</TabsTrigger>
-                        <TabsTrigger value="verify">A Verificar</TabsTrigger>
+                        <TabsTrigger value="all">Todos ({statusCounts.all})</TabsTrigger>
+                        <TabsTrigger value="unvalidated">Pendentes ({statusCounts.unvalidated})</TabsTrigger>
+                        <TabsTrigger value="correct">Corretos ({statusCounts.correct})</TabsTrigger>
+                        <TabsTrigger value="incorrect">Incorretos ({statusCounts.incorrect})</TabsTrigger>
+                        <TabsTrigger value="verify">A Verificar ({statusCounts.verify})</TabsTrigger>
                     </TabsList>
                 </Tabs>
                 <div className="flex gap-2 ml-4">
@@ -586,13 +616,13 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                         </DialogHeader>
                         <Tabs defaultValue="cfop" className="w-full">
                             <TabsList className="grid w-full grid-cols-3">
-                                <TabsTrigger value="cfop">Filtro por CFOP</TabsTrigger>
-                                <TabsTrigger value="cst">Filtro por CST</TabsTrigger>
-                                <TabsTrigger value="picms">Filtro por Alíquota</TabsTrigger>
+                                <TabsTrigger value="cfop">Filtro por CFOP ({filterOptionsForModal.cfops.length})</TabsTrigger>
+                                <TabsTrigger value="cst">Filtro por CST ({filterOptionsForModal.csts.length})</TabsTrigger>
+                                <TabsTrigger value="picms">Filtro por Alíquota ({filterOptionsForModal.picms.length})</TabsTrigger>
                             </TabsList>
                             <TabsContent value="cfop" className="mt-4">
                                 <ScrollArea className="h-96 w-full rounded-md border p-4">
-                                {Array.from(allGroupedItems[currentEditingGroup]?.xmlCfops || []).sort().map(cfop => (
+                                {filterOptionsForModal.cfops.map(cfop => (
                                     <div key={cfop} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
                                         <div className='flex items-center space-x-2'>
                                             <Checkbox
@@ -611,7 +641,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                             </TabsContent>
                              <TabsContent value="cst" className="mt-4">
                                 <ScrollArea className="h-96 w-full rounded-md border p-4">
-                                {Array.from(allGroupedItems[currentEditingGroup]?.xmlCsts || []).sort().map(cst => (
+                                {filterOptionsForModal.csts.map(cst => (
                                     <div key={cst} className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted">
                                         <Checkbox
                                             id={`cst-filter-${cst}`}
@@ -627,7 +657,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                             </TabsContent>
                             <TabsContent value="picms" className="mt-4">
                                 <ScrollArea className="h-96 w-full rounded-md border p-4">
-                                {Array.from(allGroupedItems[currentEditingGroup]?.xmlPIcms || []).sort((a,b) => parseFloat(a) - parseFloat(b)).map(picms => (
+                                {filterOptionsForModal.picms.map(picms => (
                                     <div key={picms} className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted">
                                         <Checkbox
                                             id={`picms-filter-${picms}`}
