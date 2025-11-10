@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { VirtualDataTable } from "@/components/app/virtual-data-table";
+import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
 import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX, Copy, Save, Settings, Dot, HelpCircle } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
@@ -538,9 +538,12 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                                                 {isAnyFilterActive && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span></span>}
                                             </Button>
                                         </div>
-                                        <VirtualDataTable
+                                         <DataTable
                                             columns={fullColumns}
                                             data={itemsForActiveTab}
+                                            rowSelection={rowSelection}
+                                            setRowSelection={setRowSelection}
+                                            tableRef={tableRef}
                                         />
                                     </>
                                 )
