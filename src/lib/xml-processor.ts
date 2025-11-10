@@ -169,29 +169,19 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
 
         // Extrai todos os campos de <imposto> e seus filhos
         if (imposto) {
-            // Specific extraction for pICMS
-            const pICMSTag = imposto.querySelector('pICMS');
-            if (pICMSTag && pICMSTag.textContent) {
-                item['pICMS'] = parseFloat(pICMSTag.textContent) || 0;
-            }
-
-            for (const taxGroup of Array.from(imposto.children)) {
-                const taxGroupName = taxGroup.tagName; // ex: ICMS, PIS, COFINS
-                 if (taxGroup.children.length > 1) { // Se for um grupo como ICMS00, PISAliq
-                    const taxIdentifier = taxGroup.children[0].parentElement?.tagName;
-                     for (const taxField of Array.from(taxGroup.children)) {
-                        const fieldName = taxField.tagName;
-                        const content = taxField.textContent;
-                        if (fieldName && content) {
-                             item[`${taxIdentifier}_${fieldName}`] = content;
-                        }
+            // Specific extraction for pICMS and CST
+            const icmsGroup = imposto.querySelector('ICMS');
+            if (icmsGroup) {
+                const icmsDetails = icmsGroup.children[0]; // Gets ICMS00, ICMS10, etc.
+                if (icmsDetails) {
+                    const pICMSTag = icmsDetails.querySelector('pICMS');
+                    if (pICMSTag && pICMSTag.textContent) {
+                        item['pICMS'] = parseFloat(pICMSTag.textContent) || 0;
                     }
-                } else {
-                     const fieldName = taxGroup.tagName;
-                     const content = taxGroup.textContent;
-                      if (fieldName && content) {
-                           item[fieldName] = content;
-                      }
+                    const cstTag = icmsDetails.querySelector('CST');
+                    if(cstTag && cstTag.textContent) {
+                        item['CST do ICMS'] = cstTag.textContent;
+                    }
                 }
             }
         }
