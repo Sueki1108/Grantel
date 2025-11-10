@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -621,7 +622,11 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                                 <TabsTrigger value="picms">Filtro por Alíquota ({filterOptionsForModal.picms.length})</TabsTrigger>
                             </TabsList>
                             <TabsContent value="cfop" className="mt-4">
-                                <ScrollArea className="h-96 w-full rounded-md border p-4">
+                                <div className="flex justify-end gap-2 mb-2">
+                                    <Button variant="outline" size="sm" onClick={() => setTempIncludedCfops(new Set(filterOptionsForModal.cfops))}>Selecionar Todos</Button>
+                                    <Button variant="outline" size="sm" onClick={() => setTempIncludedCfops(new Set())}>Limpar Seleção</Button>
+                                </div>
+                                <ScrollArea className="h-80 w-full rounded-md border p-4">
                                 {filterOptionsForModal.cfops.map(cfop => (
                                     <div key={cfop} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
                                         <div className='flex items-center space-x-2'>
@@ -640,7 +645,11 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                                 </ScrollArea>
                             </TabsContent>
                              <TabsContent value="cst" className="mt-4">
-                                <ScrollArea className="h-96 w-full rounded-md border p-4">
+                                 <div className="flex justify-end gap-2 mb-2">
+                                    <Button variant="outline" size="sm" onClick={() => setTempIncludedCsts(new Set(filterOptionsForModal.csts))}>Selecionar Todos</Button>
+                                    <Button variant="outline" size="sm" onClick={() => setTempIncludedCsts(new Set())}>Limpar Seleção</Button>
+                                </div>
+                                <ScrollArea className="h-80 w-full rounded-md border p-4">
                                 {filterOptionsForModal.csts.map(cst => (
                                     <div key={cst} className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted">
                                         <Checkbox
@@ -656,7 +665,11 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                                 </ScrollArea>
                             </TabsContent>
                             <TabsContent value="picms" className="mt-4">
-                                <ScrollArea className="h-96 w-full rounded-md border p-4">
+                                <div className="flex justify-end gap-2 mb-2">
+                                    <Button variant="outline" size="sm" onClick={() => setTempIncludedPIcms(new Set(filterOptionsForModal.picms))}>Selecionar Todos</Button>
+                                    <Button variant="outline" size="sm" onClick={() => setTempIncludedPIcms(new Set())}>Limpar Seleção</Button>
+                                </div>
+                                <ScrollArea className="h-80 w-full rounded-md border p-4">
                                 {filterOptionsForModal.picms.map(picms => (
                                     <div key={picms} className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted">
                                         <Checkbox
@@ -682,3 +695,5 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         </div>
     );
 }
+
+    
