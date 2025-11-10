@@ -362,24 +362,25 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         return tempCols;
     }, [columns, statusColumn, actionColumn]);
     
-    const { visibleGroupTitles, statusCounts } = useMemo(() => {
+    const { statusCounts } = useMemo(() => {
         const counts: Record<ValidationStatus | 'all', number> = { all: 0, unvalidated: 0, correct: 0, incorrect: 0, verify: 0 };
-        const visibleGroups = Object.keys(allGroupedItems).filter(siengeCfop => {
-            const hasItemsForFilter = allGroupedItems[siengeCfop].items.some(item => 
-                activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter
-            );
-            return hasItemsForFilter;
-        }).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-
         reconciledItems.forEach(item => {
             const status = validationStatus[getItemLineKey(item)] || 'unvalidated';
             counts.all++;
             counts[status]++;
         });
 
-        return { visibleGroupTitles: visibleGroups, statusCounts: counts };
-    }, [allGroupedItems, validationStatus, activeFilter, reconciledItems]);
+        return { statusCounts: counts };
+    }, [validationStatus, reconciledItems]);
 
+    const visibleGroupTitles = useMemo(() => {
+        return Object.keys(allGroupedItems).filter(siengeCfop => {
+            const groupItems = allGroupedItems[siengeCfop].items;
+            return groupItems.some(item => 
+                activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter
+            );
+        }).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    }, [allGroupedItems, validationStatus, activeFilter]);
 
     const itemsForActiveTab = useMemo(() => {
         if (!activeTabGroup || !allGroupedItems[activeTabGroup]) {
@@ -395,13 +396,37 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
         return groupData.items.filter(item => {
             const statusOk = activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
-            const cfopOk = includedCfops.has(item.CFOP);
-            const cstOk = includedCsts.has(item['CST do ICMS'] || '');
-            const picmsOk = includedPIcms.has(String(item['pICMS'] || '0'));
-            return statusOk && cfopOk && cstOk && picmsOk;
+            if (!statusOk) return false;
+
+            const cfopOk = includedCfops.size === 0 || includedCfops.has(item.CFOP);
+            const cstOk = includedCsts.size === 0 || includedCsts.has(item['CST do ICMS'] || '');
+            const picmsOk = includedPIcms.size === 0 || includedPIcms.has(String(item['pICMS'] || '0'));
+            
+            return cfopOk && cstOk && picmsOk;
         });
 
     }, [activeTabGroup, allGroupedItems, validationStatus, activeFilter, perTabFilters]);
+    
+    const filterOptionsForModal = useMemo(() => {
+        if (!currentEditingGroup || !allGroupedItems[currentEditingGroup]) {
+            return { cfops: [], csts: [], picms: [] };
+        }
+        
+        const groupItems = allGroupedItems[currentEditingGroup].items;
+        const visibleItems = groupItems.filter(item => 
+            activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter
+        );
+        
+        const cfops = new Set(visibleItems.map(item => item.CFOP).filter(Boolean));
+        const csts = new Set(visibleItems.map(item => item['CST do ICMS'] || '').filter(Boolean));
+        const picms = new Set(visibleItems.map(item => String(item['pICMS'] || '0')).filter(p => p !== '0'));
+        
+        return {
+            cfops: Array.from(cfops).sort(),
+            csts: Array.from(csts).sort(),
+            picms: Array.from(picms).sort((a,b) => parseFloat(a) - parseFloat(b)),
+        };
+    }, [currentEditingGroup, allGroupedItems, activeFilter, validationStatus]);
     
     useEffect(() => {
         if (visibleGroupTitles.length > 0 && !visibleGroupTitles.includes(activeTabGroup)) {
@@ -432,39 +457,18 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             tableRef.current.setGlobalFilter('');
         }
     };
-    
-     const { filterOptionsForModal } = useMemo(() => {
-        if (!currentEditingGroup || !allGroupedItems[currentEditingGroup]) {
-            return { filterOptionsForModal: { cfops: [], csts: [], picms: [] }};
-        }
-
-        const visibleItemsInGroup = allGroupedItems[currentEditingGroup].items.filter(item => 
-            activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter
-        );
-        
-        const cfops = new Set(visibleItemsInGroup.map(item => item.CFOP).filter(Boolean));
-        const csts = new Set(visibleItemsInGroup.map(item => item['CST do ICMS'] || '').filter(c => c !== ''));
-        const picms = new Set(visibleItemsInGroup.map(item => String(item['pICMS'] || '0')).filter(p => p !== '0'));
-        
-        return {
-            filterOptionsForModal: {
-                cfops: Array.from(cfops).sort(),
-                csts: Array.from(csts).sort(),
-                picms: Array.from(picms).sort((a,b) => parseFloat(a) - parseFloat(b)),
-            }
-        };
-    }, [currentEditingGroup, allGroupedItems, activeFilter, validationStatus]);
-
 
     const openFilterModal = (siengeCfopGroup: string) => {
         if (!allGroupedItems[siengeCfopGroup]) return;
         const currentFilters = perTabFilters[siengeCfopGroup];
+        const allOptions = allGroupedItems[siengeCfopGroup];
 
         setCurrentEditingGroup(siengeCfopGroup);
-        // Initialize temps with existing filters OR all available options if no filters are set
-        setTempIncludedCfops(currentFilters?.cfops || new Set(filterOptionsForModal.cfops));
-        setTempIncludedCsts(currentFilters?.csts || new Set(filterOptionsForModal.csts));
-        setTempIncludedPIcms(currentFilters?.picms || new Set(filterOptionsForModal.picms));
+        
+        setTempIncludedCfops(currentFilters?.cfops || allOptions.xmlCfops);
+        setTempIncludedCsts(currentFilters?.csts || allOptions.xmlCsts);
+        setTempIncludedPIcms(currentFilters?.picms || allOptions.xmlPIcms);
+        
         setIsFilterModalOpen(true);
     };
 
@@ -506,9 +510,12 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     }
 
     const currentTabFilters = perTabFilters[activeTabGroup];
-    const isCfopFilterActive = currentTabFilters && filterOptionsForModal.cfops && currentTabFilters.cfops.size < filterOptionsForModal.cfops.length;
-    const isCstFilterActive = currentTabFilters && filterOptionsForModal.csts && currentTabFilters.csts.size < filterOptionsForModal.csts.length;
-    const isPIcmsFilterActive = currentTabFilters && filterOptionsForModal.picms && currentTabFilters.picms.size < filterOptionsForModal.picms.length;
+    const allCfopsForTab = allGroupedItems[activeTabGroup]?.xmlCfops;
+    const allCstsForTab = allGroupedItems[activeTabGroup]?.xmlCsts;
+    const allPIcmsForTab = allGroupedItems[activeTabGroup]?.xmlPIcms;
+    const isCfopFilterActive = currentTabFilters && allCfopsForTab && currentTabFilters.cfops.size < allCfopsForTab.size;
+    const isCstFilterActive = currentTabFilters && allCstsForTab && currentTabFilters.csts.size < allCstsForTab.size;
+    const isPIcmsFilterActive = currentTabFilters && allPIcmsForTab && currentTabFilters.picms.size < allPIcmsForTab.size;
     const isAnyFilterActive = isCfopFilterActive || isCstFilterActive || isPIcmsFilterActive;
 
     return (
@@ -538,17 +545,11 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                 <Tabs value={activeTabGroup} onValueChange={setActiveTabGroup} className="w-full">
                     <TabsList className="h-auto flex-wrap justify-start">
                          {visibleGroupTitles.map(title => {
-                            const count = allGroupedItems[title].items.filter(item => {
-                                 if (activeFilter === 'all') return true;
-                                 return (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
-                            }).length;
-
+                            const group = allGroupedItems[title];
+                            if (!group) return null;
+                            const count = group.items.filter(item => activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter).length;
                             if (count > 0) {
-                                return (
-                                    <TabsTrigger key={title} value={title}>
-                                        {title} ({count})
-                                    </TabsTrigger>
-                                )
+                                return <TabsTrigger key={title} value={title}>{title} ({count})</TabsTrigger>
                             }
                             return null;
                         })}

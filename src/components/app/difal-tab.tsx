@@ -6,7 +6,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { EyeOff, AlertTriangle, RotateCcw } from "lucide-react";
+import { EyeOff, AlertTriangle, RotateCw, Search } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
@@ -45,9 +45,10 @@ const getFullCfopDescription = (cfopCode: string | number): string => {
 
 export function DifalTab({ reconciledItems, allPersistedClassifications }: DifalTabProps) {
     const [disregardedItems, setDisregardedItems] = useState<Set<string>>(new Set());
+    const [difalItems, setDifalItems] = useState<CfopValidationData[]>([]);
 
-    const difalItems = useMemo(() => {
-        return reconciledItems.filter(item => {
+    const findDifalItems = () => {
+        const items = reconciledItems.filter(item => {
             if (!item) return false;
 
             const universalProductKey = getUniversalProductKey(item);
@@ -66,7 +67,9 @@ export function DifalTab({ reconciledItems, allPersistedClassifications }: Difal
             
             return isCorrect && isDifalCfop;
         });
-    }, [reconciledItems, allPersistedClassifications]);
+        setDifalItems(items);
+    };
+
     
     const handleToggleDisregard = (itemKey: string) => {
         setDisregardedItems(prev => {
@@ -108,7 +111,7 @@ export function DifalTab({ reconciledItems, allPersistedClassifications }: Difal
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleToggleDisregard(itemKey)}>
-                                    {isDisregarded ? <RotateCcw className="h-4 w-4 text-green-600" /> : <EyeOff className="h-4 w-4" />}
+                                    {isDisregarded ? <RotateCw className="h-4 w-4 text-green-600" /> : <EyeOff className="h-4 w-4" />}
                                 </Button>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -126,8 +129,15 @@ export function DifalTab({ reconciledItems, allPersistedClassifications }: Difal
     return (
         <Card>
              <CardHeader>
-                <CardTitle>Análise de Itens para DIFAL</CardTitle>
-                <CardDescription>Itens com CFOP Sienge 2551 ou 2556 validados como "Corretos" na conciliação. Use a ação para mover itens para a lista de desconsiderados.</CardDescription>
+                <div className='flex justify-between items-start'>
+                    <div>
+                        <CardTitle>Análise de Itens para DIFAL</CardTitle>
+                        <CardDescription>Itens com CFOP Sienge 2551 ou 2556 validados como "Corretos" na conciliação. Use a ação para mover itens para a lista de desconsiderados.</CardDescription>
+                    </div>
+                     <Button onClick={findDifalItems}>
+                        <Search className="mr-2 h-4 w-4" /> Buscar Itens para DIFAL
+                    </Button>
+                </div>
             </CardHeader>
             <CardContent>
                  <Tabs defaultValue="main">
@@ -136,13 +146,19 @@ export function DifalTab({ reconciledItems, allPersistedClassifications }: Difal
                         <TabsTrigger value="disregarded">Itens Desconsiderados ({ignoredItems.length})</TabsTrigger>
                     </TabsList>
                     <TabsContent value="main" className="mt-4">
-                        {mainItems.length > 0 ? (
-                            <DataTable columns={columns} data={mainItems} />
+                        {difalItems.length > 0 ? (
+                           mainItems.length > 0 ? (
+                                <DataTable columns={columns} data={mainItems} />
+                           ) : (
+                                <div className="text-center p-8 text-muted-foreground">
+                                    <p>Todos os itens encontrados foram movidos para a lista de desconsiderados.</p>
+                                </div>
+                           )
                         ) : (
                              <div className="text-center p-8 text-muted-foreground">
                                 <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
                                 <h3 className="text-xl font-semibold">Nenhum item encontrado</h3>
-                                <p>Não foram encontrados itens conciliados com CFOP 2551/2556 e status "Correto" no seu histórico de validações.</p>
+                                <p>Clique no botão "Buscar Itens" para popular a lista, ou verifique se há itens conciliados com CFOP 2551/2556 e status "Correto" no seu histórico de validações.</p>
                             </div>
                         )}
                     </TabsContent>

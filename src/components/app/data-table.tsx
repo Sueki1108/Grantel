@@ -41,15 +41,18 @@ export function DataTable<TData, TValue>({
   columns,
   data,
   footer,
-  rowSelection,
-  setRowSelection,
+  rowSelection: parentRowSelection,
+  setRowSelection: parentSetRowSelection,
   tableRef,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = React.useState('')
+  const [internalRowSelection, setInternalRowSelection] = React.useState<RowSelectionState>({});
 
-  const isRowSelectionEnabled = !!rowSelection && !!setRowSelection;
+  const isRowSelectionEnabled = !!parentSetRowSelection;
+  const rowSelection = isRowSelectionEnabled ? parentRowSelection : internalRowSelection;
+  const setRowSelection = isRowSelectionEnabled ? parentSetRowSelection : setInternalRowSelection;
 
   const table = useReactTable({
     data,
