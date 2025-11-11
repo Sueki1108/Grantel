@@ -20,7 +20,6 @@ import { KeyChecker, KeyCheckResult } from "./key-checker";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AllClassifications } from "./imobilizado-analysis";
 import { CfopValidator, CfopValidationData } from "./cfop-validator";
-import { DifalTab } from "./difal-tab";
 
 
 // ===============================================================
@@ -391,11 +390,10 @@ export function AdditionalAnalyses({
              </Card>
             
              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-1 md:grid-cols-5">
+                <TabsList className="grid w-full grid-cols-1 md:grid-cols-4">
                     <TabsTrigger value="sped">Verificação SPED</TabsTrigger>
                     <TabsTrigger value="reconciliation">Conciliação e Validação CFOP</TabsTrigger>
                     <TabsTrigger value="tax_check">Conferência Sienge</TabsTrigger>
-                    <TabsTrigger value="difal">DIFAL</TabsTrigger>
                     <TabsTrigger value="resale_export">Exportação de Revenda</TabsTrigger>
                 </TabsList>
                 
@@ -436,14 +434,6 @@ export function AdditionalAnalyses({
                         />
                     )}
                     
-                    {activeTab === 'difal' && (
-                        <DifalTab 
-                            reconciledItems={reconciliationResults?.reconciled || []}
-                            imobilizadoItems={processedData?.sheets?.Imobilizados || []}
-                            allPersistedClassifications={allPersistedClassifications}
-                        />
-                    )}
-
                     {activeTab === 'resale_export' && (
                         <Card>
                             <CardHeader>
