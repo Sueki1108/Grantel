@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
 import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
 import JSZip from "jszip";
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from "@/components/ui/button";
@@ -206,11 +206,6 @@ export function AutomatorClientPage() {
         }
         return null;
     }, [selectedPeriods]);
-
-    const handleLastSaidaNumberChange = useCallback((newNumber: number) => {
-        setLastSaidaNumber(newNumber);
-    }, []);
-
 
     // =================================================================
     // FILE HANDLING & DOWNLOAD
@@ -537,6 +532,36 @@ export function AutomatorClientPage() {
                 const localLogs: string[] = [];
                 const log = (message: string) => localLogs.push(`[${new Date().toLocaleTimeString()}] ${message}`);
                 
+                // Determinar o número da última nota de saída do período anterior
+                const activePeriods = Object.keys(selectedPeriods).filter(p => selectedPeriods[p]).sort();
+                if (activePeriods.length > 0) {
+                    const firstPeriod = activePeriods[0];
+                    const [year, month] = firstPeriod.split('-').map(Number);
+                    const previousPeriodDate = subMonths(new Date(year, month - 1, 1), 1);
+                    const previousPeriodStr = format(previousPeriodDate, 'yyyy-MM');
+                    
+                    log(`Período de análise principal: ${activePeriods.join(', ')}. Buscando última nota de ${previousPeriodStr}...`);
+
+                    const allSaidasXmls = await processUploadedXmls(xmlFiles.nfeSaida);
+                    const previousPeriodSaidas = allSaidasXmls.saidas.filter(s => s['Emissão']?.startsWith(previousPeriodStr));
+                    
+                    if (previousPeriodSaidas.length > 0) {
+                        const maxNumero = Math.max(...previousPeriodSaidas.map(s => parseInt(s['Número'], 10)).filter(n => !isNaN(n)));
+                        if (isFinite(maxNumero)) {
+                            setLastSaidaNumber(maxNumero);
+                            log(`Último número de nota do período anterior (${previousPeriodStr}) definido como: ${maxNumero}`);
+                        } else {
+                            log(`Nenhuma nota de saída numérica encontrada para o período anterior.`);
+                            setLastSaidaNumber(0);
+                        }
+                    } else {
+                        log(`Nenhuma nota de saída encontrada para o período anterior (${previousPeriodStr}).`);
+                        setLastSaidaNumber(0);
+                    }
+                } else {
+                    setLastSaidaNumber(0);
+                }
+                
                 let dataToProcess: Record<string, any[]> = {};
                 let eventCanceledKeys = new Set<string>();
 
@@ -560,7 +585,6 @@ export function AutomatorClientPage() {
                     }
                 }
                 
-                const activePeriods = Object.keys(selectedPeriods).filter(p => selectedPeriods[p]);
                 if (activePeriods.length > 0) {
                     log(`Aplicando filtro de período para: ${activePeriods.join(', ')}`);
                 
@@ -644,6 +668,7 @@ export function AutomatorClientPage() {
     const saidasNfeTabDisabled = !processedData?.sheets['Saídas'] || processedData.sheets['Saídas'].length === 0;
     const nfseTabDisabled = xmlFiles.nfse.length === 0 && (!processedData || !processedData.fileNames?.nfse || processedData.fileNames.nfse.length === 0);
     const analysisTabDisabled = !processedData?.sheets['Chaves Válidas'] || processedData.sheets['Chaves Válidas'].length === 0;
+    const imobilizadoTabDisabled = !processedData?.sheets['Imobilizados'] || processedData.sheets['Imobilizados'].length === 0;
     
     return (
         <div className="min-h-screen bg-background text-foreground">
@@ -691,12 +716,19 @@ export function AutomatorClientPage() {
                                 3. Análise NFS-e
                                 {(!nfseTabDisabled) && <FilePieChart className="h-5 w-5 text-primary" />}
                             </TabsTrigger>
+                            <TabsTrigger value="imobilizado" disabled={imobilizadoTabDisabled}>
+                                4. Imobilizado
+                                {processedData?.sheets['Imobilizados'] && <CheckCircle className="h-5 w-5 text-green-600" />}
+                            </TabsTrigger>
+                             <TabsTrigger value="difal" className="flex items-center gap-2">
+                                <TicketPercent className="h-5 w-5" /> Guia DIFAL
+                            </TabsTrigger>
                             <TabsTrigger value="analyses" disabled={analysisTabDisabled} className="flex items-center gap-2">
-                                4. Análises Avançadas
+                                5. Análises Avançadas
                                 {processedData?.keyCheckResults && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                              <TabsTrigger value="pending" className="flex items-center gap-2">
-                                <ClipboardList className="h-5 w-5" /> 5. Pendências
+                                <ClipboardList className="h-5 w-5" /> 6. Pendências
                             </TabsTrigger>
                         </TabsList>
                         
@@ -749,12 +781,18 @@ export function AutomatorClientPage() {
                             )}
 
                              {activeMainTab === 'saidas-nfe' && (
-                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
+                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
                             )}
                             
                             {activeMainTab === 'nfse' && (
                                 !nfseTabDisabled ? <NfseAnalysis nfseFiles={xmlFiles.nfse} disregardedNotes={disregardedNfseNotes} onDisregardedNotesChange={setDisregardedNfseNotes} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FilePieChart className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando ficheiros</h3><p>Carregue os XMLs de NFS-e na primeira aba para habilitar esta análise.</p></CardContent></Card>
                             )}
+                            
+                            {activeMainTab === 'imobilizado' && (
+                                !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} onPersistData={handlePersistImobilizado} allPersistedData={imobilizadoClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card>
+                            )}
+
+                             {activeMainTab === 'difal' && <DifalAnalysis /> }
                             
                             {activeMainTab === 'analyses' && (
                                 !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>

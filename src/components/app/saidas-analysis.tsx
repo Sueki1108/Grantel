@@ -1,24 +1,20 @@
-
 "use client";
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { FileWarning, TrendingUp, XCircle, Trash2, Ban, FolderClosed, CheckCircle, Save, AlertTriangle, RotateCcw, Filter } from 'lucide-react';
+import { FileWarning, TrendingUp, XCircle, Trash2, Ban, FolderClosed, CheckCircle, Save, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { DataTable } from './data-table';
-import { getColumnsWithCustomRender } from '@/lib/columns-helper';
+
 
 type SaidaStatus = 'emitida' | 'cancelada' | 'inutilizada';
 
@@ -34,33 +30,10 @@ interface SaidasAnalysisProps {
     statusMap: Record<number, SaidaStatus>;
     onStatusChange: (newStatus: Record<number, SaidaStatus>) => void;
     lastPeriodNumber: number;
-    onLastPeriodNumberChange: (newNumber: number) => void;
 }
 
-export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeriodNumber, onLastPeriodNumberChange }: SaidasAnalysisProps) {
+export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeriodNumber }: SaidasAnalysisProps) {
     const { toast } = useToast();
-    const [lastNumberInput, setLastNumberInput] = useState<string>(String(lastPeriodNumber || ''));
-
-    useEffect(() => {
-        setLastNumberInput(String(lastPeriodNumber || ''));
-    }, [lastPeriodNumber]);
-
-    const handleSaveLastNumber = () => {
-        const num = parseInt(lastNumberInput, 10);
-        if (!isNaN(num)) {
-            onLastPeriodNumberChange(num);
-            toast({
-                title: 'Número Salvo',
-                description: `O número da última nota do período anterior foi salvo como ${num}.`,
-            });
-        } else {
-            toast({
-                variant: 'destructive',
-                title: 'Número Inválido',
-                description: 'Por favor, insira um número válido.',
-            });
-        }
-    };
     
     const analysisResults = useMemo(() => {
         if (!saidasData || saidasData.length === 0) {
@@ -104,7 +77,6 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
         
         return { sequence: fullSequence, min, max, firstNoteAfterGap };
     }, [saidasData, statusMap, lastPeriodNumber]);
-
 
     const handleStatusChange = (numero: number, newStatus: SaidaStatus) => {
         const newStatusMap = { ...statusMap, [numero]: newStatus };
@@ -160,6 +132,7 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                             <CardDescription>
                                 Verifique a sequência numérica das notas fiscais de saída para identificar falhas.
                                 {analysisResults.sequence.length > 0 && ` Analisando do número ${analysisResults.sequence[0].numero} ao ${analysisResults.sequence[analysisResults.sequence.length - 1].numero}.`}
+                                {lastPeriodNumber > 0 && ` A última nota do período anterior foi a ${lastPeriodNumber}.`}
                             </CardDescription>
                         </div>
                     </div>
@@ -172,29 +145,6 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                 </div>
             </CardHeader>
             <CardContent>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <Card className="bg-muted/50">
-                        <CardHeader className='pb-2'>
-                            <CardTitle className='text-lg'>Período Anterior</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="flex items-center gap-2">
-                                <Label htmlFor="last-note-input" className="whitespace-nowrap text-sm font-medium">Última NF do Período:</Label>
-                                <Input
-                                    id="last-note-input"
-                                    type="number"
-                                    value={lastNumberInput}
-                                    onChange={(e) => setLastNumberInput(e.target.value)}
-                                    className="w-32"
-                                    placeholder="Ex: 11498"
-                                />
-                                <Button onClick={handleSaveLastNumber} size="sm"><Save className="mr-2 h-4 w-4"/> Guardar</Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-
-
                 {analysisResults.firstNoteAfterGap && (
                     <Alert variant="destructive" className="mb-4">
                         <AlertTriangle className="h-4 w-4" />
