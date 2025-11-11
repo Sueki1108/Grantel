@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -302,13 +303,8 @@ const processSpedFileInBrowser = (
         const usedParticipantCodes = new Set<string>();
         intermediateLines.forEach(line => {
             const parts = line.split('|');
-            if (parts.length > 4) {
-                 if (parts[1] === 'C100' && parts[4]) {
-                     usedParticipantCodes.add(parts[4]);
-                 } else if (parts[1] === 'D100') {
-                    if (parts[3]) usedParticipantCodes.add(parts[3]);
-                    if (parts[4]) usedParticipantCodes.add(parts[4]);
-                 }
+            if (parts.length > 4 && (parts[1] === 'C100' || parts[1] === 'D100') && parts[4]) {
+                usedParticipantCodes.add(parts[4]);
             }
         });
 
@@ -569,7 +565,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12], vlDesc: parts[14] };
             } else if (reg === 'D100' && parts.length > 17 && parts[10]?.length === 44) {
                 key = parts[10];
-                docData = { key, reg, indOper: parts[2], codPart: parts[4], codPartRemet: parts[3], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
+                docData = { key, reg, indOper: parts[2], codPart: parts[4], codPartDest: parts[3], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
             }
 
             if (key && docData) {
@@ -593,7 +589,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     const keysInTxtNotInSheet = [...spedDocData.values()]
         .filter(spedDoc => !chavesValidasMap.has(spedDoc.key))
         .map(spedDoc => {
-             const participant = spedDoc.codPart || spedDoc.codPartRemet ? participantData.get(spedDoc.codPart || spedDoc.codPartRemet) : null;
+             const participant = spedDoc.codPart ? participantData.get(spedDoc.codPart) : null;
              const isCte = spedDoc.reg === 'D100';
              const spedDate = parseSpedDate(spedDoc.dtDoc);
              return {
