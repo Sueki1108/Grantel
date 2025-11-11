@@ -400,14 +400,13 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     }), [validationStatus]);
     
     const allGroupedItems = useMemo((): GroupedItems => {
-        if (!allItemsToValidate) return {};
         const groups: GroupedItems = {};
-
-        const addOrUpdateGroup = (siengeCfop: string, item: CfopValidationData) => {
-            if (!groups[siengeCfop]) {
-                groups[siengeCfop] = { items: [], xmlCfops: new Set(), xmlCsts: new Set(), xmlPIcms: new Set() };
+        
+        const addOrUpdateGroup = (groupKey: string, item: CfopValidationData) => {
+            if (!groups[groupKey]) {
+                groups[groupKey] = { items: [], xmlCfops: new Set(), xmlCsts: new Set(), xmlPIcms: new Set() };
             }
-            const group = groups[siengeCfop];
+            const group = groups[groupKey];
             group.items.push(item);
             if (item.CFOP) group.xmlCfops.add(item.CFOP);
             const itemCst = item['CST do ICMS'] === undefined || item['CST do ICMS'] === null ? 'Vazio' : item['CST do ICMS'];
@@ -416,20 +415,32 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
             group.xmlPIcms.add(itemPIcms);
         };
     
-        allItemsToValidate.forEach(item => {
-            // Find the corresponding reconciled item to get the Sienge CFOP
+        // Primeiro, processa os itens conciliados que têm um Sienge_CFOP
+        (reconciledItems || []).forEach(item => {
+            if (item.Sienge_CFOP) {
+                addOrUpdateGroup(item.Sienge_CFOP, item);
+            }
+        });
+
+        // Depois, processa os itens de imobilizado
+        (imobilizadoItems || []).forEach(item => {
+            // Tenta encontrar uma correspondência nos itens conciliados para obter o Sienge_CFOP
             const reconciledMatch = reconciledItems?.find(r => getItemLineKey(r) === getItemLineKey(item));
             const siengeCfop = reconciledMatch?.Sienge_CFOP;
-    
+
             if (siengeCfop) {
-                addOrUpdateGroup(siengeCfop, item);
-            } else if (imobilizadoItems.some(i => getItemLineKey(i) === getItemLineKey(item))) {
-                addOrUpdateGroup('IMOBILIZADO', item); // Group imobilizado items separately if no Sienge match
+                // Se já foi adicionado pelo loop anterior, não adiciona de novo para evitar duplicados
+                if (!groups[siengeCfop]?.items.some(i => getItemLineKey(i) === getItemLineKey(item))) {
+                    addOrUpdateGroup(siengeCfop, item);
+                }
+            } else {
+                // Se não tem Sienge_CFOP, agrupa em "IMOBILIZADO"
+                addOrUpdateGroup('IMOBILIZADO', item);
             }
         });
     
         return groups;
-    }, [allItemsToValidate, reconciledItems, imobilizadoItems]);
+    }, [reconciledItems, imobilizadoItems]);
     
     const [activeTabGroup, setActiveTabGroup] = useState<string>('');
     const tableRef = React.useRef<ReactTable<CfopValidationData> | null>(null);
@@ -839,3 +850,4 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         </div>
     );
 }
+
