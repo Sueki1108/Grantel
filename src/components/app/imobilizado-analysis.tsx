@@ -48,7 +48,8 @@ export interface AllClassifications {
         cfopValidations?: {
              classifications: {
                 [uniqueProductKey: string]: {
-                    classification: 'correct' | 'incorrect' | 'verify';
+                    classification: 'correct' | 'incorrect' | 'verify' | 'unvalidated';
+                    isDifal: boolean;
                 }
             }
         }

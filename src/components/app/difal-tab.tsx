@@ -49,8 +49,8 @@ export function DifalTab({ reconciledItems, allPersistedClassifications }: Difal
 
             // Search through all competences for a 'difal' classification
             for (const competence in allPersistedClassifications) {
-                const classification = allPersistedClassifications[competence]?.cfopValidations?.classifications?.[universalProductKey]?.classification;
-                if (classification === 'difal') {
+                const classification = allPersistedClassifications[competence]?.cfopValidations?.classifications?.[universalProductKey];
+                if (classification?.isDifal) {
                     isDifal = true;
                     break;
                 }

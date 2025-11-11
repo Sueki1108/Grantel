@@ -36,7 +36,11 @@ export interface CfopValidationData extends Record<string, any> {
     'pICMS'?: number; // Alíquota de ICMS do XML
 }
 
-type ValidationStatus = 'unvalidated' | 'correct' | 'incorrect' | 'verify' | 'difal';
+type MainValidationStatus = 'unvalidated' | 'correct' | 'incorrect' | 'verify';
+type ValidationStatus = {
+    main: MainValidationStatus;
+    isDifal: boolean;
+}
 
 interface GroupedItems {
   [siengeCfop: string]: {
@@ -91,7 +95,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     const { toast } = useToast();
     const [validationStatus, setValidationStatus] = useState<Record<string, ValidationStatus>>({});
     const [hasChanges, setHasChanges] = useState(false);
-    const [activeFilter, setActiveFilter] = useState<ValidationStatus | 'all'>('unvalidated');
+    const [activeFilter, setActiveFilter] = useState<MainValidationStatus | 'all'>('unvalidated');
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -143,18 +147,19 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
 
         allItemsToValidate.forEach(item => {
             const universalProductKey = getUniversalProductKey(item);
-            let classification: ValidationStatus | undefined = undefined;
+            let finalStatus: ValidationStatus = { main: 'unvalidated', isDifal: false };
 
             // Look through all past competences for a classification
             for (const otherCompetence in allPersistedClassifications) {
-                const historicClassification = allPersistedClassifications[otherCompetence]?.cfopValidations?.classifications?.[universalProductKey]?.classification as ValidationStatus;
-                if (historicClassification && historicClassification !== 'unvalidated') {
-                    classification = historicClassification;
+                const historicClassification = allPersistedClassifications[otherCompetence]?.cfopValidations?.classifications?.[universalProductKey];
+                if (historicClassification && historicClassification.classification !== 'unvalidated') {
+                    finalStatus.main = historicClassification.classification as MainValidationStatus;
+                    finalStatus.isDifal = historicClassification.isDifal || false;
                     break;
                 }
             }
             
-            initialStatus[getItemLineKey(item)] = classification || 'unvalidated';
+            initialStatus[getItemLineKey(item)] = finalStatus;
         });
 
         setValidationStatus(initialStatus);
@@ -162,20 +167,39 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     }, [allItemsToValidate, allPersistedClassifications, competence]);
 
 
-     const handleValidationChange = (itemsToUpdate: CfopValidationData[], newStatus: ValidationStatus) => {
+     const handleMainStatusChange = (itemsToUpdate: CfopValidationData[], newMainStatus: MainValidationStatus) => {
         const newValidationStatus = { ...validationStatus };
         const productKeysToUpdate = new Set(itemsToUpdate.map(getUniversalProductKey));
 
         allItemsToValidate.forEach(item => {
             const universalProductKey = getUniversalProductKey(item);
             if (productKeysToUpdate.has(universalProductKey)) {
-                newValidationStatus[getItemLineKey(item)] = newStatus;
+                const currentStatus = newValidationStatus[getItemLineKey(item)] || { main: 'unvalidated', isDifal: false };
+                newValidationStatus[getItemLineKey(item)] = { ...currentStatus, main: newMainStatus };
             }
         });
 
         setValidationStatus(newValidationStatus);
         setHasChanges(true);
     };
+
+    const handleDifalToggle = (itemsToUpdate: CfopValidationData[], forceValue?: boolean) => {
+         const newValidationStatus = { ...validationStatus };
+        const productKeysToUpdate = new Set(itemsToUpdate.map(getUniversalProductKey));
+
+        allItemsToValidate.forEach(item => {
+            const universalProductKey = getUniversalProductKey(item);
+            if (productKeysToUpdate.has(universalProductKey)) {
+                 const currentStatus = newValidationStatus[getItemLineKey(item)] || { main: 'unvalidated', isDifal: false };
+                 const newIsDifal = forceValue !== undefined ? forceValue : !currentStatus.isDifal;
+                 newValidationStatus[getItemLineKey(item)] = { ...currentStatus, isDifal: newIsDifal };
+            }
+        });
+
+        setValidationStatus(newValidationStatus);
+        setHasChanges(true);
+    };
+
 
     const handleSaveChanges = () => {
         if (!competence) return;
@@ -193,9 +217,13 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
             const newStatus = validationStatus[getItemLineKey(item)];
             const universalProductKey = getUniversalProductKey(item);
             
-            if (newStatus && newStatus !== 'unvalidated') {
-                updatedPersistedData[competence].cfopValidations.classifications[universalProductKey] = { classification: newStatus };
-            } else if (newStatus === 'unvalidated') {
+            if (newStatus && (newStatus.main !== 'unvalidated' || newStatus.isDifal)) {
+                updatedPersistedData[competence].cfopValidations.classifications[universalProductKey] = { 
+                    classification: newStatus.main,
+                    isDifal: newStatus.isDifal
+                };
+            } else if (newStatus && newStatus.main === 'unvalidated' && !newStatus.isDifal) {
+                // Remove from persisted if it's completely unvalidated
                 if (updatedPersistedData[competence].cfopValidations.classifications[universalProductKey]) {
                     delete updatedPersistedData[competence].cfopValidations.classifications[universalProductKey];
                 }
@@ -207,17 +235,26 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         toast({ title: 'Classificações de CFOP guardadas!' });
     };
     
-    const handleBulkClassification = (newStatus: ValidationStatus) => {
+    const handleBulkClassification = (status: MainValidationStatus | 'toggleDifal' | 'setDifal' | 'unsetDifal') => {
         const table = tableRef.current;
         if (!table) return;
 
         const selectedItems = table.getFilteredSelectedRowModel().rows.map(row => row.original);
         if (selectedItems.length > 0) {
-            handleValidationChange(selectedItems, newStatus);
+            if (status === 'toggleDifal') {
+                 handleDifalToggle(selectedItems);
+            } else if (status === 'setDifal') {
+                handleDifalToggle(selectedItems, true);
+            } else if (status === 'unsetDifal') {
+                 handleDifalToggle(selectedItems, false);
+            } else {
+                handleMainStatusChange(selectedItems, status as MainValidationStatus);
+            }
         }
         
         setRowSelection({}); // Limpa a seleção após a ação
     };
+
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text).then(() => {
@@ -320,16 +357,16 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         header: 'Ações',
         cell: ({ row }: any) => {
             const item = row.original;
-            const currentStatus = validationStatus[getItemLineKey(item)] || 'unvalidated';
+            const currentStatus = validationStatus[getItemLineKey(item)] || { main: 'unvalidated', isDifal: false };
             return (
                 <TooltipProvider>
                     <div className="flex gap-1 justify-center" onClick={(e) => e.stopPropagation()}>
-                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'correct' ? 'default' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'correct')}}><ThumbsUp className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Correto</p></TooltipContent></Tooltip>
-                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'incorrect' ? 'destructive' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'incorrect')}}><ThumbsDown className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Incorreto</p></TooltipContent></Tooltip>
-                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'verify' ? 'secondary' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'verify')}}><Search className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificar</p></TooltipContent></Tooltip>
-                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'difal' ? 'default' : 'ghost'} className="h-8 w-8 bg-purple-100 dark:bg-purple-900/50" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'difal')}}><TicketPercent className="h-5 w-5 text-purple-600" /></Button></TooltipTrigger><TooltipContent><p>Marcar para DIFAL</p></TooltipContent></Tooltip>
-                        {currentStatus !== 'unvalidated' && (
-                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'unvalidated')}}><RotateCcw className="h-5 w-5 text-muted-foreground" /></Button></TooltipTrigger><TooltipContent><p>Reverter para Pendente</p></TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus.main === 'correct' ? 'default' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleMainStatusChange([item], 'correct')}}><ThumbsUp className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Correto</p></TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus.main === 'incorrect' ? 'destructive' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleMainStatusChange([item], 'incorrect')}}><ThumbsDown className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Incorreto</p></TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus.main === 'verify' ? 'secondary' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleMainStatusChange([item], 'verify')}}><Search className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificar</p></TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus.isDifal ? 'default' : 'ghost'} className={cn("h-8 w-8", currentStatus.isDifal && "bg-purple-600 hover:bg-purple-700 text-white")} onClick={(e) => {e.stopPropagation(); handleDifalToggle([item])}}><TicketPercent className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Alternar DIFAL</p></TooltipContent></Tooltip>
+                        {currentStatus.main !== 'unvalidated' && (
+                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleMainStatusChange([item], 'unvalidated')}}><RotateCcw className="h-5 w-5 text-muted-foreground" /></Button></TooltipTrigger><TooltipContent><p>Reverter para Pendente</p></TooltipContent></Tooltip>
                         )}
                     </div>
                 </TooltipProvider>
@@ -341,14 +378,29 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         id: 'status',
         header: 'Status',
         cell: ({ row }: any) => {
-            const currentStatus = validationStatus[getItemLineKey(row.original)] || 'unvalidated';
-            switch(currentStatus) {
-                case 'correct': return <Badge variant="default" className='bg-green-600 hover:bg-green-700'><CheckCircle className="h-4 w-4 mr-1" /> Correto</Badge>;
-                case 'incorrect': return <Badge variant="destructive"><AlertTriangle className="h-4 w-4 mr-1" /> Incorreto</Badge>;
-                 case 'verify': return <Badge variant="secondary" className='bg-amber-500 text-white hover:bg-amber-600'><Search className="h-4 w-4 mr-1" /> Verificar</Badge>;
-                 case 'difal': return <Badge variant="default" className='bg-purple-600 text-white hover:bg-purple-700'><TicketPercent className="h-4 w-4 mr-1" /> DIFAL</Badge>;
-                default: return <Badge variant="outline"><FileWarning className="h-4 w-4 mr-1" /> Pendente</Badge>;
+            const currentStatus = validationStatus[getItemLineKey(row.original)] || { main: 'unvalidated', isDifal: false };
+            let mainBadge;
+            switch(currentStatus.main) {
+                case 'correct': mainBadge = <Badge variant="default" className='bg-green-600 hover:bg-green-700'><CheckCircle className="h-4 w-4 mr-1" /> Correto</Badge>; break;
+                case 'incorrect': mainBadge = <Badge variant="destructive"><AlertTriangle className="h-4 w-4 mr-1" /> Incorreto</Badge>; break;
+                case 'verify': mainBadge = <Badge variant="secondary" className='bg-amber-500 text-white hover:bg-amber-600'><Search className="h-4 w-4 mr-1" /> Verificar</Badge>; break;
+                default: mainBadge = <Badge variant="outline"><FileWarning className="h-4 w-4 mr-1" /> Pendente</Badge>;
             }
+            return (
+                <div className="flex items-center gap-2">
+                    {mainBadge}
+                    {currentStatus.isDifal && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger>
+                                     <Badge variant="default" className='bg-purple-600 hover:bg-purple-700'><TicketPercent className="h-4 w-4" /></Badge>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Marcado para DIFAL</p></TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
+                </div>
+            )
         }
     }), [validationStatus]);
     
@@ -381,11 +433,11 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     }, [columns, statusColumn, actionColumn]);
     
     const statusCounts = useMemo(() => {
-        const counts: Record<ValidationStatus | 'all', number> = { all: 0, unvalidated: 0, correct: 0, incorrect: 0, verify: 0, difal: 0 };
+        const counts: Record<MainValidationStatus | 'all', number> = { all: 0, unvalidated: 0, correct: 0, incorrect: 0, verify: 0 };
         const itemsToCount = allItemsToValidate.filter(item => {
             const groupKey = item.Sienge_CFOP || 'IMOBILIZADO';
             const groupData = allGroupedItems[groupKey];
-            if (!groupData) return true; // Should not happen
+            if (!groupData) return true;
 
             const { cfops: includedCfops, csts: includedCsts, picms: includedPIcms } = perTabFilters[groupKey] || {
                 cfops: groupData.xmlCfops, csts: groupData.xmlCsts, picms: groupData.xmlPIcms
@@ -401,7 +453,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         });
 
         itemsToCount.forEach(item => {
-            const status = validationStatus[getItemLineKey(item)] || 'unvalidated';
+            const status = validationStatus[getItemLineKey(item)]?.main || 'unvalidated';
             counts.all++;
             counts[status]++;
         });
@@ -418,7 +470,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         return baseGroups.filter(siengeCfop => {
             const groupItems = allGroupedItems[siengeCfop].items;
             return groupItems.some(item => {
-                 const statusOk = activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
+                 const statusOk = activeFilter === 'all' || (validationStatus[getItemLineKey(item)]?.main || 'unvalidated') === activeFilter;
                  if (!statusOk) return false;
                  
                  const { cfops: includedCfops, csts: includedCsts, picms: includedPIcms } = perTabFilters[siengeCfop] || {
@@ -449,7 +501,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         };
 
         return groupData.items.filter(item => {
-            const statusOk = activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
+            const statusOk = activeFilter === 'all' || (validationStatus[getItemLineKey(item)]?.main || 'unvalidated') === activeFilter;
             if (!statusOk) return false;
 
             const cfopOk = includedCfops.size === 0 || includedCfops.has(item.CFOP);
@@ -470,7 +522,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         
         const groupItems = allGroupedItems[currentEditingGroup].items;
         const visibleItems = groupItems.filter(item => 
-            activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter
+            activeFilter === 'all' || (validationStatus[getItemLineKey(item)]?.main || 'unvalidated') === activeFilter
         );
         
         const cfops = new Set(visibleItems.map(item => item.CFOP).filter(Boolean));
@@ -582,13 +634,12 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         <div className="space-y-4 h-full flex flex-col relative">
              <div className="flex justify-between items-center">
                 <Tabs defaultValue="unvalidated" value={activeFilter} onValueChange={(value) => setActiveFilter(value as any)} className="w-full">
-                    <TabsList className="grid w-full grid-cols-6">
+                    <TabsList className="grid w-full grid-cols-5">
                         <TabsTrigger value="all">Todos ({statusCounts.all})</TabsTrigger>
                         <TabsTrigger value="unvalidated">Pendentes ({statusCounts.unvalidated})</TabsTrigger>
                         <TabsTrigger value="correct">Corretos ({statusCounts.correct})</TabsTrigger>
                         <TabsTrigger value="incorrect">Incorretos ({statusCounts.incorrect})</TabsTrigger>
                         <TabsTrigger value="verify">A Verificar ({statusCounts.verify})</TabsTrigger>
-                        <TabsTrigger value="difal">DIFAL ({statusCounts.difal})</TabsTrigger>
                     </TabsList>
                 </Tabs>
                 <div className="flex gap-2 ml-4">
@@ -609,7 +660,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
                             const group = allGroupedItems[title];
                             if (!group) return null;
                             const count = group.items.filter(item => {
-                                const statusOk = activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
+                                const statusOk = activeFilter === 'all' || (validationStatus[getItemLineKey(item)]?.main || 'unvalidated') === activeFilter;
                                 if (!statusOk) return false;
                                 
                                 const { cfops: includedCfops, csts: includedCsts, picms: includedPIcms } = perTabFilters[title] || {
@@ -681,7 +732,8 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
                              <Button size="sm" onClick={() => handleBulkClassification('correct')}><ThumbsUp className="mr-2 h-4 w-4" /> Correto</Button>
                              <Button size="sm" variant="destructive" onClick={() => handleBulkClassification('incorrect')}><ThumbsDown className="mr-2 h-4 w-4" /> Incorreto</Button>
                              <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('verify')}><Search className="mr-2 h-4 w-4" /> Verificar</Button>
-                             <Button size="sm" className="bg-purple-600 hover:bg-purple-700" onClick={() => handleBulkClassification('difal')}><TicketPercent className="mr-2 h-4 w-4" /> DIFAL</Button>
+                             <Button size="sm" className="bg-purple-600 hover:bg-purple-700" onClick={() => handleBulkClassification('setDifal')}><TicketPercent className="mr-2 h-4 w-4" /> Marcar DIFAL</Button>
+                             <Button size="sm" variant="outline" className="bg-purple-100 dark:bg-purple-900/40" onClick={() => handleBulkClassification('unsetDifal')}><TicketPercent className="mr-2 h-4 w-4 text-purple-600" /> Desmarcar DIFAL</Button>
                              <Button size="sm" variant="outline" onClick={() => handleBulkClassification('unvalidated')}><RotateCcw className="mr-2 h-4 w-4" /> Reverter</Button>
                          </div>
                     </Card>
