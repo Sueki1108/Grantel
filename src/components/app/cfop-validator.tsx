@@ -66,7 +66,7 @@ const CFOP_VALIDATION_FILTERS_KEY = 'cfopValidationFilters_v2';
 
 
 interface CfopValidatorProps {
-    reconciledItems: CfopValidationData[];
+    reconciledItems: CfopValidationData[] | null;
     imobilizadoItems: any[];
     allPersistedClassifications: AllClassifications;
     onPersistAllClassifications: (allData: AllClassifications) => void;
@@ -107,7 +107,8 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     
     // Combina itens conciliados com itens de imobilizado
     const allItemsToValidate = useMemo(() => {
-        const reconciledItemKeys = new Set(reconciledItems.map(item => getItemLineKey(item)));
+        const reconciled = reconciledItems || [];
+        const reconciledItemKeys = new Set(reconciled.map(item => getItemLineKey(item)));
         
         const classifiedImobilizado = (imobilizadoItems || [])
             .filter(item => {
@@ -115,9 +116,16 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
                 const classification = allPersistedClassifications[competence]?.classifications?.[item.uniqueItemId]?.classification;
                 return classification === 'imobilizado' && !reconciledItemKeys.has(getItemLineKey(item));
             })
-            .map(item => ({ ...item, 'Sienge_CFOP': 'IMOBILIZADO' })); // Adiciona um grupo especial
+            .map(item => {
+                // Try to find a reconciled item to get Sienge_CFOP
+                const reconciledMatch = reconciled.find(r => getItemLineKey(r) === getItemLineKey(item));
+                return { 
+                    ...item, 
+                    'Sienge_CFOP': reconciledMatch?.['Sienge_CFOP'] || 'IMOBILIZADO' 
+                };
+            });
 
-        return [...reconciledItems, ...classifiedImobilizado];
+        return [...reconciled, ...classifiedImobilizado];
     }, [reconciledItems, imobilizadoItems, allPersistedClassifications, competence]);
     
     useEffect(() => {
@@ -152,7 +160,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
             // Look through all past competences for a classification
             for (const otherCompetence in allPersistedClassifications) {
                 const historicClassification = allPersistedClassifications[otherCompetence]?.cfopValidations?.classifications?.[universalProductKey];
-                if (historicClassification && historicClassification.classification !== 'unvalidated') {
+                if (historicClassification) {
                     finalStatus.main = historicClassification.classification as MainValidationStatus;
                     finalStatus.isDifal = historicClassification.isDifal || false;
                     break;
@@ -217,16 +225,11 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
             const newStatus = validationStatus[getItemLineKey(item)];
             const universalProductKey = getUniversalProductKey(item);
             
-            if (newStatus && (newStatus.main !== 'unvalidated' || newStatus.isDifal)) {
+            if (newStatus) {
                 updatedPersistedData[competence].cfopValidations.classifications[universalProductKey] = { 
                     classification: newStatus.main,
                     isDifal: newStatus.isDifal
                 };
-            } else if (newStatus && newStatus.main === 'unvalidated' && !newStatus.isDifal) {
-                // Remove from persisted if it's completely unvalidated
-                if (updatedPersistedData[competence].cfopValidations.classifications[universalProductKey]) {
-                    delete updatedPersistedData[competence].cfopValidations.classifications[universalProductKey];
-                }
             }
         });
         
