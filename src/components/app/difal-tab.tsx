@@ -9,7 +9,7 @@ import { getColumnsWithCustomRender } from "@/lib/columns-helper";
 import { EyeOff, AlertTriangle, RotateCw, TicketPercent } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
-import { CfopValidationData } from './cfop-validator';
+import { CfopValidationData, getUniversalProductKey } from './cfop-validator';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { AllClassifications } from "./imobilizado-analysis";
 
@@ -17,21 +17,6 @@ import { AllClassifications } from "./imobilizado-analysis";
 const getItemLineKey = (item: CfopValidationData): string => {
     return item['Chave de acesso'] + item.Item;
 };
-
-// Adicionado para obter a chave universal do produto para correspondência entre sessões
-const getUniversalProductKey = (item: CfopValidationData): string => {
-    const siengeCfop = item['Sienge_CFOP'] || item['CFOP']; // Fallback para CFOP do XML
-    const fullDescription = getFullCfopDescription(siengeCfop).toLowerCase();
-    return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${fullDescription}`;
-};
-
-const getFullCfopDescription = (cfopCode: string | number): string => {
-    const code = parseInt(String(cfopCode), 10);
-    // Presume que cfopDescriptions é importado ou definido em algum lugar
-    const cfopDescriptions: { [key: number]: string } = {}; // Placeholder
-    return cfopDescriptions[code as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-};
-
 
 interface DifalTabProps {
     reconciledItems: CfopValidationData[];
