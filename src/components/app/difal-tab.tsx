@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
@@ -54,7 +54,7 @@ export function DifalTab({ reconciledItems, imobilizadoItems, allPersistedClassi
 
             const universalKey = getUniversalProductKey(item);
             let isItemMarkedAsDifal = false;
-
+            
             // Itera sobre todas as competências no histórico
             for (const competence in allPersistedClassifications) {
                 const classificationsForCompetence = allPersistedClassifications[competence]?.cfopValidations?.classifications;

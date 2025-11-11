@@ -661,7 +661,7 @@ export function AutomatorClientPage() {
                            <h1 className="text-xl font-bold font-headline">Fluxo de Validação</h1>
                         </div>
                      </div>
-                     <div className="flex items-center gap-2">
+                     <div className="flex items-center gap-4">
                          <div className="flex items-center space-x-2">
                             <Switch id="wide-mode-switch" checked={isWideMode} onCheckedChange={handleWideModeChange} />
                             <Label htmlFor="wide-mode-switch">Modo Amplo</Label>
@@ -671,8 +671,8 @@ export function AutomatorClientPage() {
                 </div>
             </header>
 
-            <main className="container mx-auto p-4 md:p-8">
-                <div className={cn("mx-auto space-y-8", isWideMode ? "max-w-full" : "max-w-screen-2xl")}>
+            <main className="p-4 md:p-8">
+                <div className={cn("space-y-8", isWideMode ? "w-full" : "container mx-auto")}>
                     <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
                         <TabsList className="h-auto flex-wrap justify-start">
                              <TabsTrigger value="history" className="flex items-center gap-2">
@@ -765,7 +765,7 @@ export function AutomatorClientPage() {
                             )}
                             
                             {activeMainTab === 'imobilizado' && (
-                                !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} onPersistData={handlePersistImobilizado} allPersistedData={imobilizadoClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card>
+                                !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} siengeData={processedData?.siengeSheetData} onPersistData={handlePersistImobilizado} allPersistedData={imobilizadoClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card>
                             )}
 
                              {activeMainTab === 'difal' && <DifalAnalysis /> }
