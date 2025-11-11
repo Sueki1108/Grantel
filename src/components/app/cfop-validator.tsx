@@ -107,18 +107,18 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     const [tempIncludedPIcms, setTempIncludedPIcms] = useState<Set<string>>(new Set());
     
     const allItemsToValidate = useMemo(() => {
-        if (!reconciledItems && !imobilizadoItems) {
-            return [];
+        if (!reconciledItems) {
+            return imobilizadoItems || [];
         }
     
-        const items = reconciledItems ? [...reconciledItems] : [];
-        const reconciledItemKeys = new Set(items.map(item => getItemLineKey(item)));
+        const reconciledItemKeys = new Set(reconciledItems.map(item => getItemLineKey(item)));
         
+        // Adiciona apenas os itens de imobilizado que AINDA não estão na lista de reconciliados para evitar duplicação.
         const uniqueImobilizadoItems = (imobilizadoItems || []).filter(item => 
             !reconciledItemKeys.has(getItemLineKey(item))
         );
     
-        return [...items, ...uniqueImobilizadoItems];
+        return [...reconciledItems, ...uniqueImobilizadoItems];
     }, [reconciledItems, imobilizadoItems]);
     
     useEffect(() => {
@@ -403,24 +403,22 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     
      const allGroupedItems = useMemo((): GroupedItems => {
         const groups: GroupedItems = {};
+        const imobilizadoItemKeys = new Set(imobilizadoItems.map(getItemLineKey));
 
         allItemsToValidate.forEach(item => {
-            const isImobilizado = imobilizadoItems.some(i => getItemLineKey(i) === getItemLineKey(item));
-            // Chave de agrupamento: CFOP do Sienge, ou 'IMOBILIZADO' se for um item de imobilizado sem correspondência, ou 'OUTROS' como fallback.
+            const isImobilizado = imobilizadoItemKeys.has(getItemLineKey(item));
             const groupKey = isImobilizado ? 'IMOBILIZADO' : (item.Sienge_CFOP || 'OUTROS');
             
-            if (groupKey) {
-                if (!groups[groupKey]) {
-                    groups[groupKey] = { items: [], xmlCfops: new Set(), xmlCsts: new Set(), xmlPIcms: new Set() };
-                }
-                const group = groups[groupKey];
-                group.items.push(item);
-                if (item.CFOP) group.xmlCfops.add(item.CFOP);
-                const itemCst = item['CST do ICMS'] === undefined || item['CST do ICMS'] === null ? 'Vazio' : item['CST do ICMS'];
-                group.xmlCsts.add(itemCst);
-                const itemPIcms = item['pICMS'] === undefined || item['pICMS'] === null ? 'Vazio' : String(item['pICMS']);
-                group.xmlPIcms.add(itemPIcms);
+            if (!groups[groupKey]) {
+                groups[groupKey] = { items: [], xmlCfops: new Set(), xmlCsts: new Set(), xmlPIcms: new Set() };
             }
+            const group = groups[groupKey];
+            group.items.push(item);
+            if (item.CFOP) group.xmlCfops.add(item.CFOP);
+            const itemCst = item['CST do ICMS'] === undefined || item['CST do ICMS'] === null ? 'Vazio' : item['CST do ICMS'];
+            group.xmlCsts.add(itemCst);
+            const itemPIcms = item['pICMS'] === undefined || item['pICMS'] === null ? 'Vazio' : String(item['pICMS']);
+            group.xmlPIcms.add(itemPIcms);
         });
         
         return groups;
@@ -845,3 +843,4 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         </div>
     );
 }
+
