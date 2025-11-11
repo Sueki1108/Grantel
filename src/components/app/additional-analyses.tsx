@@ -436,10 +436,10 @@ export function AdditionalAnalyses({
                     )}
                     
                     {activeTab === 'difal' && (
-                        <DifalTab 
+                         <DifalTab
                             reconciledItems={reconciliationResults?.reconciled || []}
-                            cfopValidations={allPersistedClassifications[competence || '']?.cfopValidations?.classifications || {}}
-                        />
+                            allPersistedClassifications={allPersistedClassifications}
+                         />
                     )}
 
                     {activeTab === 'resale_export' && (

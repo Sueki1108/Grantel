@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { CfopValidationData } from './cfop-validator';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { AllClassifications } from "./imobilizado-analysis";
+import { cfopDescriptions } from "@/lib/cfop";
 
 
 interface DifalTabProps {
@@ -33,12 +34,6 @@ const getItemLineKey = (item: CfopValidationData): string => {
 // Re-use cfopDescriptions from cfop.ts as it's not exported from cfop-validator
 const getFullCfopDescription = (cfopCode: string | number): string => {
     const code = parseInt(String(cfopCode), 10);
-    // You'll need to import or have access to cfopDescriptions here
-    const cfopDescriptions: { [key: number]: string } = {
-        2551: 'Compra de bem p/ o ativo imobilizado',
-        2556: 'Compra de material p/ uso ou consumo',
-        // Add other descriptions as needed
-    };
     return cfopDescriptions[code as keyof typeof cfopDescriptions] || "Descrição não encontrada";
 };
 
