@@ -19,6 +19,7 @@ import { Checkbox } from '../ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { ScrollArea } from '../ui/scroll-area';
+import { cn } from "@/lib/utils";
 
 
 // Tipos
@@ -107,6 +108,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     
     // Combina itens conciliados com itens de imobilizado
     const allItemsToValidate = useMemo(() => {
+        if (!reconciledItems) return [];
         const items = reconciledItems || [];
         const imobItems = imobilizadoItems || [];
         
@@ -415,13 +417,11 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         }
         
         allItemsToValidate.forEach(item => {
-            const isReconciledImobilizado = reconciledItems?.some(rec => getItemLineKey(rec) === getItemLineKey(item)) && imobilizadoItems.some(imob => getItemLineKey(imob) === getItemLineKey(item));
+            const isImobItem = imobilizadoItems.some(imob => getItemLineKey(imob) === getItemLineKey(item));
 
-            if (isReconciledImobilizado) {
+            if (isImobItem) {
+                // If it's in reconciliados, it has Sienge_CFOP, group by it. Otherwise group as 'IMOBILIZADO'
                  addOrUpdateGroup(item.Sienge_CFOP || 'IMOBILIZADO', item);
-            }
-            else if (imobilizadoItems.some(imob => getItemLineKey(imob) === getItemLineKey(item))) {
-                addOrUpdateGroup('IMOBILIZADO', item);
             }
             else if (item.Sienge_CFOP) {
                 addOrUpdateGroup(item.Sienge_CFOP, item);
@@ -443,7 +443,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     const statusCounts = useMemo(() => {
         const counts: Record<MainValidationStatus | 'all', number> = { all: 0, unvalidated: 0, correct: 0, incorrect: 0, verify: 0 };
         const itemsToCount = allItemsToValidate.filter(item => {
-            const groupKey = allGroupedItems['IMOBILIZADO']?.items.some(i => getItemLineKey(i) === getItemLineKey(item)) ? 'IMOBILIZADO' : item.Sienge_CFOP || 'N/A';
+            const groupKey = item.Sienge_CFOP || 'IMOBILIZADO';
             const groupData = allGroupedItems[groupKey];
             if (!groupData) return true;
 
@@ -837,4 +837,3 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         </div>
     );
 }
-
