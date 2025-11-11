@@ -107,13 +107,17 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     const [tempIncludedPIcms, setTempIncludedPIcms] = useState<Set<string>>(new Set());
     
     const allItemsToValidate = useMemo(() => {
+        if (!reconciledItems && !imobilizadoItems) {
+            return [];
+        }
+    
         const items = reconciledItems ? [...reconciledItems] : [];
         const reconciledItemKeys = new Set(items.map(item => getItemLineKey(item)));
         
         const uniqueImobilizadoItems = (imobilizadoItems || []).filter(item => 
             !reconciledItemKeys.has(getItemLineKey(item))
         );
-
+    
         return [...items, ...uniqueImobilizadoItems];
     }, [reconciledItems, imobilizadoItems]);
     
@@ -377,7 +381,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
                 case 'correct': mainBadge = <Badge variant="default" className='bg-green-600 hover:bg-green-700'><CheckCircle className="h-4 w-4 mr-1" /> Correto</Badge>; break;
                 case 'incorrect': mainBadge = <Badge variant="destructive"><AlertTriangle className="h-4 w-4 mr-1" /> Incorreto</Badge>; break;
                 case 'verify': mainBadge = <Badge variant="secondary" className='bg-amber-500 text-white hover:bg-amber-600'><Search className="h-4 w-4 mr-1" /> Verificar</Badge>; break;
-                default: mainBadge = <Badge variant="outline"><FileWarning className="h-4 w-4 mr-1" /> Pendente</Badge>;
+                default: mainBadge = <Badge variant="outline"><FileWarning className="h-4 w-4 mr-1" /> Pendente</Badge>
             }
             return (
                 <div className="flex items-center gap-2">
@@ -393,24 +397,18 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
                         </TooltipProvider>
                     )}
                 </div>
-            )
+            );
         }
     }), [validationStatus]);
     
-    const allGroupedItems = useMemo((): GroupedItems => {
+     const allGroupedItems = useMemo((): GroupedItems => {
         const groups: GroupedItems = {};
-        const imobilizadoItemKeys = new Set(imobilizadoItems.map(i => getItemLineKey(i)));
-    
+
         allItemsToValidate.forEach(item => {
-            const isImobilizado = imobilizadoItemKeys.has(getItemLineKey(item));
-            let groupKey: string | undefined;
-    
-            if (isImobilizado) {
-                groupKey = 'IMOBILIZADO';
-            } else {
-                groupKey = reconciledItems?.find(r => getItemLineKey(r) === getItemLineKey(item))?.Sienge_CFOP;
-            }
-    
+            const isImobilizado = imobilizadoItems.some(i => getItemLineKey(i) === getItemLineKey(item));
+            // Chave de agrupamento: CFOP do Sienge, ou 'IMOBILIZADO' se for um item de imobilizado sem correspondência, ou 'OUTROS' como fallback.
+            const groupKey = isImobilizado ? 'IMOBILIZADO' : (item.Sienge_CFOP || 'OUTROS');
+            
             if (groupKey) {
                 if (!groups[groupKey]) {
                     groups[groupKey] = { items: [], xmlCfops: new Set(), xmlCsts: new Set(), xmlPIcms: new Set() };
@@ -424,9 +422,9 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
                 group.xmlPIcms.add(itemPIcms);
             }
         });
-    
+        
         return groups;
-    }, [allItemsToValidate, reconciledItems, imobilizadoItems]);
+    }, [allItemsToValidate, imobilizadoItems]);
     
     const [activeTabGroup, setActiveTabGroup] = useState<string>('');
     const tableRef = React.useRef<ReactTable<CfopValidationData> | null>(null);
@@ -440,8 +438,9 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     const statusCounts = useMemo(() => {
         const counts: Record<MainValidationStatus | 'all', number> = { all: 0, unvalidated: 0, correct: 0, incorrect: 0, verify: 0 };
         const itemsToCount = allItemsToValidate.filter(item => {
-            const imobilizadoKey = imobilizadoItems.some(i => getItemLineKey(i) === getItemLineKey(item)) ? 'IMOBILIZADO' : null;
-            const groupKey = imobilizadoKey || item.Sienge_CFOP;
+            const isImobilizado = imobilizadoItems.some(i => getItemLineKey(i) === getItemLineKey(item));
+            const groupKey = isImobilizado ? 'IMOBILIZADO' : (item.Sienge_CFOP || 'OUTROS');
+
 
             if (!groupKey || !allGroupedItems[groupKey]) return false;
 
@@ -470,10 +469,14 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
 
     const visibleGroupTitles = useMemo(() => {
         const siengeCfops = Object.keys(allGroupedItems)
-            .filter(cfop => cfop !== 'IMOBILIZADO')
+            .filter(cfop => cfop !== 'IMOBILIZADO' && cfop !== 'OUTROS')
             .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
 
-        const baseGroups = allGroupedItems['IMOBILIZADO'] ? ['IMOBILIZADO', ...siengeCfops] : siengeCfops;
+        const specialGroups = [];
+        if (allGroupedItems['IMOBILIZADO']) specialGroups.push('IMOBILIZADO');
+        if (allGroupedItems['OUTROS']) specialGroups.push('OUTROS');
+
+        const baseGroups = [...specialGroups, ...siengeCfops];
 
         return baseGroups.filter(siengeCfop => {
             const groupItems = allGroupedItems[siengeCfop].items;
@@ -686,6 +689,9 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
                                 if (title === 'IMOBILIZADO') {
                                     return <TabsTrigger key={title} value={title} className="flex items-center gap-2"><Building className="h-4 w-4"/>Imobilizado ({count})</TabsTrigger>
                                 }
+                                 if (title === 'OUTROS') {
+                                    return <TabsTrigger key={title} value={title}>Outros (Sem Sienge CFOP) ({count})</TabsTrigger>
+                                }
                                 return <TabsTrigger key={title} value={title}>{title} ({count})</TabsTrigger>
                             }
                             return null;
@@ -699,6 +705,8 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
                                  if (!title) return null;
                                  const description = title === 'IMOBILIZADO' 
                                     ? 'Itens classificados como Ativo Imobilizado na etapa anterior.' 
+                                    : title === 'OUTROS'
+                                    ? 'Itens conciliados que não tiveram um CFOP correspondente encontrado no Sienge.'
                                     : getFullCfopDescription(title);
                                 return (
                                     <>
@@ -837,5 +845,3 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         </div>
     );
 }
-
-    
