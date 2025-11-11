@@ -109,12 +109,13 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     // Combina itens conciliados com itens de imobilizado
     const allItemsToValidate = useMemo(() => {
         if (!reconciledItems) return [];
-        const items = reconciledItems || [];
-        const imobItems = imobilizadoItems || [];
         
-        // Prevent duplicates: if an imobilizado item is already in reconciled, don't add it again.
+        const items = [...reconciledItems];
         const reconciledItemKeys = new Set(items.map(item => getItemLineKey(item)));
-        const uniqueImobilizadoItems = imobItems.filter(item => !reconciledItemKeys.has(getItemLineKey(item)));
+        
+        const uniqueImobilizadoItems = (imobilizadoItems || []).filter(item => 
+            !reconciledItemKeys.has(getItemLineKey(item))
+        );
 
         return [...items, ...uniqueImobilizadoItems];
     }, [reconciledItems, imobilizadoItems]);
@@ -415,32 +416,24 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
             group.xmlPIcms.add(itemPIcms);
         };
     
-        // Primeiro, processa os itens conciliados que têm um Sienge_CFOP
-        (reconciledItems || []).forEach(item => {
-            if (item.Sienge_CFOP) {
+        allItemsToValidate.forEach(item => {
+            const isImobilizado = imobilizadoItems.some(i => getItemLineKey(i) === getItemLineKey(item));
+            
+            if (isImobilizado) {
+                 const reconciledMatch = reconciledItems?.find(r => getItemLineKey(r) === getItemLineKey(item));
+                 const siengeCfop = reconciledMatch?.Sienge_CFOP;
+                 if (siengeCfop) {
+                     addOrUpdateGroup(siengeCfop, item);
+                 } else {
+                     addOrUpdateGroup('IMOBILIZADO', item);
+                 }
+            } else if (item.Sienge_CFOP) {
                 addOrUpdateGroup(item.Sienge_CFOP, item);
-            }
-        });
-
-        // Depois, processa os itens de imobilizado
-        (imobilizadoItems || []).forEach(item => {
-            // Tenta encontrar uma correspondência nos itens conciliados para obter o Sienge_CFOP
-            const reconciledMatch = reconciledItems?.find(r => getItemLineKey(r) === getItemLineKey(item));
-            const siengeCfop = reconciledMatch?.Sienge_CFOP;
-
-            if (siengeCfop) {
-                // Se já foi adicionado pelo loop anterior, não adiciona de novo para evitar duplicados
-                if (!groups[siengeCfop]?.items.some(i => getItemLineKey(i) === getItemLineKey(item))) {
-                    addOrUpdateGroup(siengeCfop, item);
-                }
-            } else {
-                // Se não tem Sienge_CFOP, agrupa em "IMOBILIZADO"
-                addOrUpdateGroup('IMOBILIZADO', item);
             }
         });
     
         return groups;
-    }, [reconciledItems, imobilizadoItems]);
+    }, [allItemsToValidate, reconciledItems, imobilizadoItems]);
     
     const [activeTabGroup, setActiveTabGroup] = useState<string>('');
     const tableRef = React.useRef<ReactTable<CfopValidationData> | null>(null);
