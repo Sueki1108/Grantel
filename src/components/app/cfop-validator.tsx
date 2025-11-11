@@ -103,11 +103,13 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     
     // Combina itens conciliados com itens de imobilizado
     const allItemsToValidate = useMemo(() => {
+        const reconciledItemKeys = new Set(reconciledItems.map(item => getItemLineKey(item)));
+        
         const classifiedImobilizado = (imobilizadoItems || [])
             .filter(item => {
                 if (!item || !allPersistedClassifications || !competence) return false;
                 const classification = allPersistedClassifications[competence]?.classifications?.[item.uniqueItemId]?.classification;
-                return classification === 'imobilizado';
+                return classification === 'imobilizado' && !reconciledItemKeys.has(getItemLineKey(item));
             })
             .map(item => ({ ...item, 'Sienge_CFOP': 'IMOBILIZADO' })); // Adiciona um grupo especial
 
@@ -276,7 +278,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
                      return <div className="text-center">{String(value ?? '')}</div>;
                 }
                  if (id === 'pICMS') {
-                    return <div className="text-center">{typeof value === 'number' ? `${value.toFixed(2)}%` : 'N/A'}</div>;
+                    return <div className="text-center">{value === 'Vazio' ? 'Vazio' : (typeof value === 'number' ? `${value.toFixed(2)}%` : 'N/A')}</div>;
                 }
                 return <div>{String(value ?? '')}</div>;
             }
@@ -378,7 +380,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         return tempCols;
     }, [columns, statusColumn, actionColumn]);
     
-    const { statusCounts } = useMemo(() => {
+    const statusCounts = useMemo(() => {
         const counts: Record<ValidationStatus | 'all', number> = { all: 0, unvalidated: 0, correct: 0, incorrect: 0, verify: 0, difal: 0 };
         const itemsToCount = allItemsToValidate.filter(item => {
             const groupKey = item.Sienge_CFOP || 'IMOBILIZADO';
@@ -403,7 +405,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
             counts.all++;
             counts[status]++;
         });
-        return { statusCounts: counts };
+        return counts;
     }, [validationStatus, allItemsToValidate, perTabFilters, allGroupedItems]);
 
     const visibleGroupTitles = useMemo(() => {
@@ -638,7 +640,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
                                  if (!title) return null;
                                  const description = title === 'IMOBILIZADO' 
                                     ? 'Itens classificados como Ativo Imobilizado na etapa anterior.' 
-                                    : cfopDescriptions[parseInt(title, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+                                    : getFullCfopDescription(title);
                                 return (
                                     <>
                                          <div className='mb-4 p-3 border rounded-md bg-muted/50 flex justify-between items-center'>
@@ -775,3 +777,5 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         </div>
     );
 }
+
+    
