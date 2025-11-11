@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -20,6 +19,7 @@ import { cfopDescriptions } from '@/lib/cfop';
 import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
+import { cleanAndToStr } from '@/lib/utils';
 
 
 // Tipos
@@ -61,6 +61,7 @@ const IMOBILIZADO_CFOP_EXCLUSION_KEY = 'imobilizadoCfopExclusionList';
 
 interface ImobilizadoAnalysisProps {
     items: ItemData[]; 
+    siengeData?: any[] | null;
     competence: string | null; 
     onPersistData: (allDataToSave: AllClassifications) => void;
     allPersistedData: AllClassifications;
@@ -100,7 +101,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
     };
 
     const columns = useMemo(() => {
-        const columnsToShow: (keyof ItemData)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
+        const columnsToShow: (keyof ItemData)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
         const baseColumns = getColumnsWithCustomRender(
             data,
             columnsToShow,
@@ -218,7 +219,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
 }
 
 
-export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
+export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
     const [hasChanges, setHasChanges] = useState(false);
@@ -273,15 +274,40 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
         }
     };
 
-    // Filter items based on the exclusion list
     const imobilizadoItems = useMemo(() => {
         if (!initialAllItems) return [];
+    
+        const siengeCfopMap = new Map<string, string>();
+        if (siengeData) {
+            const h = {
+                numero: Object.keys(siengeData[0] || {}).find(k => k.toLowerCase().includes('número') || k.toLowerCase().includes('numero')),
+                cnpj: Object.keys(siengeData[0] || {}).find(k => k.toLowerCase().includes('cnpj')),
+                cfop: Object.keys(siengeData[0] || {}).find(k => k.toLowerCase() === 'cfop'),
+            };
+    
+            if (h.numero && h.cnpj && h.cfop) {
+                siengeData.forEach(siengeItem => {
+                    const key = `${cleanAndToStr(siengeItem[h.numero!])}-${cleanAndToStr(siengeItem[h.cnpj!])}`;
+                    if (!siengeCfopMap.has(key)) {
+                        siengeCfopMap.set(key, siengeItem[h.cfop!]);
+                    }
+                });
+            }
+        }
+    
         return initialAllItems
             .filter(item => {
                 if (!item || !item.CFOP) return false;
                 return !excludedCfops.has(String(item.CFOP));
+            })
+            .map(item => {
+                const key = `${cleanAndToStr(item['Número da Nota'])}-${cleanAndToStr(item['CPF/CNPJ do Emitente'])}`;
+                return {
+                    ...item,
+                    Sienge_CFOP: siengeCfopMap.get(key) || 'N/A',
+                };
             });
-    }, [initialAllItems, excludedCfops]);
+    }, [initialAllItems, excludedCfops, siengeData]);
 
     const disregardedItems = useMemo(() => {
         return (initialAllItems || []).filter(item => {
@@ -445,6 +471,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, competence, onPers
                 'Número da Nota': item['Número da Nota'],
                 'Descrição': item['Descrição'],
                 'CFOP': item['CFOP'],
+                'Sienge_CFOP': item['Sienge_CFOP'],
                 'Descricao CFOP': (item['Descricao CFOP'] || '').substring(0, 20),
                 'Valor Unitário': item['Valor Unitário'],
                 'Valor Total': item['Valor Total'],
