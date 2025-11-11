@@ -404,7 +404,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         const groups: GroupedItems = {};
 
         const addOrUpdateGroup = (siengeCfop: string, item: CfopValidationData) => {
-             if (!groups[siengeCfop]) {
+            if (!groups[siengeCfop]) {
                 groups[siengeCfop] = { items: [], xmlCfops: new Set(), xmlCsts: new Set(), xmlPIcms: new Set() };
             }
             const group = groups[siengeCfop];
@@ -414,22 +414,22 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
             group.xmlCsts.add(itemCst);
             const itemPIcms = item['pICMS'] === undefined || item['pICMS'] === null ? 'Vazio' : String(item['pICMS']);
             group.xmlPIcms.add(itemPIcms);
-        }
-        
+        };
+    
         allItemsToValidate.forEach(item => {
-            const isImobItem = imobilizadoItems.some(imob => getItemLineKey(imob) === getItemLineKey(item));
-
-            if (isImobItem) {
-                // If it's in reconciliados, it has Sienge_CFOP, group by it. Otherwise group as 'IMOBILIZADO'
-                 addOrUpdateGroup(item.Sienge_CFOP || 'IMOBILIZADO', item);
-            }
-            else if (item.Sienge_CFOP) {
-                addOrUpdateGroup(item.Sienge_CFOP, item);
+            // Find the corresponding reconciled item to get the Sienge CFOP
+            const reconciledMatch = reconciledItems?.find(r => getItemLineKey(r) === getItemLineKey(item));
+            const siengeCfop = reconciledMatch?.Sienge_CFOP;
+    
+            if (siengeCfop) {
+                addOrUpdateGroup(siengeCfop, item);
+            } else if (imobilizadoItems.some(i => getItemLineKey(i) === getItemLineKey(item))) {
+                addOrUpdateGroup('IMOBILIZADO', item); // Group imobilizado items separately if no Sienge match
             }
         });
-
+    
         return groups;
-    }, [allItemsToValidate, imobilizadoItems, reconciledItems]);
+    }, [allItemsToValidate, reconciledItems, imobilizadoItems]);
     
     const [activeTabGroup, setActiveTabGroup] = useState<string>('');
     const tableRef = React.useRef<ReactTable<CfopValidationData> | null>(null);
@@ -443,7 +443,9 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     const statusCounts = useMemo(() => {
         const counts: Record<MainValidationStatus | 'all', number> = { all: 0, unvalidated: 0, correct: 0, incorrect: 0, verify: 0 };
         const itemsToCount = allItemsToValidate.filter(item => {
-            const groupKey = item.Sienge_CFOP || 'IMOBILIZADO';
+            const groupKey = item.Sienge_CFOP || (imobilizadoItems.some(i => getItemLineKey(i) === getItemLineKey(item)) ? 'IMOBILIZADO' : null);
+            if (!groupKey) return false;
+
             const groupData = allGroupedItems[groupKey];
             if (!groupData) return true;
 
@@ -466,7 +468,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
             counts[status]++;
         });
         return counts;
-    }, [validationStatus, allItemsToValidate, perTabFilters, allGroupedItems]);
+    }, [validationStatus, allItemsToValidate, perTabFilters, allGroupedItems, imobilizadoItems]);
 
     const visibleGroupTitles = useMemo(() => {
         const siengeCfops = Object.keys(allGroupedItems)

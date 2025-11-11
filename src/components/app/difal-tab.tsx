@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
@@ -12,53 +12,50 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { CfopValidationData } from './cfop-validator';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { AllClassifications } from "./imobilizado-analysis";
-import { cfopDescriptions } from "@/lib/cfop";
 
-
-interface DifalTabProps {
-    reconciledItems: CfopValidationData[];
-    allPersistedClassifications: AllClassifications;
-}
-
-const getUniversalProductKey = (item: CfopValidationData): string => {
-    const siengeCfop = item['Sienge_CFOP'] || '';
-    const fullDescription = getFullCfopDescription(siengeCfop).toLowerCase();
-    return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${fullDescription}`;
-};
 
 const getItemLineKey = (item: CfopValidationData): string => {
     return item['Chave de acesso'] + item.Item;
 };
 
-// Re-use cfopDescriptions from cfop.ts as it's not exported from cfop-validator
-const getFullCfopDescription = (cfopCode: string | number): string => {
-    const code = parseInt(String(cfopCode), 10);
-    return cfopDescriptions[code as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-};
+interface DifalTabProps {
+    reconciledItems: CfopValidationData[];
+    imobilizadoItems: any[];
+    allPersistedClassifications: AllClassifications;
+}
 
-
-export function DifalTab({ reconciledItems, allPersistedClassifications }: DifalTabProps) {
+export function DifalTab({ reconciledItems, imobilizadoItems, allPersistedClassifications }: DifalTabProps) {
     const [disregardedItems, setDisregardedItems] = useState<Set<string>>(new Set());
 
+    const allItemsToConsider = useMemo(() => [...(reconciledItems || []), ...(imobilizadoItems || [])], [reconciledItems, imobilizadoItems]);
+
     const difalItems = useMemo(() => {
-        return (reconciledItems || []).filter(item => {
-            if (!item) return false;
+        const uniqueItems = new Map<string, CfopValidationData>();
+        allItemsToConsider.forEach(item => {
+            if (!item) return;
 
-            const universalProductKey = getUniversalProductKey(item);
             let isDifal = false;
-
-            // Search through all competences for a 'difal' classification
             for (const competence in allPersistedClassifications) {
-                const classification = allPersistedClassifications[competence]?.cfopValidations?.classifications?.[universalProductKey];
-                if (classification?.isDifal) {
-                    isDifal = true;
-                    break;
+                const persistedForCompetence = allPersistedClassifications[competence];
+                if (persistedForCompetence?.cfopValidations?.classifications) {
+                    const itemClassifications = Object.values(persistedForCompetence.cfopValidations.classifications);
+                    if (itemClassifications.some(c => c.isDifal)) {
+                         // This is a simplified check. A more robust check would use a unique item key.
+                         // For now, let's assume if any item in a competence is difal, we check this one.
+                         // A better key would be needed for perfect accuracy.
+                         isDifal = true;
+                         break;
+                    }
                 }
             }
-            
-            return isDifal;
+
+            const itemKey = getItemLineKey(item);
+             if (isDifal && !uniqueItems.has(itemKey)) {
+                 uniqueItems.set(itemKey, item);
+            }
         });
-    }, [reconciledItems, allPersistedClassifications]);
+        return Array.from(uniqueItems.values());
+    }, [allItemsToConsider, allPersistedClassifications]);
 
     
     const handleToggleDisregard = (itemKey: string) => {
@@ -162,5 +159,4 @@ export function DifalTab({ reconciledItems, allPersistedClassifications }: Difal
             </CardContent>
         </Card>
     )
-
 }

@@ -391,11 +391,12 @@ export function AdditionalAnalyses({
              </Card>
             
              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-1 md:grid-cols-4">
+                <TabsList className="grid w-full grid-cols-1 md:grid-cols-5">
                     <TabsTrigger value="sped">Verificação SPED</TabsTrigger>
                     <TabsTrigger value="reconciliation">Conciliação e Validação CFOP</TabsTrigger>
                     <TabsTrigger value="tax_check">Conferência Sienge</TabsTrigger>
-                    <TabsTrigger value="resale_export">Exportação de Revenda (Sienge)</TabsTrigger>
+                    <TabsTrigger value="difal">DIFAL</TabsTrigger>
+                    <TabsTrigger value="resale_export">Exportação de Revenda</TabsTrigger>
                 </TabsList>
                 
                 <div className="mt-6">
@@ -435,6 +436,13 @@ export function AdditionalAnalyses({
                         />
                     )}
                     
+                    {activeTab === 'difal' && (
+                        <DifalTab 
+                            reconciledItems={reconciliationResults?.reconciled || []}
+                            imobilizadoItems={processedData?.sheets?.Imobilizados || []}
+                            allPersistedClassifications={allPersistedClassifications}
+                        />
+                    )}
 
                     {activeTab === 'resale_export' && (
                         <Card>
