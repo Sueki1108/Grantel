@@ -1,21 +1,20 @@
 "use client";
 
-import { useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { FileWarning, TrendingUp, XCircle, Trash2, Ban, FolderClosed, CheckCircle, Save, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format, parseISO } from 'date-fns';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { DataTable } from './data-table';
+import { ColumnDef } from '@tanstack/react-table';
 
 
 type SaidaStatus = 'emitida' | 'cancelada' | 'inutilizada';
@@ -25,6 +24,13 @@ interface SaidaItem {
     status: SaidaStatus;
     data?: any; // Original data from the sheet
     isGap?: boolean;
+    'Destinatário'?: string;
+    'Emissão'?: string;
+    'CFOP'?: string;
+    'Base ICMS'?: number;
+    'Alíq. ICMS (%)'?: number;
+    'Valor ICMS'?: number;
+    'Total'?: number;
 }
 
 interface SaidasAnalysisProps {
@@ -35,7 +41,7 @@ interface SaidasAnalysisProps {
     onLastPeriodNumberChange: (newNumber: number) => void;
 }
 
-export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeriodNumber, onLastPeriodNumberChange }: SaidasAnalysisProps) {
+export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeriodNumber }: SaidasAnalysisProps) {
     const { toast } = useToast();
     
     const analysisResults = useMemo(() => {
@@ -72,7 +78,18 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
             if (existingNote) {
                 const isXmlCancelled = existingNote['Status']?.toLowerCase() === 'canceladas';
                 const finalStatus = savedStatus || (isXmlCancelled ? 'cancelada' : 'emitida');
-                fullSequence.push({ numero: i, status: finalStatus, data: existingNote });
+                fullSequence.push({
+                    numero: i,
+                    status: finalStatus,
+                    data: existingNote,
+                    'Destinatário': existingNote['Destinatário'],
+                    'Emissão': existingNote['Emissão'],
+                    'CFOP': existingNote['CFOP'],
+                    'Base ICMS': existingNote['Base ICMS'],
+                    'Alíq. ICMS (%)': existingNote['Alíq. ICMS (%)'],
+                    'Valor ICMS': existingNote['Valor ICMS'],
+                    'Total': existingNote['Total'],
+                });
             } else {
                 fullSequence.push({ numero: i, status: savedStatus || 'inutilizada', isGap: true });
             }
@@ -83,7 +100,7 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
 
     const handleStatusChange = (numero: number, newStatus: SaidaStatus) => {
         const newStatusMap = { ...statusMap, [numero]: newStatus };
-        onStatusChange(newStatusMap); // Notify parent
+        onStatusChange(newStatusMap);
         toast({
             title: 'Status Alterado',
             description: `A nota número ${numero} foi marcada como ${newStatus}. O estado será guardado.`,
@@ -91,7 +108,7 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
     };
 
     const handleClearStatus = () => {
-        onStatusChange({}); // Notify parent
+        onStatusChange({});
         toast({
             title: 'Classificações Limpas',
             description: 'Todos os status manuais das notas de saída foram removidos.',
@@ -124,6 +141,89 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
         return item.status.charAt(0).toUpperCase() + item.status.slice(1);
     };
 
+    const columns: ColumnDef<SaidaItem>[] = [
+        { accessorKey: 'numero', header: 'Número' },
+        { 
+            accessorKey: 'status', 
+            header: 'Status',
+            cell: ({ row }) => (
+                <Badge variant={getStatusVariant(row.original.status)} className="flex items-center gap-2">
+                    {getStatusIcon(row.original)}
+                    <span className="capitalize">{getStatusText(row.original)}</span>
+                </Badge>
+            )
+        },
+        { accessorKey: 'Destinatário', header: 'Destinatário', cell: ({ row }) => row.original.data?.['Destinatário'] || '---' },
+        { 
+            accessorKey: 'Emissão', 
+            header: 'Data de Emissão',
+            cell: ({ row }) => row.original.data?.['Emissão'] ? format(parseISO(row.original.data['Emissão']), 'dd/MM/yyyy') : '---'
+        },
+        { accessorKey: 'CFOP', header: 'CFOP', cell: ({ row }) => row.original.data?.['CFOP'] || '---' },
+        { 
+            accessorKey: 'Base ICMS', 
+            header: 'Base ICMS',
+            cell: ({ row }) => typeof row.original.data?.['Base ICMS'] === 'number' ? row.original.data['Base ICMS'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'
+        },
+        { 
+            accessorKey: 'Alíq. ICMS (%)', 
+            header: 'Alíq. ICMS (%)',
+            cell: ({ row }) => typeof row.original.data?.['Alíq. ICMS (%)'] === 'number' ? `${row.original.data['Alíq. ICMS (%)'].toFixed(2)}%` : '---'
+        },
+        { 
+            accessorKey: 'Valor ICMS', 
+            header: 'Valor ICMS',
+            cell: ({ row }) => typeof row.original.data?.['Valor ICMS'] === 'number' ? row.original.data['Valor ICMS'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'
+        },
+        { 
+            accessorKey: 'Total', 
+            header: 'Valor Total',
+            cell: ({ row }) => (
+                <div className="text-right">
+                    {typeof row.original.data?.['Total'] === 'number' ? row.original.data['Total'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}
+                </div>
+            )
+        },
+        {
+            id: 'actions',
+            header: 'Ações',
+            cell: ({ row }) => (
+                 <div className="flex items-center justify-center gap-1">
+                    {row.original.status !== 'cancelada' && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(row.original.numero, 'cancelada')}>
+                                    <XCircle className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Marcar Cancelada</p></TooltipContent>
+                        </Tooltip>
+                    )}
+                    {row.original.status !== 'inutilizada' && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(row.original.numero, 'inutilizada')}>
+                                    <Ban className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Marcar Inutilizada</p></TooltipContent>
+                        </Tooltip>
+                    )}
+                    {row.original.status !== 'emitida' && !row.original.isGap && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(row.original.numero, 'emitida')}>
+                                    <RotateCcw className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Reverter para Emitida</p></TooltipContent>
+                        </Tooltip>
+                    )}
+                </div>
+            )
+        }
+    ];
+
     return (
         <Card>
             <CardHeader>
@@ -133,7 +233,7 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                         <div>
                             <CardTitle className="font-headline text-2xl">Análise de Sequência de Notas de Saída</CardTitle>
                             <CardDescription>
-                                Verifique a sequência numérica das notas fiscais de saída para identificar falhas.
+                                Verifique a sequência numérica das notas fiscais de saída para identificar falhas. Use os filtros nas colunas para pesquisar.
                                 {analysisResults.sequence.length > 0 && ` Analisando do número ${analysisResults.sequence[0].numero} ao ${analysisResults.sequence[analysisResults.sequence.length - 1].numero}.`}
                                 {lastPeriodNumber > 0 && ` A última nota do período anterior foi a ${lastPeriodNumber}.`}
                             </CardDescription>
@@ -159,90 +259,12 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                 )}
 
                 {analysisResults.sequence.length > 0 ? (
-                    <div className="overflow-x-auto rounded-lg border">
-                        <TooltipProvider>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead className="w-[120px]">Número</TableHead>
-                                        <TableHead className="w-[150px]">Status</TableHead>
-                                        <TableHead>Destinatário</TableHead>
-                                        <TableHead>Data de Emissão</TableHead>
-                                        <TableHead>CFOP</TableHead>
-                                        <TableHead>Base ICMS</TableHead>
-                                        <TableHead>Alíq. ICMS (%)</TableHead>
-                                        <TableHead>Valor ICMS</TableHead>
-                                        <TableHead className="text-right">Valor Total</TableHead>
-                                        <TableHead className="w-[150px] text-center">Ações</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {analysisResults.sequence.map((item) => (
-                                        <TableRow key={item.numero} className={item.isGap ? 'bg-yellow-50 dark:bg-yellow-900/20' : ''}>
-                                            <TableCell className="font-medium">{item.numero}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={getStatusVariant(item.status)} className="flex items-center gap-2">
-                                                    {getStatusIcon(item)}
-                                                    <span className="capitalize">{getStatusText(item)}</span>
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>{item.data?.['Destinatário'] || '---'}</TableCell>
-                                            <TableCell>
-                                                {item.data?.['Emissão'] ? format(parseISO(item.data['Emissão']), 'dd/MM/yyyy') : '---'}
-                                            </TableCell>
-                                            <TableCell>{item.data?.['CFOP'] || '---'}</TableCell>
-                                            <TableCell>{typeof item.data?.['Base ICMS'] === 'number' ? item.data['Base ICMS'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}</TableCell>
-                                            <TableCell>{typeof item.data?.['Alíq. ICMS (%)'] === 'number' ? `${item.data['Alíq. ICMS (%)'].toFixed(2)}%` : '---'}</TableCell>
-                                            <TableCell>{typeof item.data?.['Valor ICMS'] === 'number' ? item.data['Valor ICMS'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}</TableCell>
-                                            <TableCell className="text-right">
-                                                {typeof item.data?.['Total'] === 'number' ? item.data['Total'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                <div className="flex items-center justify-center gap-1">
-                                                    {item.status !== 'cancelada' && (
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(item.numero, 'cancelada')}>
-                                                                    <XCircle className="h-4 w-4" />
-                                                                </Button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent>
-                                                                <p>Marcar Cancelada</p>
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    )}
-                                                    {item.status !== 'inutilizada' && (
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(item.numero, 'inutilizada')}>
-                                                                    <Ban className="h-4 w-4" />
-                                                                </Button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent>
-                                                                <p>Marcar Inutilizada</p>
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    )}
-                                                    {item.status !== 'emitida' && !item.isGap && (
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(item.numero, 'emitida')}>
-                                                                    <RotateCcw className="h-4 w-4" />
-                                                                </Button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent>
-                                                                <p>Reverter para Emitida</p>
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TooltipProvider>
-                    </div>
+                    <TooltipProvider>
+                        <DataTable
+                            columns={columns}
+                            data={analysisResults.sequence}
+                        />
+                    </TooltipProvider>
                 ) : (
                     <div className="p-8 text-center text-muted-foreground"><FolderClosed className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Nenhum dado de saída</h3><p>Os dados de notas de saída da primeira etapa aparecerão aqui para análise.</p></div>
                 )}
