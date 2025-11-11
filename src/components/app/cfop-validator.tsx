@@ -6,7 +6,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX, Copy, Save, Settings, Dot, HelpCircle, ListFilter } from "lucide-react";
+import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX, Copy, Save, Settings, Dot, HelpCircle, ListFilter, TicketPercent } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from '../ui/badge';
@@ -36,7 +36,7 @@ export interface CfopValidationData extends Record<string, any> {
     'pICMS'?: number; // Alíquota de ICMS do XML
 }
 
-type ValidationStatus = 'unvalidated' | 'correct' | 'incorrect' | 'verify';
+type ValidationStatus = 'unvalidated' | 'correct' | 'incorrect' | 'verify' | 'difal';
 
 interface GroupedItems {
   [siengeCfop: string]: {
@@ -309,12 +309,13 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             const currentStatus = validationStatus[getItemLineKey(item)] || 'unvalidated';
             return (
                 <TooltipProvider>
-                    <div className="flex gap-2 justify-center" onClick={(e) => e.stopPropagation()}>
-                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'correct' ? 'default' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'correct')}}><ThumbsUp className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Correto (e todos iguais)</p></TooltipContent></Tooltip>
-                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'incorrect' ? 'destructive' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'incorrect')}}><ThumbsDown className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Incorreto (e todos iguais)</p></TooltipContent></Tooltip>
-                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'verify' ? 'secondary' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'verify')}}><Search className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificar (e todos iguais)</p></TooltipContent></Tooltip>
+                    <div className="flex gap-1 justify-center" onClick={(e) => e.stopPropagation()}>
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'correct' ? 'default' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'correct')}}><ThumbsUp className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Correto</p></TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'incorrect' ? 'destructive' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'incorrect')}}><ThumbsDown className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Incorreto</p></TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'verify' ? 'secondary' : 'ghost'} className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'verify')}}><Search className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificar</p></TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant={currentStatus === 'difal' ? 'default' : 'ghost'} className="h-8 w-8 bg-purple-100 dark:bg-purple-900/50" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'difal')}}><TicketPercent className="h-5 w-5 text-purple-600" /></Button></TooltipTrigger><TooltipContent><p>Marcar para DIFAL</p></TooltipContent></Tooltip>
                         {currentStatus !== 'unvalidated' && (
-                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'unvalidated')}}><RotateCcw className="h-5 w-5 text-muted-foreground" /></Button></TooltipTrigger><TooltipContent><p>Reverter para Pendente (e todos iguais)</p></TooltipContent></Tooltip>
+                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => {e.stopPropagation(); handleValidationChange([item], 'unvalidated')}}><RotateCcw className="h-5 w-5 text-muted-foreground" /></Button></TooltipTrigger><TooltipContent><p>Reverter para Pendente</p></TooltipContent></Tooltip>
                         )}
                     </div>
                 </TooltipProvider>
@@ -331,6 +332,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                 case 'correct': return <Badge variant="default" className='bg-green-600 hover:bg-green-700'><CheckCircle className="h-4 w-4 mr-1" /> Correto</Badge>;
                 case 'incorrect': return <Badge variant="destructive"><AlertTriangle className="h-4 w-4 mr-1" /> Incorreto</Badge>;
                  case 'verify': return <Badge variant="secondary" className='bg-amber-500 text-white hover:bg-amber-600'><Search className="h-4 w-4 mr-1" /> Verificar</Badge>;
+                 case 'difal': return <Badge variant="default" className='bg-purple-600 text-white hover:bg-purple-700'><TicketPercent className="h-4 w-4 mr-1" /> DIFAL</Badge>;
                 default: return <Badge variant="outline"><FileWarning className="h-4 w-4 mr-1" /> Pendente</Badge>;
             }
         }
@@ -347,10 +349,10 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             }
             groups[siengeCfop].items.push(item);
             if (item.CFOP) groups[siengeCfop].xmlCfops.add(item.CFOP);
-            const itemCst = item['CST do ICMS'];
-            groups[siengeCfop].xmlCsts.add(itemCst === undefined || itemCst === null ? 'Vazio' : itemCst);
-            const itemPIcms = item['pICMS'];
-            groups[siengeCfop].xmlPIcms.add(itemPIcms === undefined || itemPIcms === null ? 'Vazio' : String(itemPIcms));
+            const itemCst = item['CST do ICMS'] === undefined || item['CST do ICMS'] === null ? 'Vazio' : item['CST do ICMS'];
+            groups[siengeCfop].xmlCsts.add(itemCst);
+            const itemPIcms = item['pICMS'] === undefined || item['pICMS'] === null ? 'Vazio' : String(item['pICMS']);
+            groups[siengeCfop].xmlPIcms.add(itemPIcms);
         });
         return groups;
     }, [reconciledItems]);
@@ -365,7 +367,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     }, [columns, statusColumn, actionColumn]);
     
     const { statusCounts } = useMemo(() => {
-        const counts: Record<ValidationStatus | 'all', number> = { all: 0, unvalidated: 0, correct: 0, incorrect: 0, verify: 0 };
+        const counts: Record<ValidationStatus | 'all', number> = { all: 0, unvalidated: 0, correct: 0, incorrect: 0, verify: 0, difal: 0 };
         const itemsToCount = reconciledItems.filter(item => {
             const groupData = allGroupedItems[item.Sienge_CFOP];
             if (!groupData) return true; // Should not happen
@@ -559,12 +561,13 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         <div className="space-y-4 h-full flex flex-col relative">
              <div className="flex justify-between items-center">
                 <Tabs defaultValue="unvalidated" value={activeFilter} onValueChange={(value) => setActiveFilter(value as any)} className="w-full">
-                    <TabsList className="grid w-full grid-cols-5">
+                    <TabsList className="grid w-full grid-cols-6">
                         <TabsTrigger value="all">Todos ({statusCounts.all})</TabsTrigger>
                         <TabsTrigger value="unvalidated">Pendentes ({statusCounts.unvalidated})</TabsTrigger>
                         <TabsTrigger value="correct">Corretos ({statusCounts.correct})</TabsTrigger>
                         <TabsTrigger value="incorrect">Incorretos ({statusCounts.incorrect})</TabsTrigger>
                         <TabsTrigger value="verify">A Verificar ({statusCounts.verify})</TabsTrigger>
+                        <TabsTrigger value="difal">DIFAL ({statusCounts.difal})</TabsTrigger>
                     </TabsList>
                 </Tabs>
                 <div className="flex gap-2 ml-4">
@@ -652,6 +655,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                              <Button size="sm" onClick={() => handleBulkClassification('correct')}><ThumbsUp className="mr-2 h-4 w-4" /> Correto</Button>
                              <Button size="sm" variant="destructive" onClick={() => handleBulkClassification('incorrect')}><ThumbsDown className="mr-2 h-4 w-4" /> Incorreto</Button>
                              <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('verify')}><Search className="mr-2 h-4 w-4" /> Verificar</Button>
+                             <Button size="sm" className="bg-purple-600 hover:bg-purple-700" onClick={() => handleBulkClassification('difal')}><TicketPercent className="mr-2 h-4 w-4" /> DIFAL</Button>
                              <Button size="sm" variant="outline" onClick={() => handleBulkClassification('unvalidated')}><RotateCcw className="mr-2 h-4 w-4" /> Reverter</Button>
                          </div>
                     </Card>

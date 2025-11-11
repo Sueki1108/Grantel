@@ -6,8 +6,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { EyeOff, AlertTriangle, RotateCw, Search } from "lucide-react";
-import { useToast } from '@/hooks/use-toast';
+import { EyeOff, AlertTriangle, RotateCw, TicketPercent } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { CfopValidationData } from './cfop-validator';
@@ -40,30 +39,26 @@ const getFullCfopDescription = (cfopCode: string | number): string => {
 
 export function DifalTab({ reconciledItems, allPersistedClassifications }: DifalTabProps) {
     const [disregardedItems, setDisregardedItems] = useState<Set<string>>(new Set());
-    const [difalItems, setDifalItems] = useState<CfopValidationData[]>([]);
 
-    const findDifalItems = () => {
-        const items = reconciledItems.filter(item => {
+    const difalItems = useMemo(() => {
+        return (reconciledItems || []).filter(item => {
             if (!item) return false;
 
             const universalProductKey = getUniversalProductKey(item);
-            let isCorrect = false;
+            let isDifal = false;
 
-            // Search through all competences for a 'correct' classification
+            // Search through all competences for a 'difal' classification
             for (const competence in allPersistedClassifications) {
                 const classification = allPersistedClassifications[competence]?.cfopValidations?.classifications?.[universalProductKey]?.classification;
-                if (classification === 'correct') {
-                    isCorrect = true;
+                if (classification === 'difal') {
+                    isDifal = true;
                     break;
                 }
             }
-
-            const isDifalCfop = item.Sienge_CFOP === '2551' || item.Sienge_CFOP === '2556';
             
-            return isCorrect && isDifalCfop;
+            return isDifal;
         });
-        setDifalItems(items);
-    };
+    }, [reconciledItems, allPersistedClassifications]);
 
     
     const handleToggleDisregard = (itemKey: string) => {
@@ -126,12 +121,9 @@ export function DifalTab({ reconciledItems, allPersistedClassifications }: Difal
              <CardHeader>
                 <div className='flex justify-between items-start'>
                     <div>
-                        <CardTitle>Análise de Itens para DIFAL</CardTitle>
-                        <CardDescription>Itens com CFOP Sienge 2551 ou 2556 validados como "Corretos" na conciliação. Use a ação para mover itens para a lista de desconsiderados.</CardDescription>
+                         <CardTitle className="flex items-center gap-2"><TicketPercent className="h-6 w-6"/>Análise de Itens para DIFAL</CardTitle>
+                        <CardDescription>Itens marcados com o status "DIFAL" na validação de CFOP. Use a ação para mover itens para a lista de desconsiderados.</CardDescription>
                     </div>
-                     <Button onClick={findDifalItems}>
-                        <Search className="mr-2 h-4 w-4" /> Buscar Itens para DIFAL
-                    </Button>
                 </div>
             </CardHeader>
             <CardContent>
@@ -153,7 +145,7 @@ export function DifalTab({ reconciledItems, allPersistedClassifications }: Difal
                              <div className="text-center p-8 text-muted-foreground">
                                 <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
                                 <h3 className="text-xl font-semibold">Nenhum item encontrado</h3>
-                                <p>Clique no botão "Buscar Itens" para popular a lista, ou verifique se há itens conciliados com CFOP 2551/2556 e status "Correto" no seu histórico de validações.</p>
+                                <p>Marque itens com o status "DIFAL" na aba "Conciliação e Validação CFOP" para que eles apareçam aqui.</p>
                             </div>
                         )}
                     </TabsContent>
