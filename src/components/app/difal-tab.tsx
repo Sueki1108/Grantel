@@ -18,6 +18,21 @@ const getItemLineKey = (item: CfopValidationData): string => {
     return item['Chave de acesso'] + item.Item;
 };
 
+// Adicionado para obter a chave universal do produto para correspondência entre sessões
+const getUniversalProductKey = (item: CfopValidationData): string => {
+    const siengeCfop = item['Sienge_CFOP'] || item['CFOP']; // Fallback para CFOP do XML
+    const fullDescription = getFullCfopDescription(siengeCfop).toLowerCase();
+    return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${fullDescription}`;
+};
+
+const getFullCfopDescription = (cfopCode: string | number): string => {
+    const code = parseInt(String(cfopCode), 10);
+    // Presume que cfopDescriptions é importado ou definido em algum lugar
+    const cfopDescriptions: { [key: number]: string } = {}; // Placeholder
+    return cfopDescriptions[code as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+};
+
+
 interface DifalTabProps {
     reconciledItems: CfopValidationData[];
     imobilizadoItems: any[];
@@ -27,33 +42,51 @@ interface DifalTabProps {
 export function DifalTab({ reconciledItems, imobilizadoItems, allPersistedClassifications }: DifalTabProps) {
     const [disregardedItems, setDisregardedItems] = useState<Set<string>>(new Set());
 
-    const allItemsToConsider = useMemo(() => [...(reconciledItems || []), ...(imobilizadoItems || [])], [reconciledItems, imobilizadoItems]);
-
+    const allItemsToConsider = useMemo(() => {
+        const allItems = new Map<string, CfopValidationData>();
+        
+        // Adiciona itens conciliados
+        (reconciledItems || []).forEach(item => {
+            if (item) allItems.set(getItemLineKey(item), item);
+        });
+        
+        // Adiciona itens de imobilizado que ainda não estão na lista
+        (imobilizadoItems || []).forEach(item => {
+            if (item && !allItems.has(getItemLineKey(item))) {
+                allItems.set(getItemLineKey(item), item);
+            }
+        });
+        
+        return Array.from(allItems.values());
+    }, [reconciledItems, imobilizadoItems]);
+    
+    
     const difalItems = useMemo(() => {
         const uniqueItems = new Map<string, CfopValidationData>();
+
         allItemsToConsider.forEach(item => {
             if (!item) return;
 
-            let isDifal = false;
+            const universalKey = getUniversalProductKey(item);
+            let isItemMarkedAsDifal = false;
+
+            // Itera sobre todas as competências no histórico
             for (const competence in allPersistedClassifications) {
-                const persistedForCompetence = allPersistedClassifications[competence];
-                if (persistedForCompetence?.cfopValidations?.classifications) {
-                    const itemClassifications = Object.values(persistedForCompetence.cfopValidations.classifications);
-                    if (itemClassifications.some(c => c.isDifal)) {
-                         // This is a simplified check. A more robust check would use a unique item key.
-                         // For now, let's assume if any item in a competence is difal, we check this one.
-                         // A better key would be needed for perfect accuracy.
-                         isDifal = true;
-                         break;
-                    }
+                const classificationsForCompetence = allPersistedClassifications[competence]?.cfopValidations?.classifications;
+                
+                // Verifica se a classificação para este item universal existe e se isDifal é verdadeiro
+                if (classificationsForCompetence && classificationsForCompetence[universalKey]?.isDifal) {
+                    isItemMarkedAsDifal = true;
+                    break; // Se encontrado em qualquer competência, marca como DIFAL e para a busca
                 }
             }
-
-            const itemKey = getItemLineKey(item);
-             if (isDifal && !uniqueItems.has(itemKey)) {
-                 uniqueItems.set(itemKey, item);
+            
+            const itemLineKey = getItemLineKey(item);
+            if (isItemMarkedAsDifal && !uniqueItems.has(itemLineKey)) {
+                 uniqueItems.set(itemLineKey, item);
             }
         });
+        
         return Array.from(uniqueItems.values());
     }, [allItemsToConsider, allPersistedClassifications]);
 
