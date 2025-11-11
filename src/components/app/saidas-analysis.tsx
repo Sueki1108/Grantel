@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { FileWarning, TrendingUp, XCircle, Trash2, Ban, FolderClosed, CheckCircle, Save, AlertTriangle, RotateCcw } from 'lucide-react';
+import { FileWarning, TrendingUp, XCircle, Trash2, Ban, FolderClosed, CheckCircle, Save, AlertTriangle, RotateCcw, Filter } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { Input } from '../ui/input';
@@ -16,7 +15,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
+import { DataTable } from './data-table';
+import { getColumnsWithCustomRender } from '@/lib/columns-helper';
 
 type SaidaStatus = 'emitida' | 'cancelada' | 'inutilizada';
 
@@ -40,6 +40,8 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
     const [lastNumberInput, setLastNumberInput] = useState<string>(String(lastPeriodNumber || ''));
     const [rangeStart, setRangeStart] = useState('');
     const [rangeEnd, setRangeEnd] = useState('');
+    const [activeTab, setActiveTab] = useState('sequence');
+    const [filter, setFilter] = useState('');
 
     useEffect(() => {
         setLastNumberInput(String(lastPeriodNumber || ''));
@@ -104,6 +106,18 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
         
         return { sequence: fullSequence, min, max, firstNoteAfterGap };
     }, [saidasData, statusMap, lastPeriodNumber]);
+    
+    const filteredSequence = useMemo(() => {
+        if (!filter) return analysisResults.sequence;
+        const lowercasedFilter = filter.toLowerCase();
+        return analysisResults.sequence.filter(item => {
+            if (item.isGap) return false;
+            return Object.values(item.data).some(val => 
+                String(val).toLowerCase().includes(lowercasedFilter)
+            );
+        });
+    }, [analysisResults.sequence, filter]);
+
 
     const handleStatusChange = (numero: number, newStatus: SaidaStatus) => {
         const newStatusMap = { ...statusMap, [numero]: newStatus };
@@ -122,7 +136,7 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
         });
     };
     
-    const handleMarkRangeAsUnused = () => {
+    const handleMarkRange = (statusToApply: 'cancelada' | 'inutilizada') => {
         const start = parseInt(rangeStart, 10);
         const end = parseInt(rangeEnd, 10);
 
@@ -138,14 +152,14 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
         const newStatusMap = { ...statusMap };
         let count = 0;
         for (let i = start; i <= end; i++) {
-            newStatusMap[i] = 'inutilizada';
+            newStatusMap[i] = statusToApply;
             count++;
         }
 
         onStatusChange(newStatusMap);
 
         toast({
-            title: 'Intervalo Marcado como Inutilizado',
+            title: `Intervalo Marcado como ${statusToApply}`,
             description: `${count} notas de ${start} a ${end} foram marcadas.`
         });
         setRangeStart('');
@@ -177,6 +191,28 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
         }
         return item.status.charAt(0).toUpperCase() + item.status.slice(1);
     };
+    
+     const columns = getColumnsWithCustomRender(
+        saidasData,
+        ['Número', 'Destinatário', 'CFOP', 'Emissão', 'Base ICMS', 'Alíq. ICMS (%)', 'Valor ICMS', 'Total'],
+        (row: any, id: string) => {
+            const value = row.original[id];
+            if (['Total', 'Base ICMS', 'Valor ICMS'].includes(id) && typeof value === 'number') {
+                return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+            }
+             if (id === 'Alíq. ICMS (%)' && typeof value === 'number') {
+                return <div className="text-right">{value.toFixed(2)}%</div>
+            }
+            if (id === 'Emissão') {
+                try {
+                     return <div>{format(new Date(value), 'dd/MM/yyyy')}</div>
+                } catch {
+                     return <div>{String(value)}</div>
+                }
+            }
+            return <div>{String(value ?? '')}</div>
+        }
+    );
 
     return (
         <Card>
@@ -187,21 +223,20 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                         <div>
                             <CardTitle className="font-headline text-2xl">Análise de Sequência de Notas de Saída</CardTitle>
                             <CardDescription>
-                                Verifique a sequência numérica das notas fiscais de saída para identificar falhas.
-                                {analysisResults.sequence.length > 0 && ` Analisando do número ${analysisResults.sequence[0].numero} ao ${analysisResults.sequence[analysisResults.sequence.length - 1].numero}.`}
+                                Verifique a sequência numérica e os dados fiscais das notas de saída.
                             </CardDescription>
                         </div>
                     </div>
                      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                         <Button onClick={handleClearStatus} variant="destructive" size="sm">
                             <Trash2 className="mr-2 h-4 w-4" />
-                            Limpar Status
+                            Limpar Status Manuais
                         </Button>
                     </div>
                 </div>
             </CardHeader>
             <CardContent>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
                     <Card className="bg-muted/50">
                         <CardHeader className='pb-2'>
                             <CardTitle className='text-lg'>Período Anterior</CardTitle>
@@ -222,30 +257,26 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                         </CardContent>
                     </Card>
                      <Card className="bg-muted/50">
-                        <CardHeader className='pb-2'>
-                            <CardTitle className='text-lg'>Marcar Intervalo Inutilizado</CardTitle>
-                        </CardHeader>
+                        <CardHeader className='pb-2'><CardTitle className='text-lg'>Marcar Intervalo como Inutilizado</CardTitle></CardHeader>
                         <CardContent>
                              <div className="flex items-center gap-2">
-                                <Label htmlFor="range-start-input" className="text-sm font-medium">De:</Label>
-                                <Input
-                                    id="range-start-input"
-                                    type="number"
-                                    value={rangeStart}
-                                    onChange={(e) => setRangeStart(e.target.value)}
-                                    className="w-28"
-                                    placeholder="Início"
-                                />
-                                 <Label htmlFor="range-end-input" className="text-sm font-medium">Até:</Label>
-                                 <Input
-                                    id="range-end-input"
-                                    type="number"
-                                    value={rangeEnd}
-                                    onChange={(e) => setRangeEnd(e.target.value)}
-                                    className="w-28"
-                                    placeholder="Fim"
-                                />
-                                <Button onClick={handleMarkRangeAsUnused} size="sm" variant="secondary"><Ban className="mr-2 h-4 w-4"/> Marcar</Button>
+                                <Label htmlFor="range-start-input-unused" className="text-sm font-medium">De:</Label>
+                                <Input id="range-start-input-unused" type="number" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} className="w-28" placeholder="Início" />
+                                <Label htmlFor="range-end-input-unused" className="text-sm font-medium">Até:</Label>
+                                <Input id="range-end-input-unused" type="number" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} className="w-28" placeholder="Fim" />
+                                <Button onClick={() => handleMarkRange('inutilizada')} size="sm" variant="secondary"><Ban className="mr-2 h-4 w-4"/> Marcar</Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card className="bg-muted/50">
+                        <CardHeader className='pb-2'><CardTitle className='text-lg'>Marcar Intervalo como Cancelado</CardTitle></CardHeader>
+                        <CardContent>
+                             <div className="flex items-center gap-2">
+                                <Label htmlFor="range-start-input-canceled" className="text-sm font-medium">De:</Label>
+                                <Input id="range-start-input-canceled" type="number" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} className="w-28" placeholder="Início" />
+                                <Label htmlFor="range-end-input-canceled" className="text-sm font-medium">Até:</Label>
+                                <Input id="range-end-input-canceled" type="number" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} className="w-28" placeholder="Fim" />
+                                <Button onClick={() => handleMarkRange('cancelada')} size="sm" variant="destructive"><XCircle className="mr-2 h-4 w-4"/> Marcar</Button>
                             </div>
                         </CardContent>
                     </Card>
@@ -261,87 +292,11 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                         </AlertDescription>
                     </Alert>
                 )}
+                 
+                 <div className="mt-6">
+                    <DataTable columns={columns} data={saidasData} />
+                 </div>
 
-                {analysisResults.sequence.length > 0 ? (
-                    <div className="overflow-x-auto rounded-lg border">
-                        <TooltipProvider>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead className="w-[120px]">Número</TableHead>
-                                        <TableHead className="w-[150px]">Status</TableHead>
-                                        <TableHead>Destinatário</TableHead>
-                                        <TableHead>Data de Emissão</TableHead>
-                                        <TableHead className="text-right">Valor</TableHead>
-                                        <TableHead className="w-[150px] text-center">Ações</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {analysisResults.sequence.map((item) => (
-                                        <TableRow key={item.numero} className={item.isGap ? 'bg-yellow-50 dark:bg-yellow-900/20' : ''}>
-                                            <TableCell className="font-medium">{item.numero}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={getStatusVariant(item.status)} className="flex items-center gap-2">
-                                                    {getStatusIcon(item)}
-                                                    <span className="capitalize">{getStatusText(item)}</span>
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>{item.data?.['Destinatário'] || '---'}</TableCell>
-                                            <TableCell>
-                                                {item.data?.['Emissão'] ? format(new Date(item.data['Emissão']), 'dd/MM/yyyy HH:mm') : '---'}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                {typeof item.data?.['Total'] === 'number' ? item.data['Total'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                <div className="flex items-center justify-center gap-1">
-                                                    {item.status !== 'cancelada' && (
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(item.numero, 'cancelada')}>
-                                                                    <XCircle className="h-4 w-4" />
-                                                                </Button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent>
-                                                                <p>Marcar Cancelada</p>
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    )}
-                                                    {item.status !== 'inutilizada' && (
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(item.numero, 'inutilizada')}>
-                                                                    <Ban className="h-4 w-4" />
-                                                                </Button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent>
-                                                                <p>Marcar Inutilizada</p>
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    )}
-                                                    {item.status !== 'emitida' && !item.isGap && (
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(item.numero, 'emitida')}>
-                                                                    <RotateCcw className="h-4 w-4" />
-                                                                </Button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent>
-                                                                <p>Reverter para Emitida</p>
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TooltipProvider>
-                    </div>
-                ) : (
-                    <div className="p-8 text-center text-muted-foreground"><FolderClosed className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Nenhum dado de saída</h3><p>Os dados de notas de saída da primeira etapa aparecerão aqui para análise.</p></div>
-                )}
             </CardContent>
         </Card>
     );

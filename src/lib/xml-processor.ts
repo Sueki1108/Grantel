@@ -91,6 +91,11 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const enderDest = dest.getElementsByTagNameNS(NFE_NAMESPACE, 'enderDest')[0];
     const destUF = getTagValue(enderDest, 'UF');
 
+    // Extract ICMS Totals
+    const icmsTot = total.getElementsByTagNameNS(NFE_NAMESPACE, 'ICMSTot')[0];
+    const vBC = getTagValue(icmsTot, 'vBC');
+    const vICMS = getTagValue(icmsTot, 'vICMS');
+
 
     const vNF = getTagValue(total, 'vNF');
     
@@ -113,6 +118,9 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     if (isSaida) {
         notaFiscal['Destinatário'] = destNome;
         notaFiscal['CPF/CNPJ do Destinatário'] = destCNPJ;
+        // Adicionar totais de ICMS para saídas
+        notaFiscal['Base ICMS'] = parseFloat(vBC) || 0;
+        notaFiscal['Valor ICMS'] = parseFloat(vICMS) || 0;
     } else { // entrada
         notaFiscal['Fornecedor'] = emitNome;
         notaFiscal['CPF/CNPJ do Fornecedor'] = emitCNPJ;
@@ -184,6 +192,13 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
                 }
             }
         }
+        
+        // Se for uma nota de saída, pega o CFOP e Alíquota do primeiro item e adiciona ao cabeçalho
+        if (isSaida && i === 0) {
+            notaFiscal['CFOP'] = item['CFOP'];
+            notaFiscal['Alíq. ICMS (%)'] = item['pICMS'] || 0;
+        }
+
 
         itens.push(item);
     }
