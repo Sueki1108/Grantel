@@ -391,11 +391,10 @@ export function AdditionalAnalyses({
              </Card>
             
              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-1 md:grid-cols-5">
+                <TabsList className="grid w-full grid-cols-1 md:grid-cols-4">
                     <TabsTrigger value="sped">Verificação SPED</TabsTrigger>
-                    <TabsTrigger value="reconciliation">Conciliação Itens (XML vs Sienge)</TabsTrigger>
+                    <TabsTrigger value="reconciliation">Conciliação e Validação CFOP</TabsTrigger>
                     <TabsTrigger value="tax_check">Conferência Sienge</TabsTrigger>
-                    <TabsTrigger value="difal">DIFAL</TabsTrigger>
                     <TabsTrigger value="resale_export">Exportação de Revenda (Sienge)</TabsTrigger>
                 </TabsList>
                 
@@ -423,6 +422,7 @@ export function AdditionalAnalyses({
                             allPersistedClassifications={allPersistedClassifications}
                             onPersistAllClassifications={onPersistAllClassifications}
                             competence={competence}
+                            imobilizadoItems={processedData?.sheets?.Imobilizados || []}
                         />
                     )}
 
@@ -435,12 +435,6 @@ export function AdditionalAnalyses({
                         />
                     )}
                     
-                    {activeTab === 'difal' && (
-                         <DifalTab
-                            reconciledItems={reconciliationResults?.reconciled || []}
-                            allPersistedClassifications={allPersistedClassifications}
-                         />
-                    )}
 
                     {activeTab === 'resale_export' && (
                         <Card>
@@ -524,10 +518,11 @@ interface ReconciliationAnalysisProps {
     allPersistedClassifications: AllClassifications;
     onPersistAllClassifications: (allData: AllClassifications) => void;
     competence: string | null;
+    imobilizadoItems: any[];
 }
 
 
-function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error, allPersistedClassifications, onPersistAllClassifications, competence }: ReconciliationAnalysisProps) {
+function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error, allPersistedClassifications, onPersistAllClassifications, competence, imobilizadoItems }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState("reconciled");
     const [activeOtherTab, setActiveOtherTab] = useState<string>('');
@@ -566,8 +561,8 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                     <div className="flex items-center gap-3">
                         <GitCompareArrows className="h-8 w-8 text-primary" />
                         <div>
-                            <CardTitle className="font-headline text-2xl">Conciliação de Itens (Entradas XML vs Sienge)</CardTitle>
-                            <CardDescription>Carregue a planilha "Itens do Sienge". A comparação será executada automaticamente contra as notas de entrada.</CardDescription>
+                            <CardTitle className="font-headline text-2xl">Conciliação e Validação CFOP</CardTitle>
+                            <CardDescription>Carregue a planilha "Itens do Sienge". A comparação com as entradas de XML será executada automaticamente.</CardDescription>
                         </div>
                     </div>
                 </CardHeader>
@@ -597,7 +592,8 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                 <div className="mt-4">
                                      {activeTab === 'reconciled' && (
                                         <CfopValidator 
-                                            items={reconciliationResults.reconciled}
+                                            reconciledItems={reconciliationResults.reconciled}
+                                            imobilizadoItems={imobilizadoItems}
                                             allPersistedClassifications={allPersistedClassifications}
                                             onPersistAllClassifications={onPersistAllClassifications}
                                             competence={competence}

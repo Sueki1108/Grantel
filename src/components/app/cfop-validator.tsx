@@ -6,7 +6,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX, Copy, Save, Settings, Dot, HelpCircle, ListFilter, TicketPercent } from "lucide-react";
+import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX, Copy, Save, Settings, Dot, HelpCircle, ListFilter, TicketPercent, Building } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from '../ui/badge';
@@ -27,8 +27,8 @@ export interface CfopValidationData extends Record<string, any> {
     'Número da Nota': string;
     'CPF/CNPJ do Emitente': string;
     'Código': string; // Código do produto no XML
-    'Sienge_CFOP': string; // CFOP do Sienge
-    'Sienge_Descrição': string;
+    'Sienge_CFOP'?: string; // CFOP do Sienge - pode não existir para imobilizado
+    'Sienge_Descrição'?: string;
     'Fornecedor': string; // Nome do fornecedor do XML
     'Descrição': string; // Descrição do item no XML
     'CFOP': string; // CFOP do XML
@@ -62,7 +62,8 @@ const CFOP_VALIDATION_FILTERS_KEY = 'cfopValidationFilters_v2';
 
 
 interface CfopValidatorProps {
-    items: CfopValidationData[];
+    reconciledItems: CfopValidationData[];
+    imobilizadoItems: any[];
     allPersistedClassifications: AllClassifications;
     onPersistAllClassifications: (allData: AllClassifications) => void;
     competence: string | null;
@@ -75,7 +76,7 @@ const getFullCfopDescription = (cfopCode: string | number): string => {
 
 // Universal key based on the nature of the operation (full description of CFOP)
 const getUniversalProductKey = (item: CfopValidationData): string => {
-    const siengeCfop = item['Sienge_CFOP'] || '';
+    const siengeCfop = item['Sienge_CFOP'] || item['CFOP']; // Fallback para CFOP do XML
     const fullDescription = getFullCfopDescription(siengeCfop).toLowerCase();
     return `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${fullDescription}`;
 };
@@ -86,7 +87,7 @@ const getItemLineKey = (item: CfopValidationData): string => {
 };
 
 
-export function CfopValidator({ items, allPersistedClassifications, onPersistAllClassifications, competence }: CfopValidatorProps) {
+export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedClassifications, onPersistAllClassifications, competence }: CfopValidatorProps) {
     const { toast } = useToast();
     const [validationStatus, setValidationStatus] = useState<Record<string, ValidationStatus>>({});
     const [hasChanges, setHasChanges] = useState(false);
@@ -99,8 +100,19 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     const [tempIncludedCfops, setTempIncludedCfops] = useState<Set<string>>(new Set());
     const [tempIncludedCsts, setTempIncludedCsts] = useState<Set<string>>(new Set());
     const [tempIncludedPIcms, setTempIncludedPIcms] = useState<Set<string>>(new Set());
+    
+    // Combina itens conciliados com itens de imobilizado
+    const allItemsToValidate = useMemo(() => {
+        const classifiedImobilizado = (imobilizadoItems || [])
+            .filter(item => {
+                if (!item || !allPersistedClassifications || !competence) return false;
+                const classification = allPersistedClassifications[competence]?.classifications?.[item.uniqueItemId]?.classification;
+                return classification === 'imobilizado';
+            })
+            .map(item => ({ ...item, 'Sienge_CFOP': 'IMOBILIZADO' })); // Adiciona um grupo especial
 
-    const reconciledItems = useMemo(() => items.filter(item => item && item.Observações?.startsWith('Conciliado')), [items]);
+        return [...reconciledItems, ...classifiedImobilizado];
+    }, [reconciledItems, imobilizadoItems, allPersistedClassifications, competence]);
     
     useEffect(() => {
         try {
@@ -127,7 +139,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         if (!competence) return;
         const initialStatus: Record<string, ValidationStatus> = {};
 
-        reconciledItems.forEach(item => {
+        allItemsToValidate.forEach(item => {
             const universalProductKey = getUniversalProductKey(item);
             let classification: ValidationStatus | undefined = undefined;
 
@@ -145,14 +157,14 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
         setValidationStatus(initialStatus);
         setHasChanges(false);
-    }, [reconciledItems, allPersistedClassifications, competence]);
+    }, [allItemsToValidate, allPersistedClassifications, competence]);
 
 
      const handleValidationChange = (itemsToUpdate: CfopValidationData[], newStatus: ValidationStatus) => {
         const newValidationStatus = { ...validationStatus };
         const productKeysToUpdate = new Set(itemsToUpdate.map(getUniversalProductKey));
 
-        reconciledItems.forEach(item => {
+        allItemsToValidate.forEach(item => {
             const universalProductKey = getUniversalProductKey(item);
             if (productKeysToUpdate.has(universalProductKey)) {
                 newValidationStatus[getItemLineKey(item)] = newStatus;
@@ -175,7 +187,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             updatedPersistedData[competence].cfopValidations = { classifications: {} };
         }
 
-        reconciledItems.forEach(item => {
+        allItemsToValidate.forEach(item => {
             const newStatus = validationStatus[getItemLineKey(item)];
             const universalProductKey = getUniversalProductKey(item);
             
@@ -227,7 +239,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
     const columns = useMemo(() => {
         const baseColumns = getColumnsWithCustomRender(
-            reconciledItems,
+            allItemsToValidate,
             ['Fornecedor', 'Número da Nota', 'Descrição', 'Sienge_Descrição', 'CFOP', 'CST do ICMS', 'pICMS', 'Sienge_CFOP'],
             (row: any, id: string) => {
                 const value = row.original[id];
@@ -299,7 +311,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
 
         return baseColumns;
 
-    }, [reconciledItems]);
+    }, [allItemsToValidate]);
 
     const actionColumn = useMemo(() => ({
         id: 'Ações',
@@ -339,10 +351,10 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     }), [validationStatus]);
     
     const allGroupedItems = useMemo((): GroupedItems => {
-        if (!reconciledItems) return {};
+        if (!allItemsToValidate) return {};
         const groups: GroupedItems = {};
-        reconciledItems.forEach(item => {
-            const siengeCfop = item.Sienge_CFOP;
+        allItemsToValidate.forEach(item => {
+            const siengeCfop = item.Sienge_CFOP || 'IMOBILIZADO';
             if (!siengeCfop) return;
             if (!groups[siengeCfop]) {
                 groups[siengeCfop] = { items: [], xmlCfops: new Set(), xmlCsts: new Set(), xmlPIcms: new Set() };
@@ -355,7 +367,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             groups[siengeCfop].xmlPIcms.add(itemPIcms);
         });
         return groups;
-    }, [reconciledItems]);
+    }, [allItemsToValidate]);
     
     const [activeTabGroup, setActiveTabGroup] = useState<string>('');
     const tableRef = React.useRef<ReactTable<CfopValidationData> | null>(null);
@@ -368,11 +380,12 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     
     const { statusCounts } = useMemo(() => {
         const counts: Record<ValidationStatus | 'all', number> = { all: 0, unvalidated: 0, correct: 0, incorrect: 0, verify: 0, difal: 0 };
-        const itemsToCount = reconciledItems.filter(item => {
-            const groupData = allGroupedItems[item.Sienge_CFOP];
+        const itemsToCount = allItemsToValidate.filter(item => {
+            const groupKey = item.Sienge_CFOP || 'IMOBILIZADO';
+            const groupData = allGroupedItems[groupKey];
             if (!groupData) return true; // Should not happen
 
-            const { cfops: includedCfops, csts: includedCsts, picms: includedPIcms } = perTabFilters[item.Sienge_CFOP] || {
+            const { cfops: includedCfops, csts: includedCsts, picms: includedPIcms } = perTabFilters[groupKey] || {
                 cfops: groupData.xmlCfops, csts: groupData.xmlCsts, picms: groupData.xmlPIcms
             };
             
@@ -391,10 +404,16 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             counts[status]++;
         });
         return { statusCounts: counts };
-    }, [validationStatus, reconciledItems, perTabFilters, allGroupedItems]);
+    }, [validationStatus, allItemsToValidate, perTabFilters, allGroupedItems]);
 
     const visibleGroupTitles = useMemo(() => {
-        return Object.keys(allGroupedItems).filter(siengeCfop => {
+        const siengeCfops = Object.keys(allGroupedItems)
+            .filter(cfop => cfop !== 'IMOBILIZADO')
+            .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
+        const baseGroups = allGroupedItems['IMOBILIZADO'] ? ['IMOBILIZADO', ...siengeCfops] : siengeCfops;
+
+        return baseGroups.filter(siengeCfop => {
             const groupItems = allGroupedItems[siengeCfop].items;
             return groupItems.some(item => {
                  const statusOk = activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
@@ -412,7 +431,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                 const picmsOk = includedPIcms.size === 0 || includedPIcms.has(itemPIcms);
                 return cfopOk && cstOk && picmsOk;
             });
-        }).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+        });
     }, [allGroupedItems, validationStatus, activeFilter, perTabFilters]);
 
     const itemsForActiveTab = useMemo(() => {
@@ -538,11 +557,11 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         toast({ title: 'Filtros guardados!' });
     };
 
-    if (!reconciledItems || reconciledItems.length === 0) {
+    if (!allItemsToValidate || allItemsToValidate.length === 0) {
         return (
              <div className="text-center p-8 text-muted-foreground">
                 <FileWarning className="mx-auto h-12 w-12 mb-4" />
-                <h3 className="text-xl font-semibold">Nenhum item conciliado</h3>
+                <h3 className="text-xl font-semibold">Nenhum item para validar</h3>
                 <p>Execute a validação e carregue a planilha do Sienge para iniciar a conciliação e validação de CFOPs.</p>
              </div>
         );
@@ -603,6 +622,9 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                             }).length;
 
                             if (count > 0) {
+                                if (title === 'IMOBILIZADO') {
+                                    return <TabsTrigger key={title} value={title} className="flex items-center gap-2"><Building className="h-4 w-4"/>Imobilizado ({count})</TabsTrigger>
+                                }
                                 return <TabsTrigger key={title} value={title}>{title} ({count})</TabsTrigger>
                             }
                             return null;
@@ -614,11 +636,13 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                              {(() => {
                                  const title = activeTabGroup;
                                  if (!title) return null;
-                                 const description = cfopDescriptions[parseInt(title, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+                                 const description = title === 'IMOBILIZADO' 
+                                    ? 'Itens classificados como Ativo Imobilizado na etapa anterior.' 
+                                    : cfopDescriptions[parseInt(title, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
                                 return (
                                     <>
                                          <div className='mb-4 p-3 border rounded-md bg-muted/50 flex justify-between items-center'>
-                                            <h3 className="text-lg font-semibold">CFOP (Sienge) {title}: <span className="font-normal">{description}</span></h3>
+                                            <h3 className="text-lg font-semibold">Grupo {title}: <span className="font-normal">{description}</span></h3>
                                              <Button variant="outline" onClick={() => openFilterModal(title)} size="icon" title="Filtrar por CFOP e CST do XML" className={isAnyFilterActive ? 'relative text-blue-600 border-blue-600 hover:text-blue-700' : ''}>
                                                 <ListFilter className="h-4 w-4" />
                                                 {isAnyFilterActive && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span></span>}
