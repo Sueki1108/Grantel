@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -450,12 +451,23 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
 
         imobilizadoItems.forEach(item => {
             let classification = sessionClassifications[item.id] || 'unclassified';
+            
+            // Corrige se a classificação for inválida
             if (!categories[classification]) {
                 classification = 'unclassified';
             }
-            categories[classification].push(item);
+            
+            // Adiciona aos itens não classificados
+            if (classification === 'unclassified') {
+                categories.unclassified.push(item);
+            }
+            
+            // Adiciona a outras categorias com base na classificação
+            if(classification === 'imobilizado') categories.imobilizado.push(item);
+            if(classification === 'uso-consumo') categories['uso-consumo'].push(item);
+            if(classification === 'utilizado-em-obra') categories['utilizado-em-obra'].push(item);
         });
-
+        
         return categories;
     }, [imobilizadoItems, sessionClassifications]);
     
