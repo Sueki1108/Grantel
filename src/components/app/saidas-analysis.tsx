@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { FileWarning, TrendingUp, XCircle, Trash2, Ban, FolderClosed, CheckCircle, Save, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
 import {
   Tooltip,
   TooltipContent,
@@ -30,9 +32,10 @@ interface SaidasAnalysisProps {
     statusMap: Record<number, SaidaStatus>;
     onStatusChange: (newStatus: Record<number, SaidaStatus>) => void;
     lastPeriodNumber: number;
+    onLastPeriodNumberChange: (newNumber: number) => void;
 }
 
-export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeriodNumber }: SaidasAnalysisProps) {
+export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeriodNumber, onLastPeriodNumberChange }: SaidasAnalysisProps) {
     const { toast } = useToast();
     
     const analysisResults = useMemo(() => {
@@ -165,7 +168,11 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                                         <TableHead className="w-[150px]">Status</TableHead>
                                         <TableHead>Destinatário</TableHead>
                                         <TableHead>Data de Emissão</TableHead>
-                                        <TableHead className="text-right">Valor</TableHead>
+                                        <TableHead>CFOP</TableHead>
+                                        <TableHead>Base ICMS</TableHead>
+                                        <TableHead>Alíq. ICMS (%)</TableHead>
+                                        <TableHead>Valor ICMS</TableHead>
+                                        <TableHead className="text-right">Valor Total</TableHead>
                                         <TableHead className="w-[150px] text-center">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -181,8 +188,12 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                                             </TableCell>
                                             <TableCell>{item.data?.['Destinatário'] || '---'}</TableCell>
                                             <TableCell>
-                                                {item.data?.['Emissão'] ? format(new Date(item.data['Emissão']), 'dd/MM/yyyy') : '---'}
+                                                {item.data?.['Emissão'] ? format(parseISO(item.data['Emissão']), 'dd/MM/yyyy') : '---'}
                                             </TableCell>
+                                            <TableCell>{item.data?.['CFOP'] || '---'}</TableCell>
+                                            <TableCell>{typeof item.data?.['Base ICMS'] === 'number' ? item.data['Base ICMS'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}</TableCell>
+                                            <TableCell>{typeof item.data?.['Alíq. ICMS (%)'] === 'number' ? `${item.data['Alíq. ICMS (%)'].toFixed(2)}%` : '---'}</TableCell>
+                                            <TableCell>{typeof item.data?.['Valor ICMS'] === 'number' ? item.data['Valor ICMS'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}</TableCell>
                                             <TableCell className="text-right">
                                                 {typeof item.data?.['Total'] === 'number' ? item.data['Total'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}
                                             </TableCell>

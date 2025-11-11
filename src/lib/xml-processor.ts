@@ -79,9 +79,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const chaveAcesso = getAttributeValue(infNFe, 'Id').replace('NFe', '');
     const nNF = getTagValue(ide, 'nNF');
     const dhEmiRaw = getTagValue(ide, 'dhEmi');
-    const dhEmi = dhEmiRaw ? dhEmiRaw.substring(0, 10) : null;
-
-
+    
     const emitCNPJ = getTagValue(emit, 'CNPJ');
     const emitNome = getTagValue(emit, 'xNome');
     const emitIE = getTagValue(emit, 'IE'); // Extrair a Inscrição Estadual do Emitente
@@ -110,7 +108,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     let notaFiscal: any = {
         'Chave de acesso': chaveAcesso,
         'Número': nNF,
-        'Emissão': dhEmi,
+        'Emissão': dhEmiRaw,
         'Total': parseFloat(vNF) || 0,
         'Status': status,
     };
@@ -249,7 +247,6 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const nCT = getCteTagValue(ide, 'nCT');
     const serie = getCteTagValue(ide, 'serie'); // Extract the series
     const dhEmiRaw = getCteTagValue(ide, 'dhEmi');
-    const dhEmi = dhEmiRaw ? dhEmiRaw.substring(0, 10) : null;
     const emitCNPJ = getCteTagValue(emit, 'CNPJ');
     const emitIE = getCteTagValue(emit, 'IE'); // Extrair IE do CTe também
     const vTPrest = getCteTagValue(vPrest, 'vTPrest');
@@ -260,7 +257,7 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'Chave de acesso': chaveAcesso,
         'Número': nCT,
         'Série': serie, // Add series to the extracted data
-        'Emissão': dhEmi,
+        'Emissão': dhEmiRaw,
         'Fornecedor': getCteTagValue(emit, 'xNome'),
         'CPF/CNPJ do Fornecedor': emitCNPJ,
         'emitIE': emitIE, // Adicionar a IE do emitente do CTe
