@@ -399,19 +399,20 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     
     const allGroupedItems = useMemo((): GroupedItems => {
         const groups: GroupedItems = {};
-        
+        const imobilizadoItemKeys = new Set(imobilizadoItems.map(i => getItemLineKey(i)));
+    
         allItemsToValidate.forEach(item => {
-            const reconciledItem = reconciledItems?.find(r => getItemLineKey(r) === getItemLineKey(item));
-            let groupKey = reconciledItem?.Sienge_CFOP;
-
-            const isImobilizado = imobilizadoItems.some(i => getItemLineKey(i) === getItemLineKey(item));
-
-            if (isImobilizado && !groupKey) {
+            const isImobilizado = imobilizadoItemKeys.has(getItemLineKey(item));
+            let groupKey: string | undefined;
+    
+            if (isImobilizado) {
                 groupKey = 'IMOBILIZADO';
+            } else {
+                groupKey = reconciledItems?.find(r => getItemLineKey(r) === getItemLineKey(item))?.Sienge_CFOP;
             }
-
+    
             if (groupKey) {
-                 if (!groups[groupKey]) {
+                if (!groups[groupKey]) {
                     groups[groupKey] = { items: [], xmlCfops: new Set(), xmlCsts: new Set(), xmlPIcms: new Set() };
                 }
                 const group = groups[groupKey];
@@ -439,7 +440,9 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     const statusCounts = useMemo(() => {
         const counts: Record<MainValidationStatus | 'all', number> = { all: 0, unvalidated: 0, correct: 0, incorrect: 0, verify: 0 };
         const itemsToCount = allItemsToValidate.filter(item => {
-            const groupKey = item.Sienge_CFOP || (imobilizadoItems.some(i => getItemLineKey(i) === getItemLineKey(item)) ? 'IMOBILIZADO' : null);
+            const imobilizadoKey = imobilizadoItems.some(i => getItemLineKey(i) === getItemLineKey(item)) ? 'IMOBILIZADO' : null;
+            const groupKey = imobilizadoKey || item.Sienge_CFOP;
+
             if (!groupKey || !allGroupedItems[groupKey]) return false;
 
             const groupData = allGroupedItems[groupKey];
