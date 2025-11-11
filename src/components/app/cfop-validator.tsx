@@ -6,7 +6,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX, Copy, Save, Settings, Dot, HelpCircle } from "lucide-react";
+import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX, Copy, Save, Settings, Dot, HelpCircle, ListFilter } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from '../ui/badge';
@@ -347,8 +347,10 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             }
             groups[siengeCfop].items.push(item);
             if (item.CFOP) groups[siengeCfop].xmlCfops.add(item.CFOP);
-            if (item['CST do ICMS']) groups[siengeCfop].xmlCsts.add(item['CST do ICMS']);
-            if (item['pICMS'] !== undefined) groups[siengeCfop].xmlPIcms.add(String(item['pICMS']));
+            const itemCst = item['CST do ICMS'];
+            groups[siengeCfop].xmlCsts.add(itemCst === undefined || itemCst === null ? 'Vazio' : itemCst);
+            const itemPIcms = item['pICMS'];
+            groups[siengeCfop].xmlPIcms.add(itemPIcms === undefined || itemPIcms === null ? 'Vazio' : String(itemPIcms));
         });
         return groups;
     }, [reconciledItems]);
@@ -364,23 +366,52 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
     
     const { statusCounts } = useMemo(() => {
         const counts: Record<ValidationStatus | 'all', number> = { all: 0, unvalidated: 0, correct: 0, incorrect: 0, verify: 0 };
-        reconciledItems.forEach(item => {
+        const itemsToCount = reconciledItems.filter(item => {
+            const groupData = allGroupedItems[item.Sienge_CFOP];
+            if (!groupData) return true; // Should not happen
+
+            const { cfops: includedCfops, csts: includedCsts, picms: includedPIcms } = perTabFilters[item.Sienge_CFOP] || {
+                cfops: groupData.xmlCfops, csts: groupData.xmlCsts, picms: groupData.xmlPIcms
+            };
+            
+            const cfopOk = includedCfops.size === 0 || includedCfops.has(item.CFOP);
+            const itemCst = item['CST do ICMS'] === undefined || item['CST do ICMS'] === null ? 'Vazio' : item['CST do ICMS'];
+            const cstOk = includedCsts.size === 0 || includedCsts.has(itemCst);
+            const itemPIcms = item['pICMS'] === undefined || item['pICMS'] === null ? 'Vazio' : String(item['pICMS']);
+            const picmsOk = includedPIcms.size === 0 || includedPIcms.has(itemPIcms);
+
+            return cfopOk && cstOk && picmsOk;
+        });
+
+        itemsToCount.forEach(item => {
             const status = validationStatus[getItemLineKey(item)] || 'unvalidated';
             counts.all++;
             counts[status]++;
         });
-
         return { statusCounts: counts };
-    }, [validationStatus, reconciledItems]);
+    }, [validationStatus, reconciledItems, perTabFilters, allGroupedItems]);
 
     const visibleGroupTitles = useMemo(() => {
         return Object.keys(allGroupedItems).filter(siengeCfop => {
             const groupItems = allGroupedItems[siengeCfop].items;
-            return groupItems.some(item => 
-                activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter
-            );
+            return groupItems.some(item => {
+                 const statusOk = activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
+                 if (!statusOk) return false;
+                 
+                 const { cfops: includedCfops, csts: includedCsts, picms: includedPIcms } = perTabFilters[siengeCfop] || {
+                     cfops: allGroupedItems[siengeCfop].xmlCfops,
+                     csts: allGroupedItems[siengeCfop].xmlCsts,
+                     picms: allGroupedItems[siengeCfop].xmlPIcms,
+                 };
+                const cfopOk = includedCfops.size === 0 || includedCfops.has(item.CFOP);
+                const itemCst = item['CST do ICMS'] === undefined || item['CST do ICMS'] === null ? 'Vazio' : item['CST do ICMS'];
+                const cstOk = includedCsts.size === 0 || includedCsts.has(itemCst);
+                const itemPIcms = item['pICMS'] === undefined || item['pICMS'] === null ? 'Vazio' : String(item['pICMS']);
+                const picmsOk = includedPIcms.size === 0 || includedPIcms.has(itemPIcms);
+                return cfopOk && cstOk && picmsOk;
+            });
         }).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-    }, [allGroupedItems, validationStatus, activeFilter]);
+    }, [allGroupedItems, validationStatus, activeFilter, perTabFilters]);
 
     const itemsForActiveTab = useMemo(() => {
         if (!activeTabGroup || !allGroupedItems[activeTabGroup]) {
@@ -399,8 +430,10 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
             if (!statusOk) return false;
 
             const cfopOk = includedCfops.size === 0 || includedCfops.has(item.CFOP);
-            const cstOk = includedCsts.size === 0 || includedCsts.has(item['CST do ICMS'] || '');
-            const picmsOk = includedPIcms.size === 0 || includedPIcms.has(String(item['pICMS'] || '0'));
+            const itemCst = item['CST do ICMS'] === undefined || item['CST do ICMS'] === null ? 'Vazio' : item['CST do ICMS'];
+            const cstOk = includedCsts.size === 0 || includedCsts.has(itemCst);
+            const itemPIcms = item['pICMS'] === undefined || item['pICMS'] === null ? 'Vazio' : String(item['pICMS']);
+            const picmsOk = includedPIcms.size === 0 || includedPIcms.has(itemPIcms);
             
             return cfopOk && cstOk && picmsOk;
         });
@@ -418,13 +451,17 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         );
         
         const cfops = new Set(visibleItems.map(item => item.CFOP).filter(Boolean));
-        const csts = new Set(visibleItems.map(item => item['CST do ICMS'] || '').filter(Boolean));
-        const picms = new Set(visibleItems.map(item => String(item['pICMS'] || '0')).filter(p => p !== '0'));
+        const csts = new Set(visibleItems.map(item => item['CST do ICMS'] === undefined || item['CST do ICMS'] === null ? 'Vazio' : item['CST do ICMS']));
+        const picms = new Set(visibleItems.map(item => item['pICMS'] === undefined || item['pICMS'] === null ? 'Vazio' : String(item['pICMS'])));
         
         return {
             cfops: Array.from(cfops).sort(),
             csts: Array.from(csts).sort(),
-            picms: Array.from(picms).sort((a,b) => parseFloat(a) - parseFloat(b)),
+            picms: Array.from(picms).sort((a,b) => {
+                if (a === 'Vazio') return -1;
+                if (b === 'Vazio') return 1;
+                return parseFloat(a) - parseFloat(b)
+            }),
         };
     }, [currentEditingGroup, allGroupedItems, activeFilter, validationStatus]);
     
@@ -547,7 +584,21 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                          {visibleGroupTitles.map(title => {
                             const group = allGroupedItems[title];
                             if (!group) return null;
-                            const count = group.items.filter(item => activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter).length;
+                            const count = group.items.filter(item => {
+                                const statusOk = activeFilter === 'all' || (validationStatus[getItemLineKey(item)] || 'unvalidated') === activeFilter;
+                                if (!statusOk) return false;
+                                
+                                const { cfops: includedCfops, csts: includedCsts, picms: includedPIcms } = perTabFilters[title] || {
+                                    cfops: group.xmlCfops, csts: group.xmlCsts, picms: group.xmlPIcms
+                                };
+                                const cfopOk = includedCfops.size === 0 || includedCfops.has(item.CFOP);
+                                const itemCst = item['CST do ICMS'] === undefined || item['CST do ICMS'] === null ? 'Vazio' : item['CST do ICMS'];
+                                const cstOk = includedCsts.size === 0 || includedCsts.has(itemCst);
+                                const itemPIcms = item['pICMS'] === undefined || item['pICMS'] === null ? 'Vazio' : String(item['pICMS']);
+                                const picmsOk = includedPIcms.size === 0 || includedPIcms.has(itemPIcms);
+                                return cfopOk && cstOk && picmsOk;
+                            }).length;
+
                             if (count > 0) {
                                 return <TabsTrigger key={title} value={title}>{title} ({count})</TabsTrigger>
                             }
@@ -566,7 +617,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                                          <div className='mb-4 p-3 border rounded-md bg-muted/50 flex justify-between items-center'>
                                             <h3 className="text-lg font-semibold">CFOP (Sienge) {title}: <span className="font-normal">{description}</span></h3>
                                              <Button variant="outline" onClick={() => openFilterModal(title)} size="icon" title="Filtrar por CFOP e CST do XML" className={isAnyFilterActive ? 'relative text-blue-600 border-blue-600 hover:text-blue-700' : ''}>
-                                                <Settings className="h-4 w-4" />
+                                                <ListFilter className="h-4 w-4" />
                                                 {isAnyFilterActive && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span></span>}
                                             </Button>
                                         </div>
@@ -679,7 +730,7 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
                                             onCheckedChange={(checked) => setTempIncludedPIcms(prev => { const n = new Set(prev); if(checked) n.add(picms); else n.delete(picms); return n; })}
                                         />
                                         <Label htmlFor={`picms-filter-${picms}`} className="flex flex-col">
-                                            <Badge variant="outline">{`${picms}%`}</Badge>
+                                            <Badge variant="outline">{picms === 'Vazio' ? 'Vazio' : `${picms}%`}</Badge>
                                         </Label>
                                     </div>
                                 ))}
@@ -696,5 +747,3 @@ export function CfopValidator({ items, allPersistedClassifications, onPersistAll
         </div>
     );
 }
-
-    
