@@ -40,8 +40,6 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
     const [lastNumberInput, setLastNumberInput] = useState<string>(String(lastPeriodNumber || ''));
     const [rangeStart, setRangeStart] = useState('');
     const [rangeEnd, setRangeEnd] = useState('');
-    const [activeTab, setActiveTab] = useState('sequence');
-    const [filter, setFilter] = useState('');
 
     useEffect(() => {
         setLastNumberInput(String(lastPeriodNumber || ''));
@@ -106,17 +104,6 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
         
         return { sequence: fullSequence, min, max, firstNoteAfterGap };
     }, [saidasData, statusMap, lastPeriodNumber]);
-    
-    const filteredSequence = useMemo(() => {
-        if (!filter) return analysisResults.sequence;
-        const lowercasedFilter = filter.toLowerCase();
-        return analysisResults.sequence.filter(item => {
-            if (item.isGap) return false;
-            return Object.values(item.data).some(val => 
-                String(val).toLowerCase().includes(lowercasedFilter)
-            );
-        });
-    }, [analysisResults.sequence, filter]);
 
 
     const handleStatusChange = (numero: number, newStatus: SaidaStatus) => {
@@ -236,7 +223,7 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                 </div>
             </CardHeader>
             <CardContent>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <Card className="bg-muted/50">
                         <CardHeader className='pb-2'>
                             <CardTitle className='text-lg'>Período Anterior</CardTitle>
@@ -265,18 +252,6 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                                 <Label htmlFor="range-end-input-unused" className="text-sm font-medium">Até:</Label>
                                 <Input id="range-end-input-unused" type="number" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} className="w-28" placeholder="Fim" />
                                 <Button onClick={() => handleMarkRange('inutilizada')} size="sm" variant="secondary"><Ban className="mr-2 h-4 w-4"/> Marcar</Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card className="bg-muted/50">
-                        <CardHeader className='pb-2'><CardTitle className='text-lg'>Marcar Intervalo como Cancelado</CardTitle></CardHeader>
-                        <CardContent>
-                             <div className="flex items-center gap-2">
-                                <Label htmlFor="range-start-input-canceled" className="text-sm font-medium">De:</Label>
-                                <Input id="range-start-input-canceled" type="number" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} className="w-28" placeholder="Início" />
-                                <Label htmlFor="range-end-input-canceled" className="text-sm font-medium">Até:</Label>
-                                <Input id="range-end-input-canceled" type="number" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} className="w-28" placeholder="Fim" />
-                                <Button onClick={() => handleMarkRange('cancelada')} size="sm" variant="destructive"><XCircle className="mr-2 h-4 w-4"/> Marcar</Button>
                             </div>
                         </CardContent>
                     </Card>
