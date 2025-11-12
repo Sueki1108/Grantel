@@ -213,7 +213,7 @@ export function DifalAnalysis() {
                 </div>
              )
         }
-    ), [difalData, toast]);
+    ), [difalData]);
 
 
     return (
@@ -289,16 +289,12 @@ export function DifalAnalysis() {
                 </CardContent>
             </Card>
 
-            <Dialog open={isResultsModalOpen} onOpenChange={setIsResultsModalOpen}>
-                <DialogContent className="max-w-4xl">
-                     <DialogHeader>
-                        <DialogTitle>Resultados da Análise DIFAL</DialogTitle>
-                        <DialogDescription>
-                            Os dados foram extraídos dos XMLs carregados. Clique num valor para o copiar.
-                        </DialogDescription>
-                    </DialogHeader>
-                    
-                    {totals && (
+             {totals && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Resumo da Análise</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <Card>
                                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -331,9 +327,20 @@ export function DifalAnalysis() {
                                 </CardContent>
                             </Card>
                         </div>
-                    )}
+                    </CardContent>
+                </Card>
+            )}
+
+            <Dialog open={isResultsModalOpen} onOpenChange={setIsResultsModalOpen}>
+                <DialogContent className="max-w-4xl">
+                     <DialogHeader>
+                        <DialogTitle>Resultados da Análise DIFAL</DialogTitle>
+                        <DialogDescription>
+                            Os dados foram extraídos dos XMLs carregados. A tabela abaixo é paginada. Clique num valor para o copiar.
+                        </DialogDescription>
+                    </DialogHeader>
                     
-                     {difalData.length > 0 && (
+                    {difalData.length > 0 && (
                         <Card>
                             <CardContent className='pt-6'>
                             <DataTable 
@@ -354,3 +361,5 @@ export function DifalAnalysis() {
         </div>
     );
 }
+
+    
