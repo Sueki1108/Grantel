@@ -14,7 +14,7 @@ import { AllClassifications } from './imobilizado-analysis';
 import { useToast } from '@/hooks/use-toast';
 import { cfopDescriptions } from '@/lib/cfop';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { ScrollArea } from '../ui/scroll-area';
+import { ScrollArea, ScrollBar } from '../ui/scroll-area';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -174,7 +174,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         const sortedGroups = Object.entries(grouped).sort(([cfopA], [cfopB]) => {
             if (cfopA === 'N/A') return 1;
             if (cfopB === 'N/A') return -1;
-            return parseInt(cfopA, 10) - parseInt(cfopB, 10);
+            return parseInt(cfopA, 10) - parseInt(b, 10);
         });
 
         if (sortedGroups.length > 0 && !activeCfopTab) {
@@ -364,4 +364,3 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         </Card>
     );
 }
-
