@@ -409,8 +409,8 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                          <div className='flex items-center gap-3'>
                             <ListFilter className="h-8 w-8 text-primary" />
                             <div>
-                                <CardTitle className="font-headline text-2xl">Filtros e Ações</CardTitle>
-                                <CardDescription>Use os filtros para refinar a lista e guarde as suas validações.</CardDescription>
+                                <CardTitle className="font-headline text-2xl">Filtros e Ações em Lote</CardTitle>
+                                <CardDescription>Use os filtros para refinar a lista, execute ações em lote e guarde as suas validações.</CardDescription>
                             </div>
                         </div>
                          <div className="flex items-center gap-2">
@@ -419,38 +419,37 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="flex flex-wrap items-center gap-4">
-                        <span className="text-sm font-medium">Filtros:</span>
-                        <FilterPopover filterType="cfopXml" title="CFOP do XML" />
-                        <FilterPopover filterType="cst" title="CST do ICMS" />
-                        <FilterPopover filterType="aliquota" title="Alíquota de ICMS" />
-                        <Button variant="ghost" size="sm" onClick={() => { 
-                            setFilterState({
-                                cfopXml: new Set(availableFilters.cfopXml),
-                                cst: new Set(availableFilters.cst),
-                                aliquota: new Set(availableFilters.aliquota)
-                            })
-                         }}><FilterX className="mr-2 h-4 w-4"/>Limpar Filtros</Button>
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-medium">Filtros:</span>
+                            <FilterPopover filterType="cfopXml" title="CFOP do XML" />
+                            <FilterPopover filterType="cst" title="CST do ICMS" />
+                            <FilterPopover filterType="aliquota" title="Alíquota de ICMS" />
+                            <Button variant="ghost" size="sm" onClick={() => { 
+                                setFilterState({
+                                    cfopXml: new Set(availableFilters.cfopXml),
+                                    cst: new Set(availableFilters.cst),
+                                    aliquota: new Set(availableFilters.aliquota)
+                                })
+                             }}><FilterX className="mr-2 h-4 w-4"/>Limpar Filtros</Button>
+                        </div>
+                        {getSelectedItems().length > 0 && (
+                            <Card className="flex items-center gap-4 p-3 shadow-lg animate-in fade-in-0">
+                                <span className="text-sm font-medium pl-2">{getSelectedItems().length} item(ns) selecionado(s)</span>
+                                <div className="h-6 border-l" />
+                                <span className="text-sm font-medium">Ações em Lote:</span>
+                                <div className="flex gap-2">
+                                    <Button size="sm" variant="outline" onClick={() => handleBulkAction('correct')}><Check className="mr-2 h-4 w-4 text-green-600"/>Correto</Button>
+                                    <Button size="sm" variant="outline" onClick={() => handleBulkAction('incorrect')}><X className="mr-2 h-4 w-4 text-red-600"/>Incorreto</Button>
+                                    <Button size="sm" variant="outline" onClick={() => handleBulkAction('verify')}><AlertTriangle className="mr-2 h-4 w-4 text-amber-600"/>Verificar</Button>
+                                    <div className="h-6 border-l" />
+                                    <Button size="sm" variant="outline" onClick={() => handleBulkAction('difal')}>DIFAL</Button>
+                                </div>
+                            </Card>
+                        )}
                     </div>
                 </CardContent>
             </Card>
-
-            {(getSelectedItems().length > 0) && (
-                <div className="sticky top-16 z-20 -mx-6 px-6 py-2 bg-background border-y">
-                    <Card className="flex items-center gap-4 p-3 shadow-lg animate-in fade-in-0">
-                         <span className="text-sm font-medium pl-2">{getSelectedItems().length} item(ns) selecionado(s)</span>
-                        <div className="h-6 border-l" />
-                         <span className="text-sm font-medium">Ações em Lote:</span>
-                         <div className="flex gap-2">
-                             <Button size="sm" variant="outline" onClick={() => handleBulkAction('correct')}><Check className="mr-2 h-4 w-4 text-green-600"/>Correto</Button>
-                             <Button size="sm" variant="outline" onClick={() => handleBulkAction('incorrect')}><X className="mr-2 h-4 w-4 text-red-600"/>Incorreto</Button>
-                             <Button size="sm" variant="outline" onClick={() => handleBulkAction('verify')}><AlertTriangle className="mr-2 h-4 w-4 text-amber-600"/>Verificar</Button>
-                             <div className="h-6 border-l" />
-                             <Button size="sm" variant="outline" onClick={() => handleBulkAction('difal')}>DIFAL</Button>
-                         </div>
-                    </Card>
-                </div>
-            )}
             
             <Card>
                 <CardHeader>
