@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, AlertTriangle, Save, X, ListFilter, HardHat, Factory, Wrench, CheckSquare, RotateCcw, BadgeInfo } from "lucide-react";
+import { Check, AlertTriangle, Save, X, ListFilter, HardHat, Factory, Wrench, CheckSquare, RotateCw, HelpCircle } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Table as ReactTable, RowSelectionState, ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
@@ -19,7 +19,6 @@ import { ScrollArea, ScrollBar } from '../ui/scroll-area';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
 type ValidationStatus = 'correct' | 'incorrect' | 'verify' | 'unvalidated';
 
@@ -301,22 +300,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                     </ScrollArea>
                     
                     {groupedBySiengeCfop.map(([cfop, items]) => {
-                        const stats = {
-                            total: items.length,
-                            correct: items.filter(i => classifications[i.id]?.classification === 'correct').length,
-                            incorrect: items.filter(i => classifications[i.id]?.classification === 'incorrect').length,
-                            verify: items.filter(i => classifications[i.id]?.classification === 'verify').length,
-                            unvalidated: items.filter(i => !classifications[i.id] || classifications[i.id].classification === 'unvalidated').length,
-                        };
-
-                        const chartData = Object.entries(stats)
-                            .map(([key, value]) => ({
-                                name: STATUS_CONFIG[key as ValidationStatus]?.label,
-                                value: value,
-                                fill: STATUS_CONFIG[key as ValidationStatus]?.color,
-                            }))
-                            .filter(d => d.value > 0);
-
                         return (
                              <TabsContent key={cfop} value={cfop} className="mt-4 space-y-4">
                                 <Card>
@@ -338,23 +321,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                                         )}
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                            <div className="md:col-span-1 h-48">
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <PieChart>
-                                                        <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} label>
-                                                            {chartData.map((entry, index) => (
-                                                                <Cell key={`cell-${index}`} fill={entry.fill} />
-                                                            ))}
-                                                        </Pie>
-                                                        <RechartsTooltip formatter={(value) => `${value} (${((Number(value) / stats.total) * 100).toFixed(0)}%)`} />
-                                                    </PieChart>
-                                                </ResponsiveContainer>
-                                            </div>
-                                             <div className="md:col-span-2">
-                                                 <DataTable columns={columns} data={items} tableRef={tableRef} rowSelection={rowSelection} setRowSelection={setRowSelection} />
-                                             </div>
-                                        </div>
+                                         <DataTable columns={columns} data={items} tableRef={tableRef} rowSelection={rowSelection} setRowSelection={setRowSelection} />
                                     </CardContent>
                                 </Card>
                             </TabsContent>
