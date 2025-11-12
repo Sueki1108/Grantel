@@ -43,7 +43,7 @@ const normalizeKey = (key: string | undefined): string => {
 
 interface AdditionalAnalysesProps {
     processedData: ProcessedData | null;
-    onProcessedDataChange: (fn: (prevData: ProcessedData | null) => ProcessedData) => void;
+    onProcessedDataChange: (fn: (prevData: ProcessedData | null) => ProcessedData | null) => void;
     siengeFile: File | null;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
@@ -848,5 +848,6 @@ function SiengeTaxCheck({ siengeFile, onSiengeFileChange, onClearSiengeFile, sie
         </Card>
     );
 }
+
 
 

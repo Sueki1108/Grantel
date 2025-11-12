@@ -263,11 +263,25 @@ export function AutomatorClientPage() {
         }
     };
     
-    const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        setSiengeFile(file || null);
+    // Updated handler: only sets the file, doesn't process it.
+    const handleSiengeFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0] || null;
+        setSiengeFile(file);
+        // Clear previous Sienge data if a new file is (or isn't) selected
+        setProcessedData(prev => {
+            if (!prev) return null;
+            const { siengeSheetData, ...rest } = prev;
+            return rest as ProcessedData;
+        });
+    };
     
-        if (file) {
+    // New useEffect to process the Sienge file when it changes.
+    useEffect(() => {
+        if (!siengeFile) {
+            return;
+        }
+
+        const process = async () => {
             try {
                 const reader = new FileReader();
                 reader.onload = (event) => {
@@ -291,26 +305,18 @@ export function AutomatorClientPage() {
     
                     } catch (err: any) {
                          toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
-                         setProcessedData(prev => {
-                            if (!prev) return null;
-                            const { siengeSheetData, ...rest } = prev;
-                            return rest as ProcessedData;
-                         });
                     }
                 };
                 reader.onerror = (error) => { throw error };
-                reader.readAsArrayBuffer(file);
+                reader.readAsArrayBuffer(siengeFile);
             } catch (error: any) {
                  toast({ variant: 'destructive', title: 'Erro ao Ler Ficheiro Sienge', description: error.message });
             }
-        } else {
-             setProcessedData(prev => {
-                if (!prev) return null;
-                const { siengeSheetData, ...rest } = prev;
-                return rest as ProcessedData;
-             });
-        }
-    };
+        };
+        
+        process();
+
+    }, [siengeFile, toast]);
 
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>, category: 'nfeEntrada' | 'cte' | 'nfeSaida' | 'nfse') => {
         const selectedFiles = e.target.files;
