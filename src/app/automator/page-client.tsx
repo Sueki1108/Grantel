@@ -1,9 +1,10 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
 import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
 import JSZip from "jszip";
-import { format, parseISO, subMonths } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from "@/components/ui/button";
@@ -49,7 +50,6 @@ const requiredFiles = [
 ];
 
 const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications_v2';
-const SAIDAS_STATUS_STORAGE_KEY = 'saidasStatusMap';
 
 
 export function AutomatorClientPage() {
@@ -86,19 +86,16 @@ export function AutomatorClientPage() {
     // UI SETTINGS & PERSISTENCE
     // =================================================================
     useEffect(() => {
-        // Load UI settings and persisted data from localStorage on initial load
+        // Load UI settings from localStorage on initial load
         const wideMode = localStorage.getItem('ui-widemode') === 'true';
         setIsWideMode(wideMode);
         
+        // Load imobilizado classifications from localStorage
         try {
             const savedImobilizado = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
             if (savedImobilizado) setImobilizadoClassifications(JSON.parse(savedImobilizado));
-
-            const savedSaidasStatus = localStorage.getItem(SAIDAS_STATUS_STORAGE_KEY);
-            if (savedSaidasStatus) setSaidasStatus(JSON.parse(savedSaidasStatus));
-
         } catch (e) {
-            console.error("Failed to load persisted data from localStorage", e);
+            console.error("Failed to load imobilizado classifications from localStorage", e);
         }
     }, []);
 
@@ -122,16 +119,6 @@ export function AutomatorClientPage() {
         } catch(e) {
             console.error("Failed to save classifications to localStorage", e);
             toast({ variant: 'destructive', title: "Erro ao guardar classificações"});
-        }
-    };
-
-    const handleSaidasStatusChange = (newStatus: Record<number, 'emitida' | 'cancelada' | 'inutilizada'>) => {
-        setSaidasStatus(newStatus);
-         try {
-            localStorage.setItem(SAIDAS_STATUS_STORAGE_KEY, JSON.stringify(newStatus));
-        } catch(e) {
-            console.error("Failed to save saidas status to localStorage", e);
-            toast({ variant: 'destructive', title: "Erro ao guardar status das saídas"});
         }
     };
     
@@ -193,7 +180,7 @@ export function AutomatorClientPage() {
         
         setProcessedData(session.processedData);
         setLastSaidaNumber(session.lastSaidaNumber || 0);
-        handleSaidasStatusChange(session.saidasStatus || {});
+        setSaidasStatus(session.saidasStatus || {});
         setDisregardedNfseNotes(new Set(session.disregardedNfseNotes || []));
 
         const periods = session.competence.split('_');
@@ -211,7 +198,7 @@ export function AutomatorClientPage() {
     };
 
     // =================================================================
-    // Memoized Competence
+    // UI SETTINGS
     // =================================================================
     const competence = useMemo(() => {
         const activePeriods = Object.keys(selectedPeriods).filter(p => selectedPeriods[p]);
@@ -220,6 +207,10 @@ export function AutomatorClientPage() {
         }
         return null;
     }, [selectedPeriods]);
+
+    const handleLastSaidaNumberChange = useCallback((newNumber: number) => {
+        setLastSaidaNumber(newNumber);
+    }, []);
 
 
     // =================================================================
@@ -263,27 +254,18 @@ export function AutomatorClientPage() {
         }
     };
     
-    const handleSiengeFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0] || null;
-        setSiengeFile(file);
-    };
-    
-    useEffect(() => {
-        // Se o ficheiro for removido, limpe os dados.
-        if (!siengeFile) {
-            setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
-            return;
-        }
-    
-        // Se um novo ficheiro for definido, processe-o.
-        const process = async () => {
+    const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        setSiengeFile(file || null);
+
+        if (file) {
             try {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     try {
                         const data = event.target?.result;
                         if (!data) throw new Error("Não foi possível ler o conteúdo do ficheiro.");
-    
+
                         const workbook = XLSX.read(data, { type: 'array' });
                         const sheetName = workbook.SheetNames[0];
                         if (!sheetName) throw new Error("A planilha não contém nenhuma aba.");
@@ -307,21 +289,21 @@ export function AutomatorClientPage() {
                         });
                         
                         toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises avançadas.' });
-    
+
                     } catch (err: any) {
                          toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
+                         setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
                     }
                 };
                 reader.onerror = (error) => { throw error };
-                reader.readAsArrayBuffer(siengeFile);
+                reader.readAsArrayBuffer(file);
             } catch (error: any) {
                  toast({ variant: 'destructive', title: 'Erro ao Ler Ficheiro Sienge', description: error.message });
             }
-        };
-        
-        process();
-
-    }, [siengeFile, toast]);
+        } else {
+             setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
+        }
+    };
 
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>, category: 'nfeEntrada' | 'cte' | 'nfeSaida' | 'nfse') => {
         const selectedFiles = e.target.files;
@@ -400,7 +382,7 @@ export function AutomatorClientPage() {
         setLastSaidaNumber(0);
         setDisregardedNfseNotes(new Set());
         setSelectedPeriods({});
-        handleSaidasStatusChange({}); // Limpa o status persistido também
+        setSaidasStatus({});
 
         const inputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]');
         inputs.forEach(input => input.value = "");
@@ -551,36 +533,6 @@ export function AutomatorClientPage() {
                 const localLogs: string[] = [];
                 const log = (message: string) => localLogs.push(`[${new Date().toLocaleTimeString()}] ${message}`);
                 
-                // Determinar o número da última nota de saída do período anterior
-                const activePeriods = Object.keys(selectedPeriods).filter(p => selectedPeriods[p]).sort();
-                if (activePeriods.length > 0) {
-                    const firstPeriod = activePeriods[0];
-                    const [year, month] = firstPeriod.split('-').map(Number);
-                    const previousPeriodDate = subMonths(new Date(year, month - 1, 1), 1);
-                    const previousPeriodStr = format(previousPeriodDate, 'yyyy-MM');
-                    
-                    log(`Período de análise principal: ${activePeriods.join(', ')}. Buscando última nota de ${previousPeriodStr}...`);
-
-                    const allSaidasXmls = await processUploadedXmls(xmlFiles.nfeSaida);
-                    const previousPeriodSaidas = allSaidasXmls.saidas.filter(s => s['Emissão']?.startsWith(previousPeriodStr));
-                    
-                    if (previousPeriodSaidas.length > 0) {
-                        const maxNumero = Math.max(...previousPeriodSaidas.map(s => parseInt(s['Número'], 10)).filter(n => !isNaN(n)));
-                        if (isFinite(maxNumero)) {
-                            setLastSaidaNumber(maxNumero);
-                            log(`Último número de nota do período anterior (${previousPeriodStr}) definido como: ${maxNumero}`);
-                        } else {
-                            log(`Nenhuma nota de saída numérica encontrada para o período anterior.`);
-                            setLastSaidaNumber(0);
-                        }
-                    } else {
-                        log(`Nenhuma nota de saída encontrada para o período anterior (${previousPeriodStr}).`);
-                        setLastSaidaNumber(0);
-                    }
-                } else {
-                    setLastSaidaNumber(0);
-                }
-                
                 let dataToProcess: Record<string, any[]> = {};
                 let eventCanceledKeys = new Set<string>();
 
@@ -604,6 +556,7 @@ export function AutomatorClientPage() {
                     }
                 }
                 
+                const activePeriods = Object.keys(selectedPeriods).filter(p => selectedPeriods[p]);
                 if (activePeriods.length > 0) {
                     log(`Aplicando filtro de período para: ${activePeriods.join(', ')}`);
                 
@@ -800,7 +753,7 @@ export function AutomatorClientPage() {
                             )}
 
                              {activeMainTab === 'saidas-nfe' && (
-                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={handleSaidasStatusChange} lastPeriodNumber={lastSaidaNumber} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
+                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
                             )}
                             
                             {activeMainTab === 'nfse' && (

@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DataTable } from '@/components/app/data-table';
-import { getColumnsWithCustomRender } from '@/components/app/columns-helper';
+import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
 import { Label } from '../ui/label';
