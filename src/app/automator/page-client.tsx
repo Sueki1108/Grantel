@@ -269,13 +269,9 @@ export function AutomatorClientPage() {
     };
     
     useEffect(() => {
-        // Primeiro, se o ficheiro for removido, limpe os dados.
+        // Se o ficheiro for removido, limpe os dados.
         if (!siengeFile) {
-            setProcessedData(prev => {
-                if (!prev) return null;
-                const { siengeSheetData, ...rest } = prev;
-                return rest as ProcessedData;
-            });
+            setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
             return;
         }
     
@@ -296,15 +292,16 @@ export function AutomatorClientPage() {
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
                         
                         setProcessedData(prev => {
-                             // Create a complete, valid base object if `prev` is null
-                             const baseData = prev ?? { 
+                             // Cria um objeto base completo se prev for nulo, garantindo que todas as chaves existem
+                             const baseData: ProcessedData = prev ?? { 
                                 sheets: {}, 
                                 spedInfo: null, 
                                 keyCheckResults: null, 
                                 competence: null, 
                                 reconciliationResults: null, 
                                 resaleAnalysis: null, 
-                                spedCorrections: null 
+                                spedCorrections: null,
+                                siengeSheetData: null,
                             };
                             return { ...baseData, siengeSheetData: jsonData };
                         });

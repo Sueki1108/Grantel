@@ -79,8 +79,8 @@ export function AdditionalAnalyses({
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
 
     const { reconciliationResults, error: reconciliationError } = useMemo(() => {
-        if (!processedData) {
-            return { reconciliationResults: null, error: 'Dados processados não disponíveis.' };
+        if (!processedData || !processedData.sheets) {
+            return { reconciliationResults: null, error: null };
         }
 
         const { sheets, siengeSheetData } = processedData;
@@ -450,8 +450,9 @@ export function AdditionalAnalyses({
                             </CardHeader>
                             <CardContent>
                                 <FileUploadForm
-                                    requiredFiles={['Itens do Sienge']}
-                                    files={{ 'Itens do Sienge': !!siengeFile }}
+                                    displayName="Itens do Sienge"
+                                    formId="sienge-for-resale"
+                                    files={{ 'sienge-for-resale': !!siengeFile }}
                                     onFileChange={onSiengeFileChange}
                                     onClearFile={onClearSiengeFile}
                                 />
@@ -567,8 +568,9 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                 </CardHeader>
                 <CardContent>
                     <FileUploadForm
-                        requiredFiles={['Itens do Sienge']}
-                        files={{ 'Itens do Sienge': !!siengeFile }}
+                        displayName="Itens do Sienge"
+                        formId="sienge-for-reconciliation"
+                        files={{ 'sienge-for-reconciliation': !!siengeFile }}
                         onFileChange={onSiengeFileChange}
                         onClearFile={onClearSiengeFile}
                     />
@@ -601,13 +603,13 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                      {activeTab === 'onlyInSienge' && (
                                          <div>
                                             <Button onClick={() => handleDownload(reconciliationResults.onlyInSienge, 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                            <DataTable columns={getColumnsWithCustomRender(reconciliationResults.onlyInSienge, Object.keys(reconciliationResults.onlyInSienge[0] || {}))} data={reconciliationResults.onlyInSienge} />
+                                            <DataTable columns={getColumns(reconciliationResults.onlyInSienge)} data={reconciliationResults.onlyInSienge} />
                                          </div>
                                     )}
                                      {activeTab === 'onlyInXml' && (
                                          <div>
                                             <Button onClick={() => handleDownload(reconciliationResults.onlyInXml, 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                            <DataTable columns={getColumnsWithCustomRender(reconciliationResults.onlyInXml, Object.keys(reconciliationResults.onlyInXml[0] || {}))} data={reconciliationResults.onlyInXml} />
+                                            <DataTable columns={getColumns(reconciliationResults.onlyInXml)} data={reconciliationResults.onlyInXml} />
                                          </div>
                                     )}
                                 </div>
@@ -635,7 +637,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                             <Button onClick={() => handleDownload(items, `Sienge_Outros_${esp}`)} size="sm" className="mb-4" disabled={items.length === 0}>
                                                 <Download className="mr-2 h-4 w-4" /> Baixar
                                             </Button>
-                                            <DataTable columns={getColumnsWithCustomRender(items, Object.keys(items[0] || {}))} data={items} />
+                                            <DataTable columns={getColumns(items)} data={items} />
                                         </TabsContent>
                                     ))}
                                 </Tabs>
@@ -792,8 +794,9 @@ function SiengeTaxCheck({ siengeFile, onSiengeFileChange, onClearSiengeFile, sie
             </CardHeader>
             <CardContent className="space-y-4">
                  <FileUploadForm
-                    requiredFiles={['Itens do Sienge']}
-                    files={{ 'Itens do Sienge': !!siengeFile }}
+                    displayName="Itens do Sienge"
+                    formId="sienge-for-taxcheck"
+                    files={{ 'sienge-for-taxcheck': !!siengeFile }}
                     onFileChange={onSiengeFileChange}
                     onClearFile={onClearSiengeFile}
                 />
@@ -816,7 +819,7 @@ function SiengeTaxCheck({ siengeFile, onSiengeFileChange, onClearSiengeFile, sie
                                 </TabsList>
                                 <TabsContent value="cfop_uf" className="mt-4">
                                     <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.inconsistentCfopRows, 'CFOP_UF_Inconsistencias')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.inconsistentCfopRows.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar Inconsistências</Button>
-                                    <DataTable columns={getColumnsWithCustomRender(taxAndReconciliationAnalyses.inconsistentCfopRows, ["Número", "Credor", "CPF/CNPJ", "CFOP", "Descricao CFOP", "UF do Fornecedor", "Correção Sugerida"])} data={taxAndReconciliationAnalyses.inconsistentCfopRows} />
+                                    <DataTable columns={getColumns(taxAndReconciliationAnalyses.inconsistentCfopRows)} data={taxAndReconciliationAnalyses.inconsistentCfopRows} />
                                 </TabsContent>
                                 <TabsContent value="icms" className="mt-4">
                                     <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.taxConferences.icms, 'ICMS')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.taxConferences.icms.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
@@ -848,10 +851,4 @@ function SiengeTaxCheck({ siengeFile, onSiengeFileChange, onClearSiengeFile, sie
         </Card>
     );
 }
-
-
-
-
-
-
 
