@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, type ChangeEvent, useCallback } from "react";
@@ -19,13 +18,18 @@ import { cleanAndToStr } from "@/lib/utils";
 import { KeyChecker, KeyCheckResult } from "./key-checker";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AllClassifications } from "./imobilizado-analysis";
-import { CfopValidator, CfopValidationData } from "./cfop-validator";
-import { DifalAnalysis } from "./difal-analysis";
 
 
 // ===============================================================
 // Tipos
 // ===============================================================
+export type ReconciliationResults = {
+    reconciled: any[];
+    onlyInSienge: any[];
+    onlyInXml: any[];
+    otherSiengeItems: Record<string, any[]>;
+} | null;
+
 
 // ===============================================================
 // Constantes e Helpers
@@ -42,7 +46,7 @@ const normalizeKey = (key: string | undefined): string => {
 // ===============================================================
 
 interface AdditionalAnalysesProps {
-    processedData: ProcessedData | null;
+    processedData: ProcessedData;
     onProcessedDataChange: (fn: (prevData: ProcessedData | null) => ProcessedData | null) => void;
     siengeFile: File | null;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
@@ -79,10 +83,10 @@ export function AdditionalAnalyses({
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
 
     const { reconciliationResults, error: reconciliationError } = useMemo(() => {
-        if (!processedData || !processedData.sheets || !processedData.siengeSheetData) {
+        if (!processedData?.sheets) {
             return { reconciliationResults: null, error: null };
         }
-
+    
         const { sheets, siengeSheetData } = processedData;
         const allXmlItems = [
             ...(sheets?.['Itens Válidos'] || []),
@@ -92,14 +96,14 @@ export function AdditionalAnalyses({
                 Item: '1', 'Código': `CTE-${cte['Número']}`, 'Chave Unica': cleanAndToStr(cte['Número']) + cleanAndToStr(cte['CPF/CNPJ do Fornecedor']),
             }))
         ];
-
+    
         if (!siengeSheetData) {
-             return { 
+            return { 
                 reconciliationResults: allXmlItems.length > 0 ? { reconciled: [], onlyInSienge: [], onlyInXml: allXmlItems, otherSiengeItems: {} } : null, 
                 error: null 
             };
         }
-        
+    
         const nfeHeaderMap = new Map((sheets?.['Notas Válidas'] || []).map(n => [n['Chave Unica'], n]));
         
         const enrichedXmlItems: any[] = allXmlItems.map(item => {
@@ -114,7 +118,7 @@ export function AdditionalAnalyses({
             }
             return item;
         });
-
+    
         try {
             const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
                 if (!data || data.length === 0 || !data[0]) return undefined;
@@ -127,10 +131,10 @@ export function AdditionalAnalyses({
                 }
                 return undefined;
             };
-
+    
             const espHeader = findHeader(siengeSheetData, ['esp']);
             if (!espHeader) throw new Error("Não foi possível encontrar a coluna 'Esp' na planilha Sienge para filtragem.");
-
+    
             const otherSiengeItems: Record<string, any[]> = {};
             const siengeItemsForReconciliation: any[] = [];
             siengeSheetData.forEach(row => {
@@ -142,7 +146,7 @@ export function AdditionalAnalyses({
                     otherSiengeItems[espValue].push(row);
                 }
             });
-
+    
             const h = {
                 cnpj: findHeader(siengeItemsForReconciliation, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
                 numero: findHeader(siengeItemsForReconciliation, ['número', 'numero', 'numero da nota', 'nota fiscal']),
@@ -151,9 +155,9 @@ export function AdditionalAnalyses({
                 siengeDesc: findHeader(siengeItemsForReconciliation, ['descrição', 'descrição do item', 'produto fiscal']),
                 precoUnitario: findHeader(siengeItemsForReconciliation, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
             };
-
+    
             if (!h.cnpj || !h.numero || !h.valorTotal) throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge para notas NFE/NFSR.");
-
+    
             const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
                 const cleanNumero = cleanAndToStr(numero);
                 const cleanCnpj = String(cnpj).replace(/\D/g, '');
@@ -161,11 +165,11 @@ export function AdditionalAnalyses({
                 if (!cleanNumero || !cleanCnpj || cleanValor === 'NaN') return null;
                 return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
             };
-
+    
             let reconciled: any[] = [];
             let remainingXmlItems = [...enrichedXmlItems];
             let remainingSiengeItems = [...siengeItemsForReconciliation];
-
+    
             const reconciliationPass = (sienge: any[], xml: any[], getSiengeKey: (item: any) => string | null, getXmlKey: (item: any) => string | null, passName: string) => {
                 const matchedInPass: any[] = [];
                 const unmatchedSienge: any[] = [];
@@ -177,7 +181,7 @@ export function AdditionalAnalyses({
                         xmlMap.get(key)!.push(item);
                     }
                 });
-
+    
                 sienge.forEach(siengeItem => {
                     const key = getSiengeKey(siengeItem);
                     if (key && xmlMap.has(key)) {
@@ -214,7 +218,7 @@ export function AdditionalAnalyses({
                     xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Unitário'])
                 },
             ];
-
+    
             for (const pass of passes) {
                 if (remainingSiengeItems.length === 0 || remainingXmlItems.length === 0) break;
                 const result = reconciliationPass(remainingSiengeItems, remainingXmlItems, pass.siengeKeyFn, pass.xmlKeyFn, pass.name);
@@ -222,17 +226,17 @@ export function AdditionalAnalyses({
                 remainingSiengeItems = result.remainingSienge;
                 remainingXmlItems = result.remainingXml;
             }
-
+    
             return { 
                 reconciliationResults: { reconciled, onlyInSienge: remainingSiengeItems, onlyInXml: remainingXmlItems, otherSiengeItems }, 
                 error: null 
             };
-
+    
         } catch (err: any) {
             console.error("Reconciliation Error:", err);
             return { reconciliationResults: null, error: err.message };
         }
-    }, [processedData]);
+    }, [processedData?.siengeSheetData, processedData?.sheets]);
 
 
     const handleAnalyzeResale = () => {
@@ -360,7 +364,6 @@ export function AdditionalAnalyses({
             document.body.appendChild(link);
             link.click();
             
-            // Use a timeout to ensure the link is removed after the browser has processed the click
             setTimeout(() => {
                 document.body.removeChild(link);
                 URL.revokeObjectURL(link.href);
@@ -391,10 +394,9 @@ export function AdditionalAnalyses({
              </Card>
             
              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-1 md:grid-cols-4">
+                <TabsList className="grid w-full grid-cols-1 md:grid-cols-3">
                     <TabsTrigger value="sped">Verificação SPED</TabsTrigger>
-                    <TabsTrigger value="reconciliation">Conciliação e Validação CFOP</TabsTrigger>
-                    <TabsTrigger value="tax_check">Conferência Sienge</TabsTrigger>
+                    <TabsTrigger value="reconciliation">Conciliação (XML x Sienge)</TabsTrigger>
                     <TabsTrigger value="resale_export">Exportação de Revenda</TabsTrigger>
                 </TabsList>
                 
@@ -419,19 +421,6 @@ export function AdditionalAnalyses({
                             onClearSiengeFile={onClearSiengeFile}
                             reconciliationResults={reconciliationResults}
                             error={reconciliationError}
-                            allPersistedClassifications={allPersistedClassifications}
-                            onPersistAllClassifications={onPersistAllClassifications}
-                            competence={competence}
-                            imobilizadoItems={processedData?.sheets?.Imobilizados || []}
-                        />
-                    )}
-
-                    {activeTab === 'tax_check' && (
-                        <SiengeTaxCheck
-                            siengeFile={siengeFile}
-                            onSiengeFileChange={onSiengeFileChange}
-                            onClearSiengeFile={onClearSiengeFile}
-                            siengeSheetData={processedData?.siengeSheetData}
                         />
                     )}
                     
@@ -500,14 +489,8 @@ export function AdditionalAnalyses({
 }
 
 // ===============================================================
-// Componente de Análise de Conciliação e Hook
+// Componente de Análise de Conciliação
 // ===============================================================
-export type ReconciliationResults = {
-    reconciled: CfopValidationData[];
-    onlyInSienge: any[];
-    onlyInXml: any[];
-    otherSiengeItems: Record<string, any[]>;
-} | null;
 
 interface ReconciliationAnalysisProps {
     siengeFile: File | null;
@@ -515,14 +498,10 @@ interface ReconciliationAnalysisProps {
     error: string | null;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
-    allPersistedClassifications: AllClassifications;
-    onPersistAllClassifications: (allData: AllClassifications) => void;
-    competence: string | null;
-    imobilizadoItems: any[];
 }
 
 
-function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error, allPersistedClassifications, onPersistAllClassifications, competence, imobilizadoItems }: ReconciliationAnalysisProps) {
+function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, reconciliationResults, error }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState("reconciled");
     const [activeOtherTab, setActiveOtherTab] = useState<string>('');
@@ -561,7 +540,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                     <div className="flex items-center gap-3">
                         <GitCompareArrows className="h-8 w-8 text-primary" />
                         <div>
-                            <CardTitle className="font-headline text-2xl">Conciliação e Validação CFOP</CardTitle>
+                            <CardTitle className="font-headline text-2xl">Conciliação de Itens (XML vs Sienge)</CardTitle>
                             <CardDescription>Carregue a planilha "Itens do Sienge". A comparação com as entradas de XML será executada automaticamente.</CardDescription>
                         </div>
                     </div>
@@ -586,19 +565,16 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                         <CardContent>
                              <Tabs value={activeTab} onValueChange={setActiveTab}>
                                 <TabsList className="grid w-full grid-cols-1 md:grid-cols-3">
-                                    <TabsTrigger value="reconciled">Conciliados e Validação CFOP ({reconciliationResults.reconciled.length})</TabsTrigger>
+                                    <TabsTrigger value="reconciled">Conciliados ({reconciliationResults.reconciled.length})</TabsTrigger>
                                     <TabsTrigger value="onlyInSienge">Apenas no Sienge ({reconciliationResults.onlyInSienge.length})</TabsTrigger>
                                     <TabsTrigger value="onlyInXml">Apenas no XML ({reconciliationResults.onlyInXml.length})</TabsTrigger>
                                 </TabsList>
                                 <div className="mt-4">
                                      {activeTab === 'reconciled' && (
-                                        <CfopValidator 
-                                            reconciledItems={reconciliationResults.reconciled}
-                                            imobilizadoItems={imobilizadoItems}
-                                            allPersistedClassifications={allPersistedClassifications}
-                                            onPersistAllClassifications={onPersistAllClassifications}
-                                            competence={competence}
-                                        />
+                                        <div>
+                                            <Button onClick={() => handleDownload(reconciliationResults.reconciled, 'Itens_Conciliados')} size="sm" className="mb-4" disabled={reconciliationResults.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                            <DataTable columns={getColumns(reconciliationResults.reconciled)} data={reconciliationResults.reconciled} />
+                                        </div>
                                     )}
                                      {activeTab === 'onlyInSienge' && (
                                          <div>
@@ -660,195 +636,3 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
         </div>
     );
 }
-
-// Componente para a análise de impostos do Sienge
-function SiengeTaxCheck({ siengeFile, onSiengeFileChange, onClearSiengeFile, siengeSheetData }: any) {
-    const { toast } = useToast();
-    
-    const taxAndReconciliationAnalyses = useMemo(() => {
-        if (!siengeSheetData || siengeSheetData.length === 0) {
-            return { inconsistentCfopRows: [], taxConferences: { icms: [], pis: [], cofins: [], ipi: [], icmsSt: [] } };
-        }
-    
-        const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
-             if (!data || data.length === 0 || !data[0]) return undefined;
-             const headers = Object.keys(data[0]);
-             const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
-             for (const name of possibleNames) {
-                 const normalizedName = normalizeKey(name);
-                 const found = normalizedHeaders.find(h => h.normalized === normalizedName);
-                 if (found) return found.original;
-             }
-             return undefined;
-        };
-    
-        const h = {
-            uf: findHeader(siengeSheetData, ['uf', 'uf do fornecedor']), 
-            cfop: findHeader(siengeSheetData, ['cfop']),
-            icms: findHeader(siengeSheetData, ['icms', 'valor icms', 'vlr icms']), 
-            pis: findHeader(siengeSheetData, ['pis', 'valor pis', 'vlr pis']),
-            cofins: findHeader(siengeSheetData, ['cofins', 'valor cofins', 'vlr cofins']), 
-            ipi: findHeader(siengeSheetData, ['ipi', 'valor ipi', 'vlr ipi']),
-            icmsSt: findHeader(siengeSheetData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
-            numero: findHeader(siengeSheetData, ['número', 'numero', 'numero da nota', 'nota fiscal']), 
-            fornecedor: findHeader(siengeSheetData, ['credor', 'fornecedor', 'nome do fornecedor']),
-            cpfCnpj: findHeader(siengeSheetData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
-            descricao: findHeader(siengeSheetData, ['descrição', 'descrição do item', 'produto fiscal']),
-        };
-
-        const cfopRows: any[] = [];
-        const icms: any[] = [], pis: any[] = [], cofins: any[] = [], ipi: any[] = [], icmsSt: any[] = [];
-        
-        const getCfopDescription = (cfopCode: number): string => {
-            return cfopDescriptions[cfopCode as keyof typeof cfopDescriptions] || 'N/A';
-        };
-    
-        const getRelevantData = (row: any, taxKey: string | undefined, taxName: string) => {
-            if (!taxKey || !row || typeof row !== 'object' || !h.cfop) return null;
-            const relevantRow: Record<string, any> = {};
-            if(h.numero && h.numero in row) relevantRow["Número"] = row[h.numero];
-            if(h.cpfCnpj && h.cpfCnpj in row) relevantRow["CPF/CNPJ"] = row[h.cpfCnpj];
-            if(h.fornecedor && h.fornecedor in row) relevantRow["Credor"] = row[h.fornecedor];
-            const cfopVal = row[h.cfop] ?? row['CFOP'];
-            const cfopCode = parseInt(cleanAndToStr(cfopVal), 10);
-            relevantRow["CFOP"] = cfopCode;
-            relevantRow["Descricao CFOP"] = getCfopDescription(cfopCode);
-            if(taxKey in row) relevantRow[taxName] = row[taxKey];
-            if(h.descricao && h.descricao in row) relevantRow["Descrição"] = row[h.descricao];
-            return relevantRow;
-        }
-    
-        siengeSheetData.forEach((row: any) => {
-            if (!row || typeof row !== 'object') return;
-    
-            if (h.uf && row[h.uf] && h.cfop) {
-                const cfopVal = row[h.cfop] ?? row['CFOP'];
-                if(cfopVal) {
-                    const uf = String(row[h.uf] || '').toUpperCase().trim();
-                    const cfop = String(cfopVal || '').trim();
-                    if (uf && cfop) {
-                        const isInterstate = uf !== 'PR';
-                        const firstDigit = cfop.charAt(0);
-                        const cfopCode = parseInt(cfop, 10);
-                        const baseRow = {
-                            "Número": (h.numero && row[h.numero]) || '', 
-                            "Credor": (h.fornecedor && row[h.fornecedor]) || '', 
-                            "CPF/CNPJ": (h.cpfCnpj && row[h.cpfCnpj]) || '',
-                            "CFOP": cfop,
-                            "Descricao CFOP": getCfopDescription(cfopCode),
-                            "UF do Fornecedor": uf,
-                        };
-                        if (isInterstate && firstDigit !== '2' && !['5', '6', '7'].includes(firstDigit)) {
-                            cfopRows.push({ ...baseRow, "Correção Sugerida": `2${cfop.substring(1)}` });
-                        } else if (!isInterstate && firstDigit !== '1' && !['5', '6', '7'].includes(firstDigit)) {
-                             cfopRows.push({ ...baseRow, "Correção Sugerida": `1${cfop.substring(1)}` });
-                        }
-                    }
-                }
-            }
-    
-            if (h.icms && parseFloat(String(row[h.icms] || '0').replace(',', '.')) > 0) icms.push(getRelevantData(row, h.icms, "Valor ICMS")!);
-            if (h.pis && parseFloat(String(row[h.pis] || '0').replace(',', '.')) > 0) pis.push(getRelevantData(row, h.pis, "Valor PIS")!);
-            if (h.cofins && parseFloat(String(row[h.cofins] || '0').replace(',', '.')) > 0) cofins.push(getRelevantData(row, h.cofins, "Valor COFINS")!);
-            if (h.ipi && parseFloat(String(row[h.ipi] || '0').replace(',', '.')) > 0) ipi.push(getRelevantData(row, h.ipi, "Valor IPI")!);
-            if (h.icmsSt && parseFloat(String(row[h.icmsSt] || '0').replace(',', '.')) > 0) icmsSt.push(getRelevantData(row, h.icmsSt, "Valor ICMS ST")!);
-        });
-        
-        const uniqueCfopRowsMap = new Map<string, any>();
-        cfopRows.forEach(item => {
-            const numero = item['Número'];
-            const cnpj = item['CPF/CNPJ'];
-            if (numero && cnpj) {
-                const key = `${cleanAndToStr(numero)}-${cleanAndToStr(cnpj)}`;
-                if (!uniqueCfopRowsMap.has(key)) {
-                    uniqueCfopRowsMap.set(key, item);
-                }
-            }
-        });
-    
-        return { inconsistentCfopRows: Array.from(uniqueCfopRowsMap.values()), taxConferences: { icms, pis, cofins, ipi, icmsSt } };
-    }, [siengeSheetData]);
-
-     const handleDownloadConferencia = (data: any[], title: string) => {
-        if (!data || data.length === 0) {
-            toast({ title: "Nenhum dado para exportar", description: `Não há itens na aba "${title}".` });
-            return;
-        }
-        const worksheet = XLSX.utils.json_to_sheet(data);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, title);
-        const fileName = `Grantel - Conferência ${title}.xlsx`;
-        XLSX.writeFile(workbook, fileName);
-    };
-
-    return (
-        <Card>
-            <CardHeader>
-                <div className="flex items-center gap-3">
-                    <UploadCloud className="h-8 w-8 text-primary" />
-                    <div>
-                        <CardTitle className="font-headline text-2xl">Carregar Planilha Sienge</CardTitle>
-                        <CardDescription>Carregue a planilha "Itens do Sienge" para analisar as inconsistências de impostos.</CardDescription>
-                    </div>
-                </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                 <FileUploadForm
-                    displayName="Itens do Sienge"
-                    formId="sienge-for-taxcheck"
-                    files={{ 'sienge-for-taxcheck': !!siengeFile }}
-                    onFileChange={onSiengeFileChange}
-                    onClearFile={onClearSiengeFile}
-                />
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Resultados da Conferência de Impostos</CardTitle>
-                        <CardDescription>Listagem de todos os itens da planilha Sienge que possuem valores nos campos de impostos.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {siengeSheetData && siengeSheetData.length > 0 ? (
-                            <Tabs defaultValue="cfop_uf">
-                                <TabsList className="h-auto flex-wrap justify-start">
-                                    <TabsTrigger value="cfop_uf">CFOP/UF ({taxAndReconciliationAnalyses.inconsistentCfopRows.length})</TabsTrigger>
-                                    <TabsTrigger value="icms">ICMS ({taxAndReconciliationAnalyses.taxConferences.icms.length})</TabsTrigger>
-                                    <TabsTrigger value="pis">PIS ({taxAndReconciliationAnalyses.taxConferences.pis.length})</TabsTrigger>
-                                    <TabsTrigger value="cofins">COFINS ({taxAndReconciliationAnalyses.taxConferences.cofins.length})</TabsTrigger>
-                                    <TabsTrigger value="ipi">IPI ({taxAndReconciliationAnalyses.taxConferences.ipi.length})</TabsTrigger>
-                                    <TabsTrigger value="icms_st">ICMS ST ({taxAndReconciliationAnalyses.taxConferences.icmsSt.length})</TabsTrigger>
-                                </TabsList>
-                                <TabsContent value="cfop_uf" className="mt-4">
-                                    <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.inconsistentCfopRows, 'CFOP_UF_Inconsistencias')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.inconsistentCfopRows.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar Inconsistências</Button>
-                                    <DataTable columns={getColumns(taxAndReconciliationAnalyses.inconsistentCfopRows)} data={taxAndReconciliationAnalyses.inconsistentCfopRows} />
-                                </TabsContent>
-                                <TabsContent value="icms" className="mt-4">
-                                    <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.taxConferences.icms, 'ICMS')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.taxConferences.icms.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                    <DataTable columns={getColumns(taxAndReconciliationAnalyses.taxConferences.icms)} data={taxAndReconciliationAnalyses.taxConferences.icms} />
-                                </TabsContent>
-                                <TabsContent value="pis" className="mt-4">
-                                    <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.taxConferences.pis, 'PIS')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.taxConferences.pis.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                    <DataTable columns={getColumns(taxAndReconciliationAnalyses.taxConferences.pis)} data={taxAndReconciliationAnalyses.taxConferences.pis} />
-                                </TabsContent>
-                                <TabsContent value="cofins" className="mt-4">
-                                    <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.taxConferences.cofins, 'COFINS')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.taxConferences.cofins.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                    <DataTable columns={getColumns(taxAndReconciliationAnalyses.taxConferences.cofins)} data={taxAndReconciliationAnalyses.taxConferences.cofins} />
-                                </TabsContent>
-                                <TabsContent value="ipi" className="mt-4">
-                                    <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.taxConferences.ipi, 'IPI')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.taxConferences.ipi.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                    <DataTable columns={getColumns(taxAndReconciliationAnalyses.taxConferences.ipi)} data={taxAndReconciliationAnalyses.taxConferences.ipi} />
-                                </TabsContent>
-                                <TabsContent value="icms_st" className="mt-4">
-                                    <Button onClick={() => handleDownloadConferencia(taxAndReconciliationAnalyses.taxConferences.icmsSt, 'ICMS_ST')} size="sm" className="mb-4" disabled={taxAndReconciliationAnalyses.taxConferences.icmsSt.length === 0}><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                    <DataTable columns={getColumns(taxAndReconciliationAnalyses.taxConferences.icmsSt)} data={taxAndReconciliationAnalyses.taxConferences.icmsSt} />
-                                </TabsContent>
-                            </Tabs>
-                        ) : (
-                            <div className="p-8 text-center text-muted-foreground"><AlertTriangle className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Nenhum dado para analisar</h3><p>Carregue a planilha "Itens do Sienge" acima para iniciar a análise de conferências.</p></div>
-                        )}
-                    </CardContent>
-                </Card>
-            </CardContent>
-        </Card>
-    );
-}
-

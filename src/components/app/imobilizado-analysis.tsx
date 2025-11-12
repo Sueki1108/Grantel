@@ -1,11 +1,10 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
-import { getColumnsWithCustomRender } from "@/lib/columns-helper";
+import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { Building, Download, List, Factory, Wrench, HardHat, RotateCcw, Save, Settings, X, EyeOff, Copy } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
@@ -62,7 +61,7 @@ const IMOBILIZADO_CFOP_EXCLUSION_KEY = 'imobilizadoCfopExclusionList';
 
 interface ImobilizadoAnalysisProps {
     items: ItemData[]; 
-    siengeData?: any[] | null;
+    siengeFile?: File | null;
     competence: string | null; 
     onPersistData: (allDataToSave: AllClassifications) => void;
     allPersistedData: AllClassifications;
@@ -220,7 +219,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
 }
 
 
-export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
+export function ImobilizadoAnalysis({ items: initialAllItems, siengeFile, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
     const [hasChanges, setHasChanges] = useState(false);
@@ -230,6 +229,31 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
     const [isDisregardedModalOpen, setIsDisregardedModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<Classification>('unclassified');
     const [excludedCfops, setExcludedCfops] = useState<Set<string>>(new Set());
+    const [siengeData, setSiengeData] = useState<any[] | null>(null);
+
+     useEffect(() => {
+        if (siengeFile) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = event.target?.result;
+                    if (!data) throw new Error("Não foi possível ler o conteúdo do ficheiro.");
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    if (!sheetName) throw new Error("A planilha não contém nenhuma aba.");
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+                    setSiengeData(jsonData);
+                } catch (err: any) {
+                    toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
+                }
+            };
+            reader.onerror = (error) => toast({ variant: 'destructive', title: 'Erro ao Ler Ficheiro Sienge', description: error.message });
+            reader.readAsArrayBuffer(siengeFile);
+        } else {
+            setSiengeData(null);
+        }
+    }, [siengeFile, toast]);
 
     // ===============================================================
     // CFOP Configuration Logic
@@ -390,7 +414,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
 
         setSessionClassifications(newClassifications);
         setHasChanges(true);
-        setActiveTab(newClassification); // Stay on the same tab
+        setActiveTab(activeTab); // Stay on the same tab
     };
 
     const handleBulkClassification = (newClassification: Classification) => {
@@ -457,15 +481,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 classification = 'unclassified';
             }
             
-            // Adiciona aos itens não classificados
-            if (classification === 'unclassified') {
-                categories.unclassified.push(item);
-            }
-            
-            // Adiciona a outras categorias com base na classificação
-            if(classification === 'imobilizado') categories.imobilizado.push(item);
-            if(classification === 'uso-consumo') categories['uso-consumo'].push(item);
-            if(classification === 'utilizado-em-obra') categories['utilizado-em-obra'].push(item);
+            categories[classification].push(item);
         });
         
         return categories;

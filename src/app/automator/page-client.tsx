@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -254,65 +253,8 @@ export function AutomatorClientPage() {
         }
     };
     
-    const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        setSiengeFile(file || null);
-    
-        if (file) {
-            try {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const data = event.target?.result;
-                        if (!data) throw new Error("Não foi possível ler o conteúdo do ficheiro.");
-    
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        const sheetName = workbook.SheetNames[0];
-                        if (!sheetName) throw new Error("A planilha não contém nenhuma aba.");
-                        
-                        const worksheet = workbook.Sheets[sheetName];
-                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-                        
-                        setProcessedData(prev => {
-                             const baseData: ProcessedData = prev ?? {
-                                sheets: {},
-                                spedInfo: null,
-                                keyCheckResults: null,
-                                competence: null,
-                                reconciliationResults: null,
-                                resaleAnalysis: null,
-                                spedCorrections: null,
-                                siengeSheetData: null,
-                            };
-                            return {
-                                ...baseData,
-                                siengeSheetData: jsonData,
-                            };
-                        });
-                        
-                        toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises avançadas.' });
-    
-                    } catch (err: any) {
-                         toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
-                         setProcessedData(prev => {
-                            if (!prev) return null;
-                            const { siengeSheetData, ...rest } = prev;
-                            return rest as ProcessedData;
-                         });
-                    }
-                };
-                reader.onerror = (error) => { throw error };
-                reader.readAsArrayBuffer(file);
-            } catch (error: any) {
-                 toast({ variant: 'destructive', title: 'Erro ao Ler Ficheiro Sienge', description: error.message });
-            }
-        } else {
-             setProcessedData(prev => {
-                if (!prev) return null;
-                const { siengeSheetData, ...rest } = prev;
-                return rest as ProcessedData;
-             });
-        }
+    const handleSiengeFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+        setSiengeFile(e.target.files?.[0] || null);
     };
 
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>, category: 'nfeEntrada' | 'cte' | 'nfeSaida' | 'nfse') => {
@@ -628,7 +570,16 @@ export function AutomatorClientPage() {
 
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => {
         setProcessedData(prevData => {
-            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null };
+            const baseData: ProcessedData = prevData ?? {
+                sheets: {},
+                spedInfo: null,
+                keyCheckResults: null,
+                competence: null,
+                reconciliationResults: null,
+                resaleAnalysis: null,
+                spedCorrections: null,
+                siengeSheetData: null,
+            };
             return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections };
         });
     }, []);
@@ -771,7 +722,7 @@ export function AutomatorClientPage() {
                             )}
                             
                             {activeMainTab === 'imobilizado' && (
-                                !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} siengeData={processedData?.siengeSheetData} onPersistData={handlePersistImobilizado} allPersistedData={imobilizadoClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card>
+                                !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} siengeFile={siengeFile} onPersistData={handlePersistImobilizado} allPersistedData={imobilizadoClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card>
                             )}
 
                              {activeMainTab === 'difal' && <DifalAnalysis /> }
