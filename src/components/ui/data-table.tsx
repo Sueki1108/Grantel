@@ -32,7 +32,7 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   footer?: Record<string, string>;
-  tableRef?: React.MutableRefObject<ReactTable<TData> | null>;
+  tableRef?: React.RefObject<ReactTable<TData>>;
 }
 
 export function DataTable<TData, TValue>({
@@ -137,7 +137,6 @@ export function DataTable<TData, TValue>({
                     <TableCell 
                       key={cell.id} 
                       onClick={(e) => {
-                        // Impede a propagação do clique para a linha se a célula for de ação ou seleção
                         if (['actions', 'select'].includes(cell.column.id)) {
                           e.stopPropagation();
                         }
