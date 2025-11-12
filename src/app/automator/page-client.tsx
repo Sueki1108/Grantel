@@ -49,6 +49,7 @@ const requiredFiles = [
 ];
 
 const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications_v2';
+const SAIDAS_STATUS_STORAGE_KEY = 'saidasStatusMap';
 
 
 export function AutomatorClientPage() {
@@ -85,16 +86,19 @@ export function AutomatorClientPage() {
     // UI SETTINGS & PERSISTENCE
     // =================================================================
     useEffect(() => {
-        // Load UI settings from localStorage on initial load
+        // Load UI settings and persisted data from localStorage on initial load
         const wideMode = localStorage.getItem('ui-widemode') === 'true';
         setIsWideMode(wideMode);
         
-        // Load imobilizado classifications from localStorage
         try {
             const savedImobilizado = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
             if (savedImobilizado) setImobilizadoClassifications(JSON.parse(savedImobilizado));
+
+            const savedSaidasStatus = localStorage.getItem(SAIDAS_STATUS_STORAGE_KEY);
+            if (savedSaidasStatus) setSaidasStatus(JSON.parse(savedSaidasStatus));
+
         } catch (e) {
-            console.error("Failed to load imobilizado classifications from localStorage", e);
+            console.error("Failed to load persisted data from localStorage", e);
         }
     }, []);
 
@@ -118,6 +122,16 @@ export function AutomatorClientPage() {
         } catch(e) {
             console.error("Failed to save classifications to localStorage", e);
             toast({ variant: 'destructive', title: "Erro ao guardar classificações"});
+        }
+    };
+
+    const handleSaidasStatusChange = (newStatus: Record<number, 'emitida' | 'cancelada' | 'inutilizada'>) => {
+        setSaidasStatus(newStatus);
+         try {
+            localStorage.setItem(SAIDAS_STATUS_STORAGE_KEY, JSON.stringify(newStatus));
+        } catch(e) {
+            console.error("Failed to save saidas status to localStorage", e);
+            toast({ variant: 'destructive', title: "Erro ao guardar status das saídas"});
         }
     };
     
@@ -179,7 +193,7 @@ export function AutomatorClientPage() {
         
         setProcessedData(session.processedData);
         setLastSaidaNumber(session.lastSaidaNumber || 0);
-        setSaidasStatus(session.saidasStatus || {});
+        handleSaidasStatusChange(session.saidasStatus || {});
         setDisregardedNfseNotes(new Set(session.disregardedNfseNotes || []));
 
         const periods = session.competence.split('_');
@@ -206,6 +220,7 @@ export function AutomatorClientPage() {
         }
         return null;
     }, [selectedPeriods]);
+
 
     // =================================================================
     // FILE HANDLING & DOWNLOAD
@@ -381,7 +396,7 @@ export function AutomatorClientPage() {
         setLastSaidaNumber(0);
         setDisregardedNfseNotes(new Set());
         setSelectedPeriods({});
-        setSaidasStatus({});
+        handleSaidasStatusChange({}); // Limpa o status persistido também
 
         const inputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]');
         inputs.forEach(input => input.value = "");
@@ -646,8 +661,10 @@ export function AutomatorClientPage() {
 
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => {
         setProcessedData(prevData => {
-            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null };
-            return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections };
+            if (!prevData) {
+                return { sheets: {}, siengeSheetData: null, spedInfo: spedInfo || null, keyCheckResults: keyCheckResults || null, spedCorrections: spedCorrections ? [spedCorrections] : null, competence: null, resaleAnalysis: null, reconciliationResults: null };
+            }
+            return { ...prevData, spedInfo: spedInfo, keyCheckResults: keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : prevData.spedCorrections };
         });
     }, []);
     
@@ -781,7 +798,7 @@ export function AutomatorClientPage() {
                             )}
 
                              {activeMainTab === 'saidas-nfe' && (
-                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
+                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={handleSaidasStatusChange} lastPeriodNumber={lastSaidaNumber} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
                             )}
                             
                             {activeMainTab === 'nfse' && (
@@ -789,7 +806,7 @@ export function AutomatorClientPage() {
                             )}
                             
                             {activeMainTab === 'imobilizado' && (
-                                !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} onPersistData={handlePersistImobilizado} allPersistedData={imobilizadoClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card>
+                                !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} siengeData={processedData?.siengeSheetData} onPersistData={handlePersistImobilizado} allPersistedData={imobilizadoClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card>
                             )}
 
                              {activeMainTab === 'difal' && <DifalAnalysis /> }

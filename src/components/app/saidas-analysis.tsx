@@ -119,7 +119,7 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
         const summary: { [cfop: string]: { base: number, valor: number, aliquota: number, count: number, description: string } } = {};
 
         analysisResults.sequence.forEach(item => {
-            if (item.data && item.CFOP && (item.data['Base ICMS'] > 0 || item.data['Valor ICMS'] > 0)) {
+            if (item.data && item.status === 'emitida' && item.CFOP && (item.data['Base ICMS'] > 0 || item.data['Valor ICMS'] > 0)) {
                 if (!summary[item.CFOP]) {
                     summary[item.CFOP] = { base: 0, valor: 0, aliquota: item.data['Alíq. ICMS (%)'] || 0, count: 0, description: cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada" };
                 }
