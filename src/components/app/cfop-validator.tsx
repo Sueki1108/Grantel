@@ -8,14 +8,16 @@ import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { Check, AlertTriangle, HelpCircle, Save, X, CheckSquare, ListFilter, FilterX, RotateCcw, BadgeInfo } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { RowSelectionState, Table as ReactTable } from '@tanstack/react-table';
+import { Table as ReactTable } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
 import { AllClassifications } from './imobilizado-analysis';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Input } from '../ui/input';
 import { cfopDescriptions } from '@/lib/cfop';
 import { Badge } from '../ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { ScrollArea } from '../ui/scroll-area';
+import { Label } from '../ui/label';
 
 
 type ValidationStatus = 'correct' | 'incorrect' | 'verify' | 'unvalidated';
@@ -41,15 +43,23 @@ interface CfopValidatorProps {
     onPersistAllClassifications: (allData: AllClassifications) => void;
 }
 
+const CFOP_VALIDATOR_FILTERS_KEY = 'cfopValidatorFilters';
+
+type FilterState = {
+    cfopXml: Set<string>;
+    cst: Set<string>;
+    aliquota: Set<string>;
+};
+
 export function CfopValidator({ reconciledData, competence, allPersistedClassifications, onPersistAllClassifications }: CfopValidatorProps) {
     const { toast } = useToast();
     const [classifications, setClassifications] = useState<Record<string, { classification: ValidationStatus, isDifal: boolean }>>({});
     const [hasChanges, setHasChanges] = useState(false);
     const [activeTab, setActiveTab] = useState<ValidationStatus | 'all'>('unvalidated');
 
-    const [cfopXmlFilter, setCfopXmlFilter] = useState('');
-    const [cstFilter, setCstFilter] = useState('');
-    const [aliquotaFilter, setAliquotaFilter] = useState('');
+    // State for the new filter system
+    const [filterState, setFilterState] = useState<FilterState>({ cfopXml: new Set(), cst: new Set(), aliquota: new Set() });
+    const [availableFilters, setAvailableFilters] = useState<{ cfopXml: string[], cst: string[], aliquota: string[] }>({ cfopXml: [], cst: [], aliquota: [] });
     const [numSelected, setNumSelected] = useState(0);
 
     const tableRefs = React.useRef<Record<string, React.MutableRefObject<ReactTable<ReconciledItem> | null>>>({});
@@ -66,6 +76,65 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             };
         });
     }, [reconciledData]);
+
+     useEffect(() => {
+        // Step 1: Derive available filter options from the data
+        const cfopXmlOptions = new Set<string>();
+        const cstOptions = new Set<string>();
+        const aliquotaOptions = new Set<string>();
+
+        itemsToValidate.forEach(item => {
+            if (item['CFOP']) cfopXmlOptions.add(String(item['CFOP']));
+            if (item['CST do ICMS']) cstOptions.add(String(item['CST do ICMS']));
+            if (item['pICMS'] !== undefined && item['pICMS'] !== null) aliquotaOptions.add(String(item['pICMS']));
+        });
+
+        const sortedFilters = {
+            cfopXml: Array.from(cfopXmlOptions).sort(),
+            cst: Array.from(cstOptions).sort(),
+            aliquota: Array.from(aliquotaOptions).sort((a, b) => parseFloat(a) - parseFloat(b)),
+        };
+        setAvailableFilters(sortedFilters);
+        
+        // Step 2: Load saved filters from localStorage or default to all selected
+        try {
+            const savedFilters = localStorage.getItem(CFOP_VALIDATOR_FILTERS_KEY);
+            if (savedFilters) {
+                const parsed = JSON.parse(savedFilters);
+                setFilterState({
+                    cfopXml: new Set(parsed.cfopXml || sortedFilters.cfopXml),
+                    cst: new Set(parsed.cst || sortedFilters.cst),
+                    aliquota: new Set(parsed.aliquota || sortedFilters.aliquota),
+                });
+            } else {
+                 // Default to all selected if no saved filters
+                setFilterState({
+                    cfopXml: new Set(sortedFilters.cfopXml),
+                    cst: new Set(sortedFilters.cst),
+                    aliquota: new Set(sortedFilters.aliquota),
+                });
+            }
+        } catch (e) {
+            console.error("Failed to load CFOP filters from localStorage", e);
+             // Default to all selected on error
+            setFilterState({
+                cfopXml: new Set(sortedFilters.cfopXml),
+                cst: new Set(sortedFilters.cst),
+                aliquota: new Set(sortedFilters.aliquota),
+            });
+        }
+
+    }, [itemsToValidate]);
+    
+    // Save filters to localStorage whenever they change
+    useEffect(() => {
+        const filtersToSave = {
+            cfopXml: Array.from(filterState.cfopXml),
+            cst: Array.from(filterState.cst),
+            aliquota: Array.from(filterState.aliquota),
+        };
+        localStorage.setItem(CFOP_VALIDATOR_FILTERS_KEY, JSON.stringify(filtersToSave));
+    }, [filterState]);
 
      useEffect(() => {
         if (!competence) return;
@@ -189,9 +258,9 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         itemsToValidate.forEach(item => {
             const classification = classifications[item.id]?.classification || 'unvalidated';
             
-            const cfopMatch = !cfopXmlFilter || String(item['CFOP'] || '').includes(cfopXmlFilter);
-            const cstMatch = !cstFilter || String(item['CST do ICMS'] || '').includes(cstFilter);
-            const aliquotaMatch = !aliquotaFilter || String(item['pICMS'] || '0').includes(aliquotaFilter);
+            const cfopMatch = filterState.cfopXml.has(String(item['CFOP']));
+            const cstMatch = filterState.cst.has(String(item['CST do ICMS']));
+            const aliquotaMatch = filterState.aliquota.has(String(item['pICMS']));
 
             if (cfopMatch && cstMatch && aliquotaMatch) {
                 const siengeCfop = item.Sienge_CFOP || 'N/A';
@@ -202,30 +271,77 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             }
         });
         return categorized;
-    }, [itemsToValidate, classifications, cfopXmlFilter, cstFilter, aliquotaFilter]);
+    }, [itemsToValidate, classifications, filterState]);
+
+    const handleFilterChange = (filterType: keyof FilterState, value: string, checked: boolean) => {
+        setFilterState(prev => {
+            const newSet = new Set(prev[filterType]);
+            if (checked) {
+                newSet.add(value);
+            } else {
+                newSet.delete(value);
+            }
+            return { ...prev, [filterType]: newSet };
+        });
+    };
+
+    const FilterPopover = ({ filterType, title }: { filterType: keyof FilterState, title: string }) => {
+        const options = availableFilters[filterType];
+        const selected = filterState[filterType];
+
+        return (
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button variant="outline" className="h-8">
+                        {title} ({selected.size}/{options.length}) <ListFilter className="ml-2 h-4 w-4" />
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-0">
+                     <div className='p-2 border-b'>
+                        <Button variant="link" size="sm" onClick={() => setFilterState(p => ({...p, [filterType]: new Set(options)}))}>Todos</Button>
+                        <Button variant="link" size="sm" onClick={() => setFilterState(p => ({...p, [filterType]: new Set()}))}>Nenhum</Button>
+                    </div>
+                    <ScrollArea className="h-72">
+                        <div className='p-4 space-y-2'>
+                        {options.map(option => (
+                             <div key={option} className="flex items-center space-x-2">
+                                <Checkbox
+                                    id={`${filterType}-${option}`}
+                                    checked={selected.has(option)}
+                                    onCheckedChange={(checked) => handleFilterChange(filterType, option, !!checked)}
+                                />
+                                <Label htmlFor={`${filterType}-${option}`} className="font-normal">{option}</Label>
+                            </div>
+                        ))}
+                        </div>
+                    </ScrollArea>
+                </PopoverContent>
+            </Popover>
+        )
+    };
     
     const renderGroupedTable = (status: ValidationStatus) => {
         const groups = filteredAndCategorizedItems[status];
         const groupKeys = Object.keys(groups).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
 
         if (groupKeys.length === 0) {
-            return <div className="text-center text-muted-foreground p-8">Nenhum item para exibir.</div>;
+            return <div className="text-center text-muted-foreground p-8">Nenhum item para exibir com os filtros atuais.</div>;
         }
 
         return (
-             <Tabs defaultValue={groupKeys[0]} className="w-full" orientation="vertical">
-                 <TabsList>
+             <Tabs defaultValue={groupKeys[0]} className="w-full">
+                 <TabsList className="h-auto flex-wrap justify-start">
                     {groupKeys.map(cfop => (
                         <TooltipProvider key={cfop}>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <TabsTrigger value={cfop} className="w-full justify-start">
-                                        <Badge variant="secondary" className="mr-2">{cfop}</Badge>
-                                        <span className="truncate flex-1 text-left">{cfopDescriptions[parseInt(cfop, 10)] || 'Descrição não encontrada'}</span>
+                                    <TabsTrigger value={cfop} className="w-full justify-start gap-2">
+                                        <Badge variant="secondary">{cfop}</Badge>
+                                        <span className="truncate flex-1 text-left text-xs">{cfopDescriptions[parseInt(cfop, 10)] || 'Descrição não encontrada'}</span>
                                         <span className="ml-2 text-xs font-bold">({groups[cfop].length})</span>
                                     </TabsTrigger>
                                 </TooltipTrigger>
-                                <TooltipContent side="right">
+                                <TooltipContent side="top">
                                     <p>{cfopDescriptions[parseInt(cfop, 10)] || 'Descrição não encontrada'}</p>
                                 </TooltipContent>
                             </Tooltip>
@@ -279,7 +395,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                     });
                     
                     return (
-                        <TabsContent key={cfop} value={cfop} className="mt-0 pl-4">
+                        <TabsContent key={cfop} value={cfop} className="mt-0 pt-4">
                             <DataTable columns={columns} data={items} tableRef={tableRef} />
                         </TabsContent>
                     );
@@ -325,10 +441,16 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                         <ListFilter className="h-4 w-4"/>
                         <span className="text-sm font-medium">Filtros:</span>
                     </div>
-                     <Input placeholder="CFOP XML..." value={cfopXmlFilter} onChange={e => setCfopXmlFilter(e.target.value)} className="h-8 max-w-24" />
-                     <Input placeholder="CST ICMS..." value={cstFilter} onChange={e => setCstFilter(e.target.value)} className="h-8 max-w-24" />
-                     <Input placeholder="Alíquota..." value={aliquotaFilter} onChange={e => setAliquotaFilter(e.target.value)} className="h-8 max-w-24" />
-                     <Button variant="ghost" size="sm" onClick={() => { setCfopXmlFilter(''); setCstFilter(''); setAliquotaFilter(''); }}><FilterX className="mr-2 h-4 w-4"/>Limpar</Button>
+                     <FilterPopover filterType="cfopXml" title="CFOP do XML" />
+                     <FilterPopover filterType="cst" title="CST do ICMS" />
+                     <FilterPopover filterType="aliquota" title="Alíquota de ICMS" />
+                     <Button variant="ghost" size="sm" onClick={() => { 
+                         setFilterState({
+                             cfopXml: new Set(availableFilters.cfopXml),
+                             cst: new Set(availableFilters.cst),
+                             aliquota: new Set(availableFilters.aliquota)
+                         })
+                      }}><FilterX className="mr-2 h-4 w-4"/>Limpar Filtros</Button>
                 </div>
 
                 {numSelected > 0 && (
