@@ -40,6 +40,12 @@ export interface AccountCodeStorage {
     };
 }
 
+export interface CfopClassification {
+    classification: 'correct' | 'incorrect' | 'verify' | 'unvalidated';
+    isDifal: boolean;
+}
+
+
 // Estrutura geral para guardar as classificações e os códigos
 export interface AllClassifications {
     [competence: string]: {
@@ -47,10 +53,7 @@ export interface AllClassifications {
         accountCodes: AccountCodeStorage;
         cfopValidations?: {
              classifications: {
-                [uniqueProductKey: string]: {
-                    classification: 'correct' | 'incorrect' | 'verify' | 'unvalidated';
-                    isDifal: boolean;
-                }
+                [uniqueProductKey: string]: CfopClassification
             }
         }
     };

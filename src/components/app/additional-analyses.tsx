@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FileSearch, Sheet, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Building, Save, Database, FileJson, MinusCircle, TicketPercent } from "lucide-react";
+import { FileSearch, Sheet, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Building, Save, Database, FileJson, MinusCircle, TicketPercent, CheckSquare } from "lucide-react";
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -18,6 +18,7 @@ import { cleanAndToStr } from "@/lib/utils";
 import { KeyChecker, KeyCheckResult } from "./key-checker";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AllClassifications } from "./imobilizado-analysis";
+import { CfopValidator } from "./cfop-validator";
 
 
 // ===============================================================
@@ -394,9 +395,10 @@ export function AdditionalAnalyses({
              </Card>
             
              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-1 md:grid-cols-3">
+                <TabsList className="grid w-full grid-cols-1 md:grid-cols-4">
                     <TabsTrigger value="sped">Verificação SPED</TabsTrigger>
                     <TabsTrigger value="reconciliation">Conciliação (XML x Sienge)</TabsTrigger>
+                    <TabsTrigger value="cfop_validation">Validação CFOP</TabsTrigger>
                     <TabsTrigger value="resale_export">Exportação de Revenda</TabsTrigger>
                 </TabsList>
                 
@@ -424,6 +426,15 @@ export function AdditionalAnalyses({
                         />
                     )}
                     
+                     {activeTab === 'cfop_validation' && (
+                        <CfopValidator 
+                            reconciledData={reconciliationResults?.reconciled || []}
+                            allPersistedClassifications={allPersistedClassifications}
+                            onPersistAllClassifications={onPersistAllClassifications}
+                            competence={competence}
+                        />
+                     )}
+
                     {activeTab === 'resale_export' && (
                         <Card>
                             <CardHeader>
@@ -560,7 +571,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                 <div className="mt-6 space-y-6">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Resultados da Conciliação</CardTitle>
+                            <CardTitle>Resultados da Conciliação (NF-e/NFS-r)</CardTitle>
                         </CardHeader>
                         <CardContent>
                              <Tabs value={activeTab} onValueChange={setActiveTab}>
