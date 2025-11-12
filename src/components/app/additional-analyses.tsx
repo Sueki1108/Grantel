@@ -79,7 +79,7 @@ export function AdditionalAnalyses({
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
 
     const { reconciliationResults, error: reconciliationError } = useMemo(() => {
-        if (!processedData || !processedData.sheets) {
+        if (!processedData || !processedData.sheets || !processedData.siengeSheetData) {
             return { reconciliationResults: null, error: null };
         }
 
