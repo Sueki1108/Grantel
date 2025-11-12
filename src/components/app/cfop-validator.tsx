@@ -213,7 +213,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         Object.values(tableRefs.current).forEach(ref => {
             if (ref.current) {
                 selectedItems.push(...ref.current.getFilteredSelectedRowModel().rows.map(row => row.original));
-                if (action !== 'toggle_difal') {
+                 if (action !== 'toggle_difal') {
                     ref.current.toggleAllRowsSelected(false);
                 }
             }
@@ -420,71 +420,82 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     }
     
     return (
-        <Card>
-            <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                     <div className='flex items-center gap-3'>
-                        <CheckSquare className="h-8 w-8 text-primary" />
-                        <div>
-                            <CardTitle className="font-headline text-2xl">Validação de CFOP</CardTitle>
-                            <CardDescription>Compare os CFOPs do XML com os do Sienge, filtre, e valide em lote ou individualmente.</CardDescription>
+        <div className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                         <div className='flex items-center gap-3'>
+                            <ListFilter className="h-8 w-8 text-primary" />
+                            <div>
+                                <CardTitle className="font-headline text-2xl">Filtros e Ações</CardTitle>
+                                <CardDescription>Use os filtros para refinar a lista e guarde as suas validações.</CardDescription>
+                            </div>
+                        </div>
+                         <div className="flex items-center gap-2">
+                             <Button onClick={handleSaveChanges} disabled={!hasChanges}><Save className="mr-2 h-4 w-4"/> Guardar Validações</Button>
                         </div>
                     </div>
-                     <div className="flex items-center gap-2">
-                         <Button onClick={handleSaveChanges} disabled={!hasChanges}><Save className="mr-2 h-4 w-4"/> Guardar Validações</Button>
-                    </div>
-                </div>
-            </CardHeader>
-            <CardContent>
-                 <div className="mb-4 p-3 border rounded-lg bg-muted/50 flex flex-wrap items-center gap-4">
-                     <div className='flex items-center gap-2'>
-                        <ListFilter className="h-4 w-4"/>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex flex-wrap items-center gap-4">
                         <span className="text-sm font-medium">Filtros:</span>
+                        <FilterPopover filterType="cfopXml" title="CFOP do XML" />
+                        <FilterPopover filterType="cst" title="CST do ICMS" />
+                        <FilterPopover filterType="aliquota" title="Alíquota de ICMS" />
+                        <Button variant="ghost" size="sm" onClick={() => { 
+                            setFilterState({
+                                cfopXml: new Set(availableFilters.cfopXml),
+                                cst: new Set(availableFilters.cst),
+                                aliquota: new Set(availableFilters.aliquota)
+                            })
+                         }}><FilterX className="mr-2 h-4 w-4"/>Limpar Filtros</Button>
                     </div>
-                     <FilterPopover filterType="cfopXml" title="CFOP do XML" />
-                     <FilterPopover filterType="cst" title="CST do ICMS" />
-                     <FilterPopover filterType="aliquota" title="Alíquota de ICMS" />
-                     <Button variant="ghost" size="sm" onClick={() => { 
-                         setFilterState({
-                             cfopXml: new Set(availableFilters.cfopXml),
-                             cst: new Set(availableFilters.cst),
-                             aliquota: new Set(availableFilters.aliquota)
-                         })
-                      }}><FilterX className="mr-2 h-4 w-4"/>Limpar Filtros</Button>
-                </div>
+                </CardContent>
+            </Card>
 
-                {numSelected > 0 && (
-                    <div className="sticky top-16 z-20 mb-4 -mx-6 px-6 py-2 bg-background border-y">
-                        <Card className="flex items-center gap-4 p-3 shadow-lg animate-in fade-in-0">
-                             <span className="text-sm font-medium pl-2">{numSelected} item(ns) selecionado(s)</span>
-                            <div className="h-6 border-l" />
-                             <span className="text-sm font-medium">Ações em Lote:</span>
-                             <div className="flex gap-2">
-                                 <Button size="sm" variant="outline" onClick={() => handleBulkAction('correct')}><Check className="mr-2 h-4 w-4 text-green-600"/>Correto</Button>
-                                 <Button size="sm" variant="outline" onClick={() => handleBulkAction('incorrect')}><X className="mr-2 h-4 w-4 text-red-600"/>Incorreto</Button>
-                                 <Button size="sm" variant="outline" onClick={() => handleBulkAction('verify')}><AlertTriangle className="mr-2 h-4 w-4 text-amber-600"/>Verificar</Button>
-                                 <div className="h-6 border-l" />
-                                 <Button size="sm" variant="outline" onClick={() => handleBulkAction('toggle_difal')}><BadgeInfo className="mr-2 h-4 w-4 text-blue-600"/>DIFAL</Button>
-                             </div>
-                        </Card>
+            {numSelected > 0 && (
+                <div className="sticky top-16 z-20 -mx-6 px-6 py-2 bg-background border-y">
+                    <Card className="flex items-center gap-4 p-3 shadow-lg animate-in fade-in-0">
+                         <span className="text-sm font-medium pl-2">{numSelected} item(ns) selecionado(s)</span>
+                        <div className="h-6 border-l" />
+                         <span className="text-sm font-medium">Ações em Lote:</span>
+                         <div className="flex gap-2">
+                             <Button size="sm" variant="outline" onClick={() => handleBulkAction('correct')}><Check className="mr-2 h-4 w-4 text-green-600"/>Correto</Button>
+                             <Button size="sm" variant="outline" onClick={() => handleBulkAction('incorrect')}><X className="mr-2 h-4 w-4 text-red-600"/>Incorreto</Button>
+                             <Button size="sm" variant="outline" onClick={() => handleBulkAction('verify')}><AlertTriangle className="mr-2 h-4 w-4 text-amber-600"/>Verificar</Button>
+                             <div className="h-6 border-l" />
+                             <Button size="sm" variant="outline" onClick={() => handleBulkAction('toggle_difal')}><BadgeInfo className="mr-2 h-4 w-4 text-blue-600"/>DIFAL</Button>
+                         </div>
+                    </Card>
+                </div>
+            )}
+            
+            <Card>
+                <CardHeader>
+                    <div className='flex items-center gap-3'>
+                        <CheckSquare className="h-8 w-8 text-primary" />
+                        <div>
+                            <CardTitle className="font-headline text-2xl">Resultados da Validação de CFOP</CardTitle>
+                            <CardDescription>Itens agrupados por status. Clique nas sub-abas para filtrar por CFOP do Sienge.</CardDescription>
+                        </div>
                     </div>
-                )}
-                
-                 <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
-                    <TabsList>
-                        <TabsTrigger value="unvalidated">Não Validados ({Object.values(filteredAndCategorizedItems.unvalidated).flat().length})</TabsTrigger>
-                        <TabsTrigger value="correct">Corretos ({Object.values(filteredAndCategorizedItems.correct).flat().length})</TabsTrigger>
-                        <TabsTrigger value="incorrect">Incorretos ({Object.values(filteredAndCategorizedItems.incorrect).flat().length})</TabsTrigger>
-                        <TabsTrigger value="verify">A Verificar ({Object.values(filteredAndCategorizedItems.verify).flat().length})</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="unvalidated" className="mt-4">{renderGroupedTable('unvalidated')}</TabsContent>
-                    <TabsContent value="correct" className="mt-4">{renderGroupedTable('correct')}</TabsContent>
-                    <TabsContent value="incorrect" className="mt-4">{renderGroupedTable('incorrect')}</TabsContent>
-                    <TabsContent value="verify" className="mt-4">{renderGroupedTable('verify')}</TabsContent>
-                </Tabs>
-            </CardContent>
-        </Card>
+                </CardHeader>
+                <CardContent>
+                    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+                        <TabsList>
+                            <TabsTrigger value="unvalidated">Não Validados ({Object.values(filteredAndCategorizedItems.unvalidated).flat().length})</TabsTrigger>
+                            <TabsTrigger value="correct">Corretos ({Object.values(filteredAndCategorizedItems.correct).flat().length})</TabsTrigger>
+                            <TabsTrigger value="incorrect">Incorretos ({Object.values(filteredAndCategorizedItems.incorrect).flat().length})</TabsTrigger>
+                            <TabsTrigger value="verify">A Verificar ({Object.values(filteredAndCategorizedItems.verify).flat().length})</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="unvalidated" className="mt-4">{renderGroupedTable('unvalidated')}</TabsContent>
+                        <TabsContent value="correct" className="mt-4">{renderGroupedTable('correct')}</TabsContent>
+                        <TabsContent value="incorrect" className="mt-4">{renderGroupedTable('incorrect')}</TabsContent>
+                        <TabsContent value="verify" className="mt-4">{renderGroupedTable('verify')}</TabsContent>
+                    </Tabs>
+                </CardContent>
+            </Card>
+
+        </div>
     );
 }
-
-    
