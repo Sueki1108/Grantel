@@ -16,6 +16,7 @@ import { getColumnsWithCustomRender } from '@/components/app/columns-helper';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
 import { Label } from '../ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 
 // ===============================================================
 // Tipos
@@ -71,6 +72,7 @@ export function DifalAnalysis() {
     const [isLoading, setIsLoading] = useState(false);
     const [difalData, setDifalData] = useState<DifalData[]>([]);
     const [dueDate, setDueDate] = useState<Date | undefined>(new Date());
+    const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
     const { toast } = useToast();
     
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -148,7 +150,12 @@ export function DifalAnalysis() {
         
         setDifalData(processedItems);
         setIsLoading(false);
-        toast({ title: "Processamento Concluído", description: `${processedItems.length} XMLs analisados.` });
+        if (processedItems.length > 0) {
+            setIsResultsModalOpen(true);
+            toast({ title: "Processamento Concluído", description: `${processedItems.length} XMLs analisados.` });
+        } else {
+            toast({ variant: "destructive", title: "Nenhum dado encontrado", description: "Não foi possível extrair dados dos XMLs fornecidos." });
+        }
     };
 
     const totals = useMemo(() => {
@@ -203,7 +210,6 @@ export function DifalAnalysis() {
              return (
                 <div className="cursor-pointer hover:bg-muted p-1 rounded group flex items-center gap-1 justify-between" onClick={() => copyToClipboard(String(value))}>
                     <span>{displayValue}</span>
-                    <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
              )
         }
@@ -273,70 +279,78 @@ export function DifalAnalysis() {
                      <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Etapa 2</span></div></div>
                      <div>
                         <h3 className="text-lg font-bold mb-2">Etapa 2: Processar e Exportar</h3>
-                         <p className='text-sm text-muted-foreground mb-4'>Clique para extrair os dados dos XMLs. Depois, poderá baixar a planilha com os resultados.</p>
+                         <p className='text-sm text-muted-foreground mb-4'>Clique para extrair os dados dos XMLs. Os resultados serão exibidos num diálogo.</p>
                         <div className='flex flex-col sm:flex-row gap-4'>
                             <Button onClick={processXmls} disabled={isLoading || xmlFiles.length === 0} className="w-full">
                                 {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : <><Cpu className="mr-2 h-4 w-4" /> Processar XMLs</>}
-                            </Button>
-                             <Button onClick={handleDownloadExcel} disabled={difalData.length === 0} className="w-full">
-                                <Download className="mr-2 h-4 w-4" /> Baixar Excel
                             </Button>
                         </div>
                     </div>
                 </CardContent>
             </Card>
 
-            {totals && (
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Total de Notas</CardTitle>
-                            <Hash className="h-6 w-6 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent className='flex items-end justify-between'>
-                            <div className="text-4xl font-bold">{totals.count}</div>
-                            <Button size="icon" variant="ghost" onClick={() => copyToClipboard(totals.count)}><ClipboardCopy className="h-6 w-6" /></Button>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Valor Total das Notas</CardTitle>
-                            <Sigma className="h-6 w-6 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent className='flex items-end justify-between'>
-                            <div className="text-4xl font-bold">{totals.totalNotesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
-                            <Button size="icon" variant="ghost" onClick={() => copyToClipboard(totals.totalNotesValue)}><ClipboardCopy className="h-6 w-6" /></Button>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Valor Total Guias (11%)</CardTitle>
-                            <Coins className="h-6 w-6 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent className='flex items-end justify-between'>
-                            <div className="text-4xl font-bold">{totals.totalGuideValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
-                            <Button size="icon" variant="ghost" onClick={() => copyToClipboard(totals.totalGuideValue)}><ClipboardCopy className="h-6 w-6" /></Button>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
+            <Dialog open={isResultsModalOpen} onOpenChange={setIsResultsModalOpen}>
+                <DialogContent className="max-w-4xl">
+                     <DialogHeader>
+                        <DialogTitle>Resultados da Análise DIFAL</DialogTitle>
+                        <DialogDescription>
+                            Os dados foram extraídos dos XMLs carregados. Clique num valor para o copiar.
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    {totals && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">Total de Notas</CardTitle>
+                                    <Hash className="h-6 w-6 text-muted-foreground" />
+                                </CardHeader>
+                                <CardContent className='flex items-end justify-between'>
+                                    <div className="text-4xl font-bold">{totals.count}</div>
+                                    <Button size="icon" variant="ghost" onClick={() => copyToClipboard(totals.count)}><ClipboardCopy className="h-6 w-6" /></Button>
+                                </CardContent>
+                            </Card>
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">Valor Total das Notas</CardTitle>
+                                    <Sigma className="h-6 w-6 text-muted-foreground" />
+                                </CardHeader>
+                                <CardContent className='flex items-end justify-between'>
+                                    <div className="text-4xl font-bold">{totals.totalNotesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                                    <Button size="icon" variant="ghost" onClick={() => copyToClipboard(totals.totalNotesValue)}><ClipboardCopy className="h-6 w-6" /></Button>
+                                </CardContent>
+                            </Card>
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">Valor Total Guias (11%)</CardTitle>
+                                    <Coins className="h-6 w-6 text-muted-foreground" />
+                                </CardHeader>
+                                <CardContent className='flex items-end justify-between'>
+                                    <div className="text-4xl font-bold">{totals.totalGuideValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                                    <Button size="icon" variant="ghost" onClick={() => copyToClipboard(totals.totalGuideValue)}><ClipboardCopy className="h-6 w-6" /></Button>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    )}
+                    
+                     {difalData.length > 0 && (
+                        <Card>
+                            <CardContent className='pt-6'>
+                            <DataTable 
+                                    columns={columns}
+                                    data={difalData}
+                            />
+                            </CardContent>
+                        </Card>
+                    )}
+                    <DialogFooter>
+                         <Button onClick={handleDownloadExcel} disabled={difalData.length === 0}>
+                            <Download className="mr-2 h-4 w-4" /> Baixar Excel
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
-            {difalData.length > 0 && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Dados Extraídos para DIFAL</CardTitle>
-                        <CardDescription>
-                            Os seguintes dados foram extraídos dos XMLs carregados. Clique sobre qualquer informação para a copiar.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                       <DataTable 
-                            columns={columns}
-                            data={difalData}
-                       />
-                    </CardContent>
-                </Card>
-            )}
         </div>
     );
 }
