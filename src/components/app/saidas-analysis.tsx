@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { FileWarning, TrendingUp, XCircle, Trash2, Ban, FolderClosed, CheckCircle, Save, AlertTriangle, RotateCcw } from 'lucide-react';
+import { FileWarning, TrendingUp, XCircle, Trash2, Ban, FolderClosed, CheckCircle, Save, AlertTriangle, RotateCcw, Settings2, ListFilter } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format, parseISO } from 'date-fns';
 import {
@@ -15,6 +15,12 @@ import {
 } from "@/components/ui/tooltip";
 import { DataTable } from './data-table';
 import { ColumnDef } from '@tanstack/react-table';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
+import { cfopDescriptions } from '@/lib/cfop';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { ScrollArea } from '../ui/scroll-area';
+import { Checkbox } from '../ui/checkbox';
+import { Label } from '../ui/label';
 
 
 type SaidaStatus = 'emitida' | 'cancelada' | 'inutilizada';
@@ -38,11 +44,12 @@ interface SaidasAnalysisProps {
     statusMap: Record<number, SaidaStatus>;
     onStatusChange: (newStatus: Record<number, SaidaStatus>) => void;
     lastPeriodNumber: number;
-    onLastPeriodNumberChange: (newNumber: number) => void;
 }
 
 export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeriodNumber }: SaidasAnalysisProps) {
     const { toast } = useToast();
+    const [cfopFilter, setCfopFilter] = useState<Set<string>>(new Set());
+    const [isCfopModalOpen, setIsCfopModalOpen] = useState(false);
     
     const analysisResults = useMemo(() => {
         if (!saidasData || saidasData.length === 0) {
@@ -97,6 +104,54 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
         
         return { sequence: fullSequence, min, max, firstNoteAfterGap };
     }, [saidasData, statusMap, lastPeriodNumber]);
+    
+    const filteredSequence = useMemo(() => {
+        if (cfopFilter.size === 0) {
+            return analysisResults.sequence;
+        }
+        return analysisResults.sequence.filter(item => {
+            if (item.isGap) return true; // Always show gaps
+            return item.CFOP && cfopFilter.has(item.CFOP);
+        });
+    }, [analysisResults.sequence, cfopFilter]);
+
+    const icmsSummaryByCfop = useMemo(() => {
+        const summary: { [cfop: string]: { base: number, valor: number, aliquota: number, count: number, description: string } } = {};
+
+        analysisResults.sequence.forEach(item => {
+            if (item.data && item.CFOP && (item.data['Base ICMS'] > 0 || item.data['Valor ICMS'] > 0)) {
+                if (!summary[item.CFOP]) {
+                    summary[item.CFOP] = { base: 0, valor: 0, aliquota: item.data['Alíq. ICMS (%)'] || 0, count: 0, description: cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada" };
+                }
+                summary[item.CFOP].base += item.data['Base ICMS'] || 0;
+                summary[item.CFOP].valor += item.data['Valor ICMS'] || 0;
+                summary[item.CFOP].count += 1;
+            }
+        });
+
+        return Object.entries(summary).map(([cfop, data]) => ({ cfop, ...data }));
+    }, [analysisResults.sequence]);
+
+    const allCfops = useMemo(() => {
+        const cfops = new Set<string>();
+        analysisResults.sequence.forEach(item => {
+            if (item.CFOP) cfops.add(item.CFOP);
+        });
+        return Array.from(cfops).sort();
+    }, [analysisResults.sequence]);
+    
+    const handleCfopFilterChange = (cfop: string, checked: boolean) => {
+        setCfopFilter(prev => {
+            const newSet = new Set(prev);
+            if (checked) {
+                newSet.add(cfop);
+            } else {
+                newSet.delete(cfop);
+            }
+            return newSet;
+        });
+    };
+
 
     const handleStatusChange = (numero: number, newStatus: SaidaStatus) => {
         const newStatusMap = { ...statusMap, [numero]: newStatus };
@@ -233,8 +288,7 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                         <div>
                             <CardTitle className="font-headline text-2xl">Análise de Sequência de Notas de Saída</CardTitle>
                             <CardDescription>
-                                Verifique a sequência numérica das notas fiscais de saída para identificar falhas. Use os filtros nas colunas para pesquisar.
-                                {analysisResults.sequence.length > 0 && ` Analisando do número ${analysisResults.sequence[0].numero} ao ${analysisResults.sequence[analysisResults.sequence.length - 1].numero}.`}
+                                Verifique a sequência numérica das notas fiscais de saída, analise os totais de ICMS e filtre por CFOP.
                                 {lastPeriodNumber > 0 && ` A última nota do período anterior foi a ${lastPeriodNumber}.`}
                             </CardDescription>
                         </div>
@@ -258,11 +312,84 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                     </Alert>
                 )}
 
+                 {icmsSummaryByCfop.length > 0 && (
+                    <Accordion type="single" collapsible className="w-full mb-6 border rounded-lg px-4">
+                        <AccordionItem value="item-1">
+                            <AccordionTrigger>
+                                <h3 className='text-lg font-medium'>Resumo de ICMS por CFOP ({icmsSummaryByCfop.length})</h3>
+                            </AccordionTrigger>
+                            <AccordionContent>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50 dark:bg-gray-800">
+                                            <tr>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CFOP</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Notas</th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Alíquota (%)</th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Base de Cálculo</th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Valor do ICMS</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                                            {icmsSummaryByCfop.map(({ cfop, base, valor, aliquota, count, description }) => (
+                                                <tr key={cfop}>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">{cfop}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{description}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right">{count}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right">{aliquota.toFixed(2)}%</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right">{base.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right">{valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+                    </Accordion>
+                )}
+
+
                 {analysisResults.sequence.length > 0 ? (
                     <TooltipProvider>
+                        <div className='flex justify-end mb-4'>
+                            <Dialog open={isCfopModalOpen} onOpenChange={setIsCfopModalOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline"><ListFilter className="mr-2 h-4 w-4" />Filtrar por CFOP ({cfopFilter.size > 0 ? cfopFilter.size : 'Todos'})</Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>Filtrar por CFOP</DialogTitle>
+                                        <DialogDescription>Selecione os CFOPs que deseja visualizar na tabela. Se nada for selecionado, todos serão exibidos.</DialogDescription>
+                                    </DialogHeader>
+                                    <div className='flex gap-2 my-2'>
+                                        <Button size="sm" variant="secondary" onClick={() => setCfopFilter(new Set(allCfops))}>Selecionar Todos</Button>
+                                        <Button size="sm" variant="secondary" onClick={() => setCfopFilter(new Set())}>Limpar Seleção</Button>
+                                    </div>
+                                    <ScrollArea className='h-72 border rounded-md p-4'>
+                                        <div className='grid grid-cols-2 gap-4'>
+                                            {allCfops.map(cfop => (
+                                                <div key={cfop} className="flex items-center space-x-2">
+                                                    <Checkbox
+                                                        id={`cfop-${cfop}`}
+                                                        checked={cfopFilter.has(cfop)}
+                                                        onCheckedChange={(checked) => handleCfopFilterChange(cfop, !!checked)}
+                                                    />
+                                                    <Label htmlFor={`cfop-${cfop}`}>{cfop}</Label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </ScrollArea>
+                                    <DialogFooter>
+                                        <Button onClick={() => setIsCfopModalOpen(false)}>Aplicar</Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        </div>
                         <DataTable
                             columns={columns}
-                            data={analysisResults.sequence}
+                            data={filteredSequence}
                         />
                     </TooltipProvider>
                 ) : (
