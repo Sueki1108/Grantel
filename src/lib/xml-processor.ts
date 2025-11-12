@@ -434,7 +434,3 @@ export const processUploadedXmls = async (files: File[], log: LogFunction = () =
     
     return combinedData;
 };
-
-    
-
-    

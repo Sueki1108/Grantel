@@ -130,6 +130,7 @@ export function DifalAnalysis() {
                 
                 const entrega = infNFe.querySelector('entrega');
                 const entregaMun = getTagValue(entrega, 'xMun');
+                const entregaUf = getTagValue(entrega, 'UF');
                 
                 processedItems.push({
                     'Chave de Acesso': chaveAcesso,
@@ -137,7 +138,7 @@ export function DifalAnalysis() {
                     'Data de Emissão': dhEmi,
                     'Valor Total da Nota': vNF,
                     'Valor da Guia (11%)': parseFloat((vNF * 0.11).toFixed(2)),
-                    'Entrega': entregaMun || 'N/A',
+                    'Entrega': entregaMun ? `${entregaMun} - ${entregaUf}` : 'N/A',
                 });
 
             } catch (err) {
@@ -178,7 +179,7 @@ export function DifalAnalysis() {
     };
 
     const copyToClipboard = (text: string | number) => {
-        const textToCopy = typeof text === 'number' ? text.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : text;
+        const textToCopy = typeof text === 'number' ? text.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\./g, '').replace(',', '.') : text;
         navigator.clipboard.writeText(textToCopy).then(() => {
             toast({ title: 'Copiado!', description: `Valor "${textToCopy}" copiado para a área de transferência.` });
         }).catch(err => {
@@ -342,7 +343,3 @@ export function DifalAnalysis() {
         </div>
     );
 }
-
-    
-
-    
