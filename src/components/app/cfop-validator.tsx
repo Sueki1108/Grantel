@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, AlertTriangle, HelpCircle, Save, X, CheckSquare, ListFilter, FilterX, RotateCcw, BadgeInfo } from "lucide-react";
+import { Check, AlertTriangle, HelpCircle, Save, X, ListFilter, FilterX, RotateCcw, BadgeInfo } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Table as ReactTable } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
@@ -227,7 +227,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         } else {
             handleStatusChange(selectedItems, action as ValidationStatus);
         }
-        setNumSelected(0);
     };
 
     const handleSaveChanges = () => {

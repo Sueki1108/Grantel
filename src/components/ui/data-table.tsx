@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import {
-  Column,
   Table as ReactTable,
   ColumnDef,
   ColumnFiltersState,
@@ -27,7 +26,6 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { cn } from "@/lib/utils"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
