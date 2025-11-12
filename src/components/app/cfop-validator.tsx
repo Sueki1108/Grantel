@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, AlertTriangle, HelpCircle, Save, X, CheckSquare, ListFilter, FilterX, RotateCcw } from "lucide-react";
+import { Check, AlertTriangle, HelpCircle, Save, X, CheckSquare, ListFilter, FilterX, RotateCcw, BadgeInfo } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { RowSelectionState, Table as ReactTable } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
@@ -50,9 +50,10 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     const [cfopXmlFilter, setCfopXmlFilter] = useState('');
     const [cstFilter, setCstFilter] = useState('');
     const [aliquotaFilter, setAliquotaFilter] = useState('');
-
     const [numSelected, setNumSelected] = useState(0);
+
     const tableRefs = React.useRef<Record<string, React.MutableRefObject<ReactTable<ReconciledItem> | null>>>({});
+
 
     const itemsToValidate = useMemo((): ReconciledItem[] => {
         return reconciledData.map((item, index) => {
@@ -132,7 +133,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             });
             setNumSelected(total);
         };
-        const interval = setInterval(calculateTotalSelected, 500); // Check for selection changes periodically
+        const interval = setInterval(calculateTotalSelected, 500);
         return () => clearInterval(interval);
     }, []);
 
@@ -143,7 +144,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         Object.values(tableRefs.current).forEach(ref => {
             if (ref.current) {
                 selectedItems.push(...ref.current.getFilteredSelectedRowModel().rows.map(row => row.original));
-                ref.current.toggleAllRowsSelected(false); // Deselect after action
+                ref.current.toggleAllRowsSelected(false);
             }
         });
         
@@ -212,18 +213,19 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         }
 
         return (
-             <Tabs defaultValue={groupKeys[0]} className="w-full">
-                 <TabsList className="h-auto flex-wrap justify-start">
+             <Tabs defaultValue={groupKeys[0]} className="w-full" orientation="vertical">
+                 <TabsList>
                     {groupKeys.map(cfop => (
                         <TooltipProvider key={cfop}>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <TabsTrigger value={cfop}>
-                                        <Badge variant="secondary">{cfop}</Badge>
-                                        <span className="ml-2 text-xs">({groups[cfop].length})</span>
+                                    <TabsTrigger value={cfop} className="w-full justify-start">
+                                        <Badge variant="secondary" className="mr-2">{cfop}</Badge>
+                                        <span className="truncate flex-1 text-left">{cfopDescriptions[parseInt(cfop, 10)] || 'Descrição não encontrada'}</span>
+                                        <span className="ml-2 text-xs font-bold">({groups[cfop].length})</span>
                                     </TabsTrigger>
                                 </TooltipTrigger>
-                                <TooltipContent>
+                                <TooltipContent side="right">
                                     <p>{cfopDescriptions[parseInt(cfop, 10)] || 'Descrição não encontrada'}</p>
                                 </TooltipContent>
                             </Tooltip>
@@ -247,8 +249,8 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
 
                     columns.unshift({
                         id: 'select',
-                        header: ({ table }: any) => <Checkbox checked={table.getIsAllPageRowsSelected()} onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)} aria-label="Selecionar todas" />,
-                        cell: ({ row }: any) => <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Selecionar linha" />,
+                        header: ({ table }: any) => <Checkbox checked={table.getIsAllPageRowsSelected()} onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)} aria-label="Selecionar todas" onClick={(e) => e.stopPropagation()} />,
+                        cell: ({ row }: any) => <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Selecionar linha" onClick={(e) => e.stopPropagation()}/>,
                         enableSorting: false,
                     });
 
@@ -270,14 +272,14 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                                     <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'correct')}><Check className="h-5 w-5 text-green-600"/></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
                                     <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'incorrect')}><X className="h-5 w-5 text-red-600"/></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
                                     <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'verify')}><AlertTriangle className="h-5 w-5 text-amber-600"/></Button></TooltipTrigger><TooltipContent><p>Verificar</p></TooltipContent></Tooltip>
-                                    <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleDifalToggle([row.original])}><CheckSquare className="h-5 w-5 text-blue-600"/></Button></TooltipTrigger><TooltipContent><p>Alternar DIFAL</p></TooltipContent></Tooltip>
+                                    <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleDifalToggle([row.original])}><BadgeInfo className="h-5 w-5 text-blue-600"/></Button></TooltipTrigger><TooltipContent><p>Alternar DIFAL</p></TooltipContent></Tooltip>
                                 </div>
                             </TooltipProvider>
                         )
                     });
                     
                     return (
-                        <TabsContent key={cfop} value={cfop} className="mt-4">
+                        <TabsContent key={cfop} value={cfop} className="mt-0 pl-4">
                             <DataTable columns={columns} data={items} tableRef={tableRef} />
                         </TabsContent>
                     );
@@ -330,7 +332,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                 </div>
 
                 {numSelected > 0 && (
-                    <div className="sticky top-20 z-20 mb-4">
+                    <div className="sticky top-16 z-20 mb-4 -mx-6 px-6 py-2 bg-background border-y">
                         <Card className="flex items-center gap-4 p-3 shadow-lg animate-in fade-in-0">
                              <span className="text-sm font-medium pl-2">{numSelected} item(ns) selecionado(s)</span>
                             <div className="h-6 border-l" />
@@ -340,7 +342,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                                  <Button size="sm" variant="outline" onClick={() => handleBulkAction('incorrect')}><X className="mr-2 h-4 w-4 text-red-600"/>Incorreto</Button>
                                  <Button size="sm" variant="outline" onClick={() => handleBulkAction('verify')}><AlertTriangle className="mr-2 h-4 w-4 text-amber-600"/>Verificar</Button>
                                  <div className="h-6 border-l" />
-                                 <Button size="sm" variant="outline" onClick={() => handleBulkAction('toggle_difal')}><CheckSquare className="mr-2 h-4 w-4 text-blue-600"/>Alternar DIFAL</Button>
+                                 <Button size="sm" variant="outline" onClick={() => handleBulkAction('toggle_difal')}><BadgeInfo className="mr-2 h-4 w-4 text-blue-600"/>Alternar DIFAL</Button>
                              </div>
                         </Card>
                     </div>
