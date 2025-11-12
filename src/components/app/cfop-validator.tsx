@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, AlertTriangle, HelpCircle, Save, X, ListFilter, FilterX, RotateCw, BadgeInfo, CheckSquare } from "lucide-react";
+import { Check, AlertTriangle, Save, X, ListFilter, FilterX, RotateCw, BadgeInfo, CheckSquare, ChevronDown, ChevronRight } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Table as ReactTable } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
@@ -18,6 +18,7 @@ import { Badge } from '../ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { ScrollArea } from '../ui/scroll-area';
 import { Label } from '../ui/label';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 
 
 type ValidationStatus = 'correct' | 'incorrect' | 'verify' | 'unvalidated';
@@ -207,13 +208,14 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     }, []);
 
 
-    const handleBulkAction = (action: 'correct' | 'incorrect' | 'verify' | 'toggle_difal') => {
+    const handleBulkAction = (action: 'correct' | 'incorrect' | 'verify' | 'difal') => {
         const selectedItems: ReconciledItem[] = [];
 
         Object.values(tableRefs.current).forEach(ref => {
             if (ref.current) {
                 selectedItems.push(...ref.current.getFilteredSelectedRowModel().rows.map(row => row.original));
-                 if (action !== 'toggle_difal') {
+                // Do not clear selection for DIFAL
+                 if (action !== 'difal') {
                     ref.current.toggleAllRowsSelected(false);
                 }
             }
@@ -224,7 +226,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             return;
         }
 
-        if (action === 'toggle_difal') {
+        if (action === 'difal') {
             handleDifalToggle(selectedItems);
         } else {
             handleStatusChange(selectedItems, action as ValidationStatus);
@@ -365,7 +367,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
 
                     columns.unshift({
                         id: 'select',
-                        header: ({ table }: any) => <Checkbox checked={table.getIsAllPageRowsSelected()} onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)} aria-label="Selecionar todas" onClick={(e) => e.stopPropagation()} />,
+                        header: ({ table }: any) => <Checkbox checked={table.getIsAllPageRowsSelected()} onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)} aria-label="Selecionar todas" />,
                         cell: ({ row }: any) => <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Selecionar linha" />,
                         enableSorting: false,
                     });
@@ -388,7 +390,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                                     <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'correct')}><Check className="h-5 w-5 text-green-600"/></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
                                     <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'incorrect')}><X className="h-5 w-5 text-red-600"/></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
                                     <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'verify')}><AlertTriangle className="h-5 w-5 text-amber-600"/></Button></TooltipTrigger><TooltipContent><p>Verificar</p></TooltipContent></Tooltip>
-                                    <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleDifalToggle([row.original])}><BadgeInfo className="h-5 w-5 text-blue-600"/></Button></TooltipTrigger><TooltipContent><p>Alternar DIFAL</p></TooltipContent></Tooltip>
                                 </div>
                             </TooltipProvider>
                         )
@@ -464,7 +465,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                              <Button size="sm" variant="outline" onClick={() => handleBulkAction('incorrect')}><X className="mr-2 h-4 w-4 text-red-600"/>Incorreto</Button>
                              <Button size="sm" variant="outline" onClick={() => handleBulkAction('verify')}><AlertTriangle className="mr-2 h-4 w-4 text-amber-600"/>Verificar</Button>
                              <div className="h-6 border-l" />
-                             <Button size="sm" variant="outline" onClick={() => handleBulkAction('toggle_difal')}><BadgeInfo className="mr-2 h-4 w-4 text-blue-600"/>DIFAL</Button>
+                             <Button size="sm" variant="outline" onClick={() => handleBulkAction('difal')}>DIFAL</Button>
                          </div>
                     </Card>
                 </div>

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import {
+  Column,
   Table as ReactTable,
   ColumnDef,
   ColumnFiltersState,
@@ -32,8 +33,6 @@ interface DataTableProps<TData, TValue> {
   data: TData[]
   footer?: Record<string, string>;
   tableRef?: React.MutableRefObject<ReactTable<TData> | null>;
-  rowSelection?: RowSelectionState;
-  setRowSelection?: React.Dispatch<React.SetStateAction<RowSelectionState>>;
 }
 
 export function DataTable<TData, TValue>({
@@ -41,17 +40,12 @@ export function DataTable<TData, TValue>({
   data,
   footer,
   tableRef,
-  rowSelection: parentRowSelection,
-  setRowSelection: parentSetRowSelection,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = React.useState('')
-  const [internalRowSelection, setInternalRowSelection] = React.useState<RowSelectionState>({});
+  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
 
-  const isControlled = parentRowSelection !== undefined && parentSetRowSelection !== undefined;
-  const rowSelection = isControlled ? parentRowSelection : internalRowSelection;
-  const setRowSelection = isControlled ? parentSetRowSelection : setInternalRowSelection;
 
   const table = useReactTable({
     data,
@@ -140,12 +134,16 @@ export function DataTable<TData, TValue>({
                   onClick={() => row.toggleSelected()}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} onClick={(e) => {
-                      // Impede que o clique na célula de ações ou na checkbox se propague para a linha (e acione o toggle duas vezes)
-                      if (cell.column.id === 'actions' || cell.column.id === 'select') {
-                        e.stopPropagation();
-                      }
-                    }}>
+                    <TableCell 
+                      key={cell.id} 
+                      onClick={(e) => {
+                        // Impede que o clique em células com controlos interativos (ações, checkbox)
+                        // propague o evento para a linha, o que causaria um duplo toggle.
+                        if (['actions', 'select'].includes(cell.column.id)) {
+                          e.stopPropagation();
+                        }
+                      }}
+                    >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
