@@ -38,7 +38,7 @@ export type KeyInfo = {
     // Campos adicionais para verificação
     destIE?: string;
     destUF?: string;
-destCNPJ?: string;
+    destCNPJ?: string;
     tomadorCNPJ?: string;
     emitCNPJ?: string;
     emitName?: string;
@@ -576,7 +576,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12], vlDesc: parts[14] };
             } else if (reg === 'D100' && parts.length > 17 && parts[10]?.length === 44) {
                 key = parts[10];
-                docData = { key, reg, indOper: parts[2], codPart: parts[4], codPartDest: parts[3], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
+                docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
             }
 
             if (key && docData) {
@@ -658,7 +658,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             if (xmlUF !== GRANTEL_UF) divergenceMessages.push("UF");
             if (xmlIE !== GRANTEL_IE) divergenceMessages.push("IE");
         } else if (docType === 'CTE' && cleanAndToStr(nota.tomadorCNPJ) === GRANTEL_CNPJ) {
-             const participant = spedDoc.codPartDest ? participantData.get(spedDoc.codPartDest) : null;
+             const participant = spedDoc.codPart ? participantData.get(spedDoc.codPart) : null;
              if(participant) {
                  const spedIE = cleanAndToStr(participant.ie);
                  const spedUF = participant.uf?.trim().toUpperCase();
@@ -1082,12 +1082,12 @@ export function KeyChecker({
                                                     <TabsTrigger value="removed0150">Part. (0150) Removidos ({correctionResult.modifications.removed0150.length})</TabsTrigger>
                                                     <TabsTrigger value="removed0200">Prod. (0200) Removidos ({correctionResult.modifications.removed0200.length})</TabsTrigger>
                                                     <TabsTrigger value="removed0190">0190 Removidos ({correctionResult.modifications.removed0190.length})</TabsTrigger>
-                                                    <TabsTrigger value="counters">Contadores</TabsTrigger>
-                                                    <TabsTrigger value="ie">IE (NF-e)</TabsTrigger>
-                                                    <TabsTrigger value="cte_series">Série (CT-e)</TabsTrigger>
-                                                    <TabsTrigger value="address">Endereços</TabsTrigger>
-                                                    <TabsTrigger value="truncation">Truncamento</TabsTrigger>
-                                                    <TabsTrigger value="units">Unidades</TabsTrigger>
+                                                    <TabsTrigger value="counters">Contadores ({correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length})</TabsTrigger>
+                                                    <TabsTrigger value="ie">IE (NF-e) ({correctionResult.modifications.ieCorrection.length})</TabsTrigger>
+                                                    <TabsTrigger value="cte_series">Série (CT-e) ({correctionResult.modifications.cteSeriesCorrection.length})</TabsTrigger>
+                                                    <TabsTrigger value="address">Endereços ({correctionResult.modifications.addressSpaces.length})</TabsTrigger>
+                                                    <TabsTrigger value="truncation">Truncamento ({correctionResult.modifications.truncation.length})</TabsTrigger>
+                                                    <TabsTrigger value="units">Unidades ({correctionResult.modifications.unitStandardization.length})</TabsTrigger>
                                                 </TabsList>
                                                 <div className="flex-grow overflow-hidden mt-2">
                                                     <TabsContent value="divergenceRemoval" className="h-full">
@@ -1189,4 +1189,3 @@ export function KeyChecker({
         </div>
     );
 }
-```
