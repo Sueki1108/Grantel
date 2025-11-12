@@ -137,7 +137,7 @@ const correctionConfigLabels: Record<keyof SpedCorrectionConfig, string> = {
     fixUnits: "Padronizar Unidades de Medida para 'un'",
     remove0190: "Remover Registos 0190 Desnecessários",
     removeUnusedProducts: "Remover Produtos (0200) Não Utilizados em Itens (C170)",
-    removeUnusedParticipants: "Remover Participantes (0150) Não Utilizados (C100/D100)"
+    removeUnusedParticipants: "Remover Participantes (0150) Não Utilizados"
 };
 
 
@@ -287,7 +287,6 @@ const processSpedFileInBrowser = (
         for (let i = 0; i < intermediateLines.length; i++) {
             const line = intermediateLines[i];
             const parts = line.split('|');
-            // O código do produto está no índice 2 do registro 0200
             if (parts.length > 2 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
                 modifications.removed0200.push({ lineNumber: i + 1, line });
                 linesModifiedCount++;
@@ -302,11 +301,21 @@ const processSpedFileInBrowser = (
      if (config.removeUnusedParticipants) {
         _log("Iniciando remoção de participantes (0150) não utilizados.");
         const usedParticipantCodes = new Set<string>();
+        // Mapeamento de tipo de registro para o índice do COD_PART
+        const participantFields: { [key: string]: number } = {
+            'C100': 4, 'C500': 3,
+            'D100': 4, 'D500': 3, 'D600': 3,
+            'F100': 3,
+        };
+
         intermediateLines.forEach(line => {
             const parts = line.split('|');
-            // O código do participante está no índice 4 do registro C100/D100
-            if (parts.length > 4 && (parts[1] === 'C100' || parts[1] === 'D100') && parts[4]) {
-                usedParticipantCodes.add(parts[4]);
+            if(parts.length > 1) {
+                const regType = parts[1];
+                const partIndex = participantFields[regType];
+                if (partIndex && parts.length > partIndex && parts[partIndex]) {
+                    usedParticipantCodes.add(parts[partIndex]);
+                }
             }
         });
 
@@ -314,11 +323,10 @@ const processSpedFileInBrowser = (
         for (let i = 0; i < intermediateLines.length; i++) {
             const line = intermediateLines[i];
             const parts = line.split('|');
-            // O código do participante está no índice 2 do registro 0150
             if (parts.length > 2 && parts[1] === '0150' && !usedParticipantCodes.has(parts[2])) {
                 modifications.removed0150.push({ lineNumber: i + 1, line });
                 linesModifiedCount++;
-                continue; // Skip this line
+                continue;
             }
             filteredLines.push(line);
         }
@@ -1181,5 +1189,4 @@ export function KeyChecker({
         </div>
     );
 }
-
-    
+```
