@@ -1,9 +1,10 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from '@/components/app/data-table';
-import { getColumns } from '@/lib/columns-helper';
+import { getColumns } from '@/components/app/columns-helper';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
 interface ResultsDisplayProps {

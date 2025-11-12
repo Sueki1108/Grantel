@@ -296,7 +296,16 @@ export function AutomatorClientPage() {
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
                         
                         setProcessedData(prev => {
-                            const baseData = prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null };
+                             // Create a complete, valid base object if `prev` is null
+                             const baseData = prev ?? { 
+                                sheets: {}, 
+                                spedInfo: null, 
+                                keyCheckResults: null, 
+                                competence: null, 
+                                reconciliationResults: null, 
+                                resaleAnalysis: null, 
+                                spedCorrections: null 
+                            };
                             return { ...baseData, siengeSheetData: jsonData };
                         });
                         

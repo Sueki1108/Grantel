@@ -17,7 +17,7 @@ import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '../ui/
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Label } from '../ui/label';
 import { Checkbox } from '../ui/checkbox';
-import { getColumnsWithCustomRender } from '@/lib/columns-helper';
+import { getColumnsWithCustomRender } from '@/components/app/columns-helper';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { format } from 'date-fns';
 

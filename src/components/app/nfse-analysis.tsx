@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -6,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns } from "@/lib/columns-helper";
+import { getColumns } from "@/components/app/columns-helper";
 import { FileSearch, Loader2, Download, FilePieChart, AlertTriangle, FilterX, X, RotateCcw, ListFilter, Eye } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from '@/components/ui/input';

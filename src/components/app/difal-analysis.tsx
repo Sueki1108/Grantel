@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DataTable } from '@/components/app/data-table';
-import { getColumnsWithCustomRender } from '@/lib/columns-helper';
+import { getColumnsWithCustomRender } from '@/components/app/columns-helper';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
 import { Label } from '../ui/label';
@@ -193,20 +193,17 @@ export function DifalAnalysis() {
         (row, id) => {
             const value = row.original[id as keyof DifalData];
             let displayValue: React.ReactNode = String(value ?? '');
-            let copyValue: string | number = String(value ?? '');
-
+            
              if (id === 'Data de Emissão' && typeof value === 'string') {
-                const formattedDate = format(parseISO(value), 'dd/MM/yyyy');
-                displayValue = formattedDate;
-                copyValue = formattedDate;
+                displayValue = format(parseISO(value), 'dd/MM/yyyy');
              } else if (typeof value === 'number') {
                 displayValue = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                copyValue = value;
              }
              
              return (
-                <div className="cursor-pointer hover:bg-muted p-1 rounded" onClick={() => copyToClipboard(copyValue)}>
+                <div className="cursor-pointer hover:bg-muted p-1 rounded group flex items-center gap-1 justify-between" onClick={() => copyToClipboard(String(value))}>
                     <span>{displayValue}</span>
+                    <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
              )
         }

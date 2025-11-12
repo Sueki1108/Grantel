@@ -11,7 +11,7 @@ import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns, getColumnsWithCustomRender } from "@/lib/columns-helper";
+import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { cfopDescriptions } from "@/lib/cfop";
 import type { ProcessedData, SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
 import { FileUploadForm } from "@/components/app/file-upload-form";
@@ -848,6 +848,8 @@ function SiengeTaxCheck({ siengeFile, onSiengeFileChange, onClearSiengeFile, sie
         </Card>
     );
 }
+
+
 
 
 
