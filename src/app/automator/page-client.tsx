@@ -263,24 +263,23 @@ export function AutomatorClientPage() {
         }
     };
     
-    // Updated handler: only sets the file, doesn't process it.
     const handleSiengeFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0] || null;
         setSiengeFile(file);
-        // Clear previous Sienge data if a new file is (or isn't) selected
-        setProcessedData(prev => {
-            if (!prev) return null;
-            const { siengeSheetData, ...rest } = prev;
-            return rest as ProcessedData;
-        });
     };
     
-    // New useEffect to process the Sienge file when it changes.
     useEffect(() => {
+        // Primeiro, se o ficheiro for removido, limpe os dados.
         if (!siengeFile) {
+            setProcessedData(prev => {
+                if (!prev) return null;
+                const { siengeSheetData, ...rest } = prev;
+                return rest as ProcessedData;
+            });
             return;
         }
-
+    
+        // Se um novo ficheiro for definido, processe-o.
         const process = async () => {
             try {
                 const reader = new FileReader();
