@@ -56,9 +56,9 @@ const readFileAsText = (file: File): Promise<string> => {
     });
 };
 
-const getTagValue = (element: Element | null, query: string): string => {
+const getTagValue = (element: Element | null, tagName: string): string => {
     if (!element) return '';
-    const tag = element.querySelector(query);
+    const tag = element.querySelector(tagName);
     return tag?.textContent ?? '';
 };
 
