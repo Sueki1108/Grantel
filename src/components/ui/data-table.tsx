@@ -69,7 +69,7 @@ export function DataTable<TData, TValue>({
   
   React.useEffect(() => {
     if (tableRef) {
-      tableRef.current = table;
+      (tableRef as React.MutableRefObject<ReactTable<TData> | null>).current = table;
     }
   }, [table, tableRef]);
 
