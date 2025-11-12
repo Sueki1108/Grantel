@@ -32,9 +32,7 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   footer?: Record<string, string>;
-  tableRef?: React.RefObject<ReactTable<TData> | null>;
-  rowSelection?: RowSelectionState;
-  setRowSelection?: React.Dispatch<React.SetStateAction<RowSelectionState>>;
+  tableRef?: React.MutableRefObject<ReactTable<TData> | null>;
 }
 
 export function DataTable<TData, TValue>({
@@ -42,14 +40,12 @@ export function DataTable<TData, TValue>({
   data,
   footer,
   tableRef,
-  rowSelection,
-  setRowSelection,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = React.useState('')
+  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
 
-  const isControllingSelection = !!rowSelection && !!setRowSelection;
 
   const table = useReactTable({
     data,
@@ -61,7 +57,7 @@ export function DataTable<TData, TValue>({
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
     getFilteredRowModel: getFilteredRowModel(),
-    onRowSelectionChange: isControllingSelection ? setRowSelection : undefined,
+    onRowSelectionChange: setRowSelection,
     enableRowSelection: true, 
     state: {
       sorting,
@@ -73,7 +69,7 @@ export function DataTable<TData, TValue>({
   
   React.useEffect(() => {
     if (tableRef) {
-      (tableRef as React.MutableRefObject<ReactTable<TData> | null>).current = table;
+      tableRef.current = table;
     }
   }, [table, tableRef]);
 
@@ -141,6 +137,7 @@ export function DataTable<TData, TValue>({
                     <TableCell 
                       key={cell.id} 
                       onClick={(e) => {
+                        // Impede a propagação do clique para a linha se a célula for de ação ou seleção
                         if (['actions', 'select'].includes(cell.column.id)) {
                           e.stopPropagation();
                         }

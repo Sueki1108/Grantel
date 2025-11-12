@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from 'react';
@@ -7,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, AlertTriangle, Save, X, ListFilter, HardHat, Factory, Wrench, CheckSquare, RotateCw, HelpCircle } from "lucide-react";
+import { Check, AlertTriangle, Save, X, ListFilter, Factory, Wrench, RotateCw, CheckSquare, HelpCircle } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Table as ReactTable, RowSelectionState, ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
@@ -18,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { ScrollArea, ScrollBar } from '../ui/scroll-area';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+
 
 type ValidationStatus = 'correct' | 'incorrect' | 'verify' | 'unvalidated';
 
@@ -56,8 +55,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     const [classifications, setClassifications] = useState<Record<string, { classification: ValidationStatus, isDifal: boolean }>>({});
     const [hasChanges, setHasChanges] = useState(false);
     const [activeCfopTab, setActiveCfopTab] = useState<string | null>(null);
-    const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
-    
     const tableRef = React.useRef<ReactTable<ReconciledItem> | null>(null);
 
     const itemsToValidate = useMemo((): ReconciledItem[] => {
@@ -137,7 +134,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             handleDifalToggle(selectedItems);
         } else {
             handleStatusChange(selectedItems, action as ValidationStatus);
-            setRowSelection({});
+            tableRef.current.toggleAllRowsSelected(false); // Limpa a seleção
         }
     };
 
@@ -259,79 +256,79 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         );
     }
     
-    const numSelected = Object.keys(rowSelection).length;
+    const numSelected = tableRef.current ? tableRef.current.getFilteredSelectedRowModel().rows.length : 0;
 
     return (
-        <Card>
-            <CardHeader>
-                <div className='flex items-start justify-between'>
-                    <div>
-                        <CardTitle className="font-headline text-2xl flex items-center gap-2"><CheckSquare className="h-8 w-8 text-primary"/>Validação de CFOP</CardTitle>
-                        <CardDescription>Analise os itens por CFOP do Sienge e valide a correspondência com o CFOP do XML.</CardDescription>
+        <div className='space-y-6'>
+            <Card>
+                <CardHeader>
+                     <div className='flex items-start justify-between'>
+                        <div>
+                            <CardTitle className="font-headline text-2xl flex items-center gap-2"><CheckSquare className="h-8 w-8 text-primary"/>Validação de CFOP</CardTitle>
+                            <CardDescription>Analise os itens por CFOP do Sienge e valide a correspondência com o CFOP do XML.</CardDescription>
+                        </div>
+                         <Button onClick={handleSaveChanges} disabled={!hasChanges} className="shrink-0">
+                            <Save className="mr-2 h-4 w-4"/> Guardar Validações
+                        </Button>
                     </div>
-                     <Button onClick={handleSaveChanges} disabled={!hasChanges} className="shrink-0">
-                        <Save className="mr-2 h-4 w-4"/> Guardar Validações
-                    </Button>
-                </div>
-            </CardHeader>
-            <CardContent>
-                <Tabs value={activeCfopTab || ''} onValueChange={(val) => { setActiveCfopTab(val); setRowSelection({}); }}>
-                     <ScrollArea>
-                        <TabsList>
-                            {groupedBySiengeCfop.map(([cfop, items]) => (
-                                <TooltipProvider key={cfop}>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <TabsTrigger value={cfop}>
-                                                 <div className="flex items-center gap-2">
-                                                    <Badge variant={activeCfopTab === cfop ? 'default' : 'secondary'}>{cfop}</Badge>
-                                                    <span className="text-xs text-muted-foreground">({items.length})</span>
-                                                 </div>
-                                            </TabsTrigger>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>{cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || 'Descrição não encontrada'}</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            ))}
-                        </TabsList>
-                        <ScrollBar orientation="horizontal" />
-                    </ScrollArea>
-                    
-                    {groupedBySiengeCfop.map(([cfop, items]) => {
-                        return (
-                             <TabsContent key={cfop} value={cfop} className="mt-4 space-y-4">
-                                <Card>
-                                     <CardHeader>
-                                        <CardTitle>Análise do CFOP: {cfop}</CardTitle>
-                                         {numSelected > 0 && (
-                                            <Card className="flex items-center gap-4 p-3 shadow-lg animate-in fade-in-0 mt-4">
-                                                <span className="text-sm font-medium pl-2">{numSelected} item(ns) selecionado(s)</span>
-                                                <div className="h-6 border-l" />
-                                                <span className="text-sm font-medium">Ações em Lote:</span>
-                                                <div className="flex gap-2">
-                                                    <Button size="sm" variant="outline" onClick={() => handleBulkAction('correct')}><Check className="mr-2 h-4 w-4 text-green-600"/>Correto</Button>
-                                                    <Button size="sm" variant="outline" onClick={() => handleBulkAction('incorrect')}><X className="mr-2 h-4 w-4 text-red-600"/>Incorreto</Button>
-                                                    <Button size="sm" variant="outline" onClick={() => handleBulkAction('verify')}><AlertTriangle className="mr-2 h-4 w-4 text-amber-600"/>Verificar</Button>
-                                                    <div className="h-6 border-l" />
-                                                    <Button size="sm" variant="outline" onClick={() => handleBulkAction('difal')}>DIFAL</Button>
-                                                </div>
-                                            </Card>
-                                        )}
-                                    </CardHeader>
-                                    <CardContent>
-                                         <DataTable columns={columns} data={items} tableRef={tableRef} rowSelection={rowSelection} setRowSelection={setRowSelection} />
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
-                        )
-                    })}
-                </Tabs>
-            </CardContent>
-        </Card>
+                </CardHeader>
+                <CardContent>
+                     {numSelected > 0 && (
+                        <Card className="flex items-center gap-4 p-3 shadow-lg animate-in fade-in-0 mt-4 mb-6">
+                            <span className="text-sm font-medium pl-2">{numSelected} item(ns) selecionado(s)</span>
+                            <div className="h-6 border-l" />
+                            <span className="text-sm font-medium">Ações em Lote:</span>
+                            <div className="flex gap-2">
+                                <Button size="sm" variant="outline" onClick={() => handleBulkAction('correct')}><Check className="mr-2 h-4 w-4 text-green-600"/>Correto</Button>
+                                <Button size="sm" variant="outline" onClick={() => handleBulkAction('incorrect')}><X className="mr-2 h-4 w-4 text-red-600"/>Incorreto</Button>
+                                <Button size="sm" variant="outline" onClick={() => handleBulkAction('verify')}><AlertTriangle className="mr-2 h-4 w-4 text-amber-600"/>Verificar</Button>
+                                <div className="h-6 border-l" />
+                                <Button size="sm" variant="outline" onClick={() => handleBulkAction('difal')}>DIFAL</Button>
+                            </div>
+                        </Card>
+                    )}
+                </CardContent>
+            </Card>
+            <Card>
+                 <CardHeader>
+                     <CardTitle className="font-headline text-xl">Resultados da Validação</CardTitle>
+                     <CardDescription>Itens agrupados por status. Clique nas sub-abas para filtrar por CFOP do Sienge.</CardDescription>
+                 </CardHeader>
+                <CardContent>
+                    <Tabs value={activeCfopTab || ''} onValueChange={(val) => { setActiveCfopTab(val); tableRef.current?.toggleAllRowsSelected(false); }}>
+                         <ScrollArea>
+                            <TabsList>
+                                {groupedBySiengeCfop.map(([cfop, items]) => (
+                                    <TooltipProvider key={cfop}>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <TabsTrigger value={cfop}>
+                                                     <div className="flex items-center gap-2">
+                                                        <Badge variant={activeCfopTab === cfop ? 'default' : 'secondary'}>{cfop}</Badge>
+                                                        <span className="text-xs text-muted-foreground">({items.length})</span>
+                                                     </div>
+                                                </TabsTrigger>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>{cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || 'Descrição não encontrada'}</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                ))}
+                            </TabsList>
+                            <ScrollBar orientation="horizontal" />
+                        </ScrollArea>
+                        
+                        {groupedBySiengeCfop.map(([cfop, items]) => {
+                            return (
+                                 <TabsContent key={cfop} value={cfop} className="mt-4 space-y-4">
+                                    <DataTable columns={columns} data={items} tableRef={tableRef} />
+                                </TabsContent>
+                            )
+                        })}
+                    </Tabs>
+                </CardContent>
+            </Card>
+        </div>
     );
 }
-
-
-    
