@@ -20,7 +20,7 @@ import { KeyChecker, KeyCheckResult } from "./key-checker";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AllClassifications } from "./imobilizado-analysis";
 import { CfopValidator, CfopValidationData } from "./cfop-validator";
-import { DifalTab } from "./difal-tab";
+import { DifalAnalysis } from "./difal-analysis";
 
 
 // ===============================================================
@@ -848,4 +848,5 @@ function SiengeTaxCheck({ siengeFile, onSiengeFileChange, onClearSiengeFile, sie
         </Card>
     );
 }
+
 
