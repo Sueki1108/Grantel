@@ -27,7 +27,7 @@ type DifalData = {
     'Data de Emissão': string;
     'Valor Total da Nota': number;
     'Valor da Guia (11%)': number;
-    'Entrega em Selvíria/MS': 'Sim' | 'Não';
+    'Entrega': string;
 };
 
 
@@ -129,17 +129,15 @@ export function DifalAnalysis() {
                 const vNF = parseFloat(getTagValue(infNFe, 'total > ICMSTot > vNF') || '0');
                 
                 const entrega = infNFe.querySelector('entrega');
-                const entregaUF = getTagValue(entrega, 'UF');
                 const entregaMun = getTagValue(entrega, 'xMun');
-                const entregaEmSelviria = entregaUF === 'MS' && entregaMun.toLowerCase() === 'selviria' ? 'Sim' : 'Não';
-
+                
                 processedItems.push({
                     'Chave de Acesso': chaveAcesso,
                     'Número da Nota': nNF,
                     'Data de Emissão': dhEmi,
                     'Valor Total da Nota': vNF,
                     'Valor da Guia (11%)': parseFloat((vNF * 0.11).toFixed(2)),
-                    'Entrega em Selvíria/MS': entregaEmSelviria,
+                    'Entrega': entregaMun || 'N/A',
                 });
 
             } catch (err) {
@@ -190,17 +188,11 @@ export function DifalAnalysis() {
 
     const columns = useMemo(() => getColumnsWithCustomRender(
         difalData, 
-        ['Número da Nota', 'Chave de Acesso', 'Data de Emissão', 'Valor Total da Nota', 'Valor da Guia (11%)', 'Entrega em Selvíria/MS'],
+        ['Número da Nota', 'Chave de Acesso', 'Data de Emissão', 'Valor Total da Nota', 'Valor da Guia (11%)', 'Entrega'],
         (row, id) => {
             const value = row.original[id as keyof DifalData];
-            const renderCopyButton = (textToCopy: string | number) => (
-                <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(textToCopy); }}>
-                    <Copy className="h-3 w-3" />
-                </Button>
-            );
-
-            let displayValue: React.ReactNode;
-            let copyValue: string | number;
+            let displayValue: React.ReactNode = String(value ?? '');
+            let copyValue: string | number = String(value ?? '');
 
              if (id === 'Data de Emissão' && typeof value === 'string') {
                 const formattedDate = format(parseISO(value), 'dd/MM/yyyy');
@@ -209,19 +201,15 @@ export function DifalAnalysis() {
              } else if (typeof value === 'number') {
                 displayValue = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 copyValue = value;
-             } else {
-                displayValue = String(value);
-                copyValue = String(value);
              }
-
+             
              return (
-                 <div className="flex items-center gap-1 group">
+                <div className="cursor-pointer hover:bg-muted p-1 rounded" onClick={() => copyToClipboard(copyValue)}>
                     <span>{displayValue}</span>
-                    {renderCopyButton(copyValue)}
                 </div>
              )
         }
-    ), [difalData]);
+    ), [difalData, toast]);
 
 
     return (
@@ -340,7 +328,7 @@ export function DifalAnalysis() {
                     <CardHeader>
                         <CardTitle>Dados Extraídos para DIFAL</CardTitle>
                         <CardDescription>
-                            Os seguintes dados foram extraídos dos XMLs carregados.
+                            Os seguintes dados foram extraídos dos XMLs carregados. Clique sobre qualquer informação para a copiar.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>

@@ -118,11 +118,8 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     
     // Extrai dados do bloco <entrega> se existir
     if (entrega) {
-        const entregaUF = getTagValue(entrega, 'UF');
-        const entregaMun = getTagValue(entrega, 'xMun');
-        notaFiscal.entregaEmSelviria = entregaUF === 'MS' && entregaMun.toLowerCase() === 'selviria' ? 'Sim' : 'Não';
-    } else {
-        notaFiscal.entregaEmSelviria = 'Não';
+        notaFiscal.entrega_UF = getTagValue(entrega, 'UF');
+        notaFiscal.entrega_xMun = getTagValue(entrega, 'xMun');
     }
 
     if (isSaida) {
