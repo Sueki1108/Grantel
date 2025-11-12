@@ -216,6 +216,61 @@ export function AutomatorClientPage() {
     // =================================================================
     // FILE HANDLING & DOWNLOAD
     // =================================================================
+    useEffect(() => {
+        if (!siengeFile) {
+            setProcessedData(prev => {
+                if (!prev) return null;
+                const { siengeSheetData, ...rest } = prev;
+                return { ...rest, siengeSheetData: null } as ProcessedData;
+            });
+            return;
+        };
+
+        const processFile = async () => {
+             try {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = event.target?.result;
+                        if (!data) throw new Error("Não foi possível ler o conteúdo do ficheiro.");
+
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const sheetName = workbook.SheetNames[0];
+                        if (!sheetName) throw new Error("A planilha não contém nenhuma aba.");
+                        
+                        const worksheet = workbook.Sheets[sheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+                        
+                        setProcessedData(prev => ({
+                            sheets: {}, 
+                            spedInfo: null, 
+                            keyCheckResults: null, 
+                            competence: null,
+                            reconciliationResults: null,
+                            resaleAnalysis: null,
+                            spedCorrections: null,
+                            ...prev,
+                            siengeSheetData: jsonData
+                        }));
+                        
+                        toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises avançadas.' });
+
+                    } catch (err: any) {
+                         toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
+                         setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
+                    }
+                };
+                reader.onerror = (error) => { throw error };
+                reader.readAsArrayBuffer(siengeFile);
+            } catch (error: any) {
+                 toast({ variant: 'destructive', title: 'Erro ao Ler Ficheiro Sienge', description: error.message });
+            }
+        }
+        
+        processFile();
+
+    }, [siengeFile, toast]);
+
     const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const selectedFile = e.target.files?.[0];
         const fileName = e.target.name;
@@ -255,54 +310,7 @@ export function AutomatorClientPage() {
     };
     
     const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        setSiengeFile(file || null);
-
-        if (file) {
-            try {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const data = event.target?.result;
-                        if (!data) throw new Error("Não foi possível ler o conteúdo do ficheiro.");
-
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        const sheetName = workbook.SheetNames[0];
-                        if (!sheetName) throw new Error("A planilha não contém nenhuma aba.");
-                        
-                        const worksheet = workbook.Sheets[sheetName];
-                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-                        
-                        setProcessedData(prev => {
-                             // Cria um objeto base completo se prev for nulo, garantindo que todas as chaves existem
-                             const baseData: ProcessedData = prev ?? { 
-                                sheets: {}, 
-                                spedInfo: null, 
-                                keyCheckResults: null, 
-                                competence: null, 
-                                reconciliationResults: null, 
-                                resaleAnalysis: null, 
-                                spedCorrections: null,
-                                siengeSheetData: null,
-                            };
-                            return { ...baseData, siengeSheetData: jsonData };
-                        });
-                        
-                        toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises avançadas.' });
-
-                    } catch (err: any) {
-                         toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
-                         setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
-                    }
-                };
-                reader.onerror = (error) => { throw error };
-                reader.readAsArrayBuffer(file);
-            } catch (error: any) {
-                 toast({ variant: 'destructive', title: 'Erro ao Ler Ficheiro Sienge', description: error.message });
-            }
-        } else {
-             setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
-        }
+        setSiengeFile(e.target.files?.[0] || null);
     };
 
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>, category: 'nfeEntrada' | 'cte' | 'nfeSaida' | 'nfse') => {
