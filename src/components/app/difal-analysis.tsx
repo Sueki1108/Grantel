@@ -27,7 +27,7 @@ type DifalData = {
     'Data de Emissão': string;
     'Valor Total da Nota': number;
     'Valor da Guia (11%)': number;
-    'Encontrado "SELVIRIA/PR"': 'Sim' | 'Não';
+    'Entrega em Selvíria/MS': 'Sim' | 'Não';
 };
 
 
@@ -127,7 +127,11 @@ export function DifalAnalysis() {
                 const nNF = getTagValue(infNFe, 'ide > nNF');
                 const dhEmi = getTagValue(infNFe, 'ide > dhEmi');
                 const vNF = parseFloat(getTagValue(infNFe, 'total > ICMSTot > vNF') || '0');
-                const infCpl = getTagValue(infNFe, 'infAdic > infCpl');
+                
+                const entrega = infNFe.querySelector('entrega');
+                const entregaUF = getTagValue(entrega, 'UF');
+                const entregaMun = getTagValue(entrega, 'xMun');
+                const entregaEmSelviria = entregaUF === 'MS' && entregaMun.toLowerCase() === 'selviria' ? 'Sim' : 'Não';
 
                 processedItems.push({
                     'Chave de Acesso': chaveAcesso,
@@ -135,7 +139,7 @@ export function DifalAnalysis() {
                     'Data de Emissão': dhEmi,
                     'Valor Total da Nota': vNF,
                     'Valor da Guia (11%)': parseFloat((vNF * 0.11).toFixed(2)),
-                    'Encontrado "SELVIRIA/PR"': infCpl.toUpperCase().includes("SELVIRIA/PR") ? 'Sim' : 'Não',
+                    'Entrega em Selvíria/MS': entregaEmSelviria,
                 });
 
             } catch (err) {
@@ -175,21 +179,6 @@ export function DifalAnalysis() {
         toast({ title: 'Relatório Excel Gerado' });
     };
 
-    const columns = useMemo(() => getColumnsWithCustomRender(
-        difalData, 
-        ['Número da Nota', 'Chave de Acesso', 'Data de Emissão', 'Valor Total da Nota', 'Valor da Guia (11%)', 'Encontrado "SELVIRIA/PR"'],
-        (row, id) => {
-             const value = row.original[id as keyof DifalData];
-             if (id === 'Data de Emissão' && typeof value === 'string') {
-                 return format(parseISO(value), 'dd/MM/yyyy');
-             }
-             if (typeof value === 'number') {
-                 return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-             }
-             return String(value);
-        }
-    ), [difalData]);
-    
     const copyToClipboard = (text: string | number) => {
         const textToCopy = typeof text === 'number' ? text.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : text;
         navigator.clipboard.writeText(textToCopy).then(() => {
@@ -198,6 +187,42 @@ export function DifalAnalysis() {
             toast({ variant: 'destructive', title: 'Falha ao copiar', description: 'Não foi possível copiar o valor.' });
         });
     };
+
+    const columns = useMemo(() => getColumnsWithCustomRender(
+        difalData, 
+        ['Número da Nota', 'Chave de Acesso', 'Data de Emissão', 'Valor Total da Nota', 'Valor da Guia (11%)', 'Entrega em Selvíria/MS'],
+        (row, id) => {
+            const value = row.original[id as keyof DifalData];
+            const renderCopyButton = (textToCopy: string | number) => (
+                <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(textToCopy); }}>
+                    <Copy className="h-3 w-3" />
+                </Button>
+            );
+
+            let displayValue: React.ReactNode;
+            let copyValue: string | number;
+
+             if (id === 'Data de Emissão' && typeof value === 'string') {
+                const formattedDate = format(parseISO(value), 'dd/MM/yyyy');
+                displayValue = formattedDate;
+                copyValue = formattedDate;
+             } else if (typeof value === 'number') {
+                displayValue = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                copyValue = value;
+             } else {
+                displayValue = String(value);
+                copyValue = String(value);
+             }
+
+             return (
+                 <div className="flex items-center gap-1 group">
+                    <span>{displayValue}</span>
+                    {renderCopyButton(copyValue)}
+                </div>
+             )
+        }
+    ), [difalData]);
+
 
     return (
         <div className="space-y-6">
@@ -329,5 +354,7 @@ export function DifalAnalysis() {
         </div>
     );
 }
+
+    
 
     

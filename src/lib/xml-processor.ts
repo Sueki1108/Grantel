@@ -1,3 +1,4 @@
+
 // Types
 type LogFunction = (message: string) => void;
 
@@ -69,7 +70,6 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const total = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'total')[0];
     const detList = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'det');
     const protNFe = nfeProc.getElementsByTagNameNS(NFE_NAMESPACE, 'protNFe')[0];
-    const infAdic = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'infAdic')[0];
     
     const infProt = protNFe?.getElementsByTagNameNS(NFE_NAMESPACE, 'infProt')[0];
 
@@ -90,7 +90,6 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const destIE = getTagValue(dest, 'IE');
     const enderDest = dest.getElementsByTagNameNS(NFE_NAMESPACE, 'enderDest')[0];
     const destUF = getTagValue(enderDest, 'UF');
-    const infCpl = getTagValue(infAdic, 'infCpl');
 
 
     // Extract ICMS Totals
@@ -115,18 +114,15 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'Emissão': dhEmiRaw,
         'Total': parseFloat(vNF) || 0,
         'Status': status,
-        'infCpl': infCpl,
     };
     
     // Extrai dados do bloco <entrega> se existir
     if (entrega) {
-        for (const child of Array.from(entrega.children)) {
-            const tagName = child.tagName;
-            const content = child.textContent;
-            if (tagName && content) {
-                notaFiscal[`entrega_${tagName}`] = content;
-            }
-        }
+        const entregaUF = getTagValue(entrega, 'UF');
+        const entregaMun = getTagValue(entrega, 'xMun');
+        notaFiscal.entregaEmSelviria = entregaUF === 'MS' && entregaMun.toLowerCase() === 'selviria' ? 'Sim' : 'Não';
+    } else {
+        notaFiscal.entregaEmSelviria = 'Não';
     }
 
     if (isSaida) {
@@ -441,5 +437,7 @@ export const processUploadedXmls = async (files: File[], log: LogFunction = () =
     
     return combinedData;
 };
+
+    
 
     
