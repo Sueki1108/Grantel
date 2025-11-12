@@ -406,18 +406,18 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         }
     }), [validationStatus]);
     
-     const allGroupedItems = useMemo((): GroupedItems => {
+    const allGroupedItems = useMemo((): GroupedItems => {
         const groups: GroupedItems = {};
-        
-        // Categoria especial para Imobilizado
+    
+        // Adiciona uma categoria especial para Imobilizado
         groups['IMOBILIZADO'] = { items: [], xmlCfops: new Set(), xmlCsts: new Set(), xmlPIcms: new Set() };
-
+    
         allItemsToValidate.forEach(item => {
+            // Adiciona o item ao seu grupo de CFOP do Sienge
             const groupKey = item.Sienge_CFOP || 'OUTROS';
             if (!groups[groupKey]) {
                 groups[groupKey] = { items: [], xmlCfops: new Set(), xmlCsts: new Set(), xmlPIcms: new Set() };
             }
-            
             const group = groups[groupKey];
             group.items.push(item);
             if (item.CFOP) group.xmlCfops.add(item.CFOP);
@@ -425,18 +425,28 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
             group.xmlCsts.add(itemCst);
             const itemPIcms = item['pICMS'] === undefined || item['pICMS'] === null ? 'Vazio' : String(item['pICMS']);
             group.xmlPIcms.add(itemPIcms);
+    
+            // Se o item foi classificado como imobilizado, adiciona-o também ao grupo de imobilizado
+            if (allPersistedClassifications) {
+                let isImobilizado = false;
+                for (const competenceKey in allPersistedClassifications) {
+                    const classifications = allPersistedClassifications[competenceKey]?.classifications;
+                    if (classifications && classifications[item.uniqueItemId]?.classification === 'imobilizado') {
+                        isImobilizado = true;
+                        break;
+                    }
+                }
+                if (isImobilizado) {
+                    groups['IMOBILIZADO'].items.push(item);
+                    if (item.CFOP) groups['IMOBILIZADO'].xmlCfops.add(item.CFOP);
+                    groups['IMOBILIZADO'].xmlCsts.add(itemCst);
+                    groups['IMOBILIZADO'].xmlPIcms.add(itemPIcms);
+                }
+            }
         });
-
-        // Popula a aba "IMOBILIZADO" com os itens corretos, sem removê-los de seus grupos originais
-        imobilizadoItems.forEach(imobilizadoItem => {
-             const fullItemData = allItemsToValidate.find(item => getItemLineKey(item) === getItemLineKey(imobilizadoItem));
-             if (fullItemData) {
-                 groups['IMOBILIZADO'].items.push(fullItemData);
-             }
-        });
-
+    
         return groups;
-    }, [allItemsToValidate, imobilizadoItems]);
+    }, [allItemsToValidate, allPersistedClassifications]);
     
     const [activeTabGroup, setActiveTabGroup] = useState<string>('');
     const tableRef = React.useRef<ReactTable<CfopValidationData> | null>(null);
