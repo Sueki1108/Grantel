@@ -47,7 +47,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     const [classifications, setClassifications] = useState<Record<string, { classification: ValidationStatus, isDifal: boolean }>>({});
     const [hasChanges, setHasChanges] = useState(false);
     const [activeTab, setActiveTab] = useState<ValidationStatus | 'all'>('unvalidated');
-    const [openCollapsibles, setOpenCollapsibles] = useState<Record<string, boolean>>({});
 
     const [cfopXmlFilter, setCfopXmlFilter] = useState('');
     const [cstFilter, setCstFilter] = useState('');
@@ -215,12 +214,24 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         }
 
         return (
-            <div className="space-y-4">
-                 {groupKeys.map(cfop => {
+            <Tabs defaultValue={groupKeys[0]} className="w-full">
+                <TabsList className="h-auto flex-wrap justify-start">
+                    {groupKeys.map(cfop => {
+                        const items = groups[cfop];
+                        const cfopDescription = cfopDescriptions[parseInt(cfop, 10)] || 'Descrição não encontrada';
+                        return (
+                            <TabsTrigger key={cfop} value={cfop} className="flex flex-col h-auto items-start p-2">
+                                <div>
+                                    <Badge>{cfop}</Badge>
+                                    <span className="text-xs text-muted-foreground ml-2">({items.length} itens)</span>
+                                </div>
+                                <span className="text-xs font-normal whitespace-normal text-left mt-1">{cfopDescription}</span>
+                            </TabsTrigger>
+                        );
+                    })}
+                </TabsList>
+                {groupKeys.map(cfop => {
                     const items = groups[cfop];
-                    const cfopDescription = cfopDescriptions[parseInt(cfop, 10)] || 'Descrição não encontrada';
-                    const isGroupOpen = openCollapsibles[`${status}-${cfop}`] ?? true;
-                    
                     const tableKey = `${status}-${cfop}`;
                     if (!tableRefs.current[tableKey]) {
                         tableRefs.current[tableKey] = React.createRef<ReactTable<ReconciledItem>>();
@@ -265,27 +276,13 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                     });
 
                     return (
-                        <Collapsible 
-                            key={cfop} 
-                            open={isGroupOpen} 
-                            onOpenChange={() => setOpenCollapsibles(prev => ({...prev, [`${status}-${cfop}`]: !isGroupOpen}))}
-                        >
-                            <CollapsibleTrigger asChild>
-                                <div className='flex items-center gap-2 p-2 border-b cursor-pointer hover:bg-muted'>
-                                    {isGroupOpen ? <ChevronDown className='h-4 w-4'/> : <ChevronRight className='h-4 w-4'/>}
-                                    <Badge>{cfop}</Badge>
-                                    <span className="font-medium">{cfopDescription}</span>
-                                    <span className="text-sm text-muted-foreground ml-auto">({items.length} itens)</span>
-                                </div>
-                            </CollapsibleTrigger>
-                             <CollapsibleContent className="p-2">
-                                <DataTable columns={columns} data={items} tableRef={tableRef} />
-                            </CollapsibleContent>
-                        </Collapsible>
+                        <TabsContent key={cfop} value={cfop} className="mt-4">
+                             <DataTable columns={columns} data={items} tableRef={tableRef} />
+                        </TabsContent>
                     )
                  })}
-            </div>
-        )
+            </Tabs>
+        );
     };
 
 
