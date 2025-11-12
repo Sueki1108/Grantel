@@ -335,10 +335,10 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                         <TooltipProvider key={cfop}>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <TabsTrigger value={cfop} className="w-full justify-start gap-2">
+                                    <TabsTrigger value={cfop} className="justify-start gap-2">
                                         <Badge variant="secondary">{cfop}</Badge>
-                                        <span className="truncate flex-1 text-left text-xs">{cfopDescriptions[parseInt(cfop, 10)] || 'Descrição não encontrada'}</span>
-                                        <span className="ml-2 text-xs font-bold">({groups[cfop].length})</span>
+                                        <span className="truncate max-w-[150px] text-left text-xs">{cfopDescriptions[parseInt(cfop, 10)] || 'Descrição não encontrada'}</span>
+                                        <span className="ml-1 text-xs font-bold">({groups[cfop].length})</span>
                                     </TabsTrigger>
                                 </TooltipTrigger>
                                 <TooltipContent side="top">
@@ -366,7 +366,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                     columns.unshift({
                         id: 'select',
                         header: ({ table }: any) => <Checkbox checked={table.getIsAllPageRowsSelected()} onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)} aria-label="Selecionar todas" onClick={(e) => e.stopPropagation()} />,
-                        cell: ({ row }: any) => <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Selecionar linha" onClick={(e) => e.stopPropagation()}/>,
+                        cell: ({ row }: any) => <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Selecionar linha" />,
                         enableSorting: false,
                     });
 
