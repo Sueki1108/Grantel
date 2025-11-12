@@ -33,6 +33,8 @@ interface DataTableProps<TData, TValue> {
   data: TData[]
   footer?: Record<string, string>;
   tableRef?: React.RefObject<ReactTable<TData> | null>;
+  rowSelection?: RowSelectionState;
+  setRowSelection?: React.Dispatch<React.SetStateAction<RowSelectionState>>;
 }
 
 export function DataTable<TData, TValue>({
@@ -40,12 +42,14 @@ export function DataTable<TData, TValue>({
   data,
   footer,
   tableRef,
+  rowSelection,
+  setRowSelection,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = React.useState('')
-  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
 
+  const isControllingSelection = !!rowSelection && !!setRowSelection;
 
   const table = useReactTable({
     data,
@@ -137,8 +141,6 @@ export function DataTable<TData, TValue>({
                     <TableCell 
                       key={cell.id} 
                       onClick={(e) => {
-                        // Impede que o clique em células com controlos interativos (ações, checkbox)
-                        // propague o evento para a linha, o que causaria um duplo toggle.
                         if (['actions', 'select'].includes(cell.column.id)) {
                           e.stopPropagation();
                         }
