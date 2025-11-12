@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, AlertTriangle, HelpCircle, Save, X, CheckSquare, ListFilter, FilterX, RotateCcw } from "lucide-react";
+import { Check, AlertTriangle, HelpCircle, Save, X, CheckSquare, ListFilter, FilterX, RotateCcw, ChevronDown, ChevronRight } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { RowSelectionState, Table as ReactTable } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
@@ -14,6 +14,9 @@ import { AllClassifications } from './imobilizado-analysis';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Input } from '../ui/input';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
+import { cfopDescriptions } from '@/lib/cfop';
+import { Badge } from '../ui/badge';
 
 
 type ValidationStatus = 'correct' | 'incorrect' | 'verify' | 'unvalidated';
@@ -26,7 +29,10 @@ interface ReconciledItem extends Record<string, any> {
     'Descrição': string;
     'CST do ICMS': string;
     'pICMS': number; // Alíquota
+    'CPF/CNPJ do Emitente': string;
+    'Código': string; // prod_cProd
     uniqueProductKey: string;
+    id: string; // unique per row
 }
 
 interface CfopValidatorProps {
@@ -62,45 +68,60 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     const [classifications, setClassifications] = useState<Record<string, { classification: ValidationStatus, isDifal: boolean }>>({});
     const [hasChanges, setHasChanges] = useState(false);
     const [activeTab, setActiveTab] = useState<ValidationStatus | 'all'>('unvalidated');
+    const [openCollapsibles, setOpenCollapsibles] = useState<Record<string, boolean>>({});
+
     
     // Filtros
     const [cfopXmlFilter, setCfopXmlFilter] = useState('');
     const [cstFilter, setCstFilter] = useState('');
     const [aliquotaFilter, setAliquotaFilter] = useState('');
 
-
-    const tableRefs: { [key in ValidationStatus | 'all']: React.MutableRefObject<ReactTable<ReconciledItem> | null> } = {
-        unvalidated: React.useRef(null),
-        correct: React.useRef(null),
-        incorrect: React.useRef(null),
-        verify: React.useRef(null),
-        all: React.useRef(null)
-    };
+    const tableRefs: Record<string, React.MutableRefObject<ReactTable<ReconciledItem> | null>> = {};
 
 
     const itemsToValidate = useMemo((): ReconciledItem[] => {
-        return reconciledData.map((item, index) => ({
-            ...item,
-            uniqueProductKey: `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item.Sienge_CFOP || index}`,
-            id: `${item['Chave de acesso']}-${item['Item']}`
-        }));
+        return reconciledData.map((item, index) => {
+            const uniqueProductKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item.Sienge_CFOP || ''}`;
+            const id = `${item['Chave de acesso']}-${item['Item']}`;
+            return {
+                ...item,
+                uniqueProductKey,
+                id,
+            };
+        });
     }, [reconciledData]);
 
      useEffect(() => {
         if (!competence) return;
+
         const persistedForCompetence = allPersistedClassifications[competence]?.cfopValidations?.classifications || {};
+        
         const initialClassifications = Object.fromEntries(
-            itemsToValidate.map(item => [
-                item.id,
-                persistedForCompetence[item.uniqueProductKey] || { classification: 'unvalidated', isDifal: false }
-            ])
+            itemsToValidate.map(item => {
+                let classificationFromStore = persistedForCompetence[item.uniqueProductKey];
+                
+                // If not found in current competence, search in others
+                if (!classificationFromStore) {
+                    for (const otherCompetence in allPersistedClassifications) {
+                        const found = allPersistedClassifications[otherCompetence]?.cfopValidations?.classifications?.[item.uniqueProductKey];
+                        if (found) {
+                            classificationFromStore = found;
+                            break;
+                        }
+                    }
+                }
+                
+                return [
+                    item.id,
+                    classificationFromStore || { classification: 'unvalidated', isDifal: false }
+                ];
+            })
         );
 
         setClassifications(initialClassifications);
         setHasChanges(false);
         setRowSelection({});
     }, [itemsToValidate, competence, allPersistedClassifications]);
-
     
     const handleStatusChange = (itemsToChange: ReconciledItem[], newStatus: ValidationStatus) => {
         setClassifications(prev => {
@@ -116,32 +137,35 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         setHasChanges(true);
     };
 
-    const handleDifalChange = (itemsToChange: ReconciledItem[], isDifal: boolean) => {
+    const handleDifalToggle = (itemsToChange: ReconciledItem[]) => {
          setClassifications(prev => {
             const newClassifications = { ...prev };
             itemsToChange.forEach(item => {
-                newClassifications[item.id] = {
-                    ...(newClassifications[item.id] || { classification: 'unvalidated', isDifal: false }),
-                    isDifal: isDifal
-                };
+                const currentStatus = newClassifications[item.id] || { classification: 'unvalidated', isDifal: false };
+                newClassifications[item.id] = { ...currentStatus, isDifal: !currentStatus.isDifal };
             });
             return newClassifications;
         });
         setHasChanges(true);
     };
 
-    const handleBulkAction = (action: 'correct' | 'incorrect' | 'verify' | 'difal_true' | 'difal_false') => {
-        const table = tableRefs[activeTab]?.current;
-        if (!table) return;
+    const handleBulkAction = (action: 'correct' | 'incorrect' | 'verify' | 'toggle_difal') => {
+        const selectedItems: ReconciledItem[] = [];
+
+        Object.keys(tableRefs).forEach(key => {
+            const table = tableRefs[key].current;
+            if (table) {
+                selectedItems.push(...table.getFilteredSelectedRowModel().rows.map(row => row.original));
+            }
+        });
         
-        const selectedItems = table.getFilteredSelectedRowModel().rows.map(row => row.original) || [];
         if (selectedItems.length === 0) {
             toast({ title: "Nenhum item selecionado", variant: 'destructive' });
             return;
         }
 
-        if (action.startsWith('difal')) {
-            handleDifalChange(selectedItems, action === 'difal_true');
+        if (action === 'toggle_difal') {
+            handleDifalToggle(selectedItems);
         } else {
             handleStatusChange(selectedItems, action as ValidationStatus);
         }
@@ -152,13 +176,14 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         if (!competence) return;
 
         const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedClassifications));
-        if (!updatedPersistedData[competence]) updatedPersistedData[competence] = {};
-        if (!updatedPersistedData[competence].cfopValidations) updatedPersistedData[competence].cfopValidations = {};
+        if (!updatedPersistedData[competence]) updatedPersistedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} } };
+        if (!updatedPersistedData[competence].cfopValidations) updatedPersistedData[competence].cfopValidations = { classifications: {} };
         if (!updatedPersistedData[competence].cfopValidations.classifications) updatedPersistedData[competence].cfopValidations.classifications = {};
 
         itemsToValidate.forEach(item => {
-            if (classifications[item.id]) {
-                updatedPersistedData[competence].cfopValidations.classifications[item.uniqueProductKey] = classifications[item.id];
+            const currentClassification = classifications[item.id];
+            if (currentClassification) {
+                updatedPersistedData[competence].cfopValidations.classifications[item.uniqueProductKey] = currentClassification;
             }
         });
 
@@ -168,8 +193,8 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     };
     
      const filteredAndCategorizedItems = useMemo(() => {
-        const categorized: Record<ValidationStatus, ReconciledItem[]> = {
-            unvalidated: [], correct: [], incorrect: [], verify: []
+        const categorized: Record<ValidationStatus, Record<string, ReconciledItem[]>> = {
+            unvalidated: {}, correct: {}, incorrect: {}, verify: {}
         };
 
         itemsToValidate.forEach(item => {
@@ -180,54 +205,97 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             const aliquotaMatch = !aliquotaFilter || String(item['pICMS'] || '0').includes(aliquotaFilter);
 
             if (cfopMatch && cstMatch && aliquotaMatch) {
-                categorized[classification].push(item);
+                const siengeCfop = item.Sienge_CFOP || 'N/A';
+                if (!categorized[classification][siengeCfop]) {
+                    categorized[classification][siengeCfop] = [];
+                }
+                categorized[classification][siengeCfop].push(item);
             }
         });
         return categorized;
     }, [itemsToValidate, classifications, cfopXmlFilter, cstFilter, aliquotaFilter]);
     
 
-    const renderTable = (status: ValidationStatus) => {
-        const data = filteredAndCategorizedItems[status];
+    const renderGroupedTable = (status: ValidationStatus) => {
+        const groups = filteredAndCategorizedItems[status];
+        const groupKeys = Object.keys(groups).sort();
         
-        const columns = getColumnsWithCustomRender(
-            data,
-            ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'CST do ICMS', 'pICMS'],
-            (row, id) => <div className="truncate max-w-xs">{String(row.original[id as keyof ReconciledItem] || '')}</div>
-        );
+        if (groupKeys.length === 0) {
+             return <div className="text-center text-muted-foreground p-8">Nenhum item para exibir.</div>;
+        }
 
-        columns.unshift({
-            id: 'select',
-            header: ({ table }: any) => <Checkbox checked={table.getIsAllPageRowsSelected()} onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)} aria-label="Selecionar todas" />,
-            cell: ({ row }: any) => <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Selecionar linha" />,
-            enableSorting: false,
-        });
+        return (
+            <div className="space-y-4">
+                 {groupKeys.map(cfop => {
+                    const items = groups[cfop];
+                    const cfopDescription = cfopDescriptions[parseInt(cfop, 10)] || 'Descrição não encontrada';
+                    const isGroupOpen = openCollapsibles[`${status}-${cfop}`] ?? true;
 
-         columns.push({
-            id: 'isDifal',
-            header: 'É DIFAL?',
-            cell: ({ row }: any) => {
-                const isDifal = classifications[row.original.id]?.isDifal || false;
-                return <div className='flex justify-center'>{isDifal ? <Check className="h-5 w-5 text-blue-600" /> : <X className="h-5 w-5 text-muted-foreground" />}</div>;
-            }
-        });
+                    // Initialize ref for each table
+                    if (!tableRefs[`${status}-${cfop}`]) {
+                        tableRefs[`${status}-${cfop}`] = React.createRef<ReactTable<ReconciledItem> | null>();
+                    }
+                    const tableRef = tableRefs[`${status}-${cfop}`];
+                    
+                    const columns = getColumnsWithCustomRender(
+                        items,
+                        ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'CST do ICMS', 'pICMS'],
+                        (row, id) => <div className="truncate max-w-xs">{String(row.original[id as keyof ReconciledItem] || '')}</div>
+                    );
 
-        columns.push({
-            id: 'actions',
-            header: 'Ações',
-            cell: ({ row }: any) => (
-                 <TooltipProvider>
-                    <div className="flex gap-1 justify-center">
-                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'correct')}><Check className="h-5 w-5 text-green-600"/></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
-                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'incorrect')}><X className="h-5 w-5 text-red-600"/></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
-                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'verify')}><AlertTriangle className="h-5 w-5 text-amber-600"/></Button></TooltipTrigger><TooltipContent><p>Verificar</p></TooltipContent></Tooltip>
-                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleDifalChange([row.original], !classifications[row.original.id]?.isDifal)}><CheckSquare className="h-5 w-5 text-blue-600"/></Button></TooltipTrigger><TooltipContent><p>Alternar DIFAL</p></TooltipContent></Tooltip>
-                    </div>
-                </TooltipProvider>
-            )
-        });
-        
-        return <DataTable columns={columns} data={data} tableRef={tableRefs[status]} rowSelection={rowSelection} setRowSelection={setRowSelection} />;
+                    columns.unshift({
+                        id: 'select',
+                        header: ({ table }: any) => <Checkbox checked={table.getIsAllPageRowsSelected()} onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)} aria-label="Selecionar todas" />,
+                        cell: ({ row }: any) => <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Selecionar linha" />,
+                        enableSorting: false,
+                    });
+
+                     columns.push({
+                        id: 'isDifal',
+                        header: 'É DIFAL?',
+                        cell: ({ row }: any) => {
+                            const isDifal = classifications[row.original.id]?.isDifal || false;
+                            return <div className='flex justify-center'>{isDifal ? <Check className="h-5 w-5 text-blue-600" /> : <X className="h-5 w-5 text-muted-foreground" />}</div>;
+                        }
+                    });
+
+                    columns.push({
+                        id: 'actions',
+                        header: 'Ações',
+                        cell: ({ row }: any) => (
+                             <TooltipProvider>
+                                <div className="flex gap-1 justify-center">
+                                    <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'correct')}><Check className="h-5 w-5 text-green-600"/></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
+                                    <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'incorrect')}><X className="h-5 w-5 text-red-600"/></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
+                                    <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'verify')}><AlertTriangle className="h-5 w-5 text-amber-600"/></Button></TooltipTrigger><TooltipContent><p>Verificar</p></TooltipContent></Tooltip>
+                                    <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleDifalToggle([row.original])}><CheckSquare className="h-5 w-5 text-blue-600"/></Button></TooltipTrigger><TooltipContent><p>Alternar DIFAL</p></TooltipContent></Tooltip>
+                                </div>
+                            </TooltipProvider>
+                        )
+                    });
+
+                    return (
+                        <Collapsible 
+                            key={cfop} 
+                            open={isGroupOpen} 
+                            onOpenChange={() => setOpenCollapsibles(prev => ({...prev, [`${status}-${cfop}`]: !isGroupOpen}))}
+                        >
+                            <CollapsibleTrigger asChild>
+                                <div className='flex items-center gap-2 p-2 border-b cursor-pointer hover:bg-muted'>
+                                    {isGroupOpen ? <ChevronDown className='h-4 w-4'/> : <ChevronRight className='h-4 w-4'/>}
+                                    <Badge>{cfop}</Badge>
+                                    <span className="font-medium">{cfopDescription}</span>
+                                    <span className="text-sm text-muted-foreground ml-auto">({items.length} itens)</span>
+                                </div>
+                            </CollapsibleTrigger>
+                             <CollapsibleContent className="p-2">
+                                <DataTable columns={columns} data={items} tableRef={tableRef} rowSelection={rowSelection} setRowSelection={setRowSelection} />
+                            </CollapsibleContent>
+                        </Collapsible>
+                    )
+                 })}
+            </div>
+        )
     };
 
 
@@ -286,8 +354,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                                  <Button size="sm" variant="outline" onClick={() => handleBulkAction('incorrect')}><X className="mr-2 h-4 w-4 text-red-600"/>Incorreto</Button>
                                  <Button size="sm" variant="outline" onClick={() => handleBulkAction('verify')}><AlertTriangle className="mr-2 h-4 w-4 text-amber-600"/>Verificar</Button>
                                  <div className="h-6 border-l" />
-                                 <Button size="sm" variant="outline" onClick={() => handleBulkAction('difal_true')}><CheckSquare className="mr-2 h-4 w-4 text-blue-600"/>Marcar DIFAL</Button>
-                                 <Button size="sm" variant="outline" onClick={() => handleBulkAction('difal_false')}><RotateCcw className="mr-2 h-4 w-4"/>Desmarcar DIFAL</Button>
+                                 <Button size="sm" variant="outline" onClick={() => handleBulkAction('toggle_difal')}><CheckSquare className="mr-2 h-4 w-4 text-blue-600"/>Alternar DIFAL</Button>
                              </div>
                         </Card>
                     </div>
@@ -295,15 +362,15 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                 
                  <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
                     <TabsList>
-                        <TabsTrigger value="unvalidated">Não Validados ({filteredAndCategorizedItems.unvalidated.length})</TabsTrigger>
-                        <TabsTrigger value="correct">Corretos ({filteredAndCategorizedItems.correct.length})</TabsTrigger>
-                        <TabsTrigger value="incorrect">Incorretos ({filteredAndCategorizedItems.incorrect.length})</TabsTrigger>
-                        <TabsTrigger value="verify">A Verificar ({filteredAndCategorizedItems.verify.length})</TabsTrigger>
+                        <TabsTrigger value="unvalidated">Não Validados ({Object.values(filteredAndCategorizedItems.unvalidated).flat().length})</TabsTrigger>
+                        <TabsTrigger value="correct">Corretos ({Object.values(filteredAndCategorizedItems.correct).flat().length})</TabsTrigger>
+                        <TabsTrigger value="incorrect">Incorretos ({Object.values(filteredAndCategorizedItems.incorrect).flat().length})</TabsTrigger>
+                        <TabsTrigger value="verify">A Verificar ({Object.values(filteredAndCategorizedItems.verify).flat().length})</TabsTrigger>
                     </TabsList>
-                    <TabsContent value="unvalidated">{renderTable('unvalidated')}</TabsContent>
-                    <TabsContent value="correct">{renderTable('correct')}</TabsContent>
-                    <TabsContent value="incorrect">{renderTable('incorrect')}</TabsContent>
-                    <TabsContent value="verify">{renderTable('verify')}</TabsContent>
+                    <TabsContent value="unvalidated" className="mt-4">{renderGroupedTable('unvalidated')}</TabsContent>
+                    <TabsContent value="correct" className="mt-4">{renderGroupedTable('correct')}</TabsContent>
+                    <TabsContent value="incorrect" className="mt-4">{renderGroupedTable('incorrect')}</TabsContent>
+                    <TabsContent value="verify" className="mt-4">{renderGroupedTable('verify')}</TabsContent>
                 </Tabs>
             </CardContent>
         </Card>
