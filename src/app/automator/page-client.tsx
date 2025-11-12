@@ -282,17 +282,10 @@ export function AutomatorClientPage() {
                         const worksheet = workbook.Sheets[sheetName];
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
                         
-                        setProcessedData(prev => ({
-                            sheets: {}, 
-                            spedInfo: null, 
-                            keyCheckResults: null, 
-                            competence: null,
-                            reconciliationResults: null,
-                            resaleAnalysis: null,
-                            spedCorrections: null,
-                            ...prev,
-                            siengeSheetData: jsonData
-                        }));
+                        setProcessedData(prev => {
+                            const baseData = prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null };
+                            return { ...baseData, siengeSheetData: jsonData };
+                        });
                         
                         toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises avançadas.' });
     
@@ -661,10 +654,8 @@ export function AutomatorClientPage() {
 
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => {
         setProcessedData(prevData => {
-            if (!prevData) {
-                return { sheets: {}, siengeSheetData: null, spedInfo: spedInfo || null, keyCheckResults: keyCheckResults || null, spedCorrections: spedCorrections ? [spedCorrections] : null, competence: null, resaleAnalysis: null, reconciliationResults: null };
-            }
-            return { ...prevData, spedInfo: spedInfo, keyCheckResults: keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : prevData.spedCorrections };
+            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null };
+            return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections };
         });
     }, []);
     
