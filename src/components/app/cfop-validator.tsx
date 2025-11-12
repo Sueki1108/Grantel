@@ -6,7 +6,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/lib/columns-helper";
-import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX, Copy, Save, Settings, Dot, HelpCircle, ListFilter, TicketPercent, Building } from "lucide-react";
+import { ThumbsDown, ThumbsUp, RotateCcw, AlertTriangle, CheckCircle, FileWarning, Search, ArrowUpDown, FilterX, Copy, Save, Settings, Dot, HelpCircle, ListFilter, TicketPercent, Building, Broom } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from '../ui/badge';
@@ -114,13 +114,6 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         // Adiciona todos os itens reconciliados primeiro
         (reconciledItems || []).forEach(item => {
             if (item) itemsMap.set(getItemLineKey(item), item);
-        });
-    
-        // Adiciona itens de imobilizado que AINDA não estão na lista para evitar duplicatas
-        (imobilizadoItems || []).forEach(item => {
-            if (item && !itemsMap.has(getItemLineKey(item))) {
-                itemsMap.set(getItemLineKey(item), item);
-            }
         });
     
         return Array.from(itemsMap.values());
@@ -234,6 +227,30 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         onPersistAllClassifications(updatedPersistedData);
         setHasChanges(false);
         toast({ title: 'Classificações de CFOP guardadas!' });
+    };
+
+    const handleClearAllClassifications = () => {
+        const newValidationStatus: Record<string, ValidationStatus> = {};
+        allItemsToValidate.forEach(item => {
+            newValidationStatus[getItemLineKey(item)] = { main: 'unvalidated', isDifal: false };
+        });
+        setValidationStatus(newValidationStatus);
+
+        if (tableRef.current) {
+            tableRef.current.resetColumnFilters();
+            tableRef.current.setGlobalFilter('');
+        }
+
+        if (competence) {
+            const updatedPersistedData = { ...allPersistedClassifications };
+            if (updatedPersistedData[competence]?.cfopValidations?.classifications) {
+                updatedPersistedData[competence].cfopValidations.classifications = {};
+            }
+            onPersistAllClassifications(updatedPersistedData);
+        }
+
+        setHasChanges(false);
+        toast({ title: "Classificações Limpas", description: "Todos os itens foram redefinidos para 'Pendente'." });
     };
     
     const handleBulkClassification = (status: MainValidationStatus | 'toggleDifal' | 'setDifal' | 'unsetDifal') => {
@@ -408,12 +425,13 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
     
     const allGroupedItems = useMemo((): GroupedItems => {
         const groups: GroupedItems = {};
-    
-        // Adiciona uma categoria especial para Imobilizado
-        groups['IMOBILIZADO'] = { items: [], xmlCfops: new Set(), xmlCsts: new Set(), xmlPIcms: new Set() };
+        
+        // Categoria especial para Imobilizado
+        const imobilizadoGroupKey = 'IMOBILIZADO';
+        groups[imobilizadoGroupKey] = { items: [], xmlCfops: new Set(), xmlCsts: new Set(), xmlPIcms: new Set() };
     
         allItemsToValidate.forEach(item => {
-            // Adiciona o item ao seu grupo de CFOP do Sienge
+            // Adiciona ao grupo do CFOP do Sienge (ou 'OUTROS')
             const groupKey = item.Sienge_CFOP || 'OUTROS';
             if (!groups[groupKey]) {
                 groups[groupKey] = { items: [], xmlCfops: new Set(), xmlCsts: new Set(), xmlPIcms: new Set() };
@@ -425,23 +443,24 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
             group.xmlCsts.add(itemCst);
             const itemPIcms = item['pICMS'] === undefined || item['pICMS'] === null ? 'Vazio' : String(item['pICMS']);
             group.xmlPIcms.add(itemPIcms);
-    
-            // Se o item foi classificado como imobilizado, adiciona-o também ao grupo de imobilizado
-            if (allPersistedClassifications) {
-                let isImobilizado = false;
-                for (const competenceKey in allPersistedClassifications) {
-                    const classifications = allPersistedClassifications[competenceKey]?.classifications;
-                    if (classifications && classifications[item.uniqueItemId]?.classification === 'imobilizado') {
-                        isImobilizado = true;
-                        break;
-                    }
+
+             // Adiciona ao grupo de Imobilizado se tiver sido classificado como tal
+            const uniqueItemId = item.uniqueItemId || getUniversalProductKey(item);
+            let isImobilizado = false;
+            for (const competenceKey in allPersistedClassifications) {
+                const classification = allPersistedClassifications[competenceKey]?.classifications?.[uniqueItemId]?.classification;
+                if (classification === 'imobilizado') {
+                    isImobilizado = true;
+                    break;
                 }
-                if (isImobilizado) {
-                    groups['IMOBILIZADO'].items.push(item);
-                    if (item.CFOP) groups['IMOBILIZADO'].xmlCfops.add(item.CFOP);
-                    groups['IMOBILIZADO'].xmlCsts.add(itemCst);
-                    groups['IMOBILIZADO'].xmlPIcms.add(itemPIcms);
-                }
+            }
+
+            if (isImobilizado) {
+                 const imobGroup = groups[imobilizadoGroupKey];
+                 imobGroup.items.push(item);
+                 if (item.CFOP) imobGroup.xmlCfops.add(item.CFOP);
+                 imobGroup.xmlCsts.add(itemCst);
+                 imobGroup.xmlPIcms.add(itemPIcms);
             }
         });
     
@@ -463,7 +482,7 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
             const groupKey = item.Sienge_CFOP || 'OUTROS';
             
             if (activeTabGroup === 'IMOBILIZADO') {
-                return imobilizadoItems.some(i => getItemLineKey(i) === getItemLineKey(item));
+                return allGroupedItems['IMOBILIZADO']?.items.some(i => getItemLineKey(i) === getItemLineKey(item)) || false;
             }
 
             if (!groupKey || !allGroupedItems[groupKey] || groupKey !== activeTabGroup) return false;
@@ -682,6 +701,12 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
                         <FilterX className="mr-2 h-4 w-4" />
                         Limpar Filtros
                     </Button>
+                    {Object.keys(validationStatus).some(k => validationStatus[k].main !== 'unvalidated') && (
+                        <Button variant="destructive" onClick={handleClearAllClassifications} className='shrink-0'>
+                            <Broom className="mr-2 h-4 w-4" />
+                            Limpar Classificações
+                        </Button>
+                    )}
                     <Button onClick={handleSaveChanges} disabled={!hasChanges}>
                         <Save className="mr-2 h-4 w-4" /> Guardar Alterações
                     </Button>
@@ -869,3 +894,4 @@ export function CfopValidator({ reconciledItems, imobilizadoItems, allPersistedC
         </div>
     );
 }
+
