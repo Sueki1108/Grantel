@@ -61,7 +61,7 @@ const IMOBILIZADO_CFOP_EXCLUSION_KEY = 'imobilizadoCfopExclusionList';
 
 interface ImobilizadoAnalysisProps {
     items: ItemData[]; 
-    siengeFile?: File | null;
+    siengeData: any[] | null;
     competence: string | null; 
     onPersistData: (allDataToSave: AllClassifications) => void;
     allPersistedData: AllClassifications;
@@ -219,7 +219,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
 }
 
 
-export function ImobilizadoAnalysis({ items: initialAllItems, siengeFile, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
+export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
     const [hasChanges, setHasChanges] = useState(false);
@@ -229,31 +229,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeFile, compet
     const [isDisregardedModalOpen, setIsDisregardedModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<Classification>('unclassified');
     const [excludedCfops, setExcludedCfops] = useState<Set<string>>(new Set());
-    const [siengeData, setSiengeData] = useState<any[] | null>(null);
-
-     useEffect(() => {
-        if (siengeFile) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                try {
-                    const data = event.target?.result;
-                    if (!data) throw new Error("Não foi possível ler o conteúdo do ficheiro.");
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const sheetName = workbook.SheetNames[0];
-                    if (!sheetName) throw new Error("A planilha não contém nenhuma aba.");
-                    const worksheet = workbook.Sheets[sheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-                    setSiengeData(jsonData);
-                } catch (err: any) {
-                    toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
-                }
-            };
-            reader.onerror = (error) => toast({ variant: 'destructive', title: 'Erro ao Ler Ficheiro Sienge', description: error.message });
-            reader.readAsArrayBuffer(siengeFile);
-        } else {
-            setSiengeData(null);
-        }
-    }, [siengeFile, toast]);
 
     // ===============================================================
     // CFOP Configuration Logic
