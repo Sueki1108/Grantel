@@ -10,7 +10,7 @@ import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
+import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { cfopDescriptions } from "@/lib/cfop";
 import type { ProcessedData, SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
 import { FileUploadForm } from "@/components/app/file-upload-form";
@@ -584,19 +584,19 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                      {activeTab === 'reconciled' && (
                                         <div>
                                             <Button onClick={() => handleDownload(reconciliationResults.reconciled, 'Itens_Conciliados')} size="sm" className="mb-4" disabled={reconciliationResults.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                            <DataTable columns={getColumns(reconciliationResults.reconciled)} data={reconciliationResults.reconciled} />
+                                            <DataTable columns={getColumnsWithCustomRender(reconciliationResults.reconciled, Object.keys(reconciliationResults.reconciled[0] || {}))} data={reconciliationResults.reconciled} />
                                         </div>
                                     )}
                                      {activeTab === 'onlyInSienge' && (
                                          <div>
                                             <Button onClick={() => handleDownload(reconciliationResults.onlyInSienge, 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                            <DataTable columns={getColumns(reconciliationResults.onlyInSienge)} data={reconciliationResults.onlyInSienge} />
+                                            <DataTable columns={getColumnsWithCustomRender(reconciliationResults.onlyInSienge, Object.keys(reconciliationResults.onlyInSienge[0] || {}))} data={reconciliationResults.onlyInSienge} />
                                          </div>
                                     )}
                                      {activeTab === 'onlyInXml' && (
                                          <div>
                                             <Button onClick={() => handleDownload(reconciliationResults.onlyInXml, 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                            <DataTable columns={getColumns(reconciliationResults.onlyInXml)} data={reconciliationResults.onlyInXml} />
+                                            <DataTable columns={getColumnsWithCustomRender(reconciliationResults.onlyInXml, Object.keys(reconciliationResults.onlyInXml[0] || {}))} data={reconciliationResults.onlyInXml} />
                                          </div>
                                     )}
                                 </div>
@@ -624,7 +624,7 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                             <Button onClick={() => handleDownload(items, `Sienge_Outros_${esp}`)} size="sm" className="mb-4" disabled={items.length === 0}>
                                                 <Download className="mr-2 h-4 w-4" /> Baixar
                                             </Button>
-                                            <DataTable columns={getColumns(items)} data={items} />
+                                            <DataTable columns={getColumnsWithCustomRender(items, Object.keys(items[0] || {}))} data={items} />
                                         </TabsContent>
                                     ))}
                                 </Tabs>
