@@ -1,4 +1,3 @@
-
 // Types
 type LogFunction = (message: string) => void;
 
@@ -66,6 +65,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const ide = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'ide')[0];
     const emit = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'emit')[0];
     const dest = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'dest')[0];
+    const entrega = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'entrega')[0];
     const total = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'total')[0];
     const detList = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'det');
     const protNFe = nfeProc.getElementsByTagNameNS(NFE_NAMESPACE, 'protNFe')[0];
@@ -118,6 +118,17 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'infCpl': infCpl,
     };
     
+    // Extrai dados do bloco <entrega> se existir
+    if (entrega) {
+        for (const child of Array.from(entrega.children)) {
+            const tagName = child.tagName;
+            const content = child.textContent;
+            if (tagName && content) {
+                notaFiscal[`entrega_${tagName}`] = content;
+            }
+        }
+    }
+
     if (isSaida) {
         notaFiscal['Destinatário'] = destNome;
         notaFiscal['CPF/CNPJ do Destinatário'] = destCNPJ;
