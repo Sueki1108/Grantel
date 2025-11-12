@@ -287,6 +287,7 @@ const processSpedFileInBrowser = (
         for (let i = 0; i < intermediateLines.length; i++) {
             const line = intermediateLines[i];
             const parts = line.split('|');
+            // O código do produto está no índice 2 do registro 0200
             if (parts.length > 2 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
                 modifications.removed0200.push({ lineNumber: i + 1, line });
                 linesModifiedCount++;
@@ -303,6 +304,7 @@ const processSpedFileInBrowser = (
         const usedParticipantCodes = new Set<string>();
         intermediateLines.forEach(line => {
             const parts = line.split('|');
+            // O código do participante está no índice 4 do registro C100/D100
             if (parts.length > 4 && (parts[1] === 'C100' || parts[1] === 'D100') && parts[4]) {
                 usedParticipantCodes.add(parts[4]);
             }
@@ -312,6 +314,7 @@ const processSpedFileInBrowser = (
         for (let i = 0; i < intermediateLines.length; i++) {
             const line = intermediateLines[i];
             const parts = line.split('|');
+            // O código do participante está no índice 2 do registro 0150
             if (parts.length > 2 && parts[1] === '0150' && !usedParticipantCodes.has(parts[2])) {
                 modifications.removed0150.push({ lineNumber: i + 1, line });
                 linesModifiedCount++;
@@ -1178,3 +1181,5 @@ export function KeyChecker({
         </div>
     );
 }
+
+    
