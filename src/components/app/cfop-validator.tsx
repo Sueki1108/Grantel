@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, AlertTriangle, HelpCircle, Save, X, CheckSquare, ListFilter, FilterX, RotateCcw, ChevronDown, ChevronRight } from "lucide-react";
+import { Check, AlertTriangle, HelpCircle, Save, X, CheckSquare, ListFilter, FilterX, RotateCcw } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { RowSelectionState, Table as ReactTable } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
@@ -14,7 +14,6 @@ import { AllClassifications } from './imobilizado-analysis';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Input } from '../ui/input';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { cfopDescriptions } from '@/lib/cfop';
 import { Badge } from '../ui/badge';
 
@@ -204,32 +203,34 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         return categorized;
     }, [itemsToValidate, classifications, cfopXmlFilter, cstFilter, aliquotaFilter]);
     
-
     const renderGroupedTable = (status: ValidationStatus) => {
         const groups = filteredAndCategorizedItems[status];
-        const groupKeys = Object.keys(groups).sort();
-        
+        const groupKeys = Object.keys(groups).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
         if (groupKeys.length === 0) {
-             return <div className="text-center text-muted-foreground p-8">Nenhum item para exibir.</div>;
+            return <div className="text-center text-muted-foreground p-8">Nenhum item para exibir.</div>;
         }
 
         return (
-            <Tabs defaultValue={groupKeys[0]} className="w-full">
-                <TabsList className="h-auto flex-wrap justify-start">
-                    {groupKeys.map(cfop => {
-                        const items = groups[cfop];
-                        const cfopDescription = cfopDescriptions[parseInt(cfop, 10)] || 'Descrição não encontrada';
-                        return (
-                            <TabsTrigger key={cfop} value={cfop} className="flex flex-col h-auto items-start p-2">
-                                <div>
-                                    <Badge>{cfop}</Badge>
-                                    <span className="text-xs text-muted-foreground ml-2">({items.length} itens)</span>
-                                </div>
-                                <span className="text-xs font-normal whitespace-normal text-left mt-1">{cfopDescription}</span>
-                            </TabsTrigger>
-                        );
-                    })}
+             <Tabs defaultValue={groupKeys[0]} className="w-full">
+                 <TabsList className="h-auto flex-wrap justify-start">
+                    {groupKeys.map(cfop => (
+                        <TooltipProvider key={cfop}>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <TabsTrigger value={cfop}>
+                                        <Badge variant="secondary">{cfop}</Badge>
+                                        <span className="ml-2 text-xs">({groups[cfop].length})</span>
+                                    </TabsTrigger>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>{cfopDescriptions[parseInt(cfop, 10)] || 'Descrição não encontrada'}</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    ))}
                 </TabsList>
+
                 {groupKeys.map(cfop => {
                     const items = groups[cfop];
                     const tableKey = `${status}-${cfop}`;
@@ -274,13 +275,13 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                             </TooltipProvider>
                         )
                     });
-
+                    
                     return (
                         <TabsContent key={cfop} value={cfop} className="mt-4">
-                             <DataTable columns={columns} data={items} tableRef={tableRef} />
+                            <DataTable columns={columns} data={items} tableRef={tableRef} />
                         </TabsContent>
-                    )
-                 })}
+                    );
+                })}
             </Tabs>
         );
     };
