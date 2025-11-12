@@ -1,12 +1,12 @@
 "use client";
 
 import * as React from 'react';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, AlertTriangle, Save, X, ListFilter, Factory, Wrench, RotateCw, CheckSquare, HelpCircle } from "lucide-react";
+import { Check, AlertTriangle, Save, X, ListFilter, Factory, Wrench, RotateCw, CheckSquare, HelpCircle, ChevronDown, ChevronRight, MinusCircle } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Table as ReactTable, RowSelectionState, ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
@@ -17,6 +17,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { ScrollArea, ScrollBar } from '../ui/scroll-area';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
+import { Input } from '../ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 
 type ValidationStatus = 'correct' | 'incorrect' | 'verify' | 'unvalidated';
@@ -55,7 +58,13 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     const [classifications, setClassifications] = useState<Record<string, { classification: ValidationStatus, isDifal: boolean }>>({});
     const [hasChanges, setHasChanges] = useState(false);
     const [activeCfopTab, setActiveCfopTab] = useState<string | null>(null);
-    const tableRef = React.useRef<ReactTable<ReconciledItem> | null>(null);
+    const tableRef = useRef<ReactTable<ReconciledItem> | null>(null);
+
+    const [filters, setFilters] = useState({
+        cfopXml: new Set<string>(),
+        cstIcms: new Set<string>(),
+        aliqIcms: new Set<string>(),
+    });
 
     const itemsToValidate = useMemo((): ReconciledItem[] => {
         return reconciledData.map((item) => {
@@ -134,7 +143,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             handleDifalToggle(selectedItems);
         } else {
             handleStatusChange(selectedItems, action as ValidationStatus);
-            tableRef.current.toggleAllRowsSelected(false); // Limpa a seleção
+            tableRef.current.toggleAllRowsSelected(false);
         }
     };
 
