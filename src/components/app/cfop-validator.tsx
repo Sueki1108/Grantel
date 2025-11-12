@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -6,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, AlertTriangle, Save, X, ListFilter, HardHat, Factory, Wrench, CheckSquare, RotateCcw } from "lucide-react";
+import { Check, AlertTriangle, Save, X, ListFilter, HardHat, Factory, Wrench, CheckSquare, RotateCcw, BadgeInfo } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Table as ReactTable, RowSelectionState, ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
@@ -174,7 +175,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         const sortedGroups = Object.entries(grouped).sort(([cfopA], [cfopB]) => {
             if (cfopA === 'N/A') return 1;
             if (cfopB === 'N/A') return -1;
-            return parseInt(cfopA, 10) - parseInt(b, 10);
+            return parseInt(cfopA, 10) - parseInt(cfopB, 10);
         });
 
         if (sortedGroups.length > 0 && !activeCfopTab) {
@@ -364,3 +365,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         </Card>
     );
 }
+
+
+    
