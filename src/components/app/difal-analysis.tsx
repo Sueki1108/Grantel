@@ -1,47 +1,35 @@
 
 "use client";
 
-import { useState, useMemo, type ChangeEvent, useEffect } from 'react';
+import { useState, useMemo, type ChangeEvent } from 'react';
 import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, AlertTriangle, FileDown, Calendar as CalendarIcon, Bot, Settings, Save, History, Trash2, Library } from 'lucide-react';
+import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, Calendar as CalendarIcon, Hash, Sigma, Coins, ClipboardCopy } from 'lucide-react';
 import JSZip from 'jszip';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Checkbox } from '../ui/checkbox';
-import { Label } from '../ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DataTable } from './data-table';
+import { DataTable } from '@/components/app/data-table';
 import { getColumnsWithCustomRender } from '@/lib/columns-helper';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
-import { generateGnreScript, GNRE_DEFAULT_CONFIGS, GnreConfig } from '@/lib/gnre-script-generator';
-import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogTrigger, DialogFooter } from '../ui/dialog';
-import { Input } from '../ui/input';
-import { ScrollArea } from '../ui/scroll-area';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
-
+import { Label } from '../ui/label';
 
 // ===============================================================
 // Tipos
 // ===============================================================
 
-type GnreDataItem = {
-    filename: string;
-    chave_acesso: string;
-    valor_principal_calculado: number;
-    valor_principal_gnre: string;
+type DifalData = {
+    'Chave de Acesso': string;
+    'Número da Nota': string;
+    'Data de Emissão': string;
+    'Valor Total da Nota': number;
+    'Valor da Guia (11%)': number;
+    'Encontrado "SELVIRIA/PR"': 'Sim' | 'Não';
 };
 
-type SavedGnreConfig = GnreConfig & {
-    id: string;
-    name: string;
-}
-
-const GNRE_CONFIG_HISTORY_KEY = 'gnreConfigHistory';
 
 // ===============================================================
 // Helper Functions
@@ -68,53 +56,12 @@ const readFileAsText = (file: File): Promise<string> => {
     });
 };
 
-const parseXmlData = (xmlText: string, filename: string): GnreDataItem | null => {
-    try {
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlText, "application/xml");
-        const root = xmlDoc.documentElement;
-
-        let chaveAcesso: string | null = null;
-        const chNFeElement = root.querySelector('chNFe'); 
-        if (chNFeElement?.textContent) {
-            chaveAcesso = chNFeElement.textContent;
-        } else {
-            const infNFeElement = root.querySelector('infNFe');
-            const idAttr = infNFeElement?.getAttribute('Id');
-            if (idAttr && idAttr.startsWith('NFe')) {
-                chaveAcesso = idAttr.substring(3);
-            }
-        }
-        
-        if (!chaveAcesso || chaveAcesso.length !== 44) {
-            console.warn(`Chave de acesso inválida ou não encontrada em ${filename}.`);
-            return null;
-        }
-
-        const vNFElement = root.querySelector('vNF');
-        const vNFText = vNFElement?.textContent;
-
-        if (!vNFText) {
-            console.warn(`Valor <vNF> não encontrado em ${filename}.`);
-            return null;
-        }
-        
-        const valorNf = parseFloat(vNFText);
-        const valorPrincipal = parseFloat((valorNf * 0.10).toFixed(2));
-        const valorPrincipalGnre = String(Math.round(valorPrincipal * 100));
-
-        return {
-            filename: filename,
-            chave_acesso: chaveAcesso,
-            valor_principal_calculado: valorPrincipal,
-            valor_principal_gnre: valorPrincipalGnre,
-        };
-
-    } catch (e) {
-        console.error(`ERRO ao processar '${filename}'. Detalhes: ${e}`);
-        return null;
-    }
+const getTagValue = (element: Element | null, query: string): string => {
+    if (!element) return '';
+    const tag = element.querySelector(query);
+    return tag?.textContent ?? '';
 };
+
 
 // ===============================================================
 // Main Component
@@ -122,25 +69,10 @@ const parseXmlData = (xmlText: string, filename: string): GnreDataItem | null =>
 export function DifalAnalysis() {
     const [xmlFiles, setXmlFiles] = useState<File[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [gnreData, setGnreData] = useState<GnreDataItem[]>([]);
+    const [difalData, setDifalData] = useState<DifalData[]>([]);
     const [dueDate, setDueDate] = useState<Date | undefined>(new Date());
-    const [gnreConfigs, setGnreConfigs] = useState<GnreConfig>(GNRE_DEFAULT_CONFIGS);
-    const [savedConfigs, setSavedConfigs] = useState<SavedGnreConfig[]>([]);
-    const [configName, setConfigName] = useState('');
-
     const { toast } = useToast();
     
-    useEffect(() => {
-        try {
-            const storedHistory = localStorage.getItem(GNRE_CONFIG_HISTORY_KEY);
-            if(storedHistory) {
-                setSavedConfigs(JSON.parse(storedHistory));
-            }
-        } catch (e) {
-            console.error("Failed to load GNRE config history:", e);
-        }
-    }, []);
-
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const selectedFiles = e.target.files;
         if (!selectedFiles) return;
@@ -172,299 +104,224 @@ export function DifalAnalysis() {
         toast({ title: `${newFiles.length} ficheiro(s) XML adicionados.`, description: `${extractedCount > 0 ? `(${extractedCount} de .zip)` : ''} Clique em processar para analisar.` });
     };
 
-    const processXmlForGnre = async () => {
+    const processXmls = async () => {
         if (xmlFiles.length === 0) {
-            toast({ variant: "destructive", title: "Nenhum XML carregado", description: "Por favor, carregue os ficheiros XML de devolução." });
+            toast({ variant: "destructive", title: "Nenhum XML carregado", description: "Por favor, carregue os ficheiros XML." });
             return;
         }
 
         setIsLoading(true);
-        setGnreData([]);
+        setDifalData([]);
         
-        const processedItems: GnreDataItem[] = [];
-        
+        const processedItems: DifalData[] = [];
+        const parser = new DOMParser();
+
         for (const file of xmlFiles) {
             try {
                 const xmlText = await readFileAsText(file);
-                const data = parseXmlData(xmlText, file.name);
-                if (data) {
-                    processedItems.push(data);
-                }
+                const xmlDoc = parser.parseFromString(xmlText, "application/xml");
+                const infNFe = xmlDoc.querySelector('infNFe');
+                if (!infNFe) continue;
+
+                const chaveAcesso = infNFe.getAttribute('Id')?.replace('NFe', '') || 'N/A';
+                const nNF = getTagValue(infNFe, 'ide > nNF');
+                const dhEmi = getTagValue(infNFe, 'ide > dhEmi');
+                const vNF = parseFloat(getTagValue(infNFe, 'total > ICMSTot > vNF') || '0');
+                const infCpl = getTagValue(infNFe, 'infAdic > infCpl');
+
+                processedItems.push({
+                    'Chave de Acesso': chaveAcesso,
+                    'Número da Nota': nNF,
+                    'Data de Emissão': dhEmi,
+                    'Valor Total da Nota': vNF,
+                    'Valor da Guia (11%)': parseFloat((vNF * 0.11).toFixed(2)),
+                    'Encontrado "SELVIRIA/PR"': infCpl.toUpperCase().includes("SELVIRIA/PR") ? 'Sim' : 'Não',
+                });
+
             } catch (err) {
                 console.error("Erro ao processar ficheiro", file.name, err);
             }
         }
         
-        setGnreData(processedItems);
+        setDifalData(processedItems);
         setIsLoading(false);
-        toast({ title: "Processamento Concluído", description: `${processedItems.length} XMLs válidos encontrados e prontos para gerar o script.` });
+        toast({ title: "Processamento Concluído", description: `${processedItems.length} XMLs analisados.` });
     };
 
-    const handleGenerateAndDownloadScript = () => {
-        if (gnreData.length === 0) {
-            toast({ variant: 'destructive', title: 'Nenhum dado processado', description: 'Processe os ficheiros XML primeiro.' });
-            return;
+    const totals = useMemo(() => {
+        if (difalData.length === 0) return null;
+        return {
+            count: difalData.length,
+            totalNotesValue: difalData.reduce((sum, item) => sum + item['Valor Total da Nota'], 0),
+            totalGuideValue: difalData.reduce((sum, item) => sum + item['Valor da Guia (11%)'], 0)
         }
-        if (!dueDate) {
-             toast({ variant: 'destructive', title: 'Data de Vencimento em falta', description: 'Por favor, selecione uma data de vencimento para a guia.' });
-            return;
-        }
-
-        try {
-            const dataUnica = format(dueDate, 'dd/MM/yyyy');
-            const scriptContent = generateGnreScript(gnreData, dataUnica, dataUnica, gnreConfigs);
-            
-            const blob = new Blob([scriptContent], { type: 'text/python;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'script_automacao_gnre.py';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-            
-            toast({ title: 'Script Gerado com Sucesso', description: 'O ficheiro script_automacao_gnre.py está a ser descarregado.' });
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Erro ao Gerar Script', description: error.message });
-        }
-    };
+    }, [difalData]);
     
-    const handleConfigChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
-        setGnreConfigs(prev => ({ ...prev, [name]: value }));
-    };
-
-     const handleSaveConfig = () => {
-        if (!configName || !configName.trim()) {
-            toast({ variant: 'destructive', title: 'Nome Inválido', description: 'É necessário um nome para guardar a configuração.' });
+    const handleDownloadExcel = () => {
+        if (difalData.length === 0) {
+            toast({ variant: 'destructive', title: 'Nenhum dado para exportar' });
             return;
         }
-        
-        const newSavedConfig: SavedGnreConfig = {
-            id: new Date().toISOString(),
-            name: configName,
-            ...gnreConfigs
-        };
 
-        const newHistory = [...savedConfigs, newSavedConfig];
-        setSavedConfigs(newHistory);
-        localStorage.setItem(GNRE_CONFIG_HISTORY_KEY, JSON.stringify(newHistory));
-        toast({ title: 'Configuração guardada!', description: `"${configName}" foi adicionada ao seu histórico.` });
-        setConfigName('');
+        const dataToExport = difalData.map(item => ({
+            ...item,
+            'Data de Emissão': item['Data de Emissão'] ? format(parseISO(item['Data de Emissão']), 'dd/MM/yyyy') : 'N/A',
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Dados DIFAL');
+        XLSX.writeFile(workbook, `Relatorio_DIFAL.xlsx`);
+        toast({ title: 'Relatório Excel Gerado' });
     };
 
-    const handleLoadConfig = (configId: string) => {
-        const configToLoad = savedConfigs.find(c => c.id === configId);
-        if (configToLoad) {
-            const { id, name, ...loadedConfig } = configToLoad;
-            setGnreConfigs(loadedConfig);
-            toast({ title: 'Configuração Carregada', description: `As configurações de "${name}" foram aplicadas.` });
+    const columns = useMemo(() => getColumnsWithCustomRender(
+        difalData, 
+        ['Número da Nota', 'Chave de Acesso', 'Data de Emissão', 'Valor Total da Nota', 'Valor da Guia (11%)', 'Encontrado "SELVIRIA/PR"'],
+        (row, id) => {
+             const value = row.original[id as keyof DifalData];
+             if (id === 'Data de Emissão' && typeof value === 'string') {
+                 return format(parseISO(value), 'dd/MM/yyyy');
+             }
+             if (typeof value === 'number') {
+                 return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+             }
+             return String(value);
         }
+    ), [difalData]);
+    
+    const copyToClipboard = (text: string | number) => {
+        const textToCopy = typeof text === 'number' ? text.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : text;
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            toast({ title: 'Copiado!', description: `Valor "${textToCopy}" copiado para a área de transferência.` });
+        }).catch(err => {
+            toast({ variant: 'destructive', title: 'Falha ao copiar', description: 'Não foi possível copiar o valor.' });
+        });
     };
-
-    const handleDeleteConfig = (configId: string) => {
-        const newHistory = savedConfigs.filter(c => c.id !== configId);
-        setSavedConfigs(newHistory);
-        localStorage.setItem(GNRE_CONFIG_HISTORY_KEY, JSON.stringify(newHistory));
-        toast({ title: 'Configuração Removida', description: 'A configuração foi removida do seu histórico.' });
-    };
-
-    const dataTableColumns = useMemo(() => [
-        { accessorKey: 'filename', header: 'Nome do Ficheiro' },
-        { accessorKey: 'chave_acesso', header: 'Chave de Acesso' },
-        { accessorKey: 'valor_principal_calculado', header: 'Valor do Imposto (10%)', cell: ({row}: any) => (row.original as GnreDataItem).valor_principal_calculado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })},
-    ], []);
-
 
     return (
         <div className="space-y-6">
             <Card>
                 <CardHeader>
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                            <TicketPercent className="h-8 w-8 text-primary" />
-                            <div>
-                                <CardTitle className="font-headline text-2xl">Gerador de Script para Automação de Guias DIFAL (GNRE)</CardTitle>
-                                <CardDescription>
-                                    Carregue os XMLs de devolução, defina a data, e gere um script Python para automatizar o preenchimento das guias GNRE no portal de Pernambuco.
-                                </CardDescription>
-                            </div>
+                    <div className="flex items-center gap-3">
+                        <TicketPercent className="h-8 w-8 text-primary" />
+                        <div>
+                            <CardTitle className="font-headline text-2xl">Ferramenta de Extração para Guia DIFAL</CardTitle>
+                            <CardDescription>
+                                Carregue os XMLs de saída, processe os dados e exporte um relatório para facilitar a criação das guias.
+                            </CardDescription>
                         </div>
-                         <Dialog>
-                            <DialogTrigger asChild>
-                                <Button variant="outline" size="sm"><Settings className="mr-2 h-4 w-4"/>Configurações Avançadas</Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-[90vw] md:max-w-4xl h-[90vh] flex flex-col">
-                                <DialogHeader>
-                                    <DialogTitle>Configurações Padrão do Script GNRE</DialogTitle>
-                                    <DialogDescription>
-                                        Altere os valores padrão que serão usados no script, ou guarde/carregue configurações do seu histórico.
-                                    </DialogDescription>
-                                </DialogHeader>
-                                
-                                <Tabs defaultValue="current" className="flex-grow flex flex-col overflow-hidden">
-                                    <TabsList className="grid w-full grid-cols-2">
-                                        <TabsTrigger value="current">Configuração Atual</TabsTrigger>
-                                        <TabsTrigger value="history">Histórico de Configurações</TabsTrigger>
-                                    </TabsList>
-                                    <TabsContent value="current" className="flex-grow overflow-hidden mt-4">
-                                         <ScrollArea className="h-full pr-4">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                {Object.entries(gnreConfigs).map(([key, value]) => (
-                                                    <div key={key} className="space-y-1">
-                                                        <Label htmlFor={key} className="text-xs font-semibold capitalize">{key.replace(/_/g, ' ')}</Label>
-                                                        <Input id={key} name={key} value={value} onChange={handleConfigChange} className="h-8 text-sm"/>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </ScrollArea>
-                                    </TabsContent>
-                                     <TabsContent value="history" className="flex-grow overflow-hidden mt-4">
-                                         <ScrollArea className="h-full pr-4">
-                                            {savedConfigs.length > 0 ? (
-                                                <div className="space-y-2">
-                                                    {savedConfigs.map(config => (
-                                                        <div key={config.id} className="flex items-center justify-between p-2 border rounded-md">
-                                                            <span className="font-medium text-sm">{config.name}</span>
-                                                            <div className="flex items-center gap-1">
-                                                                <Button size="sm" variant="outline" onClick={() => handleLoadConfig(config.id)}>Carregar</Button>
-                                                                    <AlertDialog>
-                                                                    <AlertDialogTrigger asChild>
-                                                                        <Button size="icon" variant="destructive" className='h-9 w-9'><Trash2 className="h-4 w-4"/></Button>
-                                                                    </AlertDialogTrigger>
-                                                                    <AlertDialogContent>
-                                                                        <AlertDialogHeader>
-                                                                            <AlertDialogTitle>Tem a certeza?</AlertDialogTitle>
-                                                                            <AlertDialogDescription>
-                                                                                Esta ação irá remover permanentemente a configuração "{config.name}" do seu histórico.
-                                                                            </AlertDialogDescription>
-                                                                        </AlertDialogHeader>
-                                                                        <AlertDialogFooter>
-                                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                                            <AlertDialogAction onClick={() => handleDeleteConfig(config.id)}>Remover</AlertDialogAction>
-                                                                        </AlertDialogFooter>
-                                                                    </AlertDialogContent>
-                                                                </AlertDialog>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <div className="text-center text-muted-foreground py-8">
-                                                    <History className="mx-auto h-10 w-10 mb-2"/>
-                                                    <p>Nenhuma configuração guardada.</p>
-                                                </div>
-                                            )}
-                                         </ScrollArea>
-                                    </TabsContent>
-                                </Tabs>
-
-                                <DialogFooter className="pt-4 mt-4 border-t gap-2">
-                                    <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                            <Button variant="outline"><Save className="mr-2 h-4 w-4"/>Salvar Configuração Atual</Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                                <AlertDialogTitle>Nomear Configuração</AlertDialogTitle>
-                                                <AlertDialogDescription>
-                                                    Digite um nome para guardar a sua configuração atual para uso futuro.
-                                                </AlertDialogDescription>
-                                            </AlertDialogHeader>
-                                            <div className="py-2">
-                                                <Input 
-                                                    id="config-name" 
-                                                    placeholder="Ex: GNRE Matriz SP"
-                                                    value={configName}
-                                                    onChange={(e) => setConfigName(e.target.value)}
-                                                />
-                                            </div>
-                                            <AlertDialogFooter>
-                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                <AlertDialogAction onClick={handleSaveConfig}>Salvar</AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
-                                    <DialogTrigger asChild>
-                                        <Button>Fechar</Button>
-                                    </DialogTrigger>
-                                </DialogFooter>
-                            </DialogContent>
-                        </Dialog>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-8">
                     <div>
                         <h3 className="text-lg font-bold mb-4">Etapa 1: Carregar XMLs e Definir Data</h3>
-                        <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                         <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
                             <div className='flex flex-col gap-2'>
-                                <Label>Carregar XMLs de Devolução (.xml ou .zip)</Label>
-                                <label htmlFor="xml-upload-difal" className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 cursor-pointer hover:border-primary transition-colors h-full">
+                                <Label>Carregar XMLs de Saída (.xml ou .zip)</Label>
+                                <label htmlFor="xml-upload-difal" className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 cursor-pointer hover:border-primary transition-colors h-full">
                                     <FileUp className="h-8 w-8 text-muted-foreground mb-1" />
                                     <span className="font-semibold text-sm">Clique ou arraste para carregar</span>
                                     <input id="xml-upload-difal" type="file" className="sr-only" onChange={handleXmlFileChange} multiple accept=".xml,.zip" />
                                 </label>
-                                {xmlFiles.length > 0 && <div className="text-sm text-muted-foreground"><span className="font-bold">{xmlFiles.length}</span> ficheiro(s) XML pronto(s).</div>}
+                                {xmlFiles.length > 0 && <div className="text-sm text-muted-foreground"><span className="font-bold">{xmlFiles.length}</span> ficheiro(s) carregados.</div>}
                             </div>
                             <div>
-                                <Label htmlFor='due-date'>Data de Vencimento/Pagamento da Guia</Label>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            id="due-date"
-                                            variant={"outline"}
-                                            className={cn(
-                                                "w-full justify-start text-left font-normal",
-                                                !dueDate && "text-muted-foreground"
-                                            )}
-                                        >
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {dueDate ? format(dueDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : <span>Selecione uma data</span>}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0">
-                                        <Calendar
-                                            mode="single"
-                                            selected={dueDate}
-                                            onSelect={setDueDate}
-                                            initialFocus
-                                        />
-                                    </PopoverContent>
-                                </Popover>
+                                <Label htmlFor='due-date'>Data de Pagamento da Guia</Label>
+                                <div className="flex items-center gap-2">
+                                     <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                id="due-date"
+                                                variant={"outline"}
+                                                className={cn(
+                                                    "w-full justify-start text-left font-normal",
+                                                    !dueDate && "text-muted-foreground"
+                                                )}
+                                            >
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {dueDate ? format(dueDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : <span>Selecione uma data</span>}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0">
+                                            <Calendar
+                                                mode="single"
+                                                selected={dueDate}
+                                                onSelect={setDueDate}
+                                                initialFocus
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
+                                     <Button size="icon" variant="ghost" onClick={() => copyToClipboard(dueDate ? format(dueDate, 'dd/MM/yyyy') : '')} disabled={!dueDate}>
+                                        <ClipboardCopy className="h-6 w-6" />
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Etapa 2</span></div></div>
-
-                    <div>
-                        <h3 className="text-lg font-bold mb-2">Etapa 2: Processar e Gerar Script</h3>
-                        <p className='text-sm text-muted-foreground mb-4'>Clique para extrair os dados dos XMLs. Depois, poderá gerar o script de automação.</p>
+                     <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Etapa 2</span></div></div>
+                     <div>
+                        <h3 className="text-lg font-bold mb-2">Etapa 2: Processar e Exportar</h3>
+                         <p className='text-sm text-muted-foreground mb-4'>Clique para extrair os dados dos XMLs. Depois, poderá baixar a planilha com os resultados.</p>
                         <div className='flex flex-col sm:flex-row gap-4'>
-                            <Button onClick={processXmlForGnre} disabled={isLoading || xmlFiles.length === 0} className="w-full">
+                            <Button onClick={processXmls} disabled={isLoading || xmlFiles.length === 0} className="w-full">
                                 {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : <><Cpu className="mr-2 h-4 w-4" /> Processar XMLs</>}
                             </Button>
-                             <Button onClick={handleGenerateAndDownloadScript} disabled={gnreData.length === 0} className="w-full">
-                                <Bot className="mr-2 h-4 w-4" /> Gerar e Baixar Script de Automação
+                             <Button onClick={handleDownloadExcel} disabled={difalData.length === 0} className="w-full">
+                                <Download className="mr-2 h-4 w-4" /> Baixar Excel
                             </Button>
                         </div>
                     </div>
                 </CardContent>
             </Card>
 
-            {gnreData.length > 0 && (
+            {totals && (
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Total de Notas</CardTitle>
+                            <Hash className="h-6 w-6 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent className='flex items-end justify-between'>
+                            <div className="text-4xl font-bold">{totals.count}</div>
+                            <Button size="icon" variant="ghost" onClick={() => copyToClipboard(totals.count)}><ClipboardCopy className="h-6 w-6" /></Button>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Valor Total das Notas</CardTitle>
+                            <Sigma className="h-6 w-6 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent className='flex items-end justify-between'>
+                            <div className="text-4xl font-bold">{totals.totalNotesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                            <Button size="icon" variant="ghost" onClick={() => copyToClipboard(totals.totalNotesValue)}><ClipboardCopy className="h-6 w-6" /></Button>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Valor Total Guias (11%)</CardTitle>
+                            <Coins className="h-6 w-6 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent className='flex items-end justify-between'>
+                            <div className="text-4xl font-bold">{totals.totalGuideValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                            <Button size="icon" variant="ghost" onClick={() => copyToClipboard(totals.totalGuideValue)}><ClipboardCopy className="h-6 w-6" /></Button>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {difalData.length > 0 && (
                 <Card>
                     <CardHeader>
-                        <CardTitle>Dados Extraídos dos XMLs</CardTitle>
+                        <CardTitle>Dados Extraídos para DIFAL</CardTitle>
                         <CardDescription>
-                            Os seguintes dados foram extraídos e serão incluídos no script de automação.
+                            Os seguintes dados foram extraídos dos XMLs carregados.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
                        <DataTable 
-                            columns={dataTableColumns}
-                            data={gnreData}
+                            columns={columns}
+                            data={difalData}
                        />
                     </CardContent>
                 </Card>
@@ -472,4 +329,3 @@ export function DifalAnalysis() {
         </div>
     );
 }
-
