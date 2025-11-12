@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, AlertTriangle, HelpCircle, Save, X } from "lucide-react";
+import { Check, AlertTriangle, HelpCircle, Save, X, CheckSquare } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { RowSelectionState, Table as ReactTable } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
@@ -157,15 +157,15 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         return [
             {
                 id: 'select',
-                header: ({ table }) => <Checkbox checked={table.getIsAllPageRowsSelected()} onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)} aria-label="Selecionar todas" />,
-                cell: ({ row }) => <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Selecionar linha" />,
+                header: ({ table }: any) => <Checkbox checked={table.getIsAllPageRowsSelected()} onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)} aria-label="Selecionar todas" />,
+                cell: ({ row }: any) => <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Selecionar linha" />,
                 enableSorting: false,
             },
             ...baseCols,
              {
                 id: 'status',
                 header: 'Status da Validação',
-                cell: ({ row }) => {
+                cell: ({ row }: any) => {
                     const status = classifications[row.original.uniqueProductKey]?.classification || 'unvalidated';
                     return <div className={`flex items-center gap-2 font-medium ${getStatusStyles(status)}`}>{getStatusIcon(status)} {status}</div>;
                 }
@@ -173,7 +173,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
              {
                 id: 'isDifal',
                 header: 'É DIFAL?',
-                cell: ({ row }) => {
+                cell: ({ row }: any) => {
                     const isDifal = classifications[row.original.uniqueProductKey]?.isDifal || false;
                     return <div className='flex justify-center'>{isDifal ? <Check className="h-5 w-5 text-blue-600" /> : <X className="h-5 w-5 text-muted-foreground" />}</div>;
                 }
@@ -181,7 +181,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             {
                 id: 'actions',
                 header: 'Ações Individuais',
-                cell: ({ row }) => (
+                cell: ({ row }: any) => (
                      <TooltipProvider>
                         <div className="flex gap-1 justify-center">
                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'correct')}><Check className="h-5 w-5 text-green-600"/></Button></TooltipTrigger><TooltipContent><p>Marcar como Correto</p></TooltipContent></Tooltip>
@@ -193,7 +193,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                 )
             }
         ];
-    }, [itemsToValidate, classifications, handleStatusChange, handleDifalChange]);
+    }, [itemsToValidate, classifications]);
 
 
     if (reconciledData.length === 0) {
