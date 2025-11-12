@@ -32,7 +32,7 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   footer?: Record<string, string>;
-  tableRef?: React.MutableRefObject<ReactTable<TData> | null>;
+  tableRef?: React.RefObject<ReactTable<TData> | null>;
 }
 
 export function DataTable<TData, TValue>({
@@ -69,7 +69,7 @@ export function DataTable<TData, TValue>({
   
   React.useEffect(() => {
     if (tableRef) {
-      tableRef.current = table;
+      (tableRef as React.MutableRefObject<ReactTable<TData> | null>).current = table;
     }
   }, [table, tableRef]);
 

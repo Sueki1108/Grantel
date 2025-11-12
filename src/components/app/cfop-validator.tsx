@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, AlertTriangle, Save, X, ListFilter, FilterX, RotateCw, BadgeInfo, CheckSquare, ChevronDown, ChevronRight } from "lucide-react";
+import { Check, AlertTriangle, Save, X, ListFilter, FilterX, RotateCw, ChevronDown, ChevronRight } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Table as ReactTable } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
@@ -58,16 +58,14 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     const [hasChanges, setHasChanges] = useState(false);
     const [activeTab, setActiveTab] = useState<ValidationStatus | 'all'>('unvalidated');
 
-    // State for the new filter system
     const [filterState, setFilterState] = useState<FilterState>({ cfopXml: new Set(), cst: new Set(), aliquota: new Set() });
     const [availableFilters, setAvailableFilters] = useState<{ cfopXml: string[], cst: string[], aliquota: string[] }>({ cfopXml: [], cst: [], aliquota: [] });
-    const [numSelected, setNumSelected] = useState(0);
-
-    const tableRefs = React.useRef<Record<string, React.MutableRefObject<ReactTable<ReconciledItem> | null>>>({});
+    
+    const tableRefs = React.useRef<Record<string, React.RefObject<ReactTable<ReconciledItem>>>>({});
 
 
     const itemsToValidate = useMemo((): ReconciledItem[] => {
-        return reconciledData.map((item, index) => {
+        return reconciledData.map((item) => {
             const uniqueProductKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item.Sienge_CFOP || ''}`;
             const id = `${item['Chave de acesso']}-${item['Item']}`;
             return {
@@ -79,7 +77,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     }, [reconciledData]);
 
      useEffect(() => {
-        // Step 1: Derive available filter options from the data
         const cfopXmlOptions = new Set<string>();
         const cstOptions = new Set<string>();
         const aliquotaOptions = new Set<string>();
@@ -97,7 +94,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         };
         setAvailableFilters(sortedFilters);
         
-        // Step 2: Load saved filters from localStorage or default to all selected
         try {
             const savedFilters = localStorage.getItem(CFOP_VALIDATOR_FILTERS_KEY);
             if (savedFilters) {
@@ -108,7 +104,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                     aliquota: new Set(parsed.aliquota || sortedFilters.aliquota),
                 });
             } else {
-                 // Default to all selected if no saved filters
                 setFilterState({
                     cfopXml: new Set(sortedFilters.cfopXml),
                     cst: new Set(sortedFilters.cst),
@@ -117,7 +112,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             }
         } catch (e) {
             console.error("Failed to load CFOP filters from localStorage", e);
-             // Default to all selected on error
             setFilterState({
                 cfopXml: new Set(sortedFilters.cfopXml),
                 cst: new Set(sortedFilters.cst),
@@ -127,7 +121,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
 
     }, [itemsToValidate]);
     
-    // Save filters to localStorage whenever they change
     useEffect(() => {
         const filtersToSave = {
             cfopXml: Array.from(filterState.cfopXml),
@@ -193,19 +186,11 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         setHasChanges(true);
     };
     
-    useEffect(() => {
-        const calculateTotalSelected = () => {
-             let total = 0;
-            Object.values(tableRefs.current).forEach(ref => {
-                if (ref.current) {
-                    total += ref.current.getFilteredSelectedRowModel().rows.length;
-                }
-            });
-            setNumSelected(total);
-        };
-        const interval = setInterval(calculateTotalSelected, 500);
-        return () => clearInterval(interval);
-    }, []);
+    const numSelected = useMemo(() => {
+        return Object.values(tableRefs.current).reduce((acc, ref) => {
+            return acc + (ref.current?.getFilteredSelectedRowModel().rows.length || 0);
+        }, 0);
+    }, [tableRefs.current]);
 
 
     const handleBulkAction = (action: 'correct' | 'incorrect' | 'verify' | 'difal') => {
@@ -214,9 +199,8 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         Object.values(tableRefs.current).forEach(ref => {
             if (ref.current) {
                 selectedItems.push(...ref.current.getFilteredSelectedRowModel().rows.map(row => row.original));
-                // Do not clear selection for DIFAL
                  if (action !== 'difal') {
-                    ref.current.toggleAllRowsSelected(false);
+                    ref.current.toggleAllPageRowsSelected(false);
                 }
             }
         });
@@ -335,12 +319,11 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
              <Tabs defaultValue={groupKeys[0]} className="w-full">
                  <TabsList className="h-auto flex-wrap justify-start">
                     {groupKeys.map(cfop => (
-                        <TooltipProvider key={cfop}>
+                        <TooltipProvider key={cfop} delayDuration={300}>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <TabsTrigger value={cfop} className="justify-start gap-2">
-                                        <Badge variant="secondary">{cfop}</Badge>
-                                        <span className="ml-1 text-xs font-bold">({groups[cfop].length})</span>
+                                    <TabsTrigger value={cfop}>
+                                        {cfop} ({groups[cfop].length})
                                     </TabsTrigger>
                                 </TooltipTrigger>
                                 <TooltipContent side="top">
@@ -354,46 +337,46 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                 {groupKeys.map(cfop => {
                     const items = groups[cfop];
                     const tableKey = `${status}-${cfop}`;
+                    
                     if (!tableRefs.current[tableKey]) {
                         tableRefs.current[tableKey] = React.createRef<ReactTable<ReconciledItem>>();
                     }
                     const tableRef = tableRefs.current[tableKey];
                     
-                    const columns = getColumnsWithCustomRender(
-                        items,
-                        ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'CST do ICMS', 'pICMS'],
-                        (row, id) => <div className="truncate max-w-xs">{String(row.original[id as keyof ReconciledItem] || '')}</div>
-                    );
-
-                    columns.unshift({
-                        id: 'select',
-                        header: ({ table }: any) => <Checkbox checked={table.getIsAllPageRowsSelected()} onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)} aria-label="Selecionar todas" />,
-                        cell: ({ row }: any) => <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Selecionar linha" />,
-                        enableSorting: false,
-                    });
-
-                     columns.push({
-                        id: 'isDifal',
-                        header: 'É DIFAL?',
-                        cell: ({ row }: any) => {
-                            const isDifal = classifications[row.original.id]?.isDifal || false;
-                            return <div className='flex justify-center'>{isDifal ? <Check className="h-5 w-5 text-blue-600" /> : <X className="h-5 w-5 text-muted-foreground" />}</div>;
+                    const columns: ColumnDef<ReconciledItem>[] = [
+                        {
+                            id: 'select',
+                            header: ({ table }) => <Checkbox checked={table.getIsAllPageRowsSelected()} onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)} aria-label="Selecionar todas" />,
+                            cell: ({ row }) => <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Selecionar linha" onClick={(e) => e.stopPropagation()}/>,
+                            enableSorting: false,
+                        },
+                         ...getColumnsWithCustomRender(
+                            items,
+                            ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'CST do ICMS', 'pICMS'],
+                            (row, id) => <div className="truncate max-w-xs">{String(row.original[id as keyof ReconciledItem] || '')}</div>
+                        ),
+                        {
+                            id: 'isDifal',
+                            header: 'É DIFAL?',
+                            cell: ({ row }) => {
+                                const isDifal = classifications[row.original.id]?.isDifal || false;
+                                return <div className='flex justify-center'>{isDifal ? <Check className="h-5 w-5 text-blue-600" /> : <X className="h-5 w-5 text-muted-foreground" />}</div>;
+                            }
+                        },
+                        {
+                            id: 'actions',
+                            header: () => <div className='text-center'>Ações</div>,
+                            cell: ({ row }) => (
+                                 <TooltipProvider>
+                                    <div className="flex gap-1 justify-center">
+                                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'correct')}><Check className="h-5 w-5 text-green-600"/></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
+                                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'incorrect')}><X className="h-5 w-5 text-red-600"/></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
+                                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'verify')}><AlertTriangle className="h-5 w-5 text-amber-600"/></Button></TooltipTrigger><TooltipContent><p>Verificar</p></TooltipContent></Tooltip>
+                                    </div>
+                                </TooltipProvider>
+                            )
                         }
-                    });
-
-                    columns.push({
-                        id: 'actions',
-                        header: 'Ações',
-                        cell: ({ row }: any) => (
-                             <TooltipProvider>
-                                <div className="flex gap-1 justify-center">
-                                    <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'correct')}><Check className="h-5 w-5 text-green-600"/></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
-                                    <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'incorrect')}><X className="h-5 w-5 text-red-600"/></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
-                                    <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'verify')}><AlertTriangle className="h-5 w-5 text-amber-600"/></Button></TooltipTrigger><TooltipContent><p>Verificar</p></TooltipContent></Tooltip>
-                                </div>
-                            </TooltipProvider>
-                        )
-                    });
+                    ];
                     
                     return (
                         <TabsContent key={cfop} value={cfop} className="mt-0 pt-4">
