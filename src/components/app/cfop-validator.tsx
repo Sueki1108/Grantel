@@ -42,42 +42,19 @@ interface CfopValidatorProps {
     onPersistAllClassifications: (allData: AllClassifications) => void;
 }
 
-const getStatusStyles = (status: ValidationStatus) => {
-    switch (status) {
-        case 'correct': return "text-green-600";
-        case 'incorrect': return "text-red-600";
-        case 'verify': return "text-amber-600";
-        default: return "text-muted-foreground";
-    }
-};
-
-const getStatusIcon = (status: ValidationStatus) => {
-    switch (status) {
-        case 'correct': return <Check className="h-5 w-5" />;
-        case 'incorrect': return <X className="h-5 w-5" />;
-        case 'verify': return <AlertTriangle className="h-5 w-5" />;
-        default: return <HelpCircle className="h-5 w-5" />;
-    }
-}
-
-
 export function CfopValidator({ reconciledData, competence, allPersistedClassifications, onPersistAllClassifications }: CfopValidatorProps) {
     const { toast } = useToast();
-    const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-
     const [classifications, setClassifications] = useState<Record<string, { classification: ValidationStatus, isDifal: boolean }>>({});
     const [hasChanges, setHasChanges] = useState(false);
     const [activeTab, setActiveTab] = useState<ValidationStatus | 'all'>('unvalidated');
     const [openCollapsibles, setOpenCollapsibles] = useState<Record<string, boolean>>({});
 
-    
-    // Filtros
     const [cfopXmlFilter, setCfopXmlFilter] = useState('');
     const [cstFilter, setCstFilter] = useState('');
     const [aliquotaFilter, setAliquotaFilter] = useState('');
 
-    const tableRefs: Record<string, React.MutableRefObject<ReactTable<ReconciledItem> | null>> = {};
-
+    const [numSelected, setNumSelected] = useState(0);
+    const tableRefs = React.useRef<Record<string, React.MutableRefObject<ReactTable<ReconciledItem> | null>>>({});
 
     const itemsToValidate = useMemo((): ReconciledItem[] => {
         return reconciledData.map((item, index) => {
@@ -100,7 +77,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             itemsToValidate.map(item => {
                 let classificationFromStore = persistedForCompetence[item.uniqueProductKey];
                 
-                // If not found in current competence, search in others
                 if (!classificationFromStore) {
                     for (const otherCompetence in allPersistedClassifications) {
                         const found = allPersistedClassifications[otherCompetence]?.cfopValidations?.classifications?.[item.uniqueProductKey];
@@ -120,7 +96,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
 
         setClassifications(initialClassifications);
         setHasChanges(false);
-        setRowSelection({});
     }, [itemsToValidate, competence, allPersistedClassifications]);
     
     const handleStatusChange = (itemsToChange: ReconciledItem[], newStatus: ValidationStatus) => {
@@ -148,14 +123,29 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         });
         setHasChanges(true);
     };
+    
+    useEffect(() => {
+        const calculateTotalSelected = () => {
+             let total = 0;
+            Object.values(tableRefs.current).forEach(ref => {
+                if (ref.current) {
+                    total += ref.current.getFilteredSelectedRowModel().rows.length;
+                }
+            });
+            setNumSelected(total);
+        };
+        const interval = setInterval(calculateTotalSelected, 500); // Check for selection changes periodically
+        return () => clearInterval(interval);
+    }, []);
+
 
     const handleBulkAction = (action: 'correct' | 'incorrect' | 'verify' | 'toggle_difal') => {
         const selectedItems: ReconciledItem[] = [];
 
-        Object.keys(tableRefs).forEach(key => {
-            const table = tableRefs[key].current;
-            if (table) {
-                selectedItems.push(...table.getFilteredSelectedRowModel().rows.map(row => row.original));
+        Object.values(tableRefs.current).forEach(ref => {
+            if (ref.current) {
+                selectedItems.push(...ref.current.getFilteredSelectedRowModel().rows.map(row => row.original));
+                ref.current.toggleAllRowsSelected(false); // Deselect after action
             }
         });
         
@@ -169,7 +159,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         } else {
             handleStatusChange(selectedItems, action as ValidationStatus);
         }
-        setRowSelection({});
+        setNumSelected(0);
     };
 
     const handleSaveChanges = () => {
@@ -230,12 +220,12 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                     const items = groups[cfop];
                     const cfopDescription = cfopDescriptions[parseInt(cfop, 10)] || 'Descrição não encontrada';
                     const isGroupOpen = openCollapsibles[`${status}-${cfop}`] ?? true;
-
-                    // Initialize ref for each table
-                    if (!tableRefs[`${status}-${cfop}`]) {
-                        tableRefs[`${status}-${cfop}`] = React.createRef<ReactTable<ReconciledItem> | null>();
+                    
+                    const tableKey = `${status}-${cfop}`;
+                    if (!tableRefs.current[tableKey]) {
+                        tableRefs.current[tableKey] = React.createRef<ReactTable<ReconciledItem>>();
                     }
-                    const tableRef = tableRefs[`${status}-${cfop}`];
+                    const tableRef = tableRefs.current[tableKey];
                     
                     const columns = getColumnsWithCustomRender(
                         items,
@@ -289,7 +279,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                                 </div>
                             </CollapsibleTrigger>
                              <CollapsibleContent className="p-2">
-                                <DataTable columns={columns} data={items} tableRef={tableRef} rowSelection={rowSelection} setRowSelection={setRowSelection} />
+                                <DataTable columns={columns} data={items} tableRef={tableRef} />
                             </CollapsibleContent>
                         </Collapsible>
                     )
@@ -312,8 +302,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             </Card>
         );
     }
-    
-    const numSelected = Object.keys(rowSelection).length;
     
     return (
         <Card>

@@ -32,8 +32,6 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   footer?: Record<string, string>;
-  rowSelection?: RowSelectionState;
-  setRowSelection?: React.Dispatch<React.SetStateAction<RowSelectionState>>;
   tableRef?: React.MutableRefObject<ReactTable<TData> | null>;
 }
 
@@ -41,15 +39,13 @@ export function DataTable<TData, TValue>({
   columns,
   data,
   footer,
-  rowSelection,
-  setRowSelection,
   tableRef,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = React.useState('')
+  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
 
-  const isRowSelectionEnabled = !!rowSelection && !!setRowSelection;
 
   const table = useReactTable({
     data,
@@ -62,7 +58,7 @@ export function DataTable<TData, TValue>({
     onGlobalFilterChange: setGlobalFilter,
     getFilteredRowModel: getFilteredRowModel(),
     onRowSelectionChange: setRowSelection,
-    enableRowSelection: isRowSelectionEnabled, 
+    enableRowSelection: true, 
     state: {
       sorting,
       columnFilters,
@@ -89,12 +85,10 @@ export function DataTable<TData, TValue>({
             }
             className="max-w-sm"
             />
-            {isRowSelectionEnabled && (
-              <div className="text-sm text-muted-foreground">
-                  {table.getFilteredSelectedRowModel().rows.length} de{" "}
-                  {table.getFilteredRowModel().rows.length} linha(s) selecionadas.
-              </div>
-            )}
+            <div className="text-sm text-muted-foreground">
+                {table.getFilteredSelectedRowModel().rows.length} de{" "}
+                {table.getFilteredRowModel().rows.length} linha(s) selecionadas.
+            </div>
       </div>
       <div className="rounded-md border overflow-x-auto">
         <Table>
@@ -135,9 +129,7 @@ export function DataTable<TData, TValue>({
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  data-state={isRowSelectionEnabled && row.getIsSelected() ? "selected" : undefined}
-                  onClick={isRowSelectionEnabled ? () => row.toggleSelected() : undefined}
-                  className={isRowSelectionEnabled ? 'cursor-pointer' : ''}
+                  data-state={row.getIsSelected() ? "selected" : undefined}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
