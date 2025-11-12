@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, AlertTriangle, HelpCircle, Save, X, ListFilter, FilterX, RotateCcw, BadgeInfo } from "lucide-react";
+import { Check, AlertTriangle, HelpCircle, Save, X, ListFilter, FilterX, RotateCw, BadgeInfo, CheckSquare } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Table as ReactTable } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
@@ -213,7 +213,9 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         Object.values(tableRefs.current).forEach(ref => {
             if (ref.current) {
                 selectedItems.push(...ref.current.getFilteredSelectedRowModel().rows.map(row => row.original));
-                ref.current.toggleAllRowsSelected(false);
+                if (action !== 'toggle_difal') {
+                    ref.current.toggleAllRowsSelected(false);
+                }
             }
         });
         
@@ -462,7 +464,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                                  <Button size="sm" variant="outline" onClick={() => handleBulkAction('incorrect')}><X className="mr-2 h-4 w-4 text-red-600"/>Incorreto</Button>
                                  <Button size="sm" variant="outline" onClick={() => handleBulkAction('verify')}><AlertTriangle className="mr-2 h-4 w-4 text-amber-600"/>Verificar</Button>
                                  <div className="h-6 border-l" />
-                                 <Button size="sm" variant="outline" onClick={() => handleBulkAction('toggle_difal')}><BadgeInfo className="mr-2 h-4 w-4 text-blue-600"/>Alternar DIFAL</Button>
+                                 <Button size="sm" variant="outline" onClick={() => handleBulkAction('toggle_difal')}><BadgeInfo className="mr-2 h-4 w-4 text-blue-600"/>DIFAL</Button>
                              </div>
                         </Card>
                     </div>
@@ -484,3 +486,5 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         </Card>
     );
 }
+
+    
