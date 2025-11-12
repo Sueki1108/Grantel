@@ -8,7 +8,7 @@ import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { Check, AlertTriangle, Save, X, ListFilter, FilterX, RotateCw, ChevronDown, ChevronRight, CheckSquare } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { Table as ReactTable, RowSelectionState } from '@tanstack/react-table';
+import { Table as ReactTable, RowSelectionState, ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
 import { AllClassifications } from './imobilizado-analysis';
 import { useToast } from '@/hooks/use-toast';
@@ -199,7 +199,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             handleDifalToggle(selectedItems);
         } else {
             handleStatusChange(selectedItems, action as ValidationStatus);
-            // Deselect rows after applying a status
             setRowSelection({});
         }
     };
@@ -317,7 +316,11 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         {
             id: 'select',
             header: ({ table }) => <Checkbox checked={table.getIsAllPageRowsSelected()} onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)} aria-label="Selecionar todas" />,
-            cell: ({ row }) => <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Selecionar linha" onClick={(e) => e.stopPropagation()}/>,
+            cell: ({ row }) => (
+                <div onClick={(e) => e.stopPropagation()}>
+                    <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Selecionar linha" />
+                </div>
+            ),
             enableSorting: false,
         },
          ...getColumnsWithCustomRender(
@@ -337,13 +340,13 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             id: 'actions',
             header: () => <div className='text-center'>Ações</div>,
             cell: ({ row }) => (
-                 <TooltipProvider>
-                    <div className="flex gap-1 justify-center" onClick={(e) => e.stopPropagation()}>
+                 <div className="flex gap-1 justify-center" onClick={(e) => e.stopPropagation()}>
+                    <TooltipProvider>
                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'correct')}><Check className="h-5 w-5 text-green-600"/></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'incorrect')}><X className="h-5 w-5 text-red-600"/></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'verify')}><AlertTriangle className="h-5 w-5 text-amber-600"/></Button></TooltipTrigger><TooltipContent><p>Verificar</p></TooltipContent></Tooltip>
-                    </div>
-                </TooltipProvider>
+                    </TooltipProvider>
+                </div>
             )
         }
     ];
@@ -418,14 +421,31 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                             <TabsTrigger value="all">Todos</TabsTrigger>
                         </TabsList>
                     </Tabs>
-                    <div className="mt-4 border rounded-md">
-                        <DataTable
-                            columns={columns}
-                            data={filteredAndGroupedItems.flatMap(([, items]) => items)}
-                            tableRef={tableRef}
-                            rowSelection={rowSelection}
-                            setRowSelection={setRowSelection}
-                        />
+                     <div className="mt-4 border rounded-md p-2">
+                        {filteredAndGroupedItems.length > 0 ? (
+                             <div className="space-y-2">
+                                {filteredAndGroupedItems.map(([siengeCfop, items]) => (
+                                    <Collapsible key={siengeCfop}>
+                                        <CollapsibleTrigger asChild>
+                                            <div className="flex items-center justify-between p-2 bg-muted hover:bg-muted/80 rounded-md cursor-pointer">
+                                                <div className="flex items-center gap-2">
+                                                     <ChevronRight className="h-4 w-4 transition-transform data-[state=open]:rotate-90" />
+                                                     <span className="font-semibold">CFOP Sienge: {siengeCfop}</span>
+                                                     <span className="text-muted-foreground">({items.length} itens)</span>
+                                                </div>
+                                            </div>
+                                        </CollapsibleTrigger>
+                                        <CollapsibleContent>
+                                            <div className="p-2 pl-8">
+                                                <DataTable columns={columns} data={items} tableRef={tableRef} rowSelection={rowSelection} setRowSelection={setRowSelection} />
+                                            </div>
+                                        </CollapsibleContent>
+                                    </Collapsible>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center text-muted-foreground p-8">Nenhum item corresponde aos filtros selecionados.</div>
+                        )}
                     </div>
                 </CardContent>
             </Card>

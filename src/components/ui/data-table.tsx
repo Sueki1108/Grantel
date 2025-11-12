@@ -61,7 +61,7 @@ export function DataTable<TData, TValue>({
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
     getFilteredRowModel: getFilteredRowModel(),
-    onRowSelectionChange: setRowSelection,
+    onRowSelectionChange: isControllingSelection ? setRowSelection : undefined,
     enableRowSelection: true, 
     state: {
       sorting,
