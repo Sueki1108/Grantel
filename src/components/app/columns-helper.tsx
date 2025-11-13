@@ -3,9 +3,8 @@
 import { ColumnDef } from "@tanstack/react-table"
 import { ArrowUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Row } from "@tanstack/react-table";
 
-type CustomCellRender<TData> = (row: Row<TData>, id: string) => React.ReactNode;
+type CustomCellRender<TData> = (row: { original: TData }, id: string) => React.ReactNode;
 
 const columnNameMap: Record<string, string> = {
     'Chave de acesso': 'Chave',

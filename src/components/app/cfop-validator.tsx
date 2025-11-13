@@ -14,7 +14,7 @@ import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { cfopDescriptions } from '@/lib/cfop';
-import { getColumnsWithCustomRender } from './columns-helper';
+import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
 import { DataTable } from './data-table';

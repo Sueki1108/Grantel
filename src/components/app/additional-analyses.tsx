@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, type ChangeEvent, useCallback } from "react";
@@ -5,12 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FileSearch, Sheet, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Save, FileJson, Validate } from "lucide-react";
+import { FileSearch, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Save, FileJson, Validate } from "lucide-react";
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns } from "@/components/app/columns-helper";
+import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import type { ProcessedData, SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { cleanAndToStr } from "@/lib/utils";
@@ -41,7 +42,6 @@ interface AdditionalAnalysesProps {
 
 export function AdditionalAnalyses({ 
     processedData, 
-    onProcessedDataChange,
     onSiengeFileChange, 
     onClearSiengeFile, 
     siengeFile, 
@@ -51,14 +51,11 @@ export function AdditionalAnalyses({
     onSpedProcessed,
     competence,
     onExportSession,
-    allPersistedClassifications,
-    onPersistAllClassifications,
 }: AdditionalAnalysesProps) {
     const { toast } = useToast();
     
     const reconciliationResults = processedData.reconciliationResults;
 
-    // Estado Exportação XML Revenda
     const [isExporting, setIsExporting] = useState(false);
     const [resaleAnalysis, setResaleAnalysis] = useState<{ noteKeys: Set<string>; xmls: File[] } | null>(null);
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
@@ -85,9 +82,9 @@ export function AdditionalAnalyses({
                 const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
                     if (data.length === 0 || !data[0]) return undefined;
                     const headers = Object.keys(data[0]);
-                    for (const name of possibleNames) {
-                        const found = headers.find(h => h.toLowerCase().replace(/[\s-._/]/g, '') === name);
-                        if(found) return found;
+                    for (const name of possibleNames){
+                        const found = headers.find((h)=>h.toLowerCase().replace(/[\s-._\/]/g, "") === name);
+                        if (found) return found;
                     }
                     return undefined;
                 };
@@ -317,7 +314,7 @@ export function AdditionalAnalyses({
                     <CfopValidator 
                         reconciledData={processedData.reconciliationResults?.allReconciledItems || []}
                         competence={competence}
-                        allPersistedClassifications={allPersistedClassifications}
+                        allPersistedClassifications={processedData.imobilizadoClassifications || {}}
                         onPersistAllClassifications={onPersistAllClassifications}
                     />
                 </TabsContent>
