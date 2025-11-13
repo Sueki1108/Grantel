@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from 'react';
@@ -15,7 +14,7 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
     const [activeTab, setActiveTab] = useState('');
 
     const orderedSheetNames = useMemo(() => [
-        "Notas Válidas", "CTEs Válidos", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
+        "Notas Válidas", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
         "Imobilizados",
         "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes", "Remessas e Retornos",
         "Notas Canceladas",

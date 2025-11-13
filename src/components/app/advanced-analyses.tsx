@@ -80,11 +80,10 @@ export function AdvancedAnalyses({
                 const findSiengeHeader = (data: any[], possibleNames: string[]): string | undefined => {
                     if (data.length === 0 || !data[0]) return undefined;
                     const headers = Object.keys(data[0]);
-                    const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
                     for (const name of possibleNames) {
                         const normalizedName = normalizeKey(name);
-                        const found = normalizedHeaders.find(h => h.normalized === normalizedName);
-                        if (found) return found.original;
+                        const found = headers.find(h => normalizeKey(h) === normalizedName);
+                        if (found) return found;
                     }
                     return undefined;
                 };

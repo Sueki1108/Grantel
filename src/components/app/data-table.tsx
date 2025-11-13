@@ -35,6 +35,8 @@ interface DataTableProps<TData, TValue> {
   footer?: Record<string, string>;
   tableRef?: React.MutableRefObject<ReactTable<TData> | null>;
   onSelectionChange?: (rowCount: number) => void;
+  rowSelection?: RowSelectionState;
+  setRowSelection?: React.Dispatch<React.SetStateAction<RowSelectionState>>;
 }
 
 export function DataTable<TData, TValue>({
@@ -42,12 +44,21 @@ export function DataTable<TData, TValue>({
   data,
   footer,
   tableRef,
-  onSelectionChange
+  onSelectionChange,
+  rowSelection: externalRowSelection,
+  setRowSelection: externalSetRowSelection
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = React.useState('')
-  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
+  
+  // Use internal state only if external state is not provided
+  const [internalRowSelection, setInternalRowSelection] = React.useState<RowSelectionState>({});
+  
+  const isControllingSelection = externalRowSelection !== undefined && externalSetRowSelection !== undefined;
+
+  const rowSelection = isControllingSelection ? externalRowSelection : internalRowSelection;
+  const setRowSelection = isControllingSelection ? externalSetRowSelection : setInternalRowSelection;
 
 
   const table = useReactTable({
@@ -94,10 +105,12 @@ export function DataTable<TData, TValue>({
             }
             className="max-w-sm"
             />
-            <div className="text-sm text-muted-foreground">
-                {table.getFilteredSelectedRowModel().rows.length} de{" "}
-                {table.getFilteredRowModel().rows.length} linha(s) selecionadas.
-            </div>
+            {onSelectionChange && (
+              <div className="text-sm text-muted-foreground">
+                  {table.getFilteredSelectedRowModel().rows.length} de{" "}
+                  {table.getFilteredRowModel().rows.length} linha(s) selecionadas.
+              </div>
+            )}
       </div>
       <div className="rounded-md border overflow-x-auto">
         <Table>
@@ -139,8 +152,8 @@ export function DataTable<TData, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() ? "selected" : undefined}
-                  className="cursor-pointer"
-                  onClick={() => row.toggleSelected()}
+                  className={onSelectionChange ? "cursor-pointer" : ""}
+                  onClick={() => onSelectionChange && row.toggleSelected()}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell 
