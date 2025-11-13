@@ -393,7 +393,7 @@ function useReconciliation(siengeData: any[] | null, xmlEntradaItems: any[], xml
 
     const result = useMemo(() => {
         if (!siengeData || !allXmlItems) {
-            return { reconciliationResults: null, error: null, enrichedXmlItems };
+            return { reconciliationResults: null, error: null, enrichedXmlItems: allXmlItems };
         }
         
         try {
@@ -416,7 +416,7 @@ function useReconciliation(siengeData: any[] | null, xmlEntradaItems: any[], xml
             };
 
             if (!h.cnpj || !h.numero || !h.valorTotal || !h.cfop) {
-                return { reconciliationResults: null, error: "Colunas essenciais (CPF/CNPJ, Número, Valor Total, CFOP) não encontradas no Sienge.", enrichedXmlItems };
+                return { reconciliationResults: null, error: "Colunas essenciais (CPF/CNPJ, Número, Valor Total, CFOP) não encontradas no Sienge.", enrichedXmlItems: allXmlItems };
             }
 
             const siengeMap = new Map<string, any[]>();
@@ -466,7 +466,7 @@ function useReconciliation(siengeData: any[] | null, xmlEntradaItems: any[], xml
             };
 
         } catch (err: any) {
-            return { reconciliationResults: null, error: err.message, enrichedXmlItems };
+            return { reconciliationResults: null, error: err.message, enrichedXmlItems: allXmlItems };
         }
     }, [siengeData, allXmlItems]);
 
