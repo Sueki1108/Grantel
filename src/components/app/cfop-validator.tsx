@@ -4,7 +4,6 @@ import * as React from 'react';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataTable } from "@/components/ui/data-table";
 import { Check, AlertTriangle, Save, X, ListFilter, RotateCw, HelpCircle, ClipboardCopy, Settings } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Table as ReactTable, ColumnDef } from '@tanstack/react-table';
@@ -18,6 +17,7 @@ import { cfopDescriptions } from '@/lib/cfop';
 import { getColumnsWithCustomRender } from './columns-helper';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
+import { DataTable } from './data-table';
 
 
 type ValidationStatus = 'unvalidated' | 'correct' | 'incorrect' | 'verify';
@@ -319,8 +319,10 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     const firstCfopInTab = Object.keys(currentStatusGroup)[0] || null;
 
     useEffect(() => {
-        setActiveCfopTab(firstCfopInTab);
-    }, [activeTab, firstCfopInTab]);
+        if (!activeCfopTab || !currentStatusGroup[activeCfopTab]) {
+            setActiveCfopTab(firstCfopInTab);
+        }
+    }, [activeTab, firstCfopInTab, currentStatusGroup, activeCfopTab]);
     
     return (
         <div className='relative'>
@@ -365,7 +367,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                                                 <div className='flex gap-1 mb-2'><Button size="xs" variant="link" onClick={() => handleSelectAllFilters('cfopXml')}>Todos</Button><Button size="xs" variant="link" onClick={() => handleClearAllFilters('cfopXml')}>Nenhum</Button></div>
                                                 <ScrollArea className="h-48 col-span-1 border rounded-md p-2">
                                                     {Array.from(filterOptions.cfopXml).sort().map(cfop => (
-                                                        <div key={cfop} className="flex items-center space-x-2"><Checkbox id={`cfop-${cfop}`} checked={filters.cfopXml.has(cfop)} onCheckedChange={c => handleFilterChange('cfopXml', cfop, !!c)} /><Label htmlFor={`cfop-${cfop}`}>{cfop} - {cfopDescriptions[Number(cfop)]?.substring(0,25)}...</Label></div>
+                                                        <div key={cfop} className="flex items-center space-x-2"><Checkbox id={`cfop-${cfop}`} checked={filters.cfopXml.has(cfop)} onCheckedChange={c => handleFilterChange('cfopXml', cfop, !!c)} /><Label htmlFor={`cfop-${cfop}`}>{cfop} - {(cfopDescriptions[Number(cfop)] || '').substring(0,25)}...</Label></div>
                                                     ))}
                                                 </ScrollArea>
                                             </div>
@@ -421,7 +423,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                                     </TabsList>
                                      {Object.entries(currentStatusGroup).map(([cfop, items]) => (
                                         <TabsContent key={cfop} value={cfop} className="mt-4">
-                                            <DataTable columns={columns} data={items} tableRef={tableRef} onSelectionChange={setNumSelected} />
+                                            <DataTable columns={columns} data={items} onSelectionChange={setNumSelected} tableRef={tableRef} />
                                         </TabsContent>
                                     ))}
                                 </Tabs>
