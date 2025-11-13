@@ -6,19 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, AlertTriangle, Save, X, ListFilter, Factory, Wrench, RotateCw, CheckSquare, HelpCircle, ChevronDown, ChevronRight, ClipboardCopy } from "lucide-react";
+import { Check, AlertTriangle, Save, X, ListFilter, Factory, Wrench, RotateCw, CheckSquare, HelpCircle, ClipboardCopy } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Table as ReactTable, ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
 import { AllClassifications } from './imobilizado-analysis';
 import { useToast } from '@/hooks/use-toast';
-import { cfopDescriptions } from '@/lib/cfop';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { ScrollArea, ScrollBar } from '../ui/scroll-area';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
-import { Input } from '../ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 
@@ -45,11 +41,11 @@ interface CfopValidatorProps {
     onPersistAllClassifications: (allData: AllClassifications) => void;
 }
 
-const STATUS_CONFIG: Record<ValidationStatus, { label: string; color: string }> = {
-    unvalidated: { label: 'Não Validado', color: 'hsl(var(--muted-foreground))' },
-    correct: { label: 'Correto', color: 'hsl(var(--primary))' },
-    incorrect: { label: 'Incorreto', color: 'hsl(var(--destructive))' },
-    verify: { label: 'Verificar', color: 'hsl(24 9.8% 10%)' },
+const STATUS_CONFIG: Record<ValidationStatus, { label: string; icon: React.ReactNode }> = {
+    unvalidated: { label: 'Não Validado', icon: <ListFilter className="h-4 w-4 mr-2" /> },
+    correct: { label: 'Correto', icon: <Check className="h-4 w-4 mr-2 text-green-600" /> },
+    incorrect: { label: 'Incorreto', icon: <X className="h-4 w-4 mr-2 text-red-600" /> },
+    verify: { label: 'Verificar', icon: <AlertTriangle className="h-4 w-4 mr-2 text-amber-600" /> },
 };
 
 
@@ -57,7 +53,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     const { toast } = useToast();
     const [classifications, setClassifications] = useState<Record<string, { classification: ValidationStatus, isDifal: boolean }>>({});
     const [hasChanges, setHasChanges] = useState(false);
-    const [activeCfopTab, setActiveCfopTab] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<ValidationStatus>('unvalidated');
     const tableRef = useRef<ReactTable<ReconciledItem> | null>(null);
     const [numSelected, setNumSelected] = useState(0);
 
@@ -104,6 +100,22 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         setClassifications(initialClassifications);
         setHasChanges(false);
     }, [itemsToValidate, competence, allPersistedClassifications]);
+    
+    
+    const filteredItemsByStatus = useMemo(() => {
+        const grouped: Record<ValidationStatus, ReconciledItem[]> = {
+            unvalidated: [], correct: [], incorrect: [], verify: []
+        };
+
+        itemsToValidate.forEach(item => {
+            const status = classifications[item.id]?.classification || 'unvalidated';
+            grouped[status].push(item);
+        });
+
+        return grouped;
+
+    }, [itemsToValidate, classifications]);
+
 
     const handleStatusChange = (itemsToChange: ReconciledItem[], newStatus: ValidationStatus) => {
         setClassifications(prev => {
@@ -168,31 +180,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         toast({ title: 'Validações de CFOP guardadas!' });
     };
     
-    const groupedBySiengeCfop = useMemo(() => {
-        const grouped = itemsToValidate.reduce((acc, item) => {
-            const siengeCfop = item.Sienge_CFOP || 'N/A';
-            if (!acc[siengeCfop]) {
-                acc[siengeCfop] = [];
-            }
-            acc[siengeCfop].push(item);
-            return acc;
-        }, {} as Record<string, ReconciledItem[]>);
-        
-        const sortedGroups = Object.entries(grouped).sort(([cfopA], [cfopB]) => {
-            if (cfopA === 'N/A') return 1;
-            if (cfopB === 'N/A') return -1;
-            return parseInt(cfopA, 10) - parseInt(cfopB, 10);
-        });
-
-        if (sortedGroups.length > 0 && !activeCfopTab) {
-            setActiveCfopTab(sortedGroups[0][0]);
-        } else if (sortedGroups.length === 0) {
-            setActiveCfopTab(null);
-        }
-
-        return sortedGroups;
-    }, [itemsToValidate, activeCfopTab]);
-
     const copyToClipboard = (text: string | number | undefined, type: string) => {
         const textToCopy = String(text ?? '');
         navigator.clipboard.writeText(textToCopy).then(() => {
@@ -201,7 +188,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
         });
     };
-
     
     const columns: ColumnDef<ReconciledItem>[] = useMemo(() => [
         {
@@ -214,23 +200,9 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             ),
             enableSorting: false,
         },
-        {
-            id: 'status',
-            header: 'Status',
-            cell: ({ row }) => {
-                 const status = classifications[row.original.id]?.classification || 'unvalidated';
-                 const icons: Record<ValidationStatus, React.ReactNode> = {
-                    unvalidated: <ListFilter className="h-5 w-5 text-muted-foreground" />,
-                    correct: <Check className="h-5 w-5 text-green-600" />,
-                    incorrect: <X className="h-5 w-5 text-red-600" />,
-                    verify: <AlertTriangle className="h-5 w-5 text-amber-600" />,
-                 };
-                 return <div className="flex justify-center">{icons[status]}</div>;
-            }
-        },
-         ...getColumnsWithCustomRender(
+        ...getColumnsWithCustomRender(
             itemsToValidate,
-            ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Valor Total'],
+            ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Valor Total'],
             (row, id) => {
                 const value = row.original[id as keyof ReconciledItem];
                 let displayValue = String(value ?? '');
@@ -284,6 +256,14 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             </Card>
         );
     }
+    
+    const handleTabChange = (value: string) => {
+        setActiveTab(value as ValidationStatus);
+        if (tableRef.current) {
+            tableRef.current.toggleAllRowsSelected(false);
+        }
+    };
+
 
     return (
         <div className='relative'>
@@ -308,51 +288,30 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                      <div className='flex items-start justify-between'>
                         <div>
                             <CardTitle className="font-headline text-2xl flex items-center gap-2"><CheckSquare className="h-8 w-8 text-primary"/>Validação de CFOP</CardTitle>
-                            <CardDescription>Analise os itens por CFOP do Sienge e valide a correspondência com o CFOP do XML.</CardDescription>
+                            <CardDescription>Analise os itens por status e valide a correspondência com o CFOP do XML.</CardDescription>
                         </div>
                          <Button onClick={handleSaveChanges} disabled={!hasChanges} className="shrink-0">
                             <Save className="mr-2 h-4 w-4"/> Guardar Validações
                         </Button>
                     </div>
                 </CardHeader>
-            </Card>
-            <Card className='mt-6'>
-                 <CardHeader>
-                     <CardTitle className="font-headline text-xl">Resultados da Validação de CFOP</CardTitle>
-                     <CardDescription>Itens agrupados por CFOP do Sienge.</CardDescription>
-                 </CardHeader>
-                <CardContent>
-                    <Tabs value={activeCfopTab || ''} onValueChange={(val) => { setActiveCfopTab(val); tableRef.current?.toggleAllRowsSelected(false); }}>
-                         <ScrollArea>
-                            <TabsList>
-                                {groupedBySiengeCfop.map(([cfop, items]) => (
-                                    <TooltipProvider key={cfop}>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <TabsTrigger value={cfop}>
-                                                     <div className="flex items-center gap-2">
-                                                        <Badge variant={activeCfopTab === cfop ? 'default' : 'secondary'}>{cfop}</Badge>
-                                                        <span className="text-xs text-muted-foreground">({items.length})</span>
-                                                     </div>
-                                                </TabsTrigger>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                                <p>{cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || 'Descrição não encontrada'}</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                    </TooltipProvider>
-                                ))}
-                            </TabsList>
-                            <ScrollBar orientation="horizontal" />
-                        </ScrollArea>
+                 <CardContent>
+                     <Tabs value={activeTab} onValueChange={handleTabChange}>
+                        <TabsList className="grid w-full grid-cols-4">
+                            {(Object.keys(STATUS_CONFIG) as ValidationStatus[]).map(status => (
+                                <TabsTrigger key={status} value={status} className="flex items-center gap-2">
+                                    {STATUS_CONFIG[status].icon}
+                                    {STATUS_CONFIG[status].label}
+                                    <Badge variant={activeTab === status ? "default" : "secondary"}>{filteredItemsByStatus[status].length}</Badge>
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
                         
-                        {groupedBySiengeCfop.map(([cfop, items]) => {
-                            return (
-                                 <TabsContent key={cfop} value={cfop} className="mt-4 space-y-4">
-                                    <DataTable columns={columns} data={items} tableRef={tableRef} onSelectionChange={(rowCount) => setNumSelected(rowCount)} />
-                                </TabsContent>
-                            )
-                        })}
+                        {(Object.keys(STATUS_CONFIG) as ValidationStatus[]).map(status => (
+                             <TabsContent key={status} value={status} className="mt-4 space-y-4">
+                                <DataTable columns={columns} data={filteredItemsByStatus[status]} tableRef={tableRef} onSelectionChange={(rowCount) => setNumSelected(rowCount)} />
+                            </TabsContent>
+                        ))}
                     </Tabs>
                 </CardContent>
             </Card>
