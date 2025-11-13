@@ -1,4 +1,3 @@
-
 // Types
 type LogFunction = (message: string) => void;
 
@@ -80,6 +79,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
 
     const chaveAcesso = getAttributeValue(infNFe, 'Id').replace('NFe', '');
     const nNF = getTagValue(ide, 'nNF');
+    const natOp = getTagValue(ide, 'natOp');
     const dhEmiRaw = getTagValue(ide, 'dhEmi');
     
     const emitCNPJ = getTagValue(emit, 'CNPJ');
@@ -114,6 +114,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'Emissão': dhEmiRaw,
         'Total': parseFloat(vNF) || 0,
         'Status': status,
+        'Natureza da Operação': natOp,
     };
     
     // Extrai dados do bloco <entrega> se existir

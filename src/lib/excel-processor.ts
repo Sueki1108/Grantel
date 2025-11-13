@@ -1,4 +1,3 @@
-
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import { KeyCheckResult } from '@/components/app/key-checker';
@@ -298,15 +297,19 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         ...originalDfs 
     };
     
-    const addCfopDescriptionToRow = (row: any) => {
-        if (!row || typeof row !== 'object' || !row['CFOP']) {
+    const addCfopDescriptionToRow = (row: any, allNfeCte: any[]) => {
+        if (!row || typeof row !== 'object') {
             return { ...row, 'Descricao CFOP': 'N/A' };
         }
-        const cfopCode = parseInt(cleanAndToStr(row['CFOP']), 10);
-        const fullDescription = cfopDescriptions[cfopCode] || 'Descrição não encontrada';
         
-        // Retornar a descrição completa agora
-        const newRow: { [key: string]: any } = { ...row, 'Descricao CFOP': fullDescription };
+        const chaveUnica = cleanAndToStr(row['Chave Unica']);
+        const relatedNota = allNfeCte.find(nota => cleanAndToStr(nota['Chave Unica']) === chaveUnica);
+        
+        const natOp = relatedNota ? relatedNota['Natureza da Operação'] : 'N/A';
+        const shortDescription = (natOp || 'N/A').split(' ').slice(0, 3).join(' ');
+
+        const newRow: { [key: string]: any } = { ...row, 'Descricao CFOP': shortDescription };
+        
         return newRow;
     };
     
@@ -317,11 +320,14 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         "Notas Canceladas", ...Object.keys(originalDfs)
     ];
 
+    const allNfeCteHeaders = [...nfe, ...cte, ...saidas];
+
     displayOrder.forEach(name => {
         let sheetData = finalResult[name];
         if (sheetData && sheetData.length > 0) {
-            if (["Itens Válidos", "Itens Válidos Saídas", "Saídas", "Notas Válidas", "Imobilizados", "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes", "Remessas e Retornos"].includes(name)) {
-                 sheetData = sheetData.map(addCfopDescriptionToRow);
+            // Aplica a descrição apenas para folhas que têm itens ou são notas
+            if (["Itens Válidos", "Itens Válidos Saídas", "Imobilizados", "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes", "Remessas e Retornos", "Saídas", "Notas Válidas"].includes(name)) {
+                 sheetData = sheetData.map(row => addCfopDescriptionToRow(row, allNfeCteHeaders));
             }
             finalSheetSet[name] = sheetData;
         }
