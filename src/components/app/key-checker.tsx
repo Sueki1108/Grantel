@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { KeyRound, FileText, Loader2, Download, FileWarning, UploadCloud, Search, Trash2, Copy, ShieldCheck, HelpCircle, X, FileUp, Upload, Settings } from "lucide-react";
+import { KeyRound, FileText, Loader2, Download, FileWarning, UploadCloud, Terminal, Search, Trash2, Copy, ShieldCheck, HelpCircle, X, FileUp, Upload, Settings } from "lucide-react";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
 import { formatCnpj, cleanAndToStr, parseSpedDate } from "@/lib/utils";
 import type { SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
@@ -26,6 +26,7 @@ import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
 import { LogDisplay } from "@/components/app/log-display";
+
 
 // Types
 export type KeyInfo = {
@@ -223,7 +224,7 @@ const processSpedFileInBrowser = (
     }
 
 
-    const lines = spedFileContent.split(/\\r?\\n/);
+    const lines = spedFileContent.split(/\r?\n/);
     let linesModifiedCount = 0;
     
     let intermediateLines: string[] = lines;
@@ -377,8 +378,8 @@ const processSpedFileInBrowser = (
         
         if (config.fixAddressSpaces && codeType === '0150' && parts.length > 12) {
             const addressComplement = parts[12] || '';
-            if (/\\s{2,}/.test(addressComplement)) {
-                parts[12] = addressComplement.replace(/\\s+/g, ' ').trim();
+            if (/\s{2,}/.test(addressComplement)) {
+                parts[12] = addressComplement.replace(/\s+/g, ' ').trim();
                 currentLine = parts.join('|');
                 modifications.addressSpaces.push({ lineNumber: i + 1, original: originalLine, corrected: currentLine });
                 lineWasModified = true;
@@ -490,7 +491,7 @@ const processSpedFileInBrowser = (
 
     return {
         fileName: `corrigido_sped.txt`,
-        fileContent: modifiedLines.join('\\r\\n') + '\\r\\n',
+        fileContent: modifiedLines.join('\r\n') + '\r\n',
         linesRead: lines.length,
         linesModified: linesModifiedCount,
         modifications,
@@ -543,7 +544,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     };
 
     for (const content of spedFileContents) {
-        const lines = content.split(/\\r?\\n/);
+        const lines = content.split(/\r?\n/);
         for (const line of lines) {
             const parts = line.split('|');
             if (parts.length < 2) continue;
@@ -1177,5 +1178,3 @@ export function KeyChecker({
         </div>
     );
 }
-
-    
