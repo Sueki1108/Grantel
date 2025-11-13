@@ -56,7 +56,7 @@ export interface ProcessedData {
     lastSaidaNumber?: number;
     imobilizadoClassifications?: AllClassifications;
     competence: string | null;
-    reconciliationResults?: ReconciliationResults | null;
+    reconciliationResults: ReconciliationResults;
     resaleAnalysis?: { noteKeys: Set<string>; xmls: File[] } | null;
     spedCorrections?: SpedCorrectionResult[] | null;
     fileNames?: {
@@ -351,15 +351,17 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         keyCheckResults: null,
         resaleAnalysis: null,
         spedCorrections: null,
-        reconciliationResults: null,
     };
 }
 
 
-export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any[], xmlSaidaItems: any[], xmlCteItems: any[]): ReconciliationResults | null {
-    if (!siengeData) {
-        return null;
+export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any[], xmlSaidaItems: any[], xmlCteItems: any[]): ReconciliationResults {
+    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], allReconciledItems: [] };
+    
+    if (!siengeData || !xmlEntradaItems) {
+        return emptyResult;
     }
+
     const allXmlItems = [
         ...(xmlEntradaItems || []).map(item => ({ ...item })),
         ...(xmlSaidaItems || []).map(item => ({ ...item })),
@@ -433,6 +435,6 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
 
     } catch (err: any) {
         console.error("Reconciliation Error:", err.message);
-        return null;
+        return emptyResult;
     }
 }

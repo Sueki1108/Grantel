@@ -11,7 +11,7 @@ import JSZip from 'jszip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
 import { getColumns } from "@/components/app/columns-helper";
-import type { ProcessedData, SpedInfo, SpedCorrectionResult, ReconciliationResults } from "@/lib/excel-processor";
+import type { ProcessedData, SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { cleanAndToStr } from "@/lib/utils";
 import { KeyChecker, type KeyCheckResult } from "./key-checker";
@@ -196,6 +196,18 @@ export function AdditionalAnalyses({
             setIsExporting(false);
         }
     };
+
+    const handleDownloadConciliacao = (data: any[], title: string) => {
+        if (!data || data.length === 0) {
+            toast({ title: "Nenhum dado para exportar", description: `Não há itens na aba "${title}".` });
+            return;
+        }
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, title);
+        const fileName = `Grantel - Conciliação ${title}.xlsx`;
+        XLSX.writeFile(workbook, fileName);
+    };
     
     return (
         <div className="space-y-6">
@@ -275,15 +287,15 @@ export function AdditionalAnalyses({
                                         </TabsList>
                                         <div className="mt-4">
                                             <TabsContent value="reconciled">
-                                                <Button onClick={() => {}} size="sm" className="mb-4" disabled={reconciliationResults.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                                <Button onClick={() => handleDownloadConciliacao(reconciliationResults.reconciled, 'Itens_Conciliados')} size="sm" className="mb-4" disabled={reconciliationResults.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
                                                 <DataTable columns={getColumns(reconciliationResults.reconciled)} data={reconciliationResults.reconciled} />
                                             </TabsContent>
                                             <TabsContent value="onlyInSienge">
-                                                <Button onClick={() => {}} size="sm" className="mb-4" disabled={reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                                <Button onClick={() => handleDownloadConciliacao(reconciliationResults.onlyInSienge, 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
                                                 <DataTable columns={getColumns(reconciliationResults.onlyInSienge)} data={reconciliationResults.onlyInSienge} />
                                             </TabsContent>
                                             <TabsContent value="onlyInXml">
-                                                <Button onClick={() => {}} size="sm" className="mb-4" disabled={reconciliationResults.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                                <Button onClick={() => handleDownloadConciliacao(reconciliationResults.onlyInXml, 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
                                                 <DataTable columns={getColumns(reconciliationResults.onlyInXml)} data={reconciliationResults.onlyInXml} />
                                             </TabsContent>
                                         </div>
