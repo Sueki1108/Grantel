@@ -33,6 +33,7 @@ interface DataTableProps<TData, TValue> {
   data: TData[]
   footer?: Record<string, string>;
   tableRef?: React.MutableRefObject<ReactTable<TData> | null>;
+  onSelectionChange?: (rowCount: number) => void;
 }
 
 export function DataTable<TData, TValue>({
@@ -40,6 +41,7 @@ export function DataTable<TData, TValue>({
   data,
   footer,
   tableRef,
+  onSelectionChange
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -72,6 +74,12 @@ export function DataTable<TData, TValue>({
       tableRef.current = table;
     }
   }, [table, tableRef]);
+  
+  React.useEffect(() => {
+    if (onSelectionChange) {
+      onSelectionChange(Object.keys(rowSelection).length);
+    }
+  }, [rowSelection, onSelectionChange]);
 
 
   return (
@@ -130,9 +138,18 @@ export function DataTable<TData, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() ? "selected" : undefined}
+                  className="cursor-pointer"
+                  onClick={() => row.toggleSelected()}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell 
+                      key={cell.id} 
+                      onClick={(e) => {
+                        if (['actions', 'select'].includes(cell.column.id)) {
+                          e.stopPropagation();
+                        }
+                      }}
+                    >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
