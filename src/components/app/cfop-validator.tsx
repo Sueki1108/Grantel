@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { cfopDescriptions } from '@/lib/cfop';
 import { getColumnsWithCustomRender } from './columns-helper';
 import { Checkbox } from '../ui/checkbox';
-import { ScrollArea } from '../ui/scroll-area';
+import { ScrollArea, ScrollBar } from '../ui/scroll-area';
 
 
 type ValidationStatus = 'unvalidated' | 'correct' | 'incorrect' | 'verify';
