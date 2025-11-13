@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
 import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { cfopDescriptions } from "@/lib/cfop";
-import { cleanAndToStr } from "@/lib/utils";
+import { cleanAndToStr, normalizeKey } from "@/lib/utils";
 import { Button } from '@/components/ui/button';
 
 type InconsistentRow = { 
@@ -25,11 +25,6 @@ const formatCurrency = (value: any) => {
     if (isNaN(num)) return String(value ?? '');
     return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
-
-const normalizeKey = (key: string | undefined): string => {
-    if(!key) return '';
-    return key.toLowerCase().replace(/[\s-._/]/g, '');
-}
 
 export function SiengeTaxCheck({siengeData}: {siengeData: any[] | null}) {
     

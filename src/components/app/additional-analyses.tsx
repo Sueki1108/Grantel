@@ -14,7 +14,7 @@ import { DataTable } from "@/components/app/data-table";
 import { getColumns } from "@/components/app/columns-helper";
 import type { ProcessedData, SpedInfo, SpedCorrectionResult, ReconciliationResults } from "@/lib/excel-processor";
 import { FileUploadForm } from "@/components/app/file-upload-form";
-import { cleanAndToStr } from "@/lib/utils";
+import { cleanAndToStr, normalizeKey } from "@/lib/utils";
 import { KeyChecker, type KeyCheckResult } from "./key-checker";
 import { CfopValidator } from "./cfop-validator";
 import { SiengeTaxCheck } from "./sienge-tax-check";
@@ -82,20 +82,22 @@ export function AdditionalAnalyses({
             try {
                 const RESALE_CFOPS = ['1102', '2102', '1403', '2403'];
                 
-                const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
+                const findSiengeHeader = (data: any[], possibleNames: string[]): string | undefined => {
                     if (data.length === 0 || !data[0]) return undefined;
                     const headers = Object.keys(data[0]);
-                    for (const name of possibleNames){
-                        const found = headers.find((h)=>h.toLowerCase().replace(/[\\s-._/]/g, "") === name);
-                        if (found) return found;
+                    const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
+                    for (const name of possibleNames) {
+                        const normalizedName = normalizeKey(name);
+                        const found = normalizedHeaders.find(h => h.normalized === normalizedName);
+                        if (found) return found.original;
                     }
                     return undefined;
                 };
     
                 const h = {
-                    cfop: findHeader(siengeData, ['cfop']),
-                    numero: findHeader(siengeData, ['número', 'numero', 'numerodanota', 'notafiscal']),
-                    cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpjfornecedor']),
+                    cfop: findSiengeHeader(siengeData, ['cfop']),
+                    numero: findSiengeHeader(siengeData, ['número', 'numero', 'numerodanota', 'notafiscal']),
+                    cnpj: findSiengeHeader(siengeData, ['cpf/cnpj', 'cpf/cnpjfornecedor']),
                 };
     
                 if (!h.cfop || !h.numero || !h.cnpj) {

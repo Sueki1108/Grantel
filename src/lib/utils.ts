@@ -28,3 +28,9 @@ export const parseSpedDate = (dateStr: string): Date => {
     const year = parseInt(dateStr.substring(4, 8), 10);
     return new Date(year, month, day);
 };
+
+export const normalizeKey = (key: string | undefined): string => {
+    if(!key) return '';
+    // Escapes the hyphen at the end of the character class
+    return key.toLowerCase().replace(/[\s._\/-]/g, '');
+}

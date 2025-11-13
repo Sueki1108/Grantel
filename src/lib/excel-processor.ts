@@ -1,3 +1,4 @@
+
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import { KeyCheckResult } from '@/components/app/key-checker';
@@ -56,7 +57,7 @@ export interface ProcessedData {
     lastSaidaNumber?: number;
     imobilizadoClassifications?: AllClassifications;
     competence: string | null;
-    reconciliationResults: ReconciliationResults;
+    reconciliationResults: ReconciliationResults | null;
     resaleAnalysis?: { noteKeys: Set<string>; xmls: File[] } | null;
     spedCorrections?: SpedCorrectionResult[] | null;
     fileNames?: {
@@ -119,7 +120,7 @@ const renameChaveColumn = (df: DataFrame): DataFrame => {
 // MAIN PROCESSING FUNCTION
 // =================================================================
 
-export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'reconciliationResults'> {
+export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'reconciliationResults' | 'siengeSheetData'> {
     
     log("Iniciando preparação dos dados no navegador...");
     const GRANTEL_CNPJ = "81732042000119";
@@ -347,7 +348,6 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     return {
         sheets: finalSheetSet,
         spedInfo: null,
-        siengeSheetData: null,
         keyCheckResults: null,
         resaleAnalysis: null,
         spedCorrections: null,
@@ -372,7 +372,7 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
         const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
             if (!data || data.length === 0 || !data[0]) return undefined;
             const headers = Object.keys(data[0]);
-            const normalizedHeaders = headers.map(h => ({ original: h, normalized: h.toLowerCase().replace(/[\s-._/]/g, '') }));
+            const normalizedHeaders = headers.map(h => ({ original: h, normalized: h.toLowerCase().replace(/[\\s._\\/-]/g, '') }));
             for (const name of possibleNames) {
                 const found = normalizedHeaders.find(h => h.normalized === name);
                 if (found) return found.original;
