@@ -17,6 +17,7 @@ import { cleanAndToStr } from "@/lib/utils";
 import { KeyChecker, type KeyCheckResult } from "./key-checker";
 import { AllClassifications } from "./imobilizado-analysis";
 import { CfopValidator } from "./cfop-validator";
+import { SiengeTaxCheck } from "./sienge-tax-check";
 
 // ===============================================================
 // Tipos
@@ -568,45 +569,4 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
             </CardContent>
          </Card>
     );
-}
-
-const SiengeTaxCheck = ({siengeData}: {siengeData: any[] | null}) => {
-    
-    const { toast } = useToast();
-
-    const taxAnalyses = useMemo(() => {
-        if (!siengeData || siengeData.length === 0) {
-            return { inconsistentCfopRows: [], taxConferences: { icms: [], pis: [], cofins: [], ipi: [], icmsSt: [] } };
-        }
-        // ... (cálculos)
-        return { inconsistentCfopRows: [], taxConferences: { icms: [], pis: [], cofins: [], ipi: [], icmsSt: [] } }; // Placeholder
-    }, [siengeData]);
-
-    if (!siengeData) {
-        return (
-             <Card>
-                <CardHeader>
-                    <CardTitle>Conferência de Impostos (Sienge)</CardTitle>
-                </CardHeader>
-                <CardContent className="p-8 text-center text-muted-foreground">
-                    <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
-                    <h3 className="text-xl font-semibold mb-2">Nenhum dado para analisar</h3>
-                    <p>Carregue a planilha "Itens do Sienge" para iniciar a análise.</p>
-                </CardContent>
-             </Card>
-        )
-    }
-
-    return (
-        <Card>
-             <CardHeader>
-                <CardTitle>Resultados da Conferência de Impostos</CardTitle>
-                <CardDescription>Listagem de todos os itens da planilha Sienge que possuem valores nos campos de impostos.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                {/* O conteúdo da tabela de conferência de impostos irá aqui */}
-                 <p>Conteúdo da análise de impostos...</p>
-            </CardContent>
-        </Card>
-    )
 }
