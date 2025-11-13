@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
-import { Check, AlertTriangle, Save, X, ListFilter, RotateCw, HelpCircle, ClipboardCopy } from "lucide-react";
+import { Check, AlertTriangle, Save, X, ListFilter, RotateCw, HelpCircle, ClipboardCopy, Settings } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Table as ReactTable, ColumnDef } from '@tanstack/react-table';
 import { AllClassifications } from './imobilizado-analysis';
@@ -44,9 +44,9 @@ interface CfopValidatorProps {
 }
 
 const STATUS_CONFIG: Record<ValidationStatus, { label: string; icon: React.ReactNode; badge: "default" | "destructive" | "secondary" | "outline" }> = {
-    unvalidated: { label: 'Não Validado', icon: <ListFilter className="h-4 w-4" />, badge: "outline" },
-    correct: { label: 'Correto', icon: <Check className="h-4 w-4" />, badge: "default" },
-    incorrect: { label: 'Incorreto', icon: <X className="h-4 w-4" />, badge: "destructive" },
+    unvalidated: { label: 'Pendentes', icon: <ListFilter className="h-4 w-4" />, badge: "outline" },
+    correct: { label: 'Corretos', icon: <Check className="h-4 w-4" />, badge: "default" },
+    incorrect: { label: 'Incorretos', icon: <X className="h-4 w-4" />, badge: "destructive" },
     verify: { label: 'Verificar', icon: <AlertTriangle className="h-4 w-4" />, badge: "secondary" },
 };
 
@@ -63,6 +63,8 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         cstIcms: new Set(),
         aliqIcms: new Set(),
     });
+    
+    const [numSelected, setNumSelected] = React.useState(0);
 
     const itemsToValidate = useMemo((): ReconciledItem[] => {
         return reconciledData.map((item) => {
@@ -102,16 +104,41 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         setHasChanges(false);
     }, [itemsToValidate, competence, allPersistedClassifications]);
     
-    const filteredItemsByStatus = useMemo(() => {
+    const { filteredItemsByStatus, filterOptions } = useMemo(() => {
         const categories: Record<ValidationStatus, ReconciledItem[]> = {
             unvalidated: [], correct: [], incorrect: [], verify: []
         };
-        itemsToValidate.forEach(item => {
+        const options = {
+            cfopXml: new Set<string>(),
+            cstIcms: new Set<string>(),
+            aliqIcms: new Set<string>(),
+        };
+
+        const itemsWithStatus = itemsToValidate.map(item => {
             const status = classifications[item.id]?.classification || 'unvalidated';
-            categories[status].push(item);
+            return { ...item, status };
         });
-        return categories;
-    }, [itemsToValidate, classifications]);
+
+        itemsWithStatus.forEach(item => {
+            if (item.CFOP) options.cfopXml.add(item.CFOP);
+            if (item['CST do ICMS']) options.cstIcms.add(item['CST do ICMS']);
+            if (item.pICMS !== undefined) options.aliqIcms.add(String(item.pICMS));
+        });
+
+        const filtered = itemsWithStatus.filter(item => {
+            const cfopMatch = filters.cfopXml.size === 0 || filters.cfopXml.has(item.CFOP);
+            const cstMatch = filters.cstIcms.size === 0 || (item['CST do ICMS'] && filters.cstIcms.has(item['CST do ICMS']));
+            const aliqMatch = filters.aliqIcms.size === 0 || (item.pICMS !== undefined && filters.aliqIcms.has(String(item.pICMS)));
+            return cfopMatch && cstMatch && aliqMatch;
+        });
+
+        filtered.forEach(item => {
+            categories[item.status].push(item);
+        });
+        
+        return { filteredItemsByStatus: categories, filterOptions: options };
+
+    }, [itemsToValidate, classifications, filters]);
 
     const handleStatusChange = (itemsToChange: ReconciledItem[], newStatus: ValidationStatus) => {
         setClassifications(prev => {
@@ -130,9 +157,11 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     const handleDifalToggle = (itemsToChange: ReconciledItem[]) => {
          setClassifications(prev => {
             const newClassifications = { ...prev };
+            const isTogglingToTrue = !itemsToChange[0] || !newClassifications[itemsToChange[0].id]?.isDifal;
+
             itemsToChange.forEach(item => {
                 const currentStatus = newClassifications[item.id] || { classification: 'unvalidated', isDifal: false };
-                newClassifications[item.id] = { ...currentStatus, isDifal: !currentStatus.isDifal };
+                newClassifications[item.id] = { ...currentStatus, isDifal: isTogglingToTrue };
             });
             return newClassifications;
         });
@@ -198,13 +227,15 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         },
         ...getColumnsWithCustomRender(
             itemsToValidate,
-            ['Fornecedor', 'Número da Nota', 'Descrição', 'Valor Total'],
+            ['Fornecedor', 'Número da Nota', 'Descrição', 'Valor Total', 'Sienge_CFOP', 'CST do ICMS', 'pICMS'],
             (row, id) => {
                 const value = row.original[id as keyof ReconciledItem];
                 let displayValue = String(value ?? '');
                 
                  if (id === 'Valor Total' && typeof value === 'number') {
                      displayValue = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                 } else if (id === 'pICMS' && typeof value === 'number') {
+                     displayValue = `${value.toFixed(2)}%`;
                  }
                 return (
                      <div className="group flex items-center justify-between gap-1">
@@ -215,30 +246,14 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             }
         ),
          {
-            id: 'cfop',
-            header: 'CFOP (XML / Sienge)',
-            cell: ({ row }) => {
-                const xmlCfop = row.original.CFOP;
-                const siengeCfop = row.original.Sienge_CFOP;
-                const description = cfopDescriptions[parseInt(xmlCfop, 10) as keyof typeof cfopDescriptions] || 'N/A';
-                return (
-                    <div className="flex items-center gap-2">
-                        <Badge variant={xmlCfop === siengeCfop ? 'default' : 'destructive'}>{xmlCfop}</Badge>
-                        <span>/</span>
-                        <Badge variant="secondary">{siengeCfop}</Badge>
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger>
-                                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <p>{description}</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    </div>
-                );
-            },
+            id: 'CFOP',
+            accessorKey: 'CFOP',
+            header: 'CFOP XML',
+        },
+        {
+            id: 'Descricao CFOP',
+            accessorKey: 'Descricao CFOP',
+            header: 'Descrição CFOP',
         },
         {
             id: 'actions',
@@ -251,6 +266,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'correct')}><Check className="h-5 w-5 text-green-600"/></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'incorrect')}><X className="h-5 w-5 text-red-600"/></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'verify')}><AlertTriangle className="h-5 w-5 text-amber-600"/></Button></TooltipTrigger><TooltipContent><p>Verificar</p></TooltipContent></Tooltip>
+                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'unvalidated')}><RotateCw className="h-5 w-5 text-blue-600"/></Button></TooltipTrigger><TooltipContent><p>Reverter para Pendente</p></TooltipContent></Tooltip>
                             <div className="border-l h-6 mx-1" />
                              <Tooltip>
                                 <TooltipTrigger asChild>
@@ -278,13 +294,23 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             </Card>
         );
     }
-
-    const numSelected = tableRef.current ? tableRef.current.getFilteredSelectedRowModel().rows.length : 0;
+    
+    const handleFilterChange = (filterType: keyof typeof filters, value: string, checked: boolean) => {
+        setFilters(prev => {
+            const newSet = new Set(prev[filterType]);
+            if (checked) {
+                newSet.add(value);
+            } else {
+                newSet.delete(value);
+            }
+            return { ...prev, [filterType]: newSet };
+        });
+    };
     
     return (
         <div className='relative'>
              {numSelected > 0 && (
-                <div className="fixed bottom-4 z-20 w-full flex justify-center">
+                <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-20 w-auto">
                     <Card className="flex items-center gap-4 p-3 shadow-2xl animate-in fade-in-0 slide-in-from-bottom-5">
                         <span className="text-sm font-medium pl-2">{numSelected} item(ns) selecionado(s)</span>
                         <div className="h-6 border-l" />
@@ -293,6 +319,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                             <Button size="sm" variant="outline" onClick={() => handleBulkAction('correct')}><Check className="mr-2 h-4 w-4 text-green-600"/>Correto</Button>
                             <Button size="sm" variant="outline" onClick={() => handleBulkAction('incorrect')}><X className="mr-2 h-4 w-4 text-red-600"/>Incorreto</Button>
                             <Button size="sm" variant="outline" onClick={() => handleBulkAction('verify')}><AlertTriangle className="mr-2 h-4 w-4 text-amber-600"/>Verificar</Button>
+                            <Button size="sm" variant="outline" onClick={() => handleStatusChange(tableRef.current?.getFilteredSelectedRowModel().rows.map(r => r.original) || [], 'unvalidated')}><RotateCw className="mr-2 h-4 w-4 text-blue-600"/>Reverter</Button>
                             <div className="h-6 border-l" />
                             <Button size="sm" variant="secondary" onClick={() => handleBulkAction('difal')}>DIFAL</Button>
                         </div>
@@ -304,11 +331,46 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                      <div className='flex items-start justify-between'>
                         <div>
                             <CardTitle className="font-headline text-2xl flex items-center gap-2">Validação de CFOP</CardTitle>
-                            <CardDescription>Itens agrupados por status. Use as ações em lote para classificar rapidamente.</CardDescription>
+                            <CardDescription>Itens agrupados por status. Use os filtros para refinar a busca e as ações em lote para classificar rapidamente.</CardDescription>
                         </div>
-                         <Button onClick={handleSaveChanges} disabled={!hasChanges} className="shrink-0">
-                            <Save className="mr-2 h-4 w-4"/> Guardar Validações
-                        </Button>
+                        <div className="flex gap-2">
+                             <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline"><Settings className="mr-2 h-4 w-4" />Filtros</Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-96">
+                                     <div className="grid gap-4">
+                                        <div className="space-y-2">
+                                            <h4 className="font-medium leading-none">Filtrar Itens</h4>
+                                            <p className="text-sm text-muted-foreground">Selecione os valores para filtrar a tabela.</p>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                             <ScrollArea className="h-48 col-span-1">
+                                                <h5 className="font-bold text-sm mb-2">CFOP XML</h5>
+                                                {Array.from(filterOptions.cfopXml).sort().map(cfop => (
+                                                    <div key={cfop} className="flex items-center space-x-2"><Checkbox id={`cfop-${cfop}`} checked={filters.cfopXml.has(cfop)} onCheckedChange={c => handleFilterChange('cfopXml', cfop, !!c)} /><Label htmlFor={`cfop-${cfop}`}>{cfop}</Label></div>
+                                                ))}
+                                            </ScrollArea>
+                                            <ScrollArea className="h-48 col-span-1">
+                                                 <h5 className="font-bold text-sm mb-2">CST ICMS</h5>
+                                                {Array.from(filterOptions.cstIcms).sort().map(cst => (
+                                                    <div key={cst} className="flex items-center space-x-2"><Checkbox id={`cst-${cst}`} checked={filters.cstIcms.has(cst)} onCheckedChange={c => handleFilterChange('cstIcms', cst, !!c)} /><Label htmlFor={`cst-${cst}`}>{cst}</Label></div>
+                                                ))}
+                                            </ScrollArea>
+                                             <ScrollArea className="h-48 col-span-1">
+                                                 <h5 className="font-bold text-sm mb-2">Alíq. ICMS</h5>
+                                                {Array.from(filterOptions.aliqIcms).sort().map(aliq => (
+                                                    <div key={aliq} className="flex items-center space-x-2"><Checkbox id={`aliq-${aliq}`} checked={filters.aliqIcms.has(aliq)} onCheckedChange={c => handleFilterChange('aliqIcms', aliq, !!c)} /><Label htmlFor={`aliq-${aliq}`}>{aliq}%</Label></div>
+                                                ))}
+                                            </ScrollArea>
+                                        </div>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                             <Button onClick={handleSaveChanges} disabled={!hasChanges}>
+                                <Save className="mr-2 h-4 w-4"/> Guardar Validações
+                            </Button>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -327,7 +389,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                     
                      {Object.entries(filteredItemsByStatus).map(([status, items]) => (
                         <TabsContent key={status} value={status} className="mt-4">
-                            <DataTable columns={columns} data={items} tableRef={tableRef} />
+                            <DataTable columns={columns} data={items} tableRef={tableRef} onSelectionChange={setNumSelected} />
                         </TabsContent>
                     ))}
                     </Tabs>
