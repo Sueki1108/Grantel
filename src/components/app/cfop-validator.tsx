@@ -288,7 +288,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     return (
         <div className='relative'>
             {numSelected > 0 && (
-                <div className="sticky bottom-4 z-20 w-full flex justify-center">
+                <div className="fixed bottom-4 z-20 w-full flex justify-center">
                     <Card className="flex items-center gap-4 p-3 shadow-2xl animate-in fade-in-0 slide-in-from-bottom-5">
                         <span className="text-sm font-medium pl-2">{numSelected} item(ns) selecionado(s)</span>
                         <div className="h-6 border-l" />
