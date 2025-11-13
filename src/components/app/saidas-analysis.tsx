@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -21,35 +22,45 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ScrollArea } from '../ui/scroll-area';
 import { Checkbox } from '../ui/checkbox';
 import { Label } from '../ui/label';
+import { SaidaItem, SaidaStatus } from '@/lib/types';
 
-
-type SaidaStatus = 'emitida' | 'cancelada' | 'inutilizada';
-
-interface SaidaItem {
-    numero: number;
-    status: SaidaStatus;
-    data?: any; // Original data from the sheet
-    isGap?: boolean;
-    'Destinatário'?: string;
-    'Emissão'?: string;
-    'CFOP'?: string;
-    'Base ICMS'?: number;
-    'Alíq. ICMS (%)'?: number;
-    'Valor ICMS'?: number;
-    'Total'?: number;
-}
 
 interface SaidasAnalysisProps {
     saidasData: any[];
     statusMap: Record<number, SaidaStatus>;
     onStatusChange: (newStatus: Record<number, SaidaStatus>) => void;
     lastPeriodNumber: number;
+    onLastPeriodNumberChange: (newNumber: number) => void;
 }
 
-export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeriodNumber }: SaidasAnalysisProps) {
+export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeriodNumber, onLastPeriodNumberChange }: SaidasAnalysisProps) {
     const { toast } = useToast();
     const [cfopFilter, setCfopFilter] = useState<Set<string>>(new Set());
     const [isCfopModalOpen, setIsCfopModalOpen] = useState(false);
+    const [lastNumberInput, setLastNumberInput] = useState<string>(String(lastPeriodNumber || ''));
+    const [rangeStart, setRangeStart] = useState('');
+    const [rangeEnd, setRangeEnd] = useState('');
+
+    useEffect(() => {
+        setLastNumberInput(String(lastPeriodNumber || ''));
+    }, [lastPeriodNumber]);
+
+    const handleSaveLastNumber = () => {
+        const num = parseInt(lastNumberInput, 10);
+        if (!isNaN(num)) {
+            onLastPeriodNumberChange(num);
+            toast({
+                title: 'Número Salvo',
+                description: `O número da última nota do período anterior foi salvo como ${num}.`,
+            });
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'Número Inválido',
+                description: 'Por favor, insira um número válido.',
+            });
+        }
+    };
     
     const analysisResults = useMemo(() => {
         if (!saidasData || saidasData.length === 0) {
@@ -168,6 +179,36 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
             title: 'Classificações Limpas',
             description: 'Todos os status manuais das notas de saída foram removidos.',
         });
+    };
+
+    const handleMarkRangeAsUnused = () => {
+        const start = parseInt(rangeStart, 10);
+        const end = parseInt(rangeEnd, 10);
+
+        if (isNaN(start) || isNaN(end) || start <= 0 || end <= 0) {
+            toast({ variant: 'destructive', title: 'Intervalo Inválido', description: 'Por favor, insira números de início e fim válidos.' });
+            return;
+        }
+        if (start > end) {
+            toast({ variant: 'destructive', title: 'Intervalo Inválido', description: 'O número inicial deve ser menor ou igual ao final.' });
+            return;
+        }
+
+        const newStatusMap = { ...statusMap };
+        let count = 0;
+        for (let i = start; i <= end; i++) {
+            newStatusMap[i] = 'inutilizada';
+            count++;
+        }
+
+        onStatusChange(newStatusMap);
+
+        toast({
+            title: 'Intervalo Marcado como Inutilizado',
+            description: `${count} notas de ${start} a ${end} foram marcadas.`
+        });
+        setRangeStart('');
+        setRangeEnd('');
     };
     
     const getStatusVariant = (status: SaidaStatus): "default" | "destructive" | "secondary" => {
@@ -302,6 +343,82 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                 </div>
             </CardHeader>
             <CardContent>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <Card className="bg-muted/50">
+                        <CardHeader className='pb-2'>
+                            <CardTitle className='text-lg'>Configuração do Período</CardTitle>
+                        </CardHeader>
+                        <CardContent className="grid grid-cols-2 gap-4">
+                            <div>
+                                <Label htmlFor="last-note-input" className="whitespace-nowrap text-sm font-medium">Última NF do Período Anterior:</Label>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <input
+                                        id="last-note-input"
+                                        type="number"
+                                        value={lastNumberInput}
+                                        onChange={(e) => setLastNumberInput(e.target.value)}
+                                        className="w-32 h-9 rounded-md border px-3"
+                                        placeholder="Ex: 11498"
+                                    />
+                                    <Button onClick={handleSaveLastNumber} size="sm"><Save className="mr-2 h-4 w-4"/> Guardar</Button>
+                                </div>
+                            </div>
+                             <div>
+                                 <Label className="text-sm font-medium">Marcar Intervalo Inutilizado:</Label>
+                                 <div className="flex items-center gap-2 mt-1">
+                                    <input
+                                        id="range-start-input"
+                                        type="number"
+                                        value={rangeStart}
+                                        onChange={(e) => setRangeStart(e.target.value)}
+                                        className="w-28 h-9 rounded-md border px-3"
+                                        placeholder="Início"
+                                    />
+                                    <input
+                                        id="range-end-input"
+                                        type="number"
+                                        value={rangeEnd}
+                                        onChange={(e) => setRangeEnd(e.target.value)}
+                                        className="w-28 h-9 rounded-md border px-3"
+                                        placeholder="Fim"
+                                    />
+                                    <Button onClick={handleMarkRangeAsUnused} size="sm" variant="secondary"><Ban className="mr-2 h-4 w-4"/> Marcar</Button>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card className="bg-muted/50">
+                          <CardHeader className='pb-2'>
+                            <CardTitle className='text-lg'>Resumo de ICMS por CFOP</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {icmsSummaryByCfop.length > 0 ? (
+                                <ScrollArea className="h-32">
+                                     <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50 dark:bg-gray-800/50 sticky top-0">
+                                            <tr>
+                                                <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground uppercase">CFOP</th>
+                                                <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground uppercase">Base de Cálculo</th>
+                                                <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground uppercase">Valor do ICMS</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-transparent divide-y divide-gray-200 dark:divide-gray-700">
+                                            {icmsSummaryByCfop.map(({ cfop, base, valor }) => (
+                                                <tr key={cfop}>
+                                                    <td className="px-2 py-2 whitespace-nowrap text-sm font-medium">{cfop}</td>
+                                                    <td className="px-2 py-2 whitespace-nowrap text-sm text-right">{base.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                    <td className="px-2 py-2 whitespace-nowrap text-sm text-right">{valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </ScrollArea>
+                            ) : (<p className="text-sm text-muted-foreground text-center pt-8">Nenhuma nota com ICMS destacado para resumir.</p>)}
+                        </CardContent>
+                    </Card>
+                </div>
+
+
                 {analysisResults.firstNoteAfterGap && (
                     <Alert variant="destructive" className="mb-4">
                         <AlertTriangle className="h-4 w-4" />
@@ -311,45 +428,6 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                         </AlertDescription>
                     </Alert>
                 )}
-
-                 {icmsSummaryByCfop.length > 0 && (
-                    <Accordion type="single" collapsible className="w-full mb-6 border rounded-lg px-4">
-                        <AccordionItem value="item-1">
-                            <AccordionTrigger>
-                                <h3 className='text-lg font-medium'>Resumo de ICMS por CFOP ({icmsSummaryByCfop.length})</h3>
-                            </AccordionTrigger>
-                            <AccordionContent>
-                                <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-200">
-                                        <thead className="bg-gray-50 dark:bg-gray-800">
-                                            <tr>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CFOP</th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
-                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Notas</th>
-                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Alíquota (%)</th>
-                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Base de Cálculo</th>
-                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Valor do ICMS</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                                            {icmsSummaryByCfop.map(({ cfop, base, valor, aliquota, count, description }) => (
-                                                <tr key={cfop}>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">{cfop}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{description}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right">{count}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right">{aliquota.toFixed(2)}%</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right">{base.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right">{valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </AccordionContent>
-                        </AccordionItem>
-                    </Accordion>
-                )}
-
 
                 {analysisResults.sequence.length > 0 ? (
                     <TooltipProvider>
