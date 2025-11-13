@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FileSearch, Sheet, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Building, Save, Database, FileJson, MinusCircle, TicketPercent, CheckSquare } from "lucide-react";
+import { FileSearch, Sheet, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Building, Save, Database, FileJson, MinusCircle, TicketPercent, CheckSquare, RotateCw } from "lucide-react";
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -82,6 +82,7 @@ export function AdditionalAnalyses({
     const [isExporting, setIsExporting] = useState(false);
     const [resaleAnalysis, setResaleAnalysis] = useState<{ noteKeys: Set<string>; xmls: File[] } | null>(null);
     const [isAnalyzingResale, setIsAnalyzingResale] = useState(false);
+    const [disregardedDifalItems, setDisregardedDifalItems] = useState<Set<string>>(new Set());
 
     const { reconciliationResults, error: reconciliationError } = useMemo(() => {
         if (!processedData || !processedData.sheets) {
@@ -239,6 +240,30 @@ export function AdditionalAnalyses({
         }
     }, [processedData?.siengeSheetData, processedData?.sheets]);
 
+    const difalItems = useMemo(() => {
+        if (!reconciliationResults?.reconciled || !competence || !allPersistedClassifications[competence]) return [];
+
+        const cfopValidations = allPersistedClassifications[competence]?.cfopValidations?.classifications || {};
+        return reconciliationResults.reconciled.filter(item => {
+            const uniqueProductKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item.Sienge_CFOP || ''}`;
+            return cfopValidations[uniqueProductKey]?.isDifal;
+        });
+    }, [reconciliationResults, competence, allPersistedClassifications]);
+
+    const handleToggleDifalDisregard = (itemKey: string) => {
+        setDisregardedDifalItems(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(itemKey)) {
+                newSet.delete(itemKey);
+                toast({ title: "Item Revertido", description: "O item foi movido de volta para a lista de sujeitos ao DIFAL." });
+            } else {
+                newSet.add(itemKey);
+                toast({ title: "Item Desconsiderado", description: "O item foi movido para a lista de desconsiderados." });
+            }
+            return newSet;
+        });
+    };
+    
 
     const handleAnalyzeResale = () => {
         if (!processedData?.siengeSheetData) {
@@ -395,10 +420,11 @@ export function AdditionalAnalyses({
              </Card>
             
              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-1 md:grid-cols-4">
+                <TabsList className="grid w-full grid-cols-1 md:grid-cols-5">
                     <TabsTrigger value="sped">Verificação SPED</TabsTrigger>
                     <TabsTrigger value="reconciliation">Conciliação (XML x Sienge)</TabsTrigger>
                     <TabsTrigger value="cfop_validation">Validação CFOP</TabsTrigger>
+                    <TabsTrigger value="difal">Análise DIFAL</TabsTrigger>
                     <TabsTrigger value="resale_export">Exportação de Revenda</TabsTrigger>
                 </TabsList>
                 
@@ -432,6 +458,14 @@ export function AdditionalAnalyses({
                             allPersistedClassifications={allPersistedClassifications}
                             onPersistAllClassifications={onPersistAllClassifications}
                             competence={competence}
+                        />
+                     )}
+
+                     {activeTab === 'difal' && (
+                        <DifalItemsAnalysis
+                            items={difalItems}
+                            disregardedItems={disregardedDifalItems}
+                            onToggleDisregard={handleToggleDifalDisregard}
                         />
                      )}
 
@@ -645,5 +679,44 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                 </div>
             ) : null}
         </div>
+    );
+}
+
+
+function DifalItemsAnalysis({ items, disregardedItems, onToggleDisregard }: { items: any[], disregardedItems: Set<string>, onToggleDisregard: (itemKey: string) => void }) {
+    const sujeitos = items.filter(item => !disregardedItems.has(item.id));
+    const desconsiderados = items.filter(item => disregardedItems.has(item.id));
+    
+    const columns = getColumnsWithCustomRender(items, ['Fornecedor', 'Número da Nota', 'Descrição', 'Valor Total', 'CFOP', 'Sienge_CFOP']);
+
+    return (
+         <Card>
+            <CardHeader>
+                <CardTitle className="font-headline text-2xl">Análise de Itens Marcados para DIFAL</CardTitle>
+                <CardDescription>
+                    Revise os itens marcados para DIFAL na etapa de validação de CFOP. Mova itens para a lista de desconsiderados se não forem aplicáveis.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                 <Tabs defaultValue="sujeitos" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="sujeitos">Sujeitos ao DIFAL ({sujeitos.length})</TabsTrigger>
+                        <TabsTrigger value="desconsiderados">Desconsiderados ({desconsiderados.length})</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="sujeitos" className="mt-4">
+                         <DataTable
+                            columns={[...columns, { id: 'action', cell: ({row}) => <Button variant="secondary" size="sm" onClick={() => onToggleDisregard(row.original.id)}><MinusCircle className="mr-2 h-4 w-4"/>Desconsiderar</Button> }]}
+                            data={sujeitos}
+                        />
+                    </TabsContent>
+                     <TabsContent value="desconsiderados" className="mt-4">
+                        <DataTable
+                            columns={[...columns, { id: 'action', cell: ({row}) => <Button variant="outline" size="sm" onClick={() => onToggleDisregard(row.original.id)}><RotateCw className="mr-2 h-4 w-4"/>Reverter</Button> }]}
+                            data={desconsiderados}
+                        />
+                    </TabsContent>
+                </Tabs>
+            </CardContent>
+        </Card>
     );
 }
