@@ -160,88 +160,32 @@ export function AdditionalAnalyses({
             const h = {
                 cnpj: findHeader(siengeItemsForReconciliation, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpf/cnpj do destinatário']),
                 numero: findHeader(siengeItemsForReconciliation, ['número', 'numero', 'numero da nota', 'nota fiscal']),
-                valorTotal: findHeader(siengeItemsForReconciliation, ['valor total', 'valor', 'vlr total']),
                 siengeCfop: findHeader(siengeItemsForReconciliation, ['cfop']),
-                siengeDesc: findHeader(siengeItemsForReconciliation, ['descrição', 'descrição do item', 'produto fiscal']),
-                precoUnitario: findHeader(siengeItemsForReconciliation, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
             };
     
-            if (!h.cnpj || !h.numero || !h.valorTotal) throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge para notas NFE/NFSR.");
-    
-            const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
-                const cleanNumero = cleanAndToStr(numero);
-                const cleanCnpj = String(cnpj).replace(/\D/g, '');
-                const cleanValor = parseFloat(String(valor || '0').replace(',', '.')).toFixed(2);
-                if (!cleanNumero || !cleanCnpj || cleanValor === 'NaN') return null;
-                return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
-            };
-    
-            let reconciled: any[] = [];
-            let remainingXmlItems = [...enrichedXmlItems];
-            let remainingSiengeItems = [...siengeItemsForReconciliation];
-    
-            const reconciliationPass = (sienge: any[], xml: any[], getSiengeKey: (item: any) => string | null, getXmlKey: (item: any) => string | null, passName: string) => {
-                const matchedInPass: any[] = [];
-                const unmatchedSienge: any[] = [];
-                const xmlMap = new Map<string, any[]>();
-                xml.forEach(item => {
-                    const key = getXmlKey(item);
-                    if (key) {
-                        if (!xmlMap.has(key)) xmlMap.set(key, []);
-                        xmlMap.get(key)!.push(item);
-                    }
-                });
-    
-                sienge.forEach(siengeItem => {
-                    const key = getSiengeKey(siengeItem);
-                    if (key && xmlMap.has(key)) {
-                        const matchedXmlItems = xmlMap.get(key)!;
-                        if (matchedXmlItems.length > 0) {
-                            const matchedXmlItem = matchedXmlItems.shift();
-                            if (matchedXmlItems.length === 0) xmlMap.delete(key);
-                            
-                            matchedInPass.push({
-                                ...matchedXmlItem,
-                                'Sienge_CFOP': siengeItem[h.siengeCfop as string] || 'N/A',
-                                'Sienge_Descrição': siengeItem[h.siengeDesc as string] || 'N/A',
-                                'Observações': `Conciliado via ${passName}`,
-                            });
-                            return;
-                        }
-                    }
-                    unmatchedSienge.push(siengeItem);
-                });
-                
-                const unmatchedXml = Array.from(xmlMap.values()).flat();
-                return { matched: matchedInPass, remainingSienge: unmatchedSienge, remainingXml: unmatchedXml };
-            };
+            if (!h.cnpj || !h.numero || !h.siengeCfop) throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'CFOP') na planilha Sienge para notas NFE/NFSR.");
             
-            const passes = [
-                {
-                    name: "Valor Total",
-                    siengeKeyFn: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]),
-                    xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'] || item['CPF/CNPJ do Destinatário'], item['Valor Total'])
-                },
-                {
-                    name: "Preço Unitário",
-                    siengeKeyFn: (item: any) => h.precoUnitario ? getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.precoUnitario!]) : null,
-                    xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'] || item['CPF/CNPJ do Destinatário'], item['Valor Unitário'])
-                },
-            ];
-    
-            for (const pass of passes) {
-                if (remainingSiengeItems.length === 0 || remainingXmlItems.length === 0) break;
-                const result = reconciliationPass(remainingSiengeItems, remainingXmlItems, pass.siengeKeyFn, pass.xmlKeyFn, pass.name);
-                if (result.matched.length > 0) reconciled.push(...result.matched);
-                remainingSiengeItems = result.remainingSienge;
-                remainingXmlItems = result.remainingXml;
-            }
-    
-            // *** CRITICAL FIX: Ensure all items from XML, even if not reconciled, are passed to the next step. ***
-            const finalReconciledData = [...reconciled, ...remainingXmlItems.map(item => ({...item, 'Sienge_CFOP': 'N/A', 'Observações': 'Apenas no XML'}))];
+            const siengeMap = new Map<string, string>();
+            siengeItemsForReconciliation.forEach(item => {
+                 const key = `${cleanAndToStr(item[h.numero!])}-${cleanAndToStr(item[h.cnpj!])}`;
+                 if(!siengeMap.has(key)) {
+                    siengeMap.set(key, item[h.siengeCfop!]);
+                 }
+            });
+
+            const reconciledData = enrichedXmlItems.map(item => {
+                const partnerCnpj = item['CPF/CNPJ do Emitente'] || item['CPF/CNPJ do Destinatário'];
+                const key = `${cleanAndToStr(item['Número da Nota'] || item['Número'] || '')}-${cleanAndToStr(partnerCnpj)}`;
+                const siengeCfop = siengeMap.get(key);
+                return {
+                    ...item,
+                    'Sienge_CFOP': siengeCfop || 'N/A',
+                    'Observações': siengeCfop ? 'Conciliado' : 'Apenas no XML'
+                }
+            });
             
             return { 
-                reconciliationResults: { reconciled: finalReconciledData, onlyInSienge: remainingSiengeItems, onlyInXml: remainingXmlItems, otherSiengeItems }, 
+                reconciliationResults: { reconciled: reconciledData, onlyInSienge: [], onlyInXml: [], otherSiengeItems }, 
                 error: null 
             };
     
@@ -620,10 +564,9 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                         </CardHeader>
                         <CardContent>
                              <Tabs value={activeTab} onValueChange={setActiveTab}>
-                                <TabsList className="grid w-full grid-cols-1 md:grid-cols-3">
-                                    <TabsTrigger value="reconciled">Conciliados ({reconciliationResults.reconciled.length})</TabsTrigger>
+                                <TabsList className="grid w-full grid-cols-1 md:grid-cols-2">
+                                    <TabsTrigger value="reconciled">Itens para Validação ({reconciliationResults.reconciled.length})</TabsTrigger>
                                     <TabsTrigger value="onlyInSienge">Apenas no Sienge ({reconciliationResults.onlyInSienge.length})</TabsTrigger>
-                                    <TabsTrigger value="onlyInXml">Apenas no XML ({reconciliationResults.onlyInXml.length})</TabsTrigger>
                                 </TabsList>
                                 <div className="mt-4">
                                      {activeTab === 'reconciled' && (
@@ -636,12 +579,6 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
                                          <div>
                                             <Button onClick={() => handleDownload(reconciliationResults.onlyInSienge, 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
                                             <DataTable columns={getColumnsWithCustomRender(reconciliationResults.onlyInSienge, Object.keys(reconciliationResults.onlyInSienge[0] || {}))} data={reconciliationResults.onlyInSienge} />
-                                         </div>
-                                    )}
-                                     {activeTab === 'onlyInXml' && (
-                                         <div>
-                                            <Button onClick={() => handleDownload(reconciliationResults.onlyInXml, 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                            <DataTable columns={getColumnsWithCustomRender(reconciliationResults.onlyInXml, Object.keys(reconciliationResults.onlyInXml[0] || {}))} data={reconciliationResults.onlyInXml} />
                                          </div>
                                     )}
                                 </div>

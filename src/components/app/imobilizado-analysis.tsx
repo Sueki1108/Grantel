@@ -307,7 +307,8 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
     
             if (h.numero && h.cnpj && h.cfop) {
                 siengeData.forEach(siengeItem => {
-                    const key = `${cleanAndToStr(siengeItem[h.numero!])}-${cleanAndToStr(siengeItem[h.cnpj!])}`;
+                    const partnerCnpj = siengeItem[h.cnpj!]
+                    const key = `${cleanAndToStr(siengeItem[h.numero!])}-${cleanAndToStr(partnerCnpj)}`;
                     if (!siengeCfopMap.has(key)) {
                         siengeCfopMap.set(key, siengeItem[h.cfop!]);
                     }
@@ -321,7 +322,8 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 return !excludedCfops.has(String(item.CFOP));
             })
             .map(item => {
-                const key = `${cleanAndToStr(item['Número da Nota'])}-${cleanAndToStr(item['CPF/CNPJ do Emitente'])}`;
+                const partnerCnpj = item['CPF/CNPJ do Emitente'] || item['CPF/CNPJ do Destinatário'];
+                const key = `${cleanAndToStr(item['Número da Nota'] || item['Número'] || '')}-${cleanAndToStr(partnerCnpj)}`;
                 return {
                     ...item,
                     Sienge_CFOP: siengeCfopMap.get(key) || 'N/A',
