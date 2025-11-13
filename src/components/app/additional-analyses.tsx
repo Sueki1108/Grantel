@@ -90,12 +90,21 @@ export function AdditionalAnalyses({
         }
     
         const { sheets, siengeSheetData } = processedData;
+        
+        // CORREÇÃO: Unificar todas as fontes de itens (Entradas, Saídas e CTEs)
         const allXmlItems = [
             ...(sheets?.['Itens Válidos'] || []),
+            ...(sheets?.['Itens Válidos Saídas'] || []),
             ...(sheets?.['CTEs Válidos'] || []).map(cte => ({
-                ...cte, 'Número da Nota': cte['Número'], 'CPF/CNPJ do Emitente': cte['CPF/CNPJ do Fornecedor'],
-                'Valor Total': cte['Valor da Prestação'], 'Descrição': `Frete CTe N° ${cte['Número']}`, documentType: 'CTE',
-                Item: '1', 'Código': `CTE-${cte['Número']}`, 'Chave Unica': cleanAndToStr(cte['Número']) + cleanAndToStr(cte['CPF/CNPJ do Fornecedor']),
+                ...cte,
+                'Número da Nota': cte['Número'],
+                'CPF/CNPJ do Emitente': cte['CPF/CNPJ do Fornecedor'],
+                'Valor Total': cte['Valor da Prestação'],
+                'Descrição': `Frete CTe N° ${cte['Número']}`,
+                documentType: 'CTE',
+                Item: '1',
+                'Código': `CTE-${cte['Número']}`,
+                'Chave Unica': cleanAndToStr(cte['Número']) + cleanAndToStr(cte['CPF/CNPJ do Fornecedor']),
             }))
         ];
     
@@ -150,7 +159,7 @@ export function AdditionalAnalyses({
             });
     
             const h = {
-                cnpj: findHeader(siengeItemsForReconciliation, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
+                cnpj: findHeader(siengeItemsForReconciliation, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpf/cnpj do destinatário']),
                 numero: findHeader(siengeItemsForReconciliation, ['número', 'numero', 'numero da nota', 'nota fiscal']),
                 valorTotal: findHeader(siengeItemsForReconciliation, ['valor total', 'valor', 'vlr total']),
                 siengeCfop: findHeader(siengeItemsForReconciliation, ['cfop']),
@@ -212,12 +221,12 @@ export function AdditionalAnalyses({
                 {
                     name: "Valor Total",
                     siengeKeyFn: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]),
-                    xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])
+                    xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'] || item['CPF/CNPJ do Destinatário'], item['Valor Total'])
                 },
                 {
                     name: "Preço Unitário",
                     siengeKeyFn: (item: any) => h.precoUnitario ? getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.precoUnitario!]) : null,
-                    xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Unitário'])
+                    xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'] || item['CPF/CNPJ do Destinatário'], item['Valor Unitário'])
                 },
             ];
     
