@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { cfopDescriptions } from '@/lib/cfop';
 import { getColumnsWithCustomRender } from './columns-helper';
 import { Checkbox } from '../ui/checkbox';
-import { ScrollArea, ScrollBar } from '../ui/scroll-area';
+import { ScrollArea } from '../ui/scroll-area';
 
 
 type ValidationStatus = 'unvalidated' | 'correct' | 'incorrect' | 'verify';
@@ -237,7 +237,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         },
         ...getColumnsWithCustomRender(
             itemsToValidate,
-            ['Fornecedor', 'Número da Nota', 'Descrição', 'Valor Total', 'CFOP', 'Descricao CFOP', 'Sienge_CFOP', 'CST do ICMS', 'pICMS'],
+            ['Fornecedor', 'Número da Nota', 'Descrição', 'Valor Total', 'CFOP', 'Descricao CFOP', 'CST do ICMS', 'pICMS'],
             (row, id) => {
                 const value = row.original[id as keyof ReconciledItem];
                 let displayValue = String(value ?? '');
@@ -414,14 +414,11 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                         <TabsContent value={activeTab} className="mt-4">
                              {Object.keys(currentStatusGroup).length > 0 ? (
                                  <Tabs value={activeCfopTab || ''} onValueChange={setActiveCfopTab} className="w-full">
-                                    <ScrollArea>
-                                         <TabsList>
-                                             {Object.entries(currentStatusGroup).map(([cfop, items]) => (
-                                                <TabsTrigger key={cfop} value={cfop}>{cfop} ({items.length})</TabsTrigger>
-                                            ))}
-                                        </TabsList>
-                                        <ScrollBar orientation="horizontal" />
-                                    </ScrollArea>
+                                    <TabsList className="h-auto flex-wrap justify-start">
+                                         {Object.entries(currentStatusGroup).map(([cfop, items]) => (
+                                            <TabsTrigger key={cfop} value={cfop}>{cfop} ({items.length})</TabsTrigger>
+                                        ))}
+                                    </TabsList>
                                      {Object.entries(currentStatusGroup).map(([cfop, items]) => (
                                         <TabsContent key={cfop} value={cfop} className="mt-4">
                                             <DataTable columns={columns} data={items} tableRef={tableRef} onSelectionChange={setNumSelected} />
