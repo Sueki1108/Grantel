@@ -20,7 +20,7 @@ import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
 
 
-type ValidationStatus = 'correct' | 'incorrect' | 'verify' | 'unvalidated';
+type ValidationStatus = 'unvalidated' | 'correct' | 'incorrect' | 'verify';
 
 interface ReconciledItem extends Record<string, any> {
     'Chave de acesso': string;
@@ -57,6 +57,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     const [hasChanges, setHasChanges] = useState(false);
     const tableRef = useRef<ReactTable<ReconciledItem> | null>(null);
     const [activeTab, setActiveTab] = useState<ValidationStatus>('unvalidated');
+    const [activeCfopTab, setActiveCfopTab] = useState<string | null>(null);
 
     const [filters, setFilters] = useState<{ cfopXml: Set<string>; cstIcms: Set<string>; aliqIcms: Set<string> }>({
         cfopXml: new Set(),
@@ -104,41 +105,50 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         setHasChanges(false);
     }, [itemsToValidate, competence, allPersistedClassifications]);
     
-    const { filteredItemsByStatus, filterOptions } = useMemo(() => {
-        const categories: Record<ValidationStatus, ReconciledItem[]> = {
-            unvalidated: [], correct: [], incorrect: [], verify: []
-        };
+    const { groupedItemsByStatus, filterOptions } = useMemo(() => {
+        const itemsWithStatus = itemsToValidate.map(item => ({ ...item, status: classifications[item.id]?.classification || 'unvalidated' }));
         const options = {
-            cfopXml: new Set<string>(),
-            cstIcms: new Set<string>(),
-            aliqIcms: new Set<string>(),
+            cfopXml: new Set<string>(), cstIcms: new Set<string>(), aliqIcms: new Set<string>(),
         };
-
-        const itemsWithStatus = itemsToValidate.map(item => {
-            const status = classifications[item.id]?.classification || 'unvalidated';
-            return { ...item, status };
-        });
-
         itemsWithStatus.forEach(item => {
             if (item.CFOP) options.cfopXml.add(item.CFOP);
             if (item['CST do ICMS']) options.cstIcms.add(item['CST do ICMS']);
             if (item.pICMS !== undefined) options.aliqIcms.add(String(item.pICMS));
         });
 
-        const filtered = itemsWithStatus.filter(item => {
-            const cfopMatch = filters.cfopXml.size === 0 || filters.cfopXml.has(item.CFOP);
-            const cstMatch = filters.cstIcms.size === 0 || (item['CST do ICMS'] && filters.cstIcms.has(item['CST do ICMS']));
-            const aliqMatch = filters.aliqIcms.size === 0 || (item.pICMS !== undefined && filters.aliqIcms.has(String(item.pICMS)));
-            return cfopMatch && cstMatch && aliqMatch;
-        });
+        const filtered = itemsWithStatus.filter(item => 
+            (filters.cfopXml.size === 0 || filters.cfopXml.has(item.CFOP)) &&
+            (filters.cstIcms.size === 0 || (item['CST do ICMS'] && filters.cstIcms.has(item['CST do ICMS']))) &&
+            (filters.aliqIcms.size === 0 || (item.pICMS !== undefined && filters.aliqIcms.has(String(item.pICMS))))
+        );
 
+        const categories: Record<ValidationStatus, Record<string, ReconciledItem[]>> = {
+            unvalidated: {}, correct: {}, incorrect: {}, verify: {}
+        };
         filtered.forEach(item => {
-            categories[item.status].push(item);
+            const siengeCfop = item.Sienge_CFOP || 'N/A';
+            if (!categories[item.status][siengeCfop]) categories[item.status][siengeCfop] = [];
+            categories[item.status][siengeCfop].push(item);
         });
-        
-        return { filteredItemsByStatus: categories, filterOptions: options };
 
+        // Ordena os grupos de CFOP dentro de cada status
+        Object.keys(categories).forEach(status => {
+            const sortedEntries = Object.entries(categories[status as ValidationStatus]).sort(([a], [b]) => a.localeCompare(b));
+            categories[status as ValidationStatus] = Object.fromEntries(sortedEntries);
+        });
+
+        return { groupedItemsByStatus: categories, filterOptions: options };
     }, [itemsToValidate, classifications, filters]);
+
+    // Initialize filters with all options selected
+    useEffect(() => {
+        setFilters({
+            cfopXml: new Set(filterOptions.cfopXml),
+            cstIcms: new Set(filterOptions.cstIcms),
+            aliqIcms: new Set(filterOptions.aliqIcms),
+        });
+    }, [filterOptions.cfopXml.size, filterOptions.cstIcms.size, filterOptions.aliqIcms.size]);
+
 
     const handleStatusChange = (itemsToChange: ReconciledItem[], newStatus: ValidationStatus) => {
         setClassifications(prev => {
@@ -227,7 +237,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         },
         ...getColumnsWithCustomRender(
             itemsToValidate,
-            ['Fornecedor', 'Número da Nota', 'Descrição', 'Valor Total', 'Sienge_CFOP', 'CST do ICMS', 'pICMS'],
+            ['Fornecedor', 'Número da Nota', 'Descrição', 'Valor Total', 'CFOP', 'Descricao CFOP', 'Sienge_CFOP', 'CST do ICMS', 'pICMS'],
             (row, id) => {
                 const value = row.original[id as keyof ReconciledItem];
                 let displayValue = String(value ?? '');
@@ -245,16 +255,6 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                 )
             }
         ),
-         {
-            id: 'CFOP',
-            accessorKey: 'CFOP',
-            header: 'CFOP XML',
-        },
-        {
-            id: 'Descricao CFOP',
-            accessorKey: 'Descricao CFOP',
-            header: 'Descrição CFOP',
-        },
         {
             id: 'actions',
             header: () => <div className='text-center'>Ações</div>,
@@ -306,6 +306,21 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             return { ...prev, [filterType]: newSet };
         });
     };
+
+    const handleSelectAllFilters = (filterType: keyof typeof filters) => {
+        setFilters(prev => ({...prev, [filterType]: new Set(filterOptions[filterType])}));
+    }
+
+    const handleClearAllFilters = (filterType: keyof typeof filters) => {
+        setFilters(prev => ({...prev, [filterType]: new Set()}));
+    }
+    
+    const currentStatusGroup = groupedItemsByStatus[activeTab] || {};
+    const firstCfopInTab = Object.keys(currentStatusGroup)[0] || null;
+
+    useEffect(() => {
+        setActiveCfopTab(firstCfopInTab);
+    }, [activeTab, firstCfopInTab]);
     
     return (
         <div className='relative'>
@@ -314,7 +329,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                     <Card className="flex items-center gap-4 p-3 shadow-2xl animate-in fade-in-0 slide-in-from-bottom-5">
                         <span className="text-sm font-medium pl-2">{numSelected} item(ns) selecionado(s)</span>
                         <div className="h-6 border-l" />
-                        <span className="text-sm font-medium">Ações em Lote:</span>
+                        <span className="text-sm font-medium">Classificar como:</span>
                         <div className="flex gap-2">
                             <Button size="sm" variant="outline" onClick={() => handleBulkAction('correct')}><Check className="mr-2 h-4 w-4 text-green-600"/>Correto</Button>
                             <Button size="sm" variant="outline" onClick={() => handleBulkAction('incorrect')}><X className="mr-2 h-4 w-4 text-red-600"/>Incorreto</Button>
@@ -331,38 +346,47 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                      <div className='flex items-start justify-between'>
                         <div>
                             <CardTitle className="font-headline text-2xl flex items-center gap-2">Validação de CFOP</CardTitle>
-                            <CardDescription>Itens agrupados por status. Use os filtros para refinar a busca e as ações em lote para classificar rapidamente.</CardDescription>
+                            <CardDescription>Itens agrupados por status e CFOP do Sienge. Use os filtros para refinar a busca e as ações em lote para classificar rapidamente.</CardDescription>
                         </div>
                         <div className="flex gap-2">
                              <Popover>
                                 <PopoverTrigger asChild>
                                     <Button variant="outline"><Settings className="mr-2 h-4 w-4" />Filtros</Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-96">
+                                <PopoverContent className="w-[600px]">
                                      <div className="grid gap-4">
                                         <div className="space-y-2">
-                                            <h4 className="font-medium leading-none">Filtrar Itens</h4>
-                                            <p className="text-sm text-muted-foreground">Selecione os valores para filtrar a tabela.</p>
+                                            <h4 className="font-medium leading-none">Filtrar Itens da Tabela</h4>
+                                            <p className="text-sm text-muted-foreground">Selecione os valores para refinar a visualização em todas as abas.</p>
                                         </div>
-                                        <div className="grid grid-cols-3 gap-2">
-                                             <ScrollArea className="h-48 col-span-1">
+                                        <div className="grid grid-cols-3 gap-4">
+                                            <div>
                                                 <h5 className="font-bold text-sm mb-2">CFOP XML</h5>
-                                                {Array.from(filterOptions.cfopXml).sort().map(cfop => (
-                                                    <div key={cfop} className="flex items-center space-x-2"><Checkbox id={`cfop-${cfop}`} checked={filters.cfopXml.has(cfop)} onCheckedChange={c => handleFilterChange('cfopXml', cfop, !!c)} /><Label htmlFor={`cfop-${cfop}`}>{cfop}</Label></div>
-                                                ))}
-                                            </ScrollArea>
-                                            <ScrollArea className="h-48 col-span-1">
+                                                <div className='flex gap-1 mb-2'><Button size="xs" variant="link" onClick={() => handleSelectAllFilters('cfopXml')}>Todos</Button><Button size="xs" variant="link" onClick={() => handleClearAllFilters('cfopXml')}>Nenhum</Button></div>
+                                                <ScrollArea className="h-48 col-span-1 border rounded-md p-2">
+                                                    {Array.from(filterOptions.cfopXml).sort().map(cfop => (
+                                                        <div key={cfop} className="flex items-center space-x-2"><Checkbox id={`cfop-${cfop}`} checked={filters.cfopXml.has(cfop)} onCheckedChange={c => handleFilterChange('cfopXml', cfop, !!c)} /><Label htmlFor={`cfop-${cfop}`}>{cfop} - {cfopDescriptions[Number(cfop)]?.substring(0,25)}...</Label></div>
+                                                    ))}
+                                                </ScrollArea>
+                                            </div>
+                                            <div>
                                                  <h5 className="font-bold text-sm mb-2">CST ICMS</h5>
-                                                {Array.from(filterOptions.cstIcms).sort().map(cst => (
-                                                    <div key={cst} className="flex items-center space-x-2"><Checkbox id={`cst-${cst}`} checked={filters.cstIcms.has(cst)} onCheckedChange={c => handleFilterChange('cstIcms', cst, !!c)} /><Label htmlFor={`cst-${cst}`}>{cst}</Label></div>
-                                                ))}
-                                            </ScrollArea>
-                                             <ScrollArea className="h-48 col-span-1">
+                                                 <div className='flex gap-1 mb-2'><Button size="xs" variant="link" onClick={() => handleSelectAllFilters('cstIcms')}>Todos</Button><Button size="xs" variant="link" onClick={() => handleClearAllFilters('cstIcms')}>Nenhum</Button></div>
+                                                <ScrollArea className="h-48 col-span-1 border rounded-md p-2">
+                                                    {Array.from(filterOptions.cstIcms).sort().map(cst => (
+                                                        <div key={cst} className="flex items-center space-x-2"><Checkbox id={`cst-${cst}`} checked={filters.cstIcms.has(cst)} onCheckedChange={c => handleFilterChange('cstIcms', cst, !!c)} /><Label htmlFor={`cst-${cst}`}>{cst}</Label></div>
+                                                    ))}
+                                                </ScrollArea>
+                                            </div>
+                                             <div>
                                                  <h5 className="font-bold text-sm mb-2">Alíq. ICMS</h5>
-                                                {Array.from(filterOptions.aliqIcms).sort().map(aliq => (
-                                                    <div key={aliq} className="flex items-center space-x-2"><Checkbox id={`aliq-${aliq}`} checked={filters.aliqIcms.has(aliq)} onCheckedChange={c => handleFilterChange('aliqIcms', aliq, !!c)} /><Label htmlFor={`aliq-${aliq}`}>{aliq}%</Label></div>
-                                                ))}
-                                            </ScrollArea>
+                                                 <div className='flex gap-1 mb-2'><Button size="xs" variant="link" onClick={() => handleSelectAllFilters('aliqIcms')}>Todos</Button><Button size="xs" variant="link" onClick={() => handleClearAllFilters('aliqIcms')}>Nenhum</Button></div>
+                                                <ScrollArea className="h-48 col-span-1 border rounded-md p-2">
+                                                    {Array.from(filterOptions.aliqIcms).sort().map(aliq => (
+                                                        <div key={aliq} className="flex items-center space-x-2"><Checkbox id={`aliq-${aliq}`} checked={filters.aliqIcms.has(aliq)} onCheckedChange={c => handleFilterChange('aliqIcms', aliq, !!c)} /><Label htmlFor={`aliq-${aliq}`}>{aliq}%</Label></div>
+                                                    ))}
+                                                </ScrollArea>
+                                            </div>
                                         </div>
                                     </div>
                                 </PopoverContent>
@@ -381,17 +405,33 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                                     {config.icon}
                                     {config.label}
                                     <Badge variant={config.badge} className="ml-2">
-                                        {filteredItemsByStatus[status as ValidationStatus].length}
+                                        {Object.values(groupedItemsByStatus[status as ValidationStatus]).reduce((sum, items) => sum + items.length, 0)}
                                     </Badge>
                                 </TabsTrigger>
                             ))}
                         </TabsList>
                     
-                     {Object.entries(filteredItemsByStatus).map(([status, items]) => (
-                        <TabsContent key={status} value={status} className="mt-4">
-                            <DataTable columns={columns} data={items} tableRef={tableRef} onSelectionChange={setNumSelected} />
+                        <TabsContent value={activeTab} className="mt-4">
+                             {Object.keys(currentStatusGroup).length > 0 ? (
+                                 <Tabs value={activeCfopTab || ''} onValueChange={setActiveCfopTab} className="w-full">
+                                    <ScrollArea>
+                                         <TabsList>
+                                             {Object.entries(currentStatusGroup).map(([cfop, items]) => (
+                                                <TabsTrigger key={cfop} value={cfop}>{cfop} ({items.length})</TabsTrigger>
+                                            ))}
+                                        </TabsList>
+                                        <ScrollBar orientation="horizontal" />
+                                    </ScrollArea>
+                                     {Object.entries(currentStatusGroup).map(([cfop, items]) => (
+                                        <TabsContent key={cfop} value={cfop} className="mt-4">
+                                            <DataTable columns={columns} data={items} tableRef={tableRef} onSelectionChange={setNumSelected} />
+                                        </TabsContent>
+                                    ))}
+                                </Tabs>
+                             ) : (
+                                <div className="text-center text-muted-foreground p-8">Nenhum item nesta categoria com os filtros atuais.</div>
+                             )}
                         </TabsContent>
-                    ))}
                     </Tabs>
                 </CardContent>
             </Card>
