@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, type ChangeEvent, useCallback } from "react";
+import { useState, type ChangeEvent, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -11,14 +11,15 @@ import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import type { ProcessedData, SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
+import { getColumns } from "@/components/app/columns-helper";
+import type { ProcessedData, SpedInfo, SpedCorrectionResult, ReconciliationResults } from "@/lib/excel-processor";
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { cleanAndToStr } from "@/lib/utils";
 import { KeyChecker, type KeyCheckResult } from "./key-checker";
-import type { AllClassifications } from "./imobilizado-analysis";
 import { CfopValidator } from "./cfop-validator";
 import { SiengeTaxCheck } from "./sienge-tax-check";
+import type { AllClassifications } from "./imobilizado-analysis";
+
 
 // ===============================================================
 // Componente Principal
@@ -51,6 +52,8 @@ export function AdditionalAnalyses({
     onSpedProcessed,
     competence,
     onExportSession,
+    allPersistedClassifications,
+    onPersistAllClassifications,
 }: AdditionalAnalysesProps) {
     const { toast } = useToast();
     
@@ -83,7 +86,7 @@ export function AdditionalAnalyses({
                     if (data.length === 0 || !data[0]) return undefined;
                     const headers = Object.keys(data[0]);
                     for (const name of possibleNames){
-                        const found = headers.find((h)=>h.toLowerCase().replace(/[\s-._\/]/g, "") === name);
+                        const found = headers.find((h)=>h.toLowerCase().replace(/[\\s-._/]/g, "") === name);
                         if (found) return found;
                     }
                     return undefined;
@@ -314,7 +317,7 @@ export function AdditionalAnalyses({
                     <CfopValidator 
                         reconciledData={processedData.reconciliationResults?.allReconciledItems || []}
                         competence={competence}
-                        allPersistedClassifications={processedData.imobilizadoClassifications || {}}
+                        allPersistedClassifications={allPersistedClassifications}
                         onPersistAllClassifications={onPersistAllClassifications}
                     />
                 </TabsContent>
