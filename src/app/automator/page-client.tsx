@@ -272,27 +272,26 @@ export function AutomatorClientPage() {
                         const worksheet = workbook.Sheets[sheetName];
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
                         
-                        setProcessedData(prev => ({
-                            sheets: {}, 
-                            spedInfo: null, 
-                            keyCheckResults: null, 
-                            competence: null,
-                            reconciliationResults: { reconciled: [], onlyInSienge: [], onlyInXml: [], allReconciledItems: [] },
-                            resaleAnalysis: null,
-                            spedCorrections: null,
-                            ...prev,
-                            siengeSheetData: jsonData
-                        }));
+                        setProcessedData(prev => {
+                            if (!prev) return null;
+                            const reconciliationResults = runReconciliation(
+                                jsonData, 
+                                prev.sheets['Itens Válidos'] || [], 
+                                prev.sheets['Itens Válidos Saídas'] || [], 
+                                prev.sheets['CTEs Válidos'] || []
+                            );
+                            return {
+                                ...prev,
+                                siengeSheetData: jsonData,
+                                reconciliationResults,
+                            }
+                        });
                         
-                        toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises avançadas.' });
+                        toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e a conciliação foi executada.' });
     
                     } catch (err: any) {
                          toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
-                         setProcessedData(prev => {
-                            if (!prev) return null;
-                            const { siengeSheetData, ...rest } = prev;
-                            return rest as ProcessedData;
-                         });
+                         setProcessedData(prev => prev ? { ...prev, siengeSheetData: null, reconciliationResults: null } : null);
                     }
                 };
                 reader.onerror = (error) => { throw error };
@@ -301,11 +300,7 @@ export function AutomatorClientPage() {
                  toast({ variant: 'destructive', title: 'Erro ao Ler Ficheiro Sienge', description: error.message });
             }
         } else {
-             setProcessedData(prev => {
-                if (!prev) return null;
-                const { siengeSheetData, ...rest } = prev;
-                return rest as ProcessedData;
-             });
+             setProcessedData(prev => prev ? { ...prev, siengeSheetData: null, reconciliationResults: null } : null);
         }
     };
 
@@ -606,7 +601,22 @@ export function AutomatorClientPage() {
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
                 const reconciliationResults = runReconciliation(
-                    processedData?.siengeSheetData, 
+                    siengeFile ? await (async () => {
+                        const reader = new FileReader();
+                        return new Promise<any[]>((resolve, reject) => {
+                            reader.onload = (event) => {
+                                try {
+                                    const data = event.target?.result;
+                                    const workbook = XLSX.read(data, { type: 'array' });
+                                    const sheetName = workbook.SheetNames[0];
+                                    const worksheet = workbook.Sheets[sheetName];
+                                    resolve(XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null }));
+                                } catch (e) { reject(e); }
+                            };
+                            reader.onerror = reject;
+                            reader.readAsArrayBuffer(siengeFile);
+                        });
+                    })() : null, 
                     resultData.sheets['Itens Válidos'] || [], 
                     resultData.sheets['Itens Válidos Saídas'] || [], 
                     resultData.sheets['CTEs Válidos'] || []
@@ -629,7 +639,7 @@ export function AutomatorClientPage() {
 
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => {
         setProcessedData(prevData => {
-            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: { reconciled: [], onlyInSienge: [], onlyInXml: [], allReconciledItems: [] } };
+            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null };
             return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections };
         });
     }, []);
@@ -778,7 +788,7 @@ export function AutomatorClientPage() {
                              {activeMainTab === 'difal' && <DifalAnalysis /> }
                             
                             {activeMainTab === 'analyses' && (
-                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
+                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
                             )}
                          
                              {activeMainTab === 'pending' && (
