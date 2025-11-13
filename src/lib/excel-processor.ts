@@ -1,3 +1,4 @@
+
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import { KeyCheckResult } from '@/components/app/key-checker';
@@ -298,26 +299,25 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     };
     
     const addCfopDescriptionToRow = (row: any) => {
-        if (!row || typeof row !== 'object' || !row['CFOP']) {
+        if (!row || typeof row !== 'object') {
             return { ...row, 'Descricao CFOP': 'N/A' };
         }
-        
-        const cfopCode = parseInt(cleanAndToStr(row['CFOP']), 10);
+    
+        const cfopCode = row['CFOP'] ? parseInt(cleanAndToStr(row['CFOP']), 10) : 0;
         const fullDescription = cfopDescriptions[cfopCode] || 'Descrição não encontrada';
-        const shortDescription = fullDescription.split(' ').slice(0, 3).join(' ');
-
-        // Cria uma nova linha com a Descricao CFOP inserida após o CFOP
+        
         const newRow: { [key: string]: any } = {};
         let cfopAdded = false;
+        
         for (const key in row) {
             newRow[key] = row[key];
             if (key === 'CFOP' && !cfopAdded) {
-                newRow['Descricao CFOP'] = shortDescription;
+                newRow['Descricao CFOP'] = fullDescription;
                 cfopAdded = true;
             }
         }
         if (!cfopAdded) {
-            newRow['Descricao CFOP'] = shortDescription;
+            newRow['Descricao CFOP'] = fullDescription;
         }
 
         return newRow;
