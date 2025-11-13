@@ -92,7 +92,7 @@ export function AdditionalAnalyses({
         const { sheets, siengeSheetData } = processedData;
         
         // 1. Unificar todos os itens de XML (Entradas, Saídas, CTEs)
-        const allXmlItems = [
+         const allXmlItems = [
             ...(sheets?.['Itens Válidos'] || []),
             ...(sheets?.['Itens Válidos Saídas'] || []),
             ...(sheets?.['CTEs Válidos'] || []).map(cte => ({
@@ -110,8 +110,14 @@ export function AdditionalAnalyses({
     
         // 2. Se não houver dados do Sienge, retorna todos os itens do XML para validação.
         if (!siengeSheetData) {
+            const enrichedData = allXmlItems.map(item => ({
+                ...item,
+                'Sienge_CFOP': 'N/A',
+                'Observações': 'Sienge não carregado'
+            }));
+
             return { 
-                reconciliationResults: { reconciled: allXmlItems, onlyInSienge: [], onlyInXml: allXmlItems, otherSiengeItems: {} }, 
+                reconciliationResults: { reconciled: enrichedData, onlyInSienge: [], onlyInXml: [], otherSiengeItems: {} }, 
                 error: null 
             };
         }
@@ -155,7 +161,7 @@ export function AdditionalAnalyses({
             
             const siengeMap = new Map<string, string>();
             siengeItemsForReconciliation.forEach(item => {
-                 const partnerCnpj = item[h.cnpj!]
+                 const partnerCnpj = item[h.cnpj!];
                  const key = `${cleanAndToStr(item[h.numero!])}-${cleanAndToStr(partnerCnpj)}`;
                  if(!siengeMap.has(key)) {
                     siengeMap.set(key, item[h.siengeCfop!]);
@@ -164,7 +170,6 @@ export function AdditionalAnalyses({
 
             // 4. Enriquecer os dados do XML com o CFOP do Sienge, se encontrado
             const reconciledData = allXmlItems.map(item => {
-                // Para vendas, usamos o CNPJ do destinatário; para compras/fretes, o do emitente.
                 const partnerCnpj = item['CPF/CNPJ do Destinatário'] || item['CPF/CNPJ do Emitente'];
                 const key = `${cleanAndToStr(item['Número da Nota'] || item['Número'] || '')}-${cleanAndToStr(partnerCnpj)}`;
                 const siengeCfop = siengeMap.get(key);
