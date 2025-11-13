@@ -31,5 +31,5 @@ export const parseSpedDate = (dateStr: string): Date => {
 
 export const normalizeKey = (key: string | undefined): string => {
     if(!key) return '';
-    return key.toLowerCase().replace(/[\s._\\/-]/g, '');
+    return key.toLowerCase().replace(/[\s._\/-]/g, '');
 }

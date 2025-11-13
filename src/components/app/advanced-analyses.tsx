@@ -14,7 +14,7 @@ import { getColumns } from "@/components/app/columns-helper";
 import type { ProcessedData, SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { cleanAndToStr, normalizeKey } from "@/lib/utils";
-import { KeyChecker, type KeyCheckResult } from "./key-checker";
+import { KeyChecker } from "./key-checker";
 import { CfopValidator } from "./cfop-validator";
 import { SiengeTaxCheck } from "./sienge-tax-check";
 import type { AllClassifications } from "./imobilizado-analysis";
