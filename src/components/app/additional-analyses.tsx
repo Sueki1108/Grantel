@@ -14,7 +14,7 @@ import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns
 import type { ProcessedData, SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { cleanAndToStr } from "@/lib/utils";
-import { KeyChecker, KeyCheckResult } from "./key-checker";
+import { KeyChecker, type KeyCheckResult } from "./key-checker";
 import { AllClassifications } from "./imobilizado-analysis";
 import { CfopValidator } from "./cfop-validator";
 
@@ -373,22 +373,11 @@ export function AdditionalAnalyses({
 // ===============================================================
 function useReconciliation(siengeData: any[] | null, xmlEntradaItems: any[], xmlSaidaItems: any[], xmlCteItems: any[]) {
     const allXmlItems = useMemo(() => {
-        const nfeHeaderMap = new Map([...(xmlEntradaItems || []), ...(xmlSaidaItems || [])].map(n => [n['Chave Unica'], n]));
+        const enrichedNfeItems = (xmlEntradaItems || []).map(item => ({ ...item }));
+        const enrichedSaidaItems = (xmlSaidaItems || []).map(item => ({ ...item }));
+        const cteItemsEnriched = (xmlCteItems || []).map(item => ({...item, 'Valor Total': item['Valor da Prestação'], 'Número da Nota': item['Número']}));
         
-        const enrichedNfeItems = (xmlEntradaItems || []).map(item => ({
-            ...item,
-            Fornecedor: nfeHeaderMap.get(item['Chave Unica'])?.Fornecedor || 'N/A'
-        }));
-
-        const enrichedSaidaItems = (xmlSaidaItems || []).map(item => ({
-            ...item,
-            Destinatário: nfeHeaderMap.get(item['Chave Unica'])?.Destinatário || 'N/A'
-        }));
-        
-        const cteItemsEnriched = (xmlCteItems || []).map(item => ({...item, 'Valor Total': item['Valor da Prestação']}));
-
         return [...enrichedNfeItems, ...enrichedSaidaItems, ...cteItemsEnriched];
-
     }, [xmlEntradaItems, xmlSaidaItems, xmlCteItems]);
 
     const result = useMemo(() => {
@@ -437,7 +426,7 @@ function useReconciliation(siengeData: any[] | null, xmlEntradaItems: any[], xml
                 const siengeMatches = siengeMap.get(key);
 
                 if (siengeMatches && siengeMatches.length > 0) {
-                    const bestMatch = siengeMatches.find(s => Math.abs(parseFloat(s[h.valorTotal!]) - xmlItem['Valor Total']) < 0.01) || siengeMatches[0];
+                    const bestMatch = siengeMatches.find(s => Math.abs(parseFloat(String(s[h.valorTotal!]).replace(',','.')) - xmlItem['Valor Total']) < 0.01) || siengeMatches[0];
                     reconciled.push({
                         ...xmlItem,
                         Sienge_CFOP: bestMatch[h.cfop!],
@@ -457,7 +446,7 @@ function useReconciliation(siengeData: any[] | null, xmlEntradaItems: any[], xml
 
             return {
                 reconciliationResults: {
-                    reconciled: finalReconciled,
+                    reconciled: reconciled,
                     onlyInSienge: onlyInSienge,
                     onlyInXml: onlyInXml,
                 },

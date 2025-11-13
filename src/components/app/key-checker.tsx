@@ -301,21 +301,10 @@ const processSpedFileInBrowser = (
      if (config.removeUnusedParticipants) {
         _log("Iniciando remoção de participantes (0150) não utilizados.");
         const usedParticipantCodes = new Set<string>();
-        // Mapeamento de tipo de registro para o índice do COD_PART
-        const participantFields: { [key: string]: number } = {
-            'C100': 4, 'C500': 3,
-            'D100': 4, 'D500': 3, 'D600': 3,
-            'F100': 3,
-        };
-
         intermediateLines.forEach(line => {
             const parts = line.split('|');
-            if(parts.length > 1) {
-                const regType = parts[1];
-                const partIndex = participantFields[regType];
-                if (partIndex && parts.length > partIndex && parts[partIndex]) {
-                    usedParticipantCodes.add(parts[partIndex]);
-                }
+            if (parts.length > 4 && (parts[1] === 'C100' || parts[1] === 'D100') && parts[4]) {
+                usedParticipantCodes.add(parts[4]);
             }
         });
 
@@ -326,7 +315,7 @@ const processSpedFileInBrowser = (
             if (parts.length > 2 && parts[1] === '0150' && !usedParticipantCodes.has(parts[2])) {
                 modifications.removed0150.push({ lineNumber: i + 1, line });
                 linesModifiedCount++;
-                continue;
+                continue; // Skip this line
             }
             filteredLines.push(line);
         }
@@ -1082,12 +1071,12 @@ export function KeyChecker({
                                                     <TabsTrigger value="removed0150">Part. (0150) Removidos ({correctionResult.modifications.removed0150.length})</TabsTrigger>
                                                     <TabsTrigger value="removed0200">Prod. (0200) Removidos ({correctionResult.modifications.removed0200.length})</TabsTrigger>
                                                     <TabsTrigger value="removed0190">0190 Removidos ({correctionResult.modifications.removed0190.length})</TabsTrigger>
-                                                    <TabsTrigger value="counters">Contadores ({correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length})</TabsTrigger>
-                                                    <TabsTrigger value="ie">IE (NF-e) ({correctionResult.modifications.ieCorrection.length})</TabsTrigger>
-                                                    <TabsTrigger value="cte_series">Série (CT-e) ({correctionResult.modifications.cteSeriesCorrection.length})</TabsTrigger>
-                                                    <TabsTrigger value="address">Endereços ({correctionResult.modifications.addressSpaces.length})</TabsTrigger>
-                                                    <TabsTrigger value="truncation">Truncamento ({correctionResult.modifications.truncation.length})</TabsTrigger>
-                                                    <TabsTrigger value="units">Unidades ({correctionResult.modifications.unitStandardization.length})</TabsTrigger>
+                                                    <TabsTrigger value="counters">Contadores</TabsTrigger>
+                                                    <TabsTrigger value="ie">IE (NF-e)</TabsTrigger>
+                                                    <TabsTrigger value="cte_series">Série (CT-e)</TabsTrigger>
+                                                    <TabsTrigger value="address">Endereços</TabsTrigger>
+                                                    <TabsTrigger value="truncation">Truncamento</TabsTrigger>
+                                                    <TabsTrigger value="units">Unidades</TabsTrigger>
                                                 </TabsList>
                                                 <div className="flex-grow overflow-hidden mt-2">
                                                     <TabsContent value="divergenceRemoval" className="h-full">
