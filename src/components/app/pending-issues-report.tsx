@@ -7,8 +7,8 @@ import autoTable from 'jspdf-autotable';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProcessedData } from '@/lib/excel-processor';
-import { ClipboardList, Download, FileQuestion, FileText, FileDown, FileSpreadsheet, Settings, Check, ListFilter, RefreshCw, ChevronDown, ChevronRight, MinusCircle, RotateCw, HelpCircle } from 'lucide-react';
-import { DataTable } from './data-table';
+import { ClipboardList, Download, FileQuestion, FileText, FileDown, FileSpreadsheet, Settings, ListFilter, RefreshCw, ChevronDown, ChevronRight, MinusCircle, RotateCw, HelpCircle } from 'lucide-react';
+import { DataTable } from '@/components/app/data-table';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { AllClassifications } from './imobilizado-analysis';
@@ -61,7 +61,7 @@ const modificationDetails: {
 };
 
 const extractInvoiceNumber = (key: string): string => {
-    if (key && key.length === 44 && /^\d+$/.test(key.substring(25, 34))) return String(parseInt(key.substring(25, 34), 10));
+    if (key && key.length === 44 && /^\\d+$/.test(key.substring(25, 34))) return String(parseInt(key.substring(25, 34), 10));
     return "N/A";
 };
 
@@ -175,7 +175,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
         const cfopValidationsForCompetence = allPersistedClassifications[competenceKey]?.cfopValidations?.classifications || {};
         
         const cfopPendingItems = cfopValidationItems.filter(item => {
-             const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+             const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
              const classification = cfopValidationsForCompetence[uniqueKey]?.classification;
              return classification === 'incorrect' || classification === 'verify';
         });
@@ -448,7 +448,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                      const exportData = sub.data.filter(item => !ignoredItems.has(item.__itemKey)).map(({__itemKey, ...rest}) => rest);
                      if (exportData.length > 0) {
                         const worksheet = XLSX.utils.json_to_sheet(exportData);
-                        const sheetName = sub.title.replace(/[:\\/?*[\]]/g, '').substring(0, 31);
+                        const sheetName = sub.title.replace(/[:\\\\/?*[\]]/g, '').substring(0, 31);
                         XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
                     }
                 })
@@ -457,7 +457,7 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
                  const exportData = section.data.filter(item => !ignoredItems.has(item.__itemKey)).map(({__itemKey, ...rest}) => rest);
                  if (exportData.length > 0) {
                     const worksheet = XLSX.utils.json_to_sheet(exportData);
-                    const sheetName = section.title.replace(/[:\\/?*[\]]/g, '').substring(0, 31);
+                    const sheetName = section.title.replace(/[:\\\\/?*[\]]/g, '').substring(0, 31);
                     XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
                 }
             }

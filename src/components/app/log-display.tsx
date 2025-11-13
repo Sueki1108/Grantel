@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -35,3 +36,5 @@ export function LogDisplay({ logs }: LogDisplayProps) {
         </Accordion>
     );
 }
+
+    
