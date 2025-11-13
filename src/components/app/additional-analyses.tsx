@@ -91,6 +91,7 @@ export function AdditionalAnalyses({
     
         const { sheets, siengeSheetData } = processedData;
         
+        // 1. Unificar todos os itens de XML (Entradas, Saídas, CTEs)
         const allXmlItems = [
             ...(sheets?.['Itens Válidos'] || []),
             ...(sheets?.['Itens Válidos Saídas'] || []),
@@ -107,28 +108,15 @@ export function AdditionalAnalyses({
             }))
         ];
     
-        const nfeHeaderMap = new Map((sheets?.['Notas Válidas'] || []).map(n => [n['Chave Unica'], n]));
-        
-        const enrichedXmlItems: any[] = allXmlItems.map(item => {
-            const header = nfeHeaderMap.get(item['Chave Unica']);
-            if (header) {
-                 return {
-                    ...item,
-                    Fornecedor: header.Fornecedor || item.Fornecedor,
-                    'Data de Emissão': header['Emissão'] || item['Emissão'],
-                    documentType: item.documentType || 'NFE',
-                }
-            }
-            return item;
-        });
-    
+        // 2. Se não houver dados do Sienge, retorna todos os itens do XML para validação.
         if (!siengeSheetData) {
             return { 
-                reconciliationResults: { reconciled: enrichedXmlItems, onlyInSienge: [], onlyInXml: enrichedXmlItems, otherSiengeItems: {} }, 
+                reconciliationResults: { reconciled: allXmlItems, onlyInSienge: [], onlyInXml: allXmlItems, otherSiengeItems: {} }, 
                 error: null 
             };
         }
     
+        // 3. Processar dados do Sienge se existirem
         try {
             const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
                 if (!data || data.length === 0 || !data[0]) return undefined;
@@ -167,14 +155,17 @@ export function AdditionalAnalyses({
             
             const siengeMap = new Map<string, string>();
             siengeItemsForReconciliation.forEach(item => {
-                 const key = `${cleanAndToStr(item[h.numero!])}-${cleanAndToStr(item[h.cnpj!])}`;
+                 const partnerCnpj = item[h.cnpj!]
+                 const key = `${cleanAndToStr(item[h.numero!])}-${cleanAndToStr(partnerCnpj)}`;
                  if(!siengeMap.has(key)) {
                     siengeMap.set(key, item[h.siengeCfop!]);
                  }
             });
 
-            const reconciledData = enrichedXmlItems.map(item => {
-                const partnerCnpj = item['CPF/CNPJ do Emitente'] || item['CPF/CNPJ do Destinatário'];
+            // 4. Enriquecer os dados do XML com o CFOP do Sienge, se encontrado
+            const reconciledData = allXmlItems.map(item => {
+                // Para vendas, usamos o CNPJ do destinatário; para compras/fretes, o do emitente.
+                const partnerCnpj = item['CPF/CNPJ do Destinatário'] || item['CPF/CNPJ do Emitente'];
                 const key = `${cleanAndToStr(item['Número da Nota'] || item['Número'] || '')}-${cleanAndToStr(partnerCnpj)}`;
                 const siengeCfop = siengeMap.get(key);
                 return {
