@@ -113,9 +113,33 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
                  if ((id === 'Valor Total' || id === 'Valor Unitário') && typeof value === 'number') {
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
                 }
+                
+                const renderCellWithTooltip = (displayValue: string, fullValue: string) => (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="truncate max-w-[120px]">{displayValue}</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>{fullValue}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                );
+
                 if (id === 'Fornecedor' && typeof value === 'string') {
-                     return <div className="truncate max-w-[120px]" title={value}>{value}</div>;
+                     return renderCellWithTooltip(value, value);
                 }
+
+                if (id === 'Descrição' && typeof value === 'string') {
+                     return renderCellWithTooltip(value, value);
+                }
+
+                if (id === 'Descricao CFOP' && typeof value === 'string') {
+                    const fullDescription = cfopDescriptions[parseInt(row.original.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+                     return renderCellWithTooltip(value, fullDescription);
+                }
+
                  if (id === 'Número da Nota') {
                     return (
                         <div className="flex items-center gap-1 group justify-center">
@@ -124,14 +148,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
                         </div>
                     );
                 }
-                 if (id === 'Descrição') {
-                    return (
-                        <div className="flex items-center gap-1 group">
-                            <p className="truncate max-w-[200px]" title={String(row.original['Descrição'])}>{value}</p>
-                            <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(String(row.original['Descrição']), 'Descrição'); }}><Copy className="h-3 w-3" /></Button>
-                        </div>
-                    );
-                }
+                
                 return <div className="truncate max-w-xs">{String(value ?? '')}</div>;
             }
         );
