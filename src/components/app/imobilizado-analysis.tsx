@@ -25,7 +25,7 @@ import { cleanAndToStr } from '@/lib/utils';
 // Tipos
 export type Classification = 'unclassified' | 'imobilizado' | 'uso-consumo' | 'utilizado-em-obra';
 
-export interface ItemData extends Record<string, any> {
+export interface ImobilizadoItemData extends Record<string, any> {
     id: string; // Chave Única da Nota + N° do Item. Identificador único por linha.
     uniqueItemId: string; // Chave para persistência de CLASSIFICAÇÃO (CNPJ-CodigoProduto)
 }
@@ -63,7 +63,7 @@ const IMOBILIZADO_CFOP_EXCLUSION_KEY = 'imobilizadoCfopExclusionList';
 
 
 interface ImobilizadoAnalysisProps {
-    items: ItemData[]; 
+    items: ImobilizadoItemData[]; 
     siengeData: any[] | null;
     competence: string | null; 
     onPersistData: (allDataToSave: AllClassifications) => void;
@@ -71,14 +71,14 @@ interface ImobilizadoAnalysisProps {
 }
 
 interface ClassificationTableProps {
-    data: ItemData[];
+    data: ImobilizadoItemData[];
     classification: Classification;
     rowSelection: RowSelectionState;
     setRowSelection: React.Dispatch<React.SetStateAction<RowSelectionState>>;
-    tableRef: React.MutableRefObject<ReactTable<ItemData> | null>;
+    tableRef: React.MutableRefObject<ReactTable<ImobilizadoItemData> | null>;
     sessionAccountCodes: Record<string, string>;
     handleAccountCodeChange: (itemLineId: string, code: string) => void;
-    handleClassificationChange: (itemsToUpdate: ItemData[], newClassification: Classification) => void;
+    handleClassificationChange: (itemsToUpdate: ImobilizadoItemData[], newClassification: Classification) => void;
 }
 
 
@@ -104,7 +104,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
     };
 
     const columns = useMemo(() => {
-        const columnsToShow: (keyof ItemData)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
+        const columnsToShow: (keyof ImobilizadoItemData)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
         const baseColumns = getColumnsWithCustomRender(
             data,
             columnsToShow,
@@ -179,7 +179,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
                 id: 'accountCode',
                 header: 'Código do Ativo',
                 cell: ({ row }: any) => {
-                    const item = row.original as ItemData;
+                    const item = row.original as ImobilizadoItemData;
                     return (
                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                             <Input
@@ -198,7 +198,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
             id: 'actions',
             header: 'Ações Individuais',
             cell: ({ row }: any) => {
-                const originalItem = row.original as ItemData;
+                const originalItem = row.original as ImobilizadoItemData;
                 const currentClassification = classification;
 
                 return (
@@ -399,7 +399,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         };
     }, [rowSelection]);
     
-     const handleClassificationChange = (itemsToUpdate: ItemData[], newClassification: Classification) => {
+     const handleClassificationChange = (itemsToUpdate: ImobilizadoItemData[], newClassification: Classification) => {
         const newClassifications = { ...sessionClassifications };
         
         itemsToUpdate.forEach(item => {
@@ -418,7 +418,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         const table = tableRef.current;
         if (!table) return;
 
-        const selectedItems = table.getFilteredSelectedRowModel().rows.map(row => row.original as ItemData);
+        const selectedItems = table.getFilteredSelectedRowModel().rows.map(row => row.original as ImobilizadoItemData);
         handleClassificationChange(selectedItems, newClassification);
         setRowSelection({}); 
     };
@@ -466,7 +466,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
     };
 
     const filteredItems = useMemo(() => {
-        const categories: Record<Classification, ItemData[]> = {
+        const categories: Record<Classification, ImobilizadoItemData[]> = {
             unclassified: [], imobilizado: [], 'uso-consumo': [], 'utilizado-em-obra': [],
         };
 
@@ -484,7 +484,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         return categories;
     }, [imobilizadoItems, sessionClassifications]);
     
-    const handleDownload = (data: ItemData[], classification: Classification) => {
+    const handleDownload = (data: ImobilizadoItemData[], classification: Classification) => {
         if (data.length === 0) {
             toast({ title: 'Nenhum dado para exportar', variant: 'destructive' });
             return;
@@ -511,7 +511,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         toast({ title: 'Download Iniciado' });
     };
 
-    const tableRef = React.useRef<ReactTable<ItemData> | null>(null);
+    const tableRef = React.useRef<ReactTable<ImobilizadoItemData> | null>(null);
 
     const onTabChange = (value: string) => {
         setRowSelection({}); // Clear selection when changing tabs

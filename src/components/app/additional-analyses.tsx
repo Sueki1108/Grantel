@@ -15,7 +15,7 @@ import type { ProcessedData, SpedInfo, SpedCorrectionResult, ReconciliationResul
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { cleanAndToStr } from "@/lib/utils";
 import { KeyChecker, type KeyCheckResult } from "./key-checker";
-import { AllClassifications } from "./imobilizado-analysis";
+import type { AllClassifications } from "./imobilizado-analysis";
 import { CfopValidator } from "./cfop-validator";
 import { SiengeTaxCheck } from "./sienge-tax-check";
 
@@ -436,4 +436,3 @@ function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeF
          </Card>
     );
 }
-    
