@@ -1,9 +1,7 @@
-
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import { KeyCheckResult } from '@/components/app/key-checker';
 import { type AllClassifications } from '@/components/app/imobilizado-analysis';
-import { ReconciliationResults } from '@/components/app/additional-analyses';
 
 // Types
 type DataFrame = any[];
@@ -43,7 +41,12 @@ export interface SpedCorrectionResult {
     };
     log: string[];
 }
-
+export interface ReconciliationResults {
+    reconciled: any[];
+    onlyInSienge: any[];
+    onlyInXml: any[];
+    allReconciledItems: any[];
+}
 export interface ProcessedData {
     sheets: DataFrames;
     spedInfo: SpedInfo | null;
@@ -351,3 +354,86 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         reconciliationResults: null,
     };
 }
+
+
+export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any[], xmlSaidaItems: any[], xmlCteItems: any[]): ReconciliationResults | null {
+    if (!siengeData) {
+        return null;
+    }
+    const allXmlItems = [
+        ...(xmlEntradaItems || []).map(item => ({ ...item })),
+        ...(xmlSaidaItems || []).map(item => ({ ...item })),
+        ...(xmlCteItems || []).map(item => ({...item, 'Valor Total': item['Valor da Prestação'], 'Número da Nota': item['Número']}))
+    ];
+
+    try {
+        const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
+            if (!data || data.length === 0 || !data[0]) return undefined;
+            const headers = Object.keys(data[0]);
+            const normalizedHeaders = headers.map(h => ({ original: h, normalized: h.toLowerCase().replace(/[\s-._/]/g, '') }));
+            for (const name of possibleNames) {
+                const found = normalizedHeaders.find(h => h.normalized === name);
+                if (found) return found.original;
+            }
+            return undefined;
+        };
+
+        const h = {
+            cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpjfornecedor', 'cpf/cnjpdestinatario']),
+            numero: findHeader(siengeData, ['número', 'numero', 'numerodanota', 'notafiscal']),
+            valorTotal: findHeader(siengeData, ['valortotal', 'valor', 'vlrtotal']),
+            cfop: findHeader(siengeData, ['cfop'])
+        };
+
+        if (!h.cnpj || !h.numero || !h.valorTotal || !h.cfop) {
+            throw new Error("Colunas essenciais (CPF/CNPJ, Número, Valor Total, CFOP) não encontradas no Sienge.");
+        }
+
+        const siengeMap = new Map<string, any[]>();
+        siengeData.forEach(siengeItem => {
+            const partnerCnpj = cleanAndToStr(siengeItem[h.cnpj!]);
+            const key = `${cleanAndToStr(siengeItem[h.numero!])}-${partnerCnpj}`;
+            if (!siengeMap.has(key)) siengeMap.set(key, []);
+            siengeMap.get(key)!.push(siengeItem);
+        });
+        
+        const reconciled: any[] = [];
+        const onlyInXml: any[] = [];
+        
+        allXmlItems.forEach(xmlItem => {
+            const partnerCnpj = xmlItem['CPF/CNPJ do Emitente'] || xmlItem['CPF/CNPJ do Destinatário'];
+            const key = `${cleanAndToStr(xmlItem['Número da Nota'] || xmlItem['Número'] || '')}-${cleanAndToStr(partnerCnpj)}`;
+            
+            const siengeMatches = siengeMap.get(key);
+
+            if (siengeMatches && siengeMatches.length > 0) {
+                const bestMatch = siengeMatches.find(s => Math.abs(parseFloat(String(s[h.valorTotal!]).replace(',','.')) - xmlItem['Valor Total']) < 0.01) || siengeMatches[0];
+                reconciled.push({
+                    ...xmlItem,
+                    Sienge_CFOP: bestMatch[h.cfop!],
+                });
+                
+                const index = siengeMatches.indexOf(bestMatch);
+                if (index > -1) siengeMatches.splice(index, 1);
+
+            } else {
+                onlyInXml.push(xmlItem);
+            }
+        });
+        
+        const onlyInSienge = Array.from(siengeMap.values()).flat();
+        const allReconciledItems = [...reconciled, ...onlyInXml.map(item => ({...item, Sienge_CFOP: 'N/A'}))];
+
+        return {
+            reconciled: reconciled,
+            onlyInSienge: onlyInSienge,
+            onlyInXml: onlyInXml,
+            allReconciledItems: allReconciledItems
+        };
+
+    } catch (err: any) {
+        console.error("Reconciliation Error:", err.message);
+        return null;
+    }
+}
+    

@@ -16,7 +16,7 @@ import Link from "next/link";
 import * as XLSX from 'xlsx';
 import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
-import { processDataFrames, type ProcessedData, type SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
+import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdditionalAnalyses } from "@/components/app/additional-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
@@ -253,38 +253,59 @@ export function AutomatorClientPage() {
         }
     };
     
-    const handleSiengeFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         setSiengeFile(file || null);
     
         if (file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                try {
-                    const data = event.target?.result;
-                    if (!data) throw new Error("Não foi possível ler o conteúdo do ficheiro.");
-
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const sheetName = workbook.SheetNames[0];
-                    if (!sheetName) throw new Error("A planilha não contém nenhuma aba.");
-                    
-                    const worksheet = workbook.Sheets[sheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-                    
-                    setProcessedData(prev => {
-                        const baseState: ProcessedData = prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, siengeSheetData: null };
-                        return { ...baseState, siengeSheetData: jsonData };
-                    });
-                    
-                    toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises avançadas.' });
-                } catch (err: any) {
-                     toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
-                }
-            };
-            reader.onerror = (error) => toast({ variant: 'destructive', title: 'Erro ao Ler Ficheiro Sienge', description: error.message });
-            reader.readAsArrayBuffer(file);
+            try {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = event.target?.result;
+                        if (!data) throw new Error("Não foi possível ler o conteúdo do ficheiro.");
+    
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const sheetName = workbook.SheetNames[0];
+                        if (!sheetName) throw new Error("A planilha não contém nenhuma aba.");
+                        
+                        const worksheet = workbook.Sheets[sheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+                        
+                        setProcessedData(prev => ({
+                            sheets: {}, 
+                            spedInfo: null, 
+                            keyCheckResults: null, 
+                            competence: null,
+                            reconciliationResults: null,
+                            resaleAnalysis: null,
+                            spedCorrections: null,
+                            ...prev,
+                            siengeSheetData: jsonData
+                        }));
+                        
+                        toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises avançadas.' });
+    
+                    } catch (err: any) {
+                         toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
+                         setProcessedData(prev => {
+                            if (!prev) return null;
+                            const { siengeSheetData, ...rest } = prev;
+                            return rest as ProcessedData;
+                         });
+                    }
+                };
+                reader.onerror = (error) => { throw error };
+                reader.readAsArrayBuffer(file);
+            } catch (error: any) {
+                 toast({ variant: 'destructive', title: 'Erro ao Ler Ficheiro Sienge', description: error.message });
+            }
         } else {
-             setProcessedData(prev => prev ? { ...prev, siengeSheetData: null } : null);
+             setProcessedData(prev => {
+                if (!prev) return null;
+                const { siengeSheetData, ...rest } = prev;
+                return rest as ProcessedData;
+             });
         }
     };
 
@@ -584,7 +605,14 @@ export function AutomatorClientPage() {
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
-                setProcessedData({...resultData, competence });
+                const reconciliationResults = runReconciliation(
+                    resultData.siengeSheetData, 
+                    resultData.sheets['Itens Válidos'] || [], 
+                    resultData.sheets['Itens Válidos Saídas'] || [], 
+                    resultData.sheets['CTEs Válidos'] || []
+                );
+
+                setProcessedData({...resultData, competence, reconciliationResults });
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
 
             } catch (err: any) {
@@ -601,10 +629,8 @@ export function AutomatorClientPage() {
 
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => {
         setProcessedData(prevData => {
-            if (!prevData) {
-                return { sheets: {}, siengeSheetData: null, spedInfo: spedInfo || null, keyCheckResults: keyCheckResults || null, spedCorrections: spedCorrections ? [spedCorrections] : null, competence: null, resaleAnalysis: null, reconciliationResults: null };
-            }
-            return { ...prevData, spedInfo: spedInfo, keyCheckResults: keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : prevData.spedCorrections };
+            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null };
+            return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections };
         });
     }, []);
     
@@ -738,7 +764,7 @@ export function AutomatorClientPage() {
                             )}
 
                              {activeMainTab === 'saidas-nfe' && (
-                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
+                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
                             )}
                             
                             {activeMainTab === 'nfse' && (
@@ -826,3 +852,4 @@ export function AutomatorClientPage() {
         </div>
     );
 }
+    
