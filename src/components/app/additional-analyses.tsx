@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, type ChangeEvent, useCallback } from "react";
+import { useState, useMemo, type ChangeEvent, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -235,14 +235,70 @@ export function AdditionalAnalyses({
                     />
                 </TabsContent>
                 
-                 <TabsContent value="reconciliation" className="mt-6">
-                    <ReconciliationAnalysis 
-                        siengeFile={siengeFile}
-                        onSiengeFileChange={onSiengeFileChange}
-                        onClearSiengeFile={onClearSiengeFile}
-                        processedData={processedData}
-                        reconciliationResults={reconciliationResults}
-                    />
+                <TabsContent value="reconciliation" className="mt-6">
+                    <Card>
+                        <CardHeader>
+                            <div className="flex items-center gap-3">
+                                <GitCompareArrows className="h-8 w-8 text-primary" />
+                                <div>
+                                    <CardTitle className="font-headline text-2xl">Conciliação de Itens (XML vs Sienge)</CardTitle>
+                                    <CardDescription>Carregue a planilha do Sienge. A comparação será executada automaticamente.</CardDescription>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <FileUploadForm
+                                displayName="Itens do Sienge"
+                                formId="sienge-for-reconciliation"
+                                files={{ 'sienge-for-reconciliation': !!siengeFile }}
+                                onFileChange={onSiengeFileChange}
+                                onClearFile={onClearSiengeFile}
+                            />
+                            {(!processedData.sheets['Itens Válidos'] || processedData.sheets['Itens Válidos'].length === 0) &&
+                            (!processedData.sheets['Itens Válidos Saídas'] || processedData.sheets['Itens Válidos Saídas'].length === 0) && (
+                                <Alert variant="destructive">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    <AlertTitle>Dados XML em falta</AlertTitle>
+                                    <AlertDescription>
+                                        Processe os XMLs de entrada ou saída na primeira aba para habilitar a conciliação.
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+                            
+                            {reconciliationResults ? (
+                                <div className="mt-6">
+                                    <Tabs defaultValue="reconciled">
+                                        <TabsList className="grid w-full grid-cols-3">
+                                            <TabsTrigger value="reconciled">Conciliados ({reconciliationResults.reconciled.length})</TabsTrigger>
+                                            <TabsTrigger value="onlyInSienge">Apenas no Sienge ({reconciliationResults.onlyInSienge.length})</TabsTrigger>
+                                            <TabsTrigger value="onlyInXml">Apenas no XML ({reconciliationResults.onlyInXml.length})</TabsTrigger>
+                                        </TabsList>
+                                        <div className="mt-4">
+                                            <TabsContent value="reconciled">
+                                                <Button onClick={() => {}} size="sm" className="mb-4" disabled={reconciliationResults.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                                <DataTable columns={getColumns(reconciliationResults.reconciled)} data={reconciliationResults.reconciled} />
+                                            </TabsContent>
+                                            <TabsContent value="onlyInSienge">
+                                                <Button onClick={() => {}} size="sm" className="mb-4" disabled={reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                                <DataTable columns={getColumns(reconciliationResults.onlyInSienge)} data={reconciliationResults.onlyInSienge} />
+                                            </TabsContent>
+                                            <TabsContent value="onlyInXml">
+                                                <Button onClick={() => {}} size="sm" className="mb-4" disabled={reconciliationResults.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                                <DataTable columns={getColumns(reconciliationResults.onlyInXml)} data={reconciliationResults.onlyInXml} />
+                                            </TabsContent>
+                                        </div>
+                                    </Tabs>
+                                </div>
+                            ) : (
+                                siengeFile && (
+                                    <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
+                                        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                                        <p className="mt-4 text-center">Processando dados para conciliação...</p>
+                                    </div>
+                                )
+                            )}
+                        </CardContent>
+                    </Card>
                 </TabsContent>
                 
                 <TabsContent value="cfop_validation" className="mt-6">
@@ -342,97 +398,5 @@ export function AdditionalAnalyses({
                 </TabsContent>
             </Tabs>
         </div>
-    );
-}
-
-
-// ===============================================================
-// Componente de Análise de Conciliação
-// ===============================================================
-interface ReconciliationAnalysisProps {
-    siengeFile: File | null;
-    processedData: ProcessedData;
-    onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
-    onClearSiengeFile: () => void;
-    reconciliationResults: ReconciliationResults | null;
-}
-
-function ReconciliationAnalysis({ siengeFile, onSiengeFileChange, onClearSiengeFile, processedData, reconciliationResults }: ReconciliationAnalysisProps) {
-    const { toast } = useToast();
-
-    const handleDownload = (data: any[], title: string) => {
-        if (!data || data.length === 0) {
-            toast({ title: "Nenhum dado para exportar", description: `Não há itens na aba "${title}".` });
-            return;
-        }
-        const worksheet = XLSX.utils.json_to_sheet(data);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, title);
-        const fileName = `Grantel - Conciliação ${title}.xlsx`;
-        XLSX.writeFile(workbook, fileName);
-    };
-
-    return (
-         <Card>
-            <CardHeader>
-                <div className="flex items-center gap-3">
-                    <GitCompareArrows className="h-8 w-8 text-primary" />
-                    <div>
-                        <CardTitle className="font-headline text-2xl">Conciliação de Itens (XML vs Sienge)</CardTitle>
-                        <CardDescription>Carregue a planilha do Sienge. A comparação será executada automaticamente.</CardDescription>
-                    </div>
-                </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <FileUploadForm
-                    displayName="Itens do Sienge"
-                    formId="sienge-for-reconciliation"
-                    files={{ 'sienge-for-reconciliation': !!siengeFile }}
-                    onFileChange={onSiengeFileChange}
-                    onClearFile={onClearSiengeFile}
-                />
-                {!processedData.sheets['Itens Válidos'] && !processedData.sheets['Itens Válidos Saídas'] && (
-                     <Alert variant="destructive">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertTitle>Dados XML em falta</AlertTitle>
-                        <AlertDescription>
-                            Processe os XMLs de entrada ou saída na primeira aba para habilitar a conciliação.
-                        </AlertDescription>
-                    </Alert>
-                )}
-                
-                {reconciliationResults && (
-                    <div className="mt-6">
-                        <Tabs defaultValue="reconciled">
-                            <TabsList className="grid w-full grid-cols-3">
-                                <TabsTrigger value="reconciled">Conciliados ({reconciliationResults.reconciled.length})</TabsTrigger>
-                                <TabsTrigger value="onlyInSienge">Apenas no Sienge ({reconciliationResults.onlyInSienge.length})</TabsTrigger>
-                                <TabsTrigger value="onlyInXml">Apenas no XML ({reconciliationResults.onlyInXml.length})</TabsTrigger>
-                            </TabsList>
-                            <div className="mt-4">
-                                <TabsContent value="reconciled">
-                                    <Button onClick={() => handleDownload(reconciliationResults.reconciled, 'Itens_Conciliados')} size="sm" className="mb-4" disabled={reconciliationResults.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                    <DataTable columns={getColumns(reconciliationResults.reconciled)} data={reconciliationResults.reconciled} />
-                                </TabsContent>
-                                <TabsContent value="onlyInSienge">
-                                    <Button onClick={() => handleDownload(reconciliationResults.onlyInSienge, 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                    <DataTable columns={getColumns(reconciliationResults.onlyInSienge)} data={reconciliationResults.onlyInSienge} />
-                                </TabsContent>
-                                <TabsContent value="onlyInXml">
-                                    <Button onClick={() => handleDownload(reconciliationResults.onlyInXml, 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                    <DataTable columns={getColumns(reconciliationResults.onlyInXml)} data={reconciliationResults.onlyInXml} />
-                                </TabsContent>
-                            </div>
-                        </Tabs>
-                    </div>
-                )}
-                 {!siengeFile && (processedData.sheets['Itens Válidos'] || processedData.sheets['Itens Válidos Saídas']) && (
-                     <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
-                        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                        <p className="mt-4 text-center">Aguardando o ficheiro "Itens do Sienge" para executar a conciliação automaticamente...</p>
-                    </div>
-                 )}
-            </CardContent>
-         </Card>
     );
 }
