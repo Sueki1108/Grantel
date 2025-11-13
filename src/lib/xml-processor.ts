@@ -1,3 +1,4 @@
+
 // Types
 type LogFunction = (message: string) => void;
 
@@ -69,6 +70,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const total = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'total')[0];
     const detList = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'det');
     const protNFe = nfeProc.getElementsByTagNameNS(NFE_NAMESPACE, 'protNFe')[0];
+    const infAdic = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'infAdic')[0];
     
     const infProt = protNFe?.getElementsByTagNameNS(NFE_NAMESPACE, 'infProt')[0];
 
@@ -84,12 +86,13 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     
     const emitCNPJ = getTagValue(emit, 'CNPJ');
     const emitNome = getTagValue(emit, 'xNome');
-    const emitIE = getTagValue(emit, 'IE'); // Extrair a Inscrição Estadual do Emitente
+    const emitIE = getTagValue(emit, 'IE');
     const destCNPJ = getTagValue(dest, 'CNPJ');
     const destNome = getTagValue(dest, 'xNome');
     const destIE = getTagValue(dest, 'IE');
     const enderDest = dest.getElementsByTagNameNS(NFE_NAMESPACE, 'enderDest')[0];
     const destUF = getTagValue(enderDest, 'UF');
+    const infCpl = getTagValue(infAdic, 'infCpl');
 
 
     // Extract ICMS Totals
@@ -115,9 +118,9 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'Total': parseFloat(vNF) || 0,
         'Status': status,
         'Natureza da Operação': natOp,
+        'infCpl': infCpl,
     };
     
-    // Extrai dados do bloco <entrega> se existir
     if (entrega) {
         notaFiscal.entrega_UF = getTagValue(entrega, 'UF');
         notaFiscal.entrega_xMun = getTagValue(entrega, 'xMun');
@@ -126,15 +129,15 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     if (isSaida) {
         notaFiscal['Destinatário'] = destNome;
         notaFiscal['CPF/CNPJ do Destinatário'] = destCNPJ;
-        // Adicionar totais de ICMS para saídas
         notaFiscal['Base ICMS'] = parseFloat(vBC) || 0;
         notaFiscal['Valor ICMS'] = parseFloat(vICMS) || 0;
     } else { // entrada
         notaFiscal['Fornecedor'] = emitNome;
         notaFiscal['CPF/CNPJ do Fornecedor'] = emitCNPJ;
+        notaFiscal['CPF/CNPJ do Destinatário'] = destCNPJ;
         notaFiscal['emitCNPJ'] = emitCNPJ;
         notaFiscal['emitName'] = emitNome;
-        notaFiscal['emitIE'] = emitIE; // Adicionar a IE do emitente aos dados da nota
+        notaFiscal['emitIE'] = emitIE;
         notaFiscal['destCNPJ'] = destCNPJ;
         notaFiscal['destIE'] = destIE;
         notaFiscal['destUF'] = destUF;
@@ -159,7 +162,6 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
             'CPF/CNPJ do Emitente': emitCNPJ,
         };
 
-        // Extrai todos os campos de <prod>
         for (const child of Array.from(prod.children)) {
             const tagName = child.tagName;
             const content = child.textContent;
@@ -168,7 +170,6 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
             }
         }
         
-        // Renomeia os campos mais comuns para melhor legibilidade
         item['Código'] = item.prod_cProd;
         item['Descrição'] = item.prod_xProd;
         item['NCM'] = item.prod_NCM;
@@ -178,14 +179,13 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         item['Valor Unitário'] = parseFloat(item.prod_vUnCom) || 0;
         item['Valor Total'] = parseFloat(item.prod_vProd) || 0;
 
-        // Adiciona explicitamente o CFOP e NCM ao nível principal do item se não estiverem já lá
         if (!item['CFOP']) item['CFOP'] = getTagValue(prod, 'CFOP');
         if (!item['NCM']) item['NCM'] = getTagValue(prod, 'NCM');
 
         if (imposto) {
             const icmsGroup = imposto.getElementsByTagNameNS(NFE_NAMESPACE, 'ICMS')[0];
             if (icmsGroup) {
-                const taxDetails = icmsGroup.children[0]; // ex: ICMS00, ICMS10, etc.
+                const taxDetails = icmsGroup.children[0]; 
                 if (taxDetails) {
                      for (const taxField of Array.from(taxDetails.children)) {
                         const tagName = taxField.tagName;
@@ -201,7 +201,6 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
             }
         }
         
-        // Se for uma nota de saída, pega o CFOP e Alíquota do primeiro item e adiciona ao cabeçalho
         if (isSaida && i === 0) {
             notaFiscal['CFOP'] = item['CFOP'];
             notaFiscal['Alíq. ICMS (%)'] = item['pICMS'] || 0;
@@ -213,13 +212,12 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     
     if (isSaida) {
         return { nfe: [], itens: [], saidas: [notaFiscal], itensSaidas: itens, cte: [] };
-    } else { // 'entrada'
+    } else {
         return { nfe: [notaFiscal], itens: itens, saidas: [], itensSaidas: [], cte: [] };
     }
 };
 
 const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | null => {
-    // CTe XMLs sometimes have inconsistent namespace usage. We'll try to get tags by name directly.
     const cteProc = xmlDoc.getElementsByTagName('cteProc')[0];
     if (!cteProc) {
         log("AVISO: Tag <cteProc> não encontrada. O XML pode não ser um documento de CTe processado.");
@@ -240,7 +238,6 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const dest = infCte.getElementsByTagName('dest')[0];
     const vPrest = infCte.getElementsByTagName('vPrest')[0];
     
-    // Tomador pode não existir, então verificamos
     const toma = infCte.getElementsByTagName('toma3')[0] || infCte.getElementsByTagName('toma4')[0];
     let tomadorCnpj = '';
     if(toma) {
@@ -255,10 +252,10 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     
     const chaveAcesso = getAttributeValue(infCte, 'Id').replace('CTe', '');
     const nCT = getCteTagValue(ide, 'nCT');
-    const serie = getCteTagValue(ide, 'serie'); // Extract the series
+    const serie = getCteTagValue(ide, 'serie');
     const dhEmiRaw = getCteTagValue(ide, 'dhEmi');
     const emitCNPJ = getCteTagValue(emit, 'CNPJ');
-    const emitIE = getCteTagValue(emit, 'IE'); // Extrair IE do CTe também
+    const emitIE = getCteTagValue(emit, 'IE');
     const vTPrest = getCteTagValue(vPrest, 'vTPrest');
     
     const status = getCteTagValue(infProt, 'cStat') === '100' ? 'Autorizadas' : 'Canceladas';
@@ -266,11 +263,11 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const notaCte = {
         'Chave de acesso': chaveAcesso,
         'Número': nCT,
-        'Série': serie, // Add series to the extracted data
+        'Série': serie,
         'Emissão': dhEmiRaw,
         'Fornecedor': getCteTagValue(emit, 'xNome'),
         'CPF/CNPJ do Fornecedor': emitCNPJ,
-        'emitIE': emitIE, // Adicionar a IE do emitente do CTe
+        'emitIE': emitIE,
         'Remetente': getCteTagValue(rem, 'xNome'),
         'CPF/CNPJ do Remetente': getCteTagValue(rem, 'CNPJ'),
         'Destinatário': getCteTagValue(dest, 'xNome'),
