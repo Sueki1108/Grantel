@@ -18,7 +18,7 @@ import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
 import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AdditionalAnalyses } from "@/components/app/additional-analyses";
+import { AdvancedAnalyses } from "@/components/app/advanced-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -605,7 +605,14 @@ export function AutomatorClientPage() {
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
-                setProcessedData({...resultData, competence });
+                const reconciliationResults = runReconciliation(
+                    resultData.siengeSheetData, 
+                    resultData.sheets['Itens Válidos'] || [], 
+                    resultData.sheets['Itens Válidos Saídas'] || [], 
+                    resultData.sheets['CTEs Válidos'] || []
+                );
+
+                setProcessedData({...resultData, competence, reconciliationResults });
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
 
             } catch (err: any) {
@@ -622,10 +629,8 @@ export function AutomatorClientPage() {
 
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => {
         setProcessedData(prevData => {
-            if (!prevData) {
-                return { sheets: {}, siengeSheetData: null, spedInfo: spedInfo || null, keyCheckResults: keyCheckResults || null, spedCorrections: spedCorrections ? [spedCorrections] : null, competence: null, resaleAnalysis: null, reconciliationResults: null };
-            }
-            return { ...prevData, spedInfo: spedInfo, keyCheckResults: keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : prevData.spedCorrections };
+            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null };
+            return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections };
         });
     }, []);
     
@@ -663,7 +668,7 @@ export function AutomatorClientPage() {
                            <h1 className="text-xl font-bold font-headline">Fluxo de Validação</h1>
                         </div>
                      </div>
-                     <div className="flex items-center gap-2">
+                     <div className="flex items-center gap-4">
                          <div className="flex items-center space-x-2">
                             <Switch id="wide-mode-switch" checked={isWideMode} onCheckedChange={handleWideModeChange} />
                             <Label htmlFor="wide-mode-switch">Modo Amplo</Label>
@@ -673,8 +678,8 @@ export function AutomatorClientPage() {
                 </div>
             </header>
 
-            <main className="container mx-auto p-4 md:p-8">
-                <div className={cn("mx-auto space-y-8", isWideMode ? "max-w-full" : "max-w-screen-2xl")}>
+            <main className="p-4 md:p-8">
+                <div className={cn("space-y-8", isWideMode ? "w-full" : "container mx-auto")}>
                     <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
                         <TabsList className="h-auto flex-wrap justify-start">
                              <TabsTrigger value="history" className="flex items-center gap-2">
@@ -767,13 +772,13 @@ export function AutomatorClientPage() {
                             )}
                             
                             {activeMainTab === 'imobilizado' && (
-                                !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} onPersistData={handlePersistImobilizado} allPersistedData={imobilizadoClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card>
+                                !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} siengeData={processedData?.siengeSheetData} onPersistData={handlePersistImobilizado} allPersistedData={imobilizadoClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card>
                             )}
 
                              {activeMainTab === 'difal' && <DifalAnalysis /> }
                             
                             {activeMainTab === 'analyses' && (
-                                !analysisTabDisabled && processedData ? <AdditionalAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} allPersistedClassifications={imobilizadoClassifications} onPersistAllClassifications={handlePersistImobilizado}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
+                                !analysisTabDisabled && processedData ? <AdvancedAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
                             )}
                          
                              {activeMainTab === 'pending' && (

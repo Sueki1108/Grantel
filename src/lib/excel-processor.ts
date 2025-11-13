@@ -1,8 +1,8 @@
-
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import { KeyCheckResult } from '@/components/app/key-checker';
 import { type AllClassifications } from '@/components/app/imobilizado-analysis';
+import { normalizeKey, cleanAndToStr } from './utils';
 
 // Types
 type DataFrame = any[];
@@ -75,11 +75,6 @@ export interface ProcessedData {
 // =================================================================
 // HELPERS
 // =================================================================
-
-const cleanAndToStr = (value: any): string => {
-    if (value === null || typeof value === 'undefined') return "";
-    return String(value).replace(/\D/g, '');
-};
 
 const addChaveUnica = (df: DataFrame): DataFrame => {
     if (!df || df.length === 0 || !df[0]) return df;
@@ -372,7 +367,7 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
         const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
             if (!data || data.length === 0 || !data[0]) return undefined;
             const headers = Object.keys(data[0]);
-            const normalizedHeaders = headers.map(h => ({ original: h, normalized: h.toLowerCase().replace(/[\\s._\\/-]/g, '') }));
+            const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
             for (const name of possibleNames) {
                 const found = normalizedHeaders.find(h => h.normalized === name);
                 if (found) return found.original;

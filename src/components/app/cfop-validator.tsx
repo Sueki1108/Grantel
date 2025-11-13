@@ -70,7 +70,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     const itemsToValidate = useMemo((): ReconciledItem[] => {
         return reconciledData.map((item) => {
             const uniqueProductKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item.Sienge_CFOP || ''}`;
-            const id = `${item['Chave de acesso']}-${item['Item']}`;
+            const id = `${item['Chave de acesso']}-${item.Item}`;
             return { ...item, uniqueProductKey, id };
         });
     }, [reconciledData]);
