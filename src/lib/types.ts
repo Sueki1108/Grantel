@@ -1,4 +1,3 @@
-
 export type SaidaStatus = 'emitida' | 'cancelada' | 'inutilizada';
 
 export interface SaidaItem {

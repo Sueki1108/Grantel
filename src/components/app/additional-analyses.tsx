@@ -12,7 +12,7 @@ import JSZip from 'jszip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
 import { getColumns } from "@/components/app/columns-helper";
-import type { ProcessedData, SpedInfo, SpedCorrectionResult, ReconciliationResults } from "@/lib/excel-processor";
+import type { ProcessedData, SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { cleanAndToStr, normalizeKey } from "@/lib/utils";
 import { KeyChecker, type KeyCheckResult } from "./key-checker";

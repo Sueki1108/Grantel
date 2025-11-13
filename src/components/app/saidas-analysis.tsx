@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -16,7 +15,6 @@ import {
 } from "@/components/ui/tooltip";
 import { DataTable } from './data-table';
 import { ColumnDef } from '@tanstack/react-table';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { cfopDescriptions } from '@/lib/cfop';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { ScrollArea } from '../ui/scroll-area';

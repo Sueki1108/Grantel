@@ -31,6 +31,5 @@ export const parseSpedDate = (dateStr: string): Date => {
 
 export const normalizeKey = (key: string | undefined): string => {
     if(!key) return '';
-    // Escapes the hyphen at the end of the character class
-    return key.toLowerCase().replace(/[\s._\/-]/g, '');
+    return key.toLowerCase().replace(/[\s._\\/-]/g, '');
 }
