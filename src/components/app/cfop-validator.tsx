@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, AlertTriangle, Save, X, ListFilter, Factory, Wrench, RotateCw, CheckSquare, HelpCircle, ChevronDown, ChevronRight, MinusCircle } from "lucide-react";
+import { Check, AlertTriangle, Save, X, ListFilter, Factory, Wrench, RotateCw, CheckSquare, HelpCircle, ChevronDown, ChevronRight, ClipboardCopy } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Table as ReactTable, ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '../ui/checkbox';
@@ -192,6 +192,15 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
         return sortedGroups;
     }, [itemsToValidate, activeCfopTab]);
 
+    const copyToClipboard = (text: string | number | undefined, type: string) => {
+        const textToCopy = String(text ?? '');
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: textToCopy });
+        }).catch(() => {
+            toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
+        });
+    };
+
     
     const columns: ColumnDef<ReconciledItem>[] = useMemo(() => [
         {
@@ -222,10 +231,18 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             itemsToValidate,
             ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Valor Total'],
             (row, id) => {
-                 if (id === 'Valor Total' && typeof row.original[id] === 'number') {
-                     return <div className='text-right'>{(row.original[id] as number).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                const value = row.original[id as keyof ReconciledItem];
+                let displayValue = String(value ?? '');
+                
+                 if (id === 'Valor Total' && typeof value === 'number') {
+                     displayValue = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
                  }
-                return <div className="truncate max-w-xs">{String(row.original[id as keyof ReconciledItem] || '')}</div>
+                return (
+                     <div className="group flex items-center justify-between gap-1">
+                        <span className="truncate max-w-xs" title={String(value)}>{displayValue}</span>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(value, id); }}><ClipboardCopy className="h-3 w-3" /></Button>
+                    </div>
+                )
             }
         ),
         {
@@ -300,8 +317,8 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             </Card>
             <Card>
                  <CardHeader>
-                     <CardTitle className="font-headline text-xl">Resultados da Validação</CardTitle>
-                     <CardDescription>Itens agrupados por status. Clique nas sub-abas para filtrar por CFOP do Sienge.</CardDescription>
+                     <CardTitle className="font-headline text-xl">Resultados da Validação de CFOP</CardTitle>
+                     <CardDescription>Itens agrupados por CFOP do Sienge.</CardDescription>
                  </CardHeader>
                 <CardContent>
                     <Tabs value={activeCfopTab || ''} onValueChange={(val) => { setActiveCfopTab(val); tableRef.current?.toggleAllRowsSelected(false); }}>
