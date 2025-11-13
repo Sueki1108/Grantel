@@ -59,6 +59,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
     const [hasChanges, setHasChanges] = useState(false);
     const [activeCfopTab, setActiveCfopTab] = useState<string | null>(null);
     const tableRef = useRef<ReactTable<ReconciledItem> | null>(null);
+    const [numSelected, setNumSelected] = useState(0);
 
     const [filters, setFilters] = useState({
         cfopXml: new Set<string>(),
@@ -143,8 +144,8 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             handleDifalToggle(selectedItems);
         } else {
             handleStatusChange(selectedItems, action as ValidationStatus);
-            tableRef.current.toggleAllRowsSelected(false);
         }
+        tableRef.current.toggleAllRowsSelected(false);
     };
 
     const handleSaveChanges = () => {
@@ -262,6 +263,8 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'correct')}><Check className="h-5 w-5 text-green-600"/></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'incorrect')}><X className="h-5 w-5 text-red-600"/></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange([row.original], 'verify')}><AlertTriangle className="h-5 w-5 text-amber-600"/></Button></TooltipTrigger><TooltipContent><p>Verificar</p></TooltipContent></Tooltip>
+                        <div className="border-l h-6 mx-1" />
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleDifalToggle([row.original])}>DIFAL</Button></TooltipTrigger><TooltipContent><p>Marcar/Desmarcar DIFAL</p></TooltipContent></Tooltip>
                     </TooltipProvider>
                 </div>
             )
@@ -281,11 +284,25 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
             </Card>
         );
     }
-    
-    const numSelected = tableRef.current ? tableRef.current.getFilteredSelectedRowModel().rows.length : 0;
 
     return (
-        <div className='space-y-6'>
+        <div className='relative'>
+            {numSelected > 0 && (
+                <div className="sticky bottom-4 z-20 w-full flex justify-center">
+                    <Card className="flex items-center gap-4 p-3 shadow-2xl animate-in fade-in-0 slide-in-from-bottom-5">
+                        <span className="text-sm font-medium pl-2">{numSelected} item(ns) selecionado(s)</span>
+                        <div className="h-6 border-l" />
+                        <span className="text-sm font-medium">Ações em Lote:</span>
+                        <div className="flex gap-2">
+                            <Button size="sm" variant="outline" onClick={() => handleBulkAction('correct')}><Check className="mr-2 h-4 w-4 text-green-600"/>Correto</Button>
+                            <Button size="sm" variant="outline" onClick={() => handleBulkAction('incorrect')}><X className="mr-2 h-4 w-4 text-red-600"/>Incorreto</Button>
+                            <Button size="sm" variant="outline" onClick={() => handleBulkAction('verify')}><AlertTriangle className="mr-2 h-4 w-4 text-amber-600"/>Verificar</Button>
+                            <div className="h-6 border-l" />
+                            <Button size="sm" variant="outline" onClick={() => handleBulkAction('difal')}>DIFAL</Button>
+                        </div>
+                    </Card>
+                </div>
+            )}
             <Card>
                 <CardHeader>
                      <div className='flex items-start justify-between'>
@@ -298,24 +315,8 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                         </Button>
                     </div>
                 </CardHeader>
-                <CardContent>
-                     {numSelected > 0 && (
-                        <Card className="flex items-center gap-4 p-3 shadow-lg animate-in fade-in-0 mt-4 mb-6">
-                            <span className="text-sm font-medium pl-2">{numSelected} item(ns) selecionado(s)</span>
-                            <div className="h-6 border-l" />
-                            <span className="text-sm font-medium">Ações em Lote:</span>
-                            <div className="flex gap-2">
-                                <Button size="sm" variant="outline" onClick={() => handleBulkAction('correct')}><Check className="mr-2 h-4 w-4 text-green-600"/>Correto</Button>
-                                <Button size="sm" variant="outline" onClick={() => handleBulkAction('incorrect')}><X className="mr-2 h-4 w-4 text-red-600"/>Incorreto</Button>
-                                <Button size="sm" variant="outline" onClick={() => handleBulkAction('verify')}><AlertTriangle className="mr-2 h-4 w-4 text-amber-600"/>Verificar</Button>
-                                <div className="h-6 border-l" />
-                                <Button size="sm" variant="outline" onClick={() => handleBulkAction('difal')}>DIFAL</Button>
-                            </div>
-                        </Card>
-                    )}
-                </CardContent>
             </Card>
-            <Card>
+            <Card className='mt-6'>
                  <CardHeader>
                      <CardTitle className="font-headline text-xl">Resultados da Validação de CFOP</CardTitle>
                      <CardDescription>Itens agrupados por CFOP do Sienge.</CardDescription>
@@ -348,7 +349,7 @@ export function CfopValidator({ reconciledData, competence, allPersistedClassifi
                         {groupedBySiengeCfop.map(([cfop, items]) => {
                             return (
                                  <TabsContent key={cfop} value={cfop} className="mt-4 space-y-4">
-                                    <DataTable columns={columns} data={items} tableRef={tableRef} />
+                                    <DataTable columns={columns} data={items} tableRef={tableRef} onSelectionChange={(rowCount) => setNumSelected(rowCount)} />
                                 </TabsContent>
                             )
                         })}

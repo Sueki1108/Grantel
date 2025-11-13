@@ -32,7 +32,8 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   footer?: Record<string, string>;
-  tableRef?: React.RefObject<ReactTable<TData>>;
+  tableRef?: React.MutableRefObject<ReactTable<TData> | null>;
+  onSelectionChange?: (rowCount: number) => void;
 }
 
 export function DataTable<TData, TValue>({
@@ -40,6 +41,7 @@ export function DataTable<TData, TValue>({
   data,
   footer,
   tableRef,
+  onSelectionChange
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -69,9 +71,15 @@ export function DataTable<TData, TValue>({
   
   React.useEffect(() => {
     if (tableRef) {
-      (tableRef as React.MutableRefObject<ReactTable<TData> | null>).current = table;
+      tableRef.current = table;
     }
   }, [table, tableRef]);
+  
+  React.useEffect(() => {
+    if (onSelectionChange) {
+      onSelectionChange(Object.keys(rowSelection).length);
+    }
+  }, [rowSelection, onSelectionChange]);
 
 
   return (
