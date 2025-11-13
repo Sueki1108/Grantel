@@ -91,7 +91,6 @@ export function AdditionalAnalyses({
     
         const { sheets, siengeSheetData } = processedData;
         
-        // CORREÇÃO: Unificar todas as fontes de itens (Entradas, Saídas e CTEs)
         const allXmlItems = [
             ...(sheets?.['Itens Válidos'] || []),
             ...(sheets?.['Itens Válidos Saídas'] || []),
@@ -108,13 +107,6 @@ export function AdditionalAnalyses({
             }))
         ];
     
-        if (!siengeSheetData) {
-            return { 
-                reconciliationResults: allXmlItems.length > 0 ? { reconciled: [], onlyInSienge: [], onlyInXml: allXmlItems, otherSiengeItems: {} } : null, 
-                error: null 
-            };
-        }
-    
         const nfeHeaderMap = new Map((sheets?.['Notas Válidas'] || []).map(n => [n['Chave Unica'], n]));
         
         const enrichedXmlItems: any[] = allXmlItems.map(item => {
@@ -129,6 +121,13 @@ export function AdditionalAnalyses({
             }
             return item;
         });
+    
+        if (!siengeSheetData) {
+            return { 
+                reconciliationResults: { reconciled: enrichedXmlItems, onlyInSienge: [], onlyInXml: enrichedXmlItems, otherSiengeItems: {} }, 
+                error: null 
+            };
+        }
     
         try {
             const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
@@ -238,8 +237,11 @@ export function AdditionalAnalyses({
                 remainingXmlItems = result.remainingXml;
             }
     
+            // *** CRITICAL FIX: Ensure all items from XML, even if not reconciled, are passed to the next step. ***
+            const finalReconciledData = [...reconciled, ...remainingXmlItems.map(item => ({...item, 'Sienge_CFOP': 'N/A', 'Observações': 'Apenas no XML'}))];
+            
             return { 
-                reconciliationResults: { reconciled, onlyInSienge: remainingSiengeItems, onlyInXml: remainingXmlItems, otherSiengeItems }, 
+                reconciliationResults: { reconciled: finalReconciledData, onlyInSienge: remainingSiengeItems, onlyInXml: remainingXmlItems, otherSiengeItems }, 
                 error: null 
             };
     
