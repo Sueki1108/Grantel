@@ -606,7 +606,7 @@ export function AutomatorClientPage() {
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
                 const reconciliationResults = runReconciliation(
-                    resultData.siengeSheetData, 
+                    processedData?.siengeSheetData, 
                     resultData.sheets['Itens Válidos'] || [], 
                     resultData.sheets['Itens Válidos Saídas'] || [], 
                     resultData.sheets['CTEs Válidos'] || []

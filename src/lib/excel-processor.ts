@@ -358,7 +358,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any[], xmlSaidaItems: any[], xmlCteItems: any[]): ReconciliationResults {
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], allReconciledItems: [] };
     
-    if (!siengeData || !xmlEntradaItems) {
+    if (!siengeData) {
         return emptyResult;
     }
 
