@@ -375,48 +375,78 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[]):
         const h = {
             cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
             numero: findHeader(siengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
-            produto: findHeader(siengeData, ['produto fiscal']),
+            ncm: findHeader(siengeData, ['ncm']),
             valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total']),
             cfop: findHeader(siengeData, ['cfop'])
         };
         
-        if (!h.cnpj || !h.numero || !h.produto || !h.valorTotal || !h.cfop) {
-            const missing = ['cnpj', 'numero', 'produto', 'valorTotal', 'cfop'].filter(key => !h[key as keyof typeof h]);
+        if (!h.cnpj || !h.numero || !h.ncm || !h.valorTotal || !h.cfop) {
+            const missing = ['cnpj', 'numero', 'ncm', 'valorTotal', 'cfop'].filter(key => !h[key as keyof typeof h]);
             throw new Error(`Colunas essenciais não encontradas na planilha Sienge: ${missing.join(', ')}.`);
         }
 
         const reconciled: any[] = [];
-        const matchedSiengeIndices = new Set<number>();
-        const matchedXmlItemIds = new Set<string>();
+        const siengeMatchedIndices = new Set<number>();
+        const xmlMatchedIndices = new Set<number>();
 
-        const getReconciliationKey = (numero: string, cnpj: string, produto: string, valor: string): string => {
-            return `${cleanAndToStr(numero)}-${cleanAndToStr(cnpj)}-${cleanAndToStr(produto)}-${parseFloat(valor.replace(',', '.')).toFixed(2)}`;
-        };
+        const getNoteKey = (num: string, cnpj: string) => `${cleanAndToStr(num)}-${cleanAndToStr(cnpj)}`;
         
-        const xmlItemMap = new Map<string, any>();
-        allXmlItems.forEach(item => {
-            const key = getReconciliationKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Código'], item['Valor Total']);
-            xmlItemMap.set(key, item);
+        const siengeItemsByNote = new Map<string, any[]>();
+        siengeData.forEach((item, index) => {
+            const key = getNoteKey(item[h.numero!], item[h.cnpj!]);
+            if (!siengeItemsByNote.has(key)) siengeItemsByNote.set(key, []);
+            siengeItemsByNote.get(key)!.push({ ...item, originalIndex: index });
         });
 
-        siengeData.forEach((siengeItem, index) => {
-            const siengeKey = getReconciliationKey(siengeItem[h.numero!], siengeItem[h.cnpj!], siengeItem[h.produto!], siengeItem[h.valorTotal!]);
+        const xmlItemsByNote = new Map<string, any[]>();
+        allXmlItems.forEach((item, index) => {
+            const key = getNoteKey(item['Número da Nota'], item['CPF/CNPJ do Emitente']);
+            if (!xmlItemsByNote.has(key)) xmlItemsByNote.set(key, []);
+            xmlItemsByNote.get(key)!.push({ ...item, originalIndex: index });
+        });
 
-            if (xmlItemMap.has(siengeKey)) {
-                const matchedXmlItem = xmlItemMap.get(siengeKey)!;
-                
-                reconciled.push({ ...matchedXmlItem, Sienge_CFOP: siengeItem[h.cfop!] });
-                
-                matchedSiengeIndices.add(index);
-                matchedXmlItemIds.add(`${matchedXmlItem['Chave Unica']}-${matchedXmlItem['Item']}`);
-                
-                // Remove from map to prevent matching again (in case of duplicates)
-                xmlItemMap.delete(siengeKey);
+        for (const [noteKey, siengeItems] of siengeItemsByNote.entries()) {
+            if (!xmlItemsByNote.has(noteKey)) continue;
+
+            const xmlItems = xmlItemsByNote.get(noteKey)!;
+
+            const createValueMap = (items: any[], valueField: string, ncmField: string) => {
+                const map = new Map<string, { count: number, items: any[] }>();
+                items.forEach(item => {
+                    const value = parseFloat(String(item[valueField]).replace(',', '.')).toFixed(2);
+                    const ncm = cleanAndToStr(item[ncmField]);
+                    const key = `${ncm}-${value}`;
+                    if (!map.has(key)) map.set(key, { count: 0, items: [] });
+                    const entry = map.get(key)!;
+                    entry.count++;
+                    entry.items.push(item);
+                });
+                return map;
+            };
+
+            const siengeValueMap = createValueMap(siengeItems, h.valorTotal!, h.ncm!);
+            const xmlValueMap = createValueMap(xmlItems, 'Valor Total', 'NCM');
+
+            for (const [siengeKey, siengeEntry] of siengeValueMap.entries()) {
+                const xmlEntry = xmlValueMap.get(siengeKey);
+
+                if (xmlEntry) {
+                    const matchCount = Math.min(siengeEntry.count, xmlEntry.count);
+
+                    for (let i = 0; i < matchCount; i++) {
+                        const siengeItem = siengeEntry.items.pop()!;
+                        const xmlItem = xmlEntry.items.pop()!;
+                        
+                        reconciled.push({ ...xmlItem, Sienge_CFOP: siengeItem[h.cfop!] });
+                        siengeMatchedIndices.add(siengeItem.originalIndex);
+                        xmlMatchedIndices.add(xmlItem.originalIndex);
+                    }
+                }
             }
-        });
+        }
         
-        const onlyInSienge = siengeData.filter((_, index) => !matchedSiengeIndices.has(index));
-        const onlyInXml = allXmlItems.filter(item => !matchedXmlItemIds.has(`${item['Chave Unica']}-${item['Item']}`));
+        const onlyInSienge = siengeData.filter((_, index) => !siengeMatchedIndices.has(index));
+        const onlyInXml = allXmlItems.filter((_, index) => !xmlMatchedIndices.has(index));
 
         return { reconciled, onlyInSienge, onlyInXml };
 
