@@ -350,16 +350,14 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 }
 
 
-export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any[], xmlSaidaItems: any[], xmlCteItems: any[]): ReconciliationResults {
+export function runReconciliation(siengeData: any[] | null, allXmlItems: any[]): ReconciliationResults {
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [] };
     
-    const allXmlItems = [...(xmlEntradaItems || []), ...(xmlSaidaItems || []), ...(xmlCteItems || [])];
-    
     if (!siengeData || siengeData.length === 0) {
-        return { ...emptyResult, onlyInXml: allXmlItems };
+        return { ...emptyResult, onlyInXml: allXmlItems || [] };
     }
 
-    if (allXmlItems.length === 0) {
+    if (!allXmlItems || allXmlItems.length === 0) {
         return { ...emptyResult, onlyInSienge: siengeData };
     }
 
@@ -407,7 +405,7 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
             }
             siengeItemsByNote.get(key)!.push({ ...item, __originalIndex: index });
         });
-
+        
         xmlItemsByNote.forEach((xmlItems, xmlNoteKey) => {
             const potentialSiengeMatches = siengeItemsByNote.get(xmlNoteKey);
             
@@ -437,7 +435,7 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
             xmlValueCounts.forEach((xmlItemGroup, value) => {
                 const siengeItemGroup = siengeValueCounts.get(value);
                 
-                if (siengeItemGroup) {
+                if (siengeItemGroup && siengeItemGroup.length > 0) {
                     const matchCount = Math.min(xmlItemGroup.length, siengeItemGroup.length);
                     for (let i = 0; i < matchCount; i++) {
                         const xmlItem = xmlItemGroup.pop()!;

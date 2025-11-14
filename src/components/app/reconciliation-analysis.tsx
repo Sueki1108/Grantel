@@ -8,7 +8,7 @@ import { FileUploadForm } from "@/components/app/file-upload-form";
 import type { ProcessedData } from '@/lib/excel-processor';
 import { runReconciliation } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2 } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from 'xlsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -42,12 +42,16 @@ export function ReconciliationAnalysis({
     const { toast } = useToast();
     
     useEffect(() => {
-        if (processedData && (processedData.sheets['Itens Válidos'] || processedData.sheets['Itens Válidos Saídas']) && processedData.siengeSheetData) {
+        const siengeSheetData = processedData?.siengeSheetData;
+        const xmlItemsEntrada = processedData?.sheets?.['Itens Válidos'];
+        const xmlItemsSaida = processedData?.sheets?.['Itens Válidos Saídas'];
+        const xmlCte = processedData?.sheets?.['CTEs Válidos'];
+        const allXmlItems = [...(xmlItemsEntrada || []), ...(xmlItemsSaida || []), ...(xmlCte || [])];
+        
+        if (processedData && allXmlItems.length > 0 && siengeSheetData) {
             const reconciliationResults = runReconciliation(
-                processedData.siengeSheetData,
-                processedData.sheets['Itens Válidos'] || [],
-                processedData.sheets['Itens Válidos Saídas'] || [],
-                processedData.sheets['CTEs Válidos'] || []
+                siengeSheetData,
+                allXmlItems
             );
 
              onProcessedDataChange(prev => ({
