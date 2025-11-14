@@ -38,8 +38,11 @@ export type KeyInfo = {
     // Campos adicionais para verificação
     destIE?: string;
     destUF?: string;
-destCNPJ?: string;
+    destCNPJ?: string;
     tomadorCNPJ?: string;
+    recebCNPJ?: string;
+    recebUF?: string;
+    recebIE?: string;
     emitCNPJ?: string;
     emitName?: string;
     emitIE?: string;
@@ -652,19 +655,16 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 divergenceMessages.push("IE e UF");
             }
 
-        } else if (docType === 'CTE' && cleanAndToStr(nota.tomadorCNPJ) === GRANTEL_CNPJ) {
-             const participant = spedDoc.codPart ? participantData.get(spedDoc.codPart) : null;
-             if(participant) {
-                 const spedIE = cleanAndToStr(participant.ie);
-                 const spedUF = participant.uf?.trim().toUpperCase();
-                 baseDivergence['IE no XML'] = spedIE || 'Em branco';
-                 baseDivergence['UF no XML'] = spedUF || 'Em branco';
+        } else if (docType === 'CTE' && cleanAndToStr(nota.recebCNPJ) === GRANTEL_CNPJ) {
+             const xmlIE = cleanAndToStr(nota.recebIE);
+             const xmlUF = nota.recebUF?.trim().toUpperCase();
+             baseDivergence['IE no XML'] = xmlIE || 'Em branco';
+             baseDivergence['UF no XML'] = xmlUF || 'Em branco';
 
-                 // Regra atualizada: adicionar divergência apenas se AMBOS estiverem errados
-                 if (spedUF !== GRANTEL_UF && spedIE !== GRANTEL_IE) {
-                    divergenceMessages.push("IE e UF");
-                }
-             }
+             // Regra atualizada: adicionar divergência apenas se AMBOS estiverem errados
+             if (xmlUF !== GRANTEL_UF && xmlIE !== GRANTEL_IE) {
+                divergenceMessages.push("IE e UF");
+            }
         }
 
 
@@ -1081,12 +1081,12 @@ export function KeyChecker({
                                                     <TabsTrigger value="removed0150">Part. (0150) Removidos ({correctionResult.modifications.removed0150.length})</TabsTrigger>
                                                     <TabsTrigger value="removed0200">Prod. (0200) Removidos ({correctionResult.modifications.removed0200.length})</TabsTrigger>
                                                     <TabsTrigger value="removed0190">0190 Removidos ({correctionResult.modifications.removed0190.length})</TabsTrigger>
-                                                    <TabsTrigger value="counters">Contadores ({correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length})</TabsTrigger>
-                                                    <TabsTrigger value="ie">IE (NF-e) ({correctionResult.modifications.ieCorrection.length})</TabsTrigger>
-                                                    <TabsTrigger value="cte_series">Série (CT-e) ({correctionResult.modifications.cteSeriesCorrection.length})</TabsTrigger>
-                                                    <TabsTrigger value="address">Endereços ({correctionResult.modifications.addressSpaces.length})</TabsTrigger>
-                                                    <TabsTrigger value="truncation">Truncamento ({correctionResult.modifications.truncation.length})</TabsTrigger>
-                                                    <TabsTrigger value="units">Unidades ({correctionResult.modifications.unitStandardization.length})</TabsTrigger>
+                                                    <TabsTrigger value="counters">Contadores</TabsTrigger>
+                                                    <TabsTrigger value="ie">IE (NF-e)</TabsTrigger>
+                                                    <TabsTrigger value="cte_series">Série (CT-e)</TabsTrigger>
+                                                    <TabsTrigger value="address">Endereços</TabsTrigger>
+                                                    <TabsTrigger value="truncation">Truncamento</TabsTrigger>
+                                                    <TabsTrigger value="units">Unidades</TabsTrigger>
                                                 </TabsList>
                                                 <div className="flex-grow overflow-hidden mt-2">
                                                     <TabsContent value="divergenceRemoval" className="h-full">

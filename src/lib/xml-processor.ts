@@ -236,6 +236,7 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const emit = infCte.getElementsByTagName('emit')[0];
     const rem = infCte.getElementsByTagName('rem')[0];
     const dest = infCte.getElementsByTagName('dest')[0];
+    const receb = infCte.getElementsByTagName('receb')[0]; // Adicionado Recebedor
     const vPrest = infCte.getElementsByTagName('vPrest')[0];
     
     const toma = infCte.getElementsByTagName('toma3')[0] || infCte.getElementsByTagName('toma4')[0];
@@ -260,7 +261,7 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     
     const status = getCteTagValue(infProt, 'cStat') === '100' ? 'Autorizadas' : 'Canceladas';
 
-    const notaCte = {
+    const notaCte: any = {
         'Chave de acesso': chaveAcesso,
         'Número': nCT,
         'Série': serie,
@@ -275,8 +276,18 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'Valor da Prestação': parseFloat(vTPrest) || 0,
         'Status': status,
         'Chave Unica': cleanAndToStr(nCT) + cleanAndToStr(emitCNPJ),
-        'tomadorCNPJ': tomadorCnpj
+        'tomadorCNPJ': tomadorCnpj,
     };
+    
+    if (receb) {
+        notaCte.recebCNPJ = getCteTagValue(receb, 'CNPJ');
+        notaCte.recebIE = getCteTagValue(receb, 'IE');
+        const enderReceb = receb.getElementsByTagName('enderReceb')[0];
+        if (enderReceb) {
+            notaCte.recebUF = getCteTagValue(enderReceb, 'UF');
+        }
+    }
+
 
     return { cte: [notaCte], nfe: [], itens: [], saidas: [], itensSaidas: [] };
 };
