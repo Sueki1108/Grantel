@@ -17,16 +17,12 @@ import { KeyChecker } from "./key-checker";
 
 interface AdvancedAnalysesProps {
     processedData: ProcessedData | null;
-    onProcessedDataChange: (data: ProcessedData) => void;
     allXmlFiles: File[];
     spedFiles: File[];
     onSpedFilesChange: (files: File[]) => void;
     onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null, spedCorrections: SpedCorrectionResult | null) => void;
     competence: string | null;
     onExportSession: () => void;
-    siengeFile: File | null;
-    onSiengeFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onClearSiengeFile: () => void;
 }
 
 export function AdvancedAnalyses({ 
@@ -187,7 +183,7 @@ export function AdvancedAnalyses({
                         <div className='flex items-center gap-3'>
                              <FileSearch className="h-8 w-8 text-primary" />
                              <div>
-                                <CardTitle className="font-headline text-2xl">Análises Avançadas</CardTitle>
+                                <CardTitle className="font-headline text-2xl">Sped Fiscal</CardTitle>
                                 <CardDescription>Execute análises de verificação SPED e exporte relatórios.</CardDescription>
                             </div>
                         </div>
@@ -224,7 +220,7 @@ export function AdvancedAnalyses({
                         <div className="p-8 text-center text-muted-foreground">
                             <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
                             <h3 className="text-xl font-semibold mb-2">Aguardando dados Sienge</h3>
-                            <p>Carregue a planilha "Itens do Sienge" na aba de conciliação para identificar as notas de revenda.</p>
+                            <p>Carregue a planilha "Itens do Sienge" na aba "XML VS Sienge" para identificar as notas de revenda.</p>
                         </div>
                     ) : (
                         <div className="flex flex-col items-start gap-4">

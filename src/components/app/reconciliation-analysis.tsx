@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUploadForm } from "@/components/app/file-upload-form";
-import type { ProcessedData, ReconciliationResults } from '@/lib/excel-processor';
+import type { ProcessedData } from '@/lib/excel-processor';
 import { runReconciliation } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2 } from 'lucide-react';
@@ -15,54 +15,39 @@ import { DataTable } from "@/components/app/data-table";
 import { getColumns } from "@/components/app/columns-helper";
 import { CfopValidator } from './cfop-validator';
 import type { AllClassifications } from './imobilizado-analysis';
+import { SiengeTaxCheck } from './sienge-tax-check';
 
 
 interface ReconciliationAnalysisProps {
     processedData: ProcessedData | null;
-    onProcessedDataChange: (data: ProcessedData) => void;
     siengeFile: File | null;
     onSiengeFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
-    allPersistedData: AllClassifications;
-    onPersistData: (allDataToSave: AllClassifications) => void;
 }
 
 
 export function ReconciliationAnalysis({ 
     processedData, 
-    onProcessedDataChange,
     siengeFile, 
     onSiengeFileChange, 
     onClearSiengeFile,
-    allPersistedData,
-    onPersistData
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     
-    useEffect(() => {
-        if (processedData && (processedData.sheets['Itens Válidos'] || processedData.sheets['Itens Válidos Saídas'])) {
-            setIsLoading(true);
-            // Give the UI a moment to update before running heavy computation
-            setTimeout(() => {
-                const reconciliationResults = runReconciliation(
-                    processedData.siengeSheetData, 
-                    processedData.sheets['Itens Válidos'] || [], 
-                    processedData.sheets['Itens Válidos Saídas'] || [],
-                    processedData.sheets['CTEs Válidos'] || []
-                );
-
-                onProcessedDataChange({
-                    ...processedData,
-                    reconciliationResults,
-                });
-                setIsLoading(false);
-            }, 50);
+    const reconciliationResults = useMemo(() => {
+        if (!processedData || (!processedData.sheets['Itens Válidos'] && !processedData.sheets['Itens Válidos Saídas'])) {
+            return null;
         }
-    }, [processedData?.sheets['Itens Válidos'], processedData?.sheets['Itens Válidos Saídas'], processedData?.siengeSheetData]);
+        
+        return runReconciliation(
+            processedData.siengeSheetData, 
+            processedData.sheets['Itens Válidos'] || [], 
+            processedData.sheets['Itens Válidos Saídas'] || [],
+            processedData.sheets['CTEs Válidos'] || []
+        );
 
-
-    const reconciliationResults = processedData?.reconciliationResults;
+    }, [processedData]);
 
     const handleDownload = (data: any[], title: string) => {
         if (!data || data.length === 0) {
@@ -82,8 +67,8 @@ export function ReconciliationAnalysis({
                 <div className="flex items-center gap-3">
                     <GitCompareArrows className="h-8 w-8 text-primary" />
                     <div>
-                        <CardTitle className="font-headline text-2xl">Conciliação de Itens (XML vs Sienge) & Classificação de CFOP</CardTitle>
-                        <CardDescription>Carregue a planilha do Sienge para iniciar a comparação. Valide os CFOPs dos itens conciliados.</CardDescription>
+                        <CardTitle className="font-headline text-2xl">XML VS Sienge</CardTitle>
+                        <CardDescription>Carregue a planilha do Sienge para cruzar informações com os XMLs processados.</CardDescription>
                     </div>
                 </div>
             </CardHeader>
@@ -97,9 +82,10 @@ export function ReconciliationAnalysis({
                 />
                 
                 <Tabs defaultValue="reconciliation">
-                    <TabsList className="grid w-full grid-cols-2">
+                    <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="reconciliation">Conciliação de Itens</TabsTrigger>
                         <TabsTrigger value="cfop_validation">Validação de CFOP</TabsTrigger>
+                        <TabsTrigger value="tax_check">Conferência de Impostos</TabsTrigger>
                     </TabsList>
                     <TabsContent value="reconciliation" className="mt-4">
                          {!processedData?.sheets['Itens Válidos'] && !processedData?.sheets['Itens Válidos Saídas'] && (
@@ -148,12 +134,16 @@ export function ReconciliationAnalysis({
                         )}
                     </TabsContent>
                     <TabsContent value="cfop_validation" className="mt-4">
+                        <p className='text-sm text-muted-foreground mb-4'>A tabela abaixo mostra **apenas** os itens que foram conciliados com sucesso. Utilize-a para validar se o CFOP do XML corresponde ao CFOP utilizado no Sienge.</p>
                         <CfopValidator 
                             items={reconciliationResults?.allReconciledItems || []} 
-                            allPersistedData={allPersistedData}
-                            onPersistData={onPersistData}
+                            allPersistedData={processedData?.imobilizadoClassifications || {}}
+                            onPersistData={() => {}}
                             competence={processedData?.competence || null}
                         />
+                    </TabsContent>
+                    <TabsContent value="tax_check" className="mt-4">
+                        <SiengeTaxCheck siengeData={processedData?.siengeSheetData || null} />
                     </TabsContent>
                 </Tabs>
             </CardContent>
