@@ -26,7 +26,7 @@ import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
 import { LogDisplay } from "@/components/app/log-display";
-import { SpedDuplicate } from "@/lib/types";
+import type { SpedDuplicate } from "@/lib/types";
 
 
 // Types
@@ -495,7 +495,7 @@ const processSpedFileInBrowser = (
                     modifiedLines[i] = parts.join('|');
                     modifications.totalLineCount.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
                     linesModifiedCount++;
-                }
+                 }
             }
         }
          _log(`Recontagem de linhas e registos concluída.`);
@@ -560,8 +560,30 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     };
 
     const seriesPositions: Record<string, number> = {
-        C100: 6, C500: 6, C600: 6, C800: 6, D100: 7, D300: 4, D400: 4, D500: 6
+        C100: 6, C500: 5, C600: 5, C800: 5, D100: 7, D300: 4, D400: 4, D500: 5
     };
+    
+    for (const content of spedFileContents) {
+        const lines = content.split(/\r?\n/);
+        for (const line of lines) {
+            const parts = line.split('|');
+            if (parts.length < 2) continue;
+            const reg = parts[1];
+            if (reg === '0000' && !currentSpedInfo) currentSpedInfo = parseSpedInfo(line);
+            if (reg === '0150') {
+                const codPart = parts[2];
+                if (codPart) {
+                    participantData.set(codPart, { 
+                        nome: parts[3], 
+                        cnpj: parts[5] || parts[6], 
+                        ie: parts[7], 
+                        uf: parts[9] 
+                    });
+                }
+            }
+        }
+    }
+    logFn(`${participantData.size} participantes (0150) encontrados e mapeados.`);
 
     for (const content of spedFileContents) {
         const lines = content.split(/\r?\n/);
@@ -572,65 +594,62 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             if (parts.length < 2) continue;
             const reg = parts[1];
 
-            if (reg === '0000' && !currentSpedInfo) currentSpedInfo = parseSpedInfo(line);
-            if (reg === '0150') {
-                const codPart = parts[2];
-                if (codPart) participantData.set(codPart, { nome: parts[3], cnpj: parts[5], ie: parts[7], uf: parts[9] });
-                continue;
-            }
-
-            let docKey: string | undefined;
+            let docData: any = { reg, line: lineNumber };
             let compositeKey: string | undefined;
-            let docData: any;
 
             try {
                 if (seriesPositions[reg]) {
                     const serIndex = seriesPositions[reg];
                     if (!parts[serIndex] || parts[serIndex].trim() === '') {
-                        const codPart = parts[4];
+                        const codPart = parts[reg === 'C100' || reg === 'D100' ? 4 : (reg === 'C500' || reg === 'D500' || reg === 'C600' || reg === 'C800' || reg === 'D300' || reg === 'D400' ? 2 : 2)];
                         const participant = participantData.get(codPart);
-                        const numDocIndex = reg === 'D100' ? 9 : 7;
-                        const valorIndex = reg === 'D100' ? 16 : 10;
-                        const chaveIndex = reg === 'C100' ? 9 : reg === 'D100' ? 10 : undefined;
                         
+                        let numDoc: string | undefined, valor: string | undefined, chave: string | undefined;
+                        switch (reg) {
+                            case 'C100': numDoc = parts[8]; valor = parts[12]; chave = parts[9]; break;
+                            case 'D100': numDoc = parts[9]; valor = parts[16]; chave = parts[10]; break;
+                            default: numDoc = parts[6]; valor = parts[7]; chave = 'N/A'; break;
+                        }
+
                         missingSeriesDivergences.push({
                             'Tipo de Registo': reg,
                             'Linha no Ficheiro': lineNumber,
-                            'Número do Documento': parts[numDocIndex],
+                            'Número do Documento': numDoc,
                             'CNPJ do Participante': participant?.cnpj,
                             'Nome do Participante': participant?.nome,
-                            'Valor do Documento': parseFloat(String(parts[valorIndex] || '0').replace(',', '.')),
-                            'Chave de Acesso': chaveIndex ? parts[chaveIndex] : 'N/A',
+                            'Valor do Documento': parseFloat(String(valor || '0').replace(',', '.')),
+                            'Chave de Acesso': chave,
                         });
                     }
                 }
+                 const docTypes: { [key: string]: { codPart: number, ser: number, numDoc: number, dtDoc: number, vlDoc: number, chave?: number } } = {
+                    'C100': { codPart: 4, ser: 6, numDoc: 8, dtDoc: 10, vlDoc: 12, chave: 9 },
+                    'D100': { codPart: 6, ser: 7, numDoc: 9, dtDoc: 12, vlDoc: 14, chave: 20 },
+                    'C500': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 4, vlDoc: 7 },
+                    'D500': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 4, vlDoc: 7 },
+                    'C600': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 7, vlDoc: 9 },
+                    'C800': { codPart: 2, ser: 5, numDoc: 4, dtDoc: 6, vlDoc: 8 },
+                    'D300': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 6, vlDoc: 7 },
+                    'D400': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 6, vlDoc: 7 },
+                };
 
-                 if (['C100', 'C500', 'C600', 'C800', 'D100', 'D300', 'D400', 'D500'].includes(reg)) {
-                    docData = { reg, line: lineNumber };
-                    docData.codPart = parts[4];
-                    
-                    const participant = participantData.get(docData.codPart);
-                    if(participant) {
-                        docData.participantName = participant.nome;
-                        docData.participantCnpjCpf = participant.cnpj;
+                if (docTypes[reg]) {
+                    const mapping = docTypes[reg];
+                    const participant = participantData.get(parts[mapping.codPart]);
+                    docData = { ...docData, 
+                        codPart: parts[mapping.codPart], 
+                        ser: parts[mapping.ser], 
+                        numDoc: parts[mapping.numDoc], 
+                        dtDoc: parts[mapping.dtDoc], 
+                        vlDoc: parts[mapping.vlDoc],
+                        participantName: participant?.nome || 'N/A',
+                        participantCnpjCpf: participant?.cnpj || 'N/A'
+                    };
+                    if (mapping.chave && parts[mapping.chave]) {
+                        spedDocData.set(parts[mapping.chave], docData);
                     }
-                    
-                    switch (reg) {
-                        case 'C100': docKey = parts[9]; docData = {...docData, ser: parts[6], numDoc: parts[7], dtDoc: parts[10], vlDoc: parts[12]}; break;
-                        case 'D100': docKey = parts[10]; docData = {...docData, ser: parts[7], numDoc: parts[9], dtDoc: parts[8], vlDoc: parts[16]}; break;
-                        case 'C500': docData = {...docData, ser: parts[6], numDoc: parts[7], dtDoc: parts[8], vlDoc: parts[10]}; break;
-                        case 'C600': docData = {...docData, ser: parts[6], numDoc: parts[7], dtDoc: parts[8], vlDoc: parts[10]}; break;
-                        case 'C800': docData = {...docData, ser: parts[6], numDoc: parts[7], dtDoc: parts[8], vlDoc: parts[10]}; break;
-                        case 'D500': docData = {...docData, ser: parts[6], numDoc: parts[7], dtDoc: parts[8], vlDoc: parts[10]}; break;
-                        case 'D300': docData = {...docData, ser: parts[4], numDoc: parts[5], dtDoc: parts[6], vlDoc: parts[7]}; break;
-                        case 'D400': docData = {...docData, ser: parts[4], numDoc: parts[5], dtDoc: parts[6], vlDoc: parts[7]}; break;
-                    }
-                }
-                
-                if (docData) {
+
                     compositeKey = `${cleanAndToStr(docData.participantCnpjCpf)}-${docData.ser || ''}-${docData.numDoc || ''}`;
-
-                    if (docKey && !spedDocData.has(docKey)) spedDocData.set(docKey, docData);
 
                     if (compositeKey) {
                         if (!duplicateCheckMap.has(compositeKey)) {
@@ -644,10 +663,6 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             }
         }
     }
-
-    if(currentSpedInfo) logFn(`Informações do SPED: CNPJ ${currentSpedInfo.cnpj}, Empresa ${currentSpedInfo.companyName}, Competência ${currentSpedInfo.competence}.`);
-    logFn(`${spedDocData.size} documentos (NFe/CTe) únicos encontrados no SPED.`);
-    logFn(`${participantData.size} participantes (0150) encontrados.`);
     logFn(`${missingSeriesDivergences.length} registos encontrados sem série informada.`);
 
      const spedDuplicates: SpedDuplicate[] = Array.from(duplicateCheckMap.values())
@@ -656,35 +671,35 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             return records.map(recordInfo => {
                 const parts = recordInfo.record.split('|');
                 const reg = parts[1];
-                const codPart = parts[4] || 'N/A';
-                const participant = participantData.get(codPart);
-                
-                let numDoc: string = 'N/A', value: string = 'N/A', ser: string = 'N/A', dtDoc: string = 'N/A';
-                
-                switch(reg) {
-                    case 'C100': ser = parts[6]; numDoc = parts[7]; dtDoc = parts[10]; value = parts[12]; break;
-                    case 'D100': ser = parts[7]; numDoc = parts[9]; dtDoc = parts[8]; value = parts[16]; break;
-                    case 'C500': ser = parts[6]; numDoc = parts[7]; dtDoc = parts[8]; value = parts[10]; break;
-                    case 'C600': ser = parts[6]; numDoc = parts[7]; dtDoc = parts[8]; value = parts[10]; break;
-                    case 'C800': ser = parts[6]; numDoc = parts[7]; dtDoc = parts[8]; value = parts[10]; break;
-                    case 'D500': ser = parts[6]; numDoc = parts[7]; dtDoc = parts[8]; value = parts[10]; break;
-                    case 'D300': ser = parts[4]; numDoc = parts[5]; dtDoc = parts[6]; value = parts[7]; break;
-                    case 'D400': ser = parts[4]; numDoc = parts[5]; dtDoc = parts[6]; value = parts[7]; break;
-                }
-                const parsedDate = parseSpedDate(dtDoc);
+                 const docTypes: { [key: string]: { codPart: number, ser: number, numDoc: number, dtDoc: number, vlDoc: number } } = {
+                    'C100': { codPart: 4, ser: 6, numDoc: 8, dtDoc: 10, vlDoc: 12 },
+                    'D100': { codPart: 6, ser: 7, numDoc: 9, dtDoc: 12, vlDoc: 14 },
+                    'C500': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 4, vlDoc: 7 },
+                    'D500': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 4, vlDoc: 7 },
+                    'C600': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 7, vlDoc: 9 },
+                    'C800': { codPart: 2, ser: 5, numDoc: 4, dtDoc: 6, vlDoc: 8 },
+                    'D300': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 6, vlDoc: 7 },
+                    'D400': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 6, vlDoc: 7 },
+                };
+
+                const mapping = docTypes[reg];
+                if (!mapping) return null;
+
+                const participant = participantData.get(parts[mapping.codPart]);
+                const parsedDate = parseSpedDate(parts[mapping.dtDoc]);
 
                 return {
                     'Tipo de Registo': reg,
-                    'Número do Documento': numDoc,
-                    'Série': ser,
+                    'Número do Documento': parts[mapping.numDoc],
+                    'Série': parts[mapping.ser],
                     'CNPJ/CPF': participant?.cnpj || 'N/A',
-                    'Fornecedor': participant?.nome || codPart,
-                    'Data Emissão': !isNaN(parsedDate.getTime()) ? `${parsedDate.getDate().toString().padStart(2,'0')}/${(parsedDate.getMonth()+1).toString().padStart(2,'0')}/${parsedDate.getFullYear()}` : dtDoc,
-                    'Valor Total': parseFloat(String(value || '0').replace(',', '.')),
+                    'Fornecedor': participant?.nome || 'N/A',
+                    'Data Emissão': !isNaN(parsedDate.getTime()) ? `${parsedDate.getDate().toString().padStart(2,'0')}/${(parsedDate.getMonth()+1).toString().padStart(2,'0')}/${parsedDate.getFullYear()}` : parts[mapping.dtDoc],
+                    'Valor Total': parseFloat(String(parts[mapping.vlDoc] || '0').replace(',', '.')),
                     'Linhas': records.map(r => r.line).join('; ')
                 };
-            });
-        });
+            }).filter(Boolean);
+        }) as SpedDuplicate[];
 
     logFn(`Encontrados ${spedDuplicates.length} registos duplicados no SPED.`);
 
@@ -737,7 +752,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             'UF no XML': 'N/A', 'IE no XML': 'N/A', 'Resumo das Divergências': '',
         };
         
-        if (xmlDateStr && spedDateStr && xmlDateStr !== spedDateStr) divergenceMessages.push("Data");
+        if (xmlDateStr && spedDateStr && xmlDateStr.substring(0,10) !== spedDateStr) divergenceMessages.push("Data");
 
         const xmlValue = nota.Total || (nota.type === 'CTE' ? nota['Valor da Prestação'] : 0) || 0;
         let spedValue = parseFloat(String(spedDoc.vlDoc || '0').replace(',', '.'));
@@ -746,13 +761,14 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
         baseDivergence['Valor SPED'] = spedValue;
         if (Math.abs(xmlValue - spedValue) > 0.01) divergenceMessages.push("Valor");
         
+        let hasIeUfDivergence = false;
         if (docType === 'NFE' && cleanAndToStr(nota.destCNPJ) === GRANTEL_CNPJ) {
              const xmlIE = cleanAndToStr(nota.destIE);
              const xmlUF = nota.destUF?.trim().toUpperCase();
              baseDivergence['IE no XML'] = xmlIE || 'Em branco';
              baseDivergence['UF no XML'] = xmlUF || 'Em branco';
             if (xmlUF !== GRANTEL_UF && xmlIE !== GRANTEL_IE) {
-                divergenceMessages.push("IE e UF");
+                hasIeUfDivergence = true;
             }
 
         } else if (docType === 'CTE' && cleanAndToStr(nota.recebCNPJ) === GRANTEL_CNPJ) {
@@ -761,8 +777,11 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
              baseDivergence['IE no XML'] = xmlIE || 'Em branco';
              baseDivergence['UF no XML'] = xmlUF || 'Em branco';
              if (xmlUF !== GRANTEL_UF && xmlIE !== GRANTEL_IE) {
-                divergenceMessages.push("IE e UF");
+                hasIeUfDivergence = true;
             }
+        }
+        if (hasIeUfDivergence) {
+            divergenceMessages.push("IE e UF");
         }
 
 
@@ -1176,12 +1195,12 @@ export function KeyChecker({
                                                     <TabsTrigger value="removed0150">Part. (0150) Removidos ({correctionResult.modifications.removed0150.length})</TabsTrigger>
                                                     <TabsTrigger value="removed0200">Prod. (0200) Removidos ({correctionResult.modifications.removed0200.length})</TabsTrigger>
                                                     <TabsTrigger value="removed0190">0190 Removidos ({correctionResult.modifications.removed0190.length})</TabsTrigger>
-                                                    <TabsTrigger value="counters">Contadores ({correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length})</TabsTrigger>
-                                                    <TabsTrigger value="ie">IE (NF-e) ({correctionResult.modifications.ieCorrection.length})</TabsTrigger>
-                                                    <TabsTrigger value="cte_series">Série (CT-e) ({correctionResult.modifications.cteSeriesCorrection.length})</TabsTrigger>
-                                                    <TabsTrigger value="address">Endereços ({correctionResult.modifications.addressSpaces.length})</TabsTrigger>
-                                                    <TabsTrigger value="truncation">Truncamento ({correctionResult.modifications.truncation.length})</TabsTrigger>
-                                                    <TabsTrigger value="units">Unidades ({correctionResult.modifications.unitStandardization.length})</TabsTrigger>
+                                                    <TabsTrigger value="counters">Contadores</TabsTrigger>
+                                                    <TabsTrigger value="ie">IE (NF-e)</TabsTrigger>
+                                                    <TabsTrigger value="cte_series">Série (CT-e)</TabsTrigger>
+                                                    <TabsTrigger value="address">Endereços</TabsTrigger>
+                                                    <TabsTrigger value="truncation">Truncamento</TabsTrigger>
+                                                    <TabsTrigger value="units">Unidades</TabsTrigger>
                                                 </TabsList>
                                                 <div className="flex-grow overflow-hidden mt-2">
                                                     <TabsContent value="divergenceRemoval" className="h-full">
@@ -1195,24 +1214,24 @@ export function KeyChecker({
                                                     </TabsContent>
                                                     <TabsContent value="removed0150" className="h-full">
                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de participantes (0150) que não estavam associados a nenhum documento fiscal (C100/D100/D500) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de participantes (0150) que não estavam associados a nenhum documento fiscal (C100/D100) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
                                                             <span>Participantes não utilizados foram removidos.</span>
                                                         </div>
-                                                        <ModificationDisplay logs={correctionResult.modifications.removed0150} />
+                                                        <RemovedLinesDisplay logs={correctionResult.modifications.removed0150} logType="0150" />
                                                     </TabsContent>
                                                     <TabsContent value="removed0200" className="h-full">
                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
                                                             <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de produtos (0200) que não foram utilizados em nenhum item de nota fiscal (C170) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
                                                             <span>Produtos não utilizados foram removidos.</span>
                                                         </div>
-                                                        <ModificationDisplay logs={correctionResult.modifications.removed0200} />
+                                                        <RemovedLinesDisplay logs={correctionResult.modifications.removed0200} logType="0200" />
                                                     </TabsContent>
                                                     <TabsContent value="removed0190" className="h-full">
                                                          <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
                                                             <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registros do tipo '0190' desnecessários (todos exceto 'un' e 'pc') foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
                                                             <span>Registros '0190' desnecessários foram removidos.</span>
                                                         </div>
-                                                        <ModificationDisplay logs={correctionResult.modifications.removed0190} />
+                                                        <RemovedLinesDisplay logs={correctionResult.modifications.removed0190} logType="0190" />
                                                     </TabsContent>
                                                     <TabsContent value="counters" className="h-full"><ModificationDisplay logs={[...correctionResult.modifications.blockCount, ...correctionResult.modifications.totalLineCount, ...correctionResult.modifications.count9900]} /></TabsContent>
                                                     <TabsContent value="ie" className="h-full"><ModificationDisplay logs={correctionResult.modifications.ieCorrection} /></TabsContent>
@@ -1283,3 +1302,4 @@ export function KeyChecker({
         </div>
     );
 }
+
