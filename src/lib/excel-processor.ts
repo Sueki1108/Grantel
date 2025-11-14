@@ -1,3 +1,4 @@
+
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import { KeyCheckResult } from '@/components/app/key-checker';
@@ -369,16 +370,17 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
             const headers = Object.keys(data[0]);
             const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
             for (const name of possibleNames) {
-                const found = normalizedHeaders.find(h => h.normalized === name);
+                const normalizedName = normalizeKey(name);
+                const found = normalizedHeaders.find(h => h.normalized === normalizedName);
                 if (found) return found.original;
             }
             return undefined;
         };
 
         const h = {
-            cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpjfornecedor', 'cpf/cnjpdestinatario']),
-            numero: findHeader(siengeData, ['número', 'numero', 'numerodanota', 'notafiscal']),
-            valorTotal: findHeader(siengeData, ['valortotal', 'valor', 'vlrtotal']),
+            cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpf/cnpj do destinatario']),
+            numero: findHeader(siengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
+            valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total']),
             cfop: findHeader(siengeData, ['cfop'])
         };
 
@@ -433,3 +435,5 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
         return emptyResult;
     }
 }
+
+    
