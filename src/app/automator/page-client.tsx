@@ -604,7 +604,6 @@ export function AutomatorClientPage() {
                     competence,
                     siengeSheetData: processedData?.siengeSheetData,
                     reconciliationResults: null, // Será calculado na aba de reconciliação
-                    imobilizadoClassifications: imobilizadoClassifications, // Persistir as classificações
                 });
 
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
@@ -687,7 +686,7 @@ export function AutomatorClientPage() {
                                 )}
                             </TabsTrigger>
                              <TabsTrigger value="reconciliation" disabled={reconciliationTabDisabled} className="flex items-center gap-2">
-                                2. Conciliação & CFOP
+                                2. Itens XML VS Sienge
                                 {processedData?.reconciliationResults && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                             <TabsTrigger value="saidas-nfe" disabled={saidasNfeTabDisabled} className="flex items-center gap-2">
@@ -706,7 +705,7 @@ export function AutomatorClientPage() {
                                 <TicketPercent className="h-5 w-5" /> 6. Guia DIFAL
                             </TabsTrigger>
                             <TabsTrigger value="analyses" disabled={analysisTabDisabled} className="flex items-center gap-2">
-                                7. Análises Avançadas
+                                7. SPED Fiscal
                                 {processedData?.keyCheckResults && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                              <TabsTrigger value="pending" className="flex items-center gap-2">
@@ -761,17 +760,17 @@ export function AutomatorClientPage() {
                                     {processedData?.sheets && Object.keys(processedData.sheets).length > 0 && <Card className="shadow-lg"><CardHeader><div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><CheckCircle className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Resultados da Validação</CardTitle><CardDescription>Visualize os dados processados. Os dados necessários para as próximas etapas estão prontos.</CardDescription></div></div><div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto"><Button onClick={handleDownloadExcel} className="w-full">Baixar Planilha (.xlsx)</Button></div></div></CardHeader><CardContent><ResultsDisplay results={processedData.sheets} /></CardContent></Card>}
                                 </div>
                             )}
-
+                            
                             {activeMainTab === 'reconciliation' && (
                                 !reconciliationTabDisabled ? 
                                 <ReconciliationAnalysis 
                                     processedData={processedData} 
-                                    onProcessedDataChange={setProcessedData}
-                                    allPersistedData={imobilizadoClassifications}
-                                    onPersistData={handlePersistImobilizado}
                                     siengeFile={siengeFile} 
                                     onSiengeFileChange={handleSiengeFileChange}
                                     onClearSiengeFile={() => setSiengeFile(null)}
+                                    allPersistedData={imobilizadoClassifications}
+                                    onPersistData={handlePersistImobilizado}
+                                    onProcessedDataChange={setProcessedData}
                                 /> 
                                 : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" e carregue a planilha Sienge para habilitar a conciliação.</p></CardContent></Card>
                             )}

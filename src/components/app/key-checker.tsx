@@ -278,7 +278,6 @@ const processSpedFileInBrowser = (
         const usedProductCodes = new Set<string>();
         intermediateLines.forEach(line => {
             const parts = line.split('|');
-            // Correctly check C170, COD_ITEM is at index 3
             if (parts.length > 3 && parts[1] === 'C170' && parts[3]) {
                 usedProductCodes.add(parts[3]);
             }
@@ -288,7 +287,6 @@ const processSpedFileInBrowser = (
         for (let i = 0; i < intermediateLines.length; i++) {
             const line = intermediateLines[i];
             const parts = line.split('|');
-            // Correctly check 0200, COD_ITEM is at index 2
             if (parts.length > 2 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
                 modifications.removed0200.push({ lineNumber: i + 1, line });
                 linesModifiedCount++;
@@ -1075,12 +1073,12 @@ export function KeyChecker({
                                                     <TabsTrigger value="removed0150">Part. (0150) Removidos ({correctionResult.modifications.removed0150.length})</TabsTrigger>
                                                     <TabsTrigger value="removed0200">Prod. (0200) Removidos ({correctionResult.modifications.removed0200.length})</TabsTrigger>
                                                     <TabsTrigger value="removed0190">0190 Removidos ({correctionResult.modifications.removed0190.length})</TabsTrigger>
-                                                    <TabsTrigger value="counters">Contadores</TabsTrigger>
-                                                    <TabsTrigger value="ie">IE (NF-e)</TabsTrigger>
-                                                    <TabsTrigger value="cte_series">Série (CT-e)</TabsTrigger>
-                                                    <TabsTrigger value="address">Endereços</TabsTrigger>
-                                                    <TabsTrigger value="truncation">Truncamento</TabsTrigger>
-                                                    <TabsTrigger value="units">Unidades</TabsTrigger>
+                                                    <TabsTrigger value="counters">Contadores ({correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length + correctionResult.modifications.count9900.length})</TabsTrigger>
+                                                    <TabsTrigger value="ie">IE (NF-e) ({correctionResult.modifications.ieCorrection.length})</TabsTrigger>
+                                                    <TabsTrigger value="cte_series">Série (CT-e) ({correctionResult.modifications.cteSeriesCorrection.length})</TabsTrigger>
+                                                    <TabsTrigger value="address">Endereços ({correctionResult.modifications.addressSpaces.length})</TabsTrigger>
+                                                    <TabsTrigger value="truncation">Truncamento ({correctionResult.modifications.truncation.length})</TabsTrigger>
+                                                    <TabsTrigger value="units">Unidades ({correctionResult.modifications.unitStandardization.length})</TabsTrigger>
                                                 </TabsList>
                                                 <div className="flex-grow overflow-hidden mt-2">
                                                     <TabsContent value="divergenceRemoval" className="h-full">
@@ -1182,4 +1180,3 @@ export function KeyChecker({
         </div>
     );
 }
-
