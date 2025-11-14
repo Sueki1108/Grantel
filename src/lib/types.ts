@@ -13,3 +13,12 @@ export interface SaidaItem {
     'Valor ICMS'?: number;
     'Total'?: number;
 }
+
+export type SpedDuplicate = {
+    key: string;
+    type: string;
+    docNumber: string;
+    participant: string;
+    value: number;
+    lines: number[];
+};

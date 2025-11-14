@@ -5,11 +5,13 @@ import { useState, type ChangeEvent, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { FileSearch, Archive, AlertCircle, Loader2, Download, AlertTriangle, FileJson } from "lucide-react";
+import { FileSearch, Archive, AlertCircle, Loader2, Download, AlertTriangle, FileJson, Copy, Repeat } from "lucide-react";
 import JSZip from 'jszip';
 import { type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
 import { cleanAndToStr, normalizeKey } from "@/lib/utils";
 import { KeyChecker } from "./key-checker";
+import { DataTable } from "./data-table";
+import { getColumns } from "./columns-helper";
 
 
 // ===============================================================
@@ -21,7 +23,7 @@ interface AdvancedAnalysesProps {
     allXmlFiles: File[];
     spedFiles: File[];
     onSpedFilesChange: (files: File[]) => void;
-    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null, spedCorrections: SpedCorrectionResult | null) => void;
+    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null, spedCorrections: SpedCorrectionResult | null, spedDuplicates: any[] | null) => void;
     competence: string | null;
     onExportSession: () => void;
 }
@@ -202,7 +204,30 @@ export function AdvancedAnalyses({
                 initialKeyCheckResults={processedData?.keyCheckResults || null}
                 nfeEntradaData={processedData?.sheets['Notas Válidas'] || []}
                 cteData={processedData?.sheets['CTEs Válidos'] || []}
+                initialSpedDuplicates={processedData?.spedDuplicates || null}
             />
+
+            {processedData?.spedDuplicates && processedData.spedDuplicates.length > 0 && (
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center gap-3">
+                            <Repeat className="h-8 w-8 text-destructive" />
+                            <div>
+                                <CardTitle>Análise de Duplicidade Interna no SPED</CardTitle>
+                                <CardDescription>
+                                    Foram encontrados registos duplicados dentro do próprio ficheiro SPED. Verifique os itens abaixo.
+                                </CardDescription>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <DataTable 
+                            columns={getColumns(processedData.spedDuplicates)} 
+                            data={processedData.spedDuplicates} 
+                        />
+                    </CardContent>
+                </Card>
+            )}
             
             <Card>
                 <CardHeader>
