@@ -53,7 +53,7 @@ export interface ProcessedData {
     spedInfo: SpedInfo | null;
     siengeSheetData: any[] | null;
     keyCheckResults: KeyCheckResult | null;
-    saidasStatus?: Record<number, 'emitida' | 'cancelada' | 'inutilizada'>;
+    saidasStatus?: Record<string, 'emitida' | 'cancelada' | 'inutilizada'>;
     lastSaidaNumber?: number;
     imobilizadoClassifications?: AllClassifications;
     competence: string | null;
