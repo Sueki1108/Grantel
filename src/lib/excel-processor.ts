@@ -445,5 +445,3 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
         return {...emptyResult, onlyInXml: allXmlItems, onlyInSienge: siengeData || []};
     }
 }
-
-    

@@ -16,13 +16,17 @@ import { KeyChecker } from "./key-checker";
 // ===============================================================
 
 interface AdvancedAnalysesProps {
-    processedData: ProcessedData;
+    processedData: ProcessedData | null;
+    onProcessedDataChange: (data: ProcessedData) => void;
     allXmlFiles: File[];
     spedFiles: File[];
     onSpedFilesChange: (files: File[]) => void;
     onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null, spedCorrections: SpedCorrectionResult | null) => void;
     competence: string | null;
     onExportSession: () => void;
+    siengeFile: File | null;
+    onSiengeFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onClearSiengeFile: () => void;
 }
 
 export function AdvancedAnalyses({ 
@@ -31,6 +35,7 @@ export function AdvancedAnalyses({
     spedFiles,
     onSpedFilesChange,
     onSpedProcessed,
+    competence,
     onExportSession,
 }: AdvancedAnalysesProps) {
     const { toast } = useToast();
@@ -41,7 +46,7 @@ export function AdvancedAnalyses({
     
     
     const handleAnalyzeResale = useCallback(async () => {
-        const siengeData = processedData.siengeSheetData;
+        const siengeData = processedData?.siengeSheetData;
         if (!siengeData) {
             toast({ variant: 'destructive', title: "Dados incompletos", description: "Carregue a planilha Sienge na aba de conciliação primeiro." });
             return;
@@ -140,7 +145,7 @@ export function AdvancedAnalyses({
             }
         }, 50);
     
-    }, [processedData.siengeSheetData, allXmlFiles, toast]);
+    }, [processedData?.siengeSheetData, allXmlFiles, toast]);
 
 
     const handleExportResaleXmls = async () => {
@@ -192,14 +197,14 @@ export function AdvancedAnalyses({
              </Card>
 
              <KeyChecker 
-                chavesValidas={processedData.sheets['Chaves Válidas'] || []}
+                chavesValidas={processedData?.sheets['Chaves Válidas'] || []}
                 spedFiles={spedFiles}
                 onFilesChange={onSpedFilesChange}
                 onSpedProcessed={onSpedProcessed}
-                initialSpedInfo={processedData.spedInfo}
-                initialKeyCheckResults={processedData.keyCheckResults}
-                nfeEntradaData={processedData.sheets['Notas Válidas'] || []}
-                cteData={processedData.sheets['Notas Válidas']?.filter(n => !n.destUF) || []}
+                initialSpedInfo={processedData?.spedInfo || null}
+                initialKeyCheckResults={processedData?.keyCheckResults || null}
+                nfeEntradaData={processedData?.sheets['Notas Válidas'] || []}
+                cteData={processedData?.sheets['Notas Válidas']?.filter(n => !n.destUF) || []}
             />
             
             <Card>
@@ -215,7 +220,7 @@ export function AdvancedAnalyses({
                     </div>
                 </CardHeader>
                 <CardContent>
-                    {!processedData.siengeSheetData ? (
+                    {!processedData?.siengeSheetData ? (
                         <div className="p-8 text-center text-muted-foreground">
                             <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
                             <h3 className="text-xl font-semibold mb-2">Aguardando dados Sienge</h3>
