@@ -1,8 +1,7 @@
-
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
-import { KeyCheckResult } from '@/components/app/key-checker';
-import { type AllClassifications } from '@/components/app/imobilizado-analysis';
+import type { KeyCheckResult } from '@/components/app/key-checker';
+import type { AllClassifications } from '@/components/app/imobilizado-analysis';
 import { normalizeKey, cleanAndToStr } from './utils';
 
 // Types
@@ -368,24 +367,25 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
         const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
             if (!data || data.length === 0 || !data[0]) return undefined;
             const headers = Object.keys(data[0]);
-            const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeKey(h) }));
             for (const name of possibleNames) {
                 const normalizedName = normalizeKey(name);
-                const found = normalizedHeaders.find(h => h.normalized === normalizedName);
-                if (found) return found.original;
+                const found = headers.find(h => normalizeKey(h) === normalizedName);
+                if (found) return found;
             }
             return undefined;
         };
 
         const h = {
-            cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpf/cnpj do destinatario']),
+            cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpfcnpj do fornecedor', 'cpfcnpj do destinatario']),
             numero: findHeader(siengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
             valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total']),
             cfop: findHeader(siengeData, ['cfop'])
         };
+        
 
         if (!h.cnpj || !h.numero || !h.valorTotal || !h.cfop) {
-            throw new Error("Colunas essenciais (CPF/CNPJ, Número, Valor Total, CFOP) não encontradas no Sienge.");
+            console.error("Colunas essenciais (CPF/CNPJ, Número, Valor Total, CFOP) não encontradas no Sienge. Cabeçalhos encontrados:", Object.keys(siengeData[0] || {}));
+            return emptyResult;
         }
 
         const siengeMap = new Map<string, any[]>();
@@ -400,22 +400,31 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
         const onlyInXml: any[] = [];
         
         allXmlItems.forEach(xmlItem => {
-            const partnerCnpj = xmlItem['CPF/CNPJ do Emitente'] || xmlItem['CPF/CNPJ do Destinatário'];
-            const key = `${cleanAndToStr(xmlItem['Número da Nota'] || xmlItem['Número'] || '')}-${cleanAndToStr(partnerCnpj)}`;
+            const partnerCnpj = cleanAndToStr(xmlItem['CPF/CNPJ do Emitente'] || xmlItem['CPF/CNPJ do Destinatário']);
+            const key = `${cleanAndToStr(xmlItem['Número da Nota'] || xmlItem['Número'] || '')}-${partnerCnpj}`;
             
             const siengeMatches = siengeMap.get(key);
 
+            let matched = false;
             if (siengeMatches && siengeMatches.length > 0) {
-                const bestMatch = siengeMatches.find(s => Math.abs(parseFloat(String(s[h.valorTotal!]).replace(',','.')) - xmlItem['Valor Total']) < 0.01) || siengeMatches[0];
-                reconciled.push({
-                    ...xmlItem,
-                    Sienge_CFOP: bestMatch[h.cfop!],
+                const xmlValue = xmlItem['Valor Total'];
+                const bestMatchIndex = siengeMatches.findIndex(s => {
+                    const siengeValue = parseFloat(String(s[h.valorTotal!]).replace(',','.'));
+                    return Math.abs(siengeValue - xmlValue) < 0.01;
                 });
-                
-                const index = siengeMatches.indexOf(bestMatch);
-                if (index > -1) siengeMatches.splice(index, 1);
 
-            } else {
+                if (bestMatchIndex > -1) {
+                    const bestMatch = siengeMatches[bestMatchIndex];
+                    reconciled.push({
+                        ...xmlItem,
+                        Sienge_CFOP: bestMatch[h.cfop!],
+                    });
+                    siengeMatches.splice(bestMatchIndex, 1);
+                    matched = true;
+                }
+            }
+
+            if (!matched) {
                 onlyInXml.push(xmlItem);
             }
         });
@@ -424,10 +433,10 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
         const allReconciledItems = [...reconciled, ...onlyInXml.map(item => ({...item, Sienge_CFOP: 'N/A'}))];
 
         return {
-            reconciled: reconciled,
-            onlyInSienge: onlyInSienge,
-            onlyInXml: onlyInXml,
-            allReconciledItems: allReconciledItems
+            reconciled,
+            onlyInSienge,
+            onlyInXml,
+            allReconciledItems
         };
 
     } catch (err: any) {
@@ -435,5 +444,3 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
         return emptyResult;
     }
 }
-
-    

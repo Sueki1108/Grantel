@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -605,13 +605,13 @@ export function AutomatorClientPage() {
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
                 const reconciliationResults = runReconciliation(
-                    resultData.siengeSheetData, 
+                    processedData?.siengeSheetData, 
                     resultData.sheets['Itens Válidos'] || [], 
                     resultData.sheets['Itens Válidos Saídas'] || [], 
-                    resultData.sheets['CTEs Válidos'] || []
+                    resultData.sheets['Notas Válidas']?.filter(n => !n.destUF) || [] // Apenas CTes para conciliação por enquanto
                 );
 
-                setProcessedData({...resultData, competence, reconciliationResults });
+                setProcessedData({...resultData, competence, reconciliationResults, siengeSheetData: processedData?.siengeSheetData });
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
 
             } catch (err: any) {

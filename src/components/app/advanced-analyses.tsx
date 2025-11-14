@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FileSearch, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Save, FileJson } from "lucide-react";
+import { FileSearch, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, GitCompareArrows, Save, FileJson } from "lucide-react";
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -87,7 +87,7 @@ export function AdvancedAnalyses({
                 const h = {
                     cfop: findSiengeHeader(siengeData, ['cfop']),
                     numero: findSiengeHeader(siengeData, ['número', 'numero', 'numerodanota', 'notafiscal']),
-                    cnpj: findSiengeHeader(siengeData, ['cpf/cnpj', 'cpf/cnpjfornecedor']),
+                    cnpj: findSiengeHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
                 };
     
                 if (!h.cfop || !h.numero || !h.cnpj) {
@@ -234,7 +234,7 @@ export function AdvancedAnalyses({
                         initialSpedInfo={processedData.spedInfo}
                         initialKeyCheckResults={processedData.keyCheckResults}
                         nfeEntradaData={processedData.sheets['Notas Válidas'] || []}
-                        cteData={processedData.sheets['CTEs Válidos'] || []}
+                        cteData={processedData.sheets['Notas Válidas']?.filter(n => !n.destUF) || []}
                     />
                 </TabsContent>
                 
