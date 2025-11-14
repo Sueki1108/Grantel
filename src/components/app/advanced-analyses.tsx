@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, type ChangeEvent, useCallback, useEffect } from "react";
@@ -73,7 +74,7 @@ export function AdvancedAnalyses({
                 const h = {
                     cfop: findSiengeHeader(siengeData, ['cfop']),
                     numero: findSiengeHeader(siengeData, ['número', 'numero', 'numerodanota', 'notafiscal']),
-                    cnpj: findSiengeHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
+                    cnpj: findSiengeHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpfcnpj']),
                 };
     
                 if (!h.cfop || !h.numero || !h.cnpj) {
@@ -200,7 +201,7 @@ export function AdvancedAnalyses({
                 initialSpedInfo={processedData?.spedInfo || null}
                 initialKeyCheckResults={processedData?.keyCheckResults || null}
                 nfeEntradaData={processedData?.sheets['Notas Válidas'] || []}
-                cteData={processedData?.sheets['Notas Válidas']?.filter(n => !n.destUF) || []}
+                cteData={processedData?.sheets['CTEs Válidos'] || []}
             />
             
             <Card>
