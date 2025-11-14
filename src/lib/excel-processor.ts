@@ -380,63 +380,80 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
             valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total', 'valortotal']),
             cfop: findHeader(siengeData, ['cfop'])
         };
-        
+
         if (!h.cnpj || !h.numero || !h.valorTotal || !h.cfop) {
             console.error("Colunas essenciais (CPF/CNPJ, Número, Valor Total, CFOP) não encontradas no Sienge.");
             return { ...emptyResult, onlyInSienge: siengeData, onlyInXml: allXmlItems };
         }
 
-        const reconciled: any[] = [];
-        const onlyInXml: any[] = [];
-        const matchedSiengeIndices = new Set<number>();
-        
+        // 1. Group items by note (Número + CNPJ)
         const xmlNoteMap = new Map<string, any[]>();
         allXmlItems.forEach(item => {
             const key = item['Chave Unica'];
             if (!xmlNoteMap.has(key)) xmlNoteMap.set(key, []);
             xmlNoteMap.get(key)!.push(item);
         });
+        
+        const siengeNoteMap = new Map<string, any[]>();
+        siengeData.forEach((item, index) => {
+            const key = `${cleanAndToStr(item[h.numero!])}${cleanAndToStr(item[h.cnpj!])}`;
+            if (!siengeNoteMap.has(key)) siengeNoteMap.set(key, []);
+            siengeNoteMap.get(key)!.push({...item, __originalIndex: index });
+        });
+        
+        const reconciled: any[] = [];
+        const onlyInXmlItems: any[] = [];
+        const matchedSiengeIndices = new Set<number>();
 
-        xmlNoteMap.forEach((xmlItems, key) => {
-            const [xmlNumero, xmlCnpj] = key.split(/(?=\d{14}$)/);
+        // 2. Iterate through XML notes and try to reconcile
+        xmlNoteMap.forEach((xmlItems, xmlKey) => {
+            const siengeItems = siengeNoteMap.get(xmlKey);
 
-            let noteMatchFound = false;
-            for (let i = 0; i < siengeData.length; i++) {
-                if (matchedSiengeIndices.has(i)) continue;
+            if (siengeItems) {
+                // Create a "balance" map of values for Sienge items
+                const siengeValueMap = new Map<string, any[]>();
+                siengeItems.forEach(si => {
+                    const value = parseFloat(String(si[h.valorTotal!]).replace(',', '.')).toFixed(2);
+                    if (!siengeValueMap.has(value)) siengeValueMap.set(value, []);
+                    siengeValueMap.get(value)!.push(si);
+                });
 
-                const siengeItem = siengeData[i];
-                const siengeNumero = cleanAndToStr(siengeItem[h.numero!]);
-                const siengeCnpj = cleanAndToStr(siengeItem[h.cnpj!]);
+                const localUnmatchedXml = [...xmlItems];
 
-                if (siengeNumero === xmlNumero && siengeCnpj === xmlCnpj) {
-                    const siengeValue = parseFloat(String(siengeItem[h.valorTotal!]).replace(',', '.'));
-
-                    for (let j = 0; j < xmlItems.length; j++) {
-                        const xmlItem = xmlItems[j];
-                        const xmlValue = xmlItem['Valor Total'] || 0;
+                // Attempt to match XML items against the Sienge value map
+                for (let i = localUnmatchedXml.length - 1; i >= 0; i--) {
+                    const xmlItem = localUnmatchedXml[i];
+                    const xmlValue = (xmlItem['Valor Total'] || 0).toFixed(2);
+                    
+                    const matchingSiengeItems = siengeValueMap.get(xmlValue);
+                    if (matchingSiengeItems && matchingSiengeItems.length > 0) {
+                        const matchedSiengeItem = matchingSiengeItems.pop()!; // Take one match
                         
-                        if (Math.abs(xmlValue - siengeValue) < 0.01) {
-                            reconciled.push({ ...xmlItem, Sienge_CFOP: siengeItem[h.cfop!] });
-                            matchedSiengeIndices.add(i);
-                            xmlItems.splice(j, 1); // Remove matched XML item
-                            noteMatchFound = true;
-                            break; 
-                        }
+                        reconciled.push({ ...xmlItem, Sienge_CFOP: matchedSiengeItem[h.cfop!] });
+                        matchedSiengeIndices.add(matchedSiengeItem.__originalIndex);
+                        localUnmatchedXml.splice(i, 1); // Remove matched XML item
                     }
                 }
-            }
-
-            if (xmlItems.length > 0) {
-                onlyInXml.push(...xmlItems);
+                
+                // Any remaining XML items for this note are "Only in XML"
+                if (localUnmatchedXml.length > 0) {
+                    onlyInXmlItems.push(...localUnmatchedXml);
+                }
+                
+            } else {
+                // If no Sienge note matches the XML note, all its items are "Only in XML"
+                onlyInXmlItems.push(...xmlItems);
             }
         });
 
         const onlyInSienge = siengeData.filter((_, index) => !matchedSiengeIndices.has(index));
-
-        return { reconciled, onlyInSienge, onlyInXml };
+        
+        return { reconciled, onlyInSienge, onlyInXml: onlyInXmlItems };
 
     } catch (err: any) {
         console.error("Reconciliation Error:", err.message);
         return { ...emptyResult, onlyInSienge: siengeData, onlyInXml: allXmlItems };
     }
 }
+
+    
