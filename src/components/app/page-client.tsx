@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -16,7 +16,7 @@ import Link from "next/link";
 import * as XLSX from 'xlsx';
 import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
-import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
+import { processDataFrames, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdvancedAnalyses } from "@/components/app/advanced-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
@@ -302,8 +302,8 @@ export function AutomatorClientPage() {
         } else {
              setProcessedData(prev => {
                 if (!prev) return null;
-                const { siengeSheetData, ...rest } = prev;
-                return rest as ProcessedData;
+                const { siengeSheetData, reconciliationResults, ...rest } = prev;
+                return { ...rest, siengeSheetData: null, reconciliationResults: null } as ProcessedData;
              });
         }
     };
@@ -604,7 +604,7 @@ export function AutomatorClientPage() {
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
-                setProcessedData({...resultData, competence, siengeSheetData: processedData?.siengeSheetData });
+                setProcessedData({...resultData, competence, siengeSheetData: processedData?.siengeSheetData, reconciliationResults: null });
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
 
             } catch (err: any) {
