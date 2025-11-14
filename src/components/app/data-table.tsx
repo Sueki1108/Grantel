@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -153,13 +154,18 @@ export function DataTable<TData, TValue>({
                   key={row.id}
                   data-state={row.getIsSelected() ? "selected" : undefined}
                   className={onSelectionChange ? "cursor-pointer" : ""}
-                  onClick={() => onSelectionChange && row.toggleSelected()}
+                  onClick={() => {
+                      if (onSelectionChange) {
+                          row.toggleSelected();
+                      }
+                  }}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell 
                       key={cell.id} 
                       onClick={(e) => {
-                        if (['actions', 'select'].includes(cell.column.id)) {
+                        // Prevent row click from toggling selection if clicking on a cell with interactive content
+                        if (['actions', 'select', 'accountCode'].includes(cell.column.id)) {
                           e.stopPropagation();
                         }
                       }}

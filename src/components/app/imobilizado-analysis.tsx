@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -235,7 +236,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
         return <div className="text-center text-muted-foreground p-8">Nenhum item nesta categoria.</div>;
     }
 
-    return <DataTable columns={columns} data={data} rowSelection={rowSelection} setRowSelection={setRowSelection} tableRef={tableRef} />;
+    return <DataTable columns={columns} data={data} rowSelection={rowSelection} setRowSelection={setRowSelection} tableRef={tableRef} onSelectionChange={() => {}} />;
 }
 
 
@@ -669,3 +670,4 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         </div>
     );
 }
+

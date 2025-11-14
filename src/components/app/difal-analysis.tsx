@@ -332,17 +332,17 @@ export function DifalAnalysis() {
             )}
 
             <Dialog open={isResultsModalOpen} onOpenChange={setIsResultsModalOpen}>
-                <DialogContent className="max-w-4xl">
+                <DialogContent className="max-w-4xl h-auto max-h-[90vh] flex flex-col">
                      <DialogHeader>
                         <DialogTitle>Resultados da Análise DIFAL</DialogTitle>
                         <DialogDescription>
-                            Os dados foram extraídos dos XMLs carregados. A tabela abaixo é paginada. Clique num valor para o copiar.
+                            Os dados foram extraídos dos XMLs carregados. Clique num valor para o copiar.
                         </DialogDescription>
                     </DialogHeader>
                     
                     {difalData.length > 0 && (
-                        <Card>
-                            <CardContent className='pt-6'>
+                        <Card className="flex-grow overflow-hidden">
+                            <CardContent className='pt-6 h-full'>
                             <DataTable 
                                     columns={columns}
                                     data={difalData}
