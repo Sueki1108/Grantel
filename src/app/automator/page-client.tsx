@@ -79,7 +79,7 @@ export function AutomatorClientPage() {
     const [selectedPeriods, setSelectedPeriods] = useState<Record<string, boolean>>({});
     const [isPreProcessing, setIsPreProcessing] = useState(false);
     
-    const [activeMainTab, setActiveMainTab] = useState("history");
+    const [activeMainTab, setActiveMainTab] = useState("nf-stock");
     const [isWideMode, setIsWideMode] = useState(false);
 
 
@@ -569,7 +569,7 @@ export function AutomatorClientPage() {
                         return rows.filter(row => {
                             const emissionValue = row['Emissão'] || row['Data de Emissão'];
                             if (!emissionValue) return true;
-                            if (typeof emissionValue === 'string' && emissionValue.length >= 7) {
+                            if (typeof emissionValue === 'string' && emissionValue.length >= 10) {
                                 return activePeriods.includes(emissionValue.substring(0, 7));
                             }
                             try {
@@ -775,6 +775,9 @@ export function AutomatorClientPage() {
                                     siengeFile={siengeFile} 
                                     onSiengeFileChange={handleSiengeFileChange}
                                     onClearSiengeFile={() => setSiengeFile(null)}
+                                    allPersistedData={imobilizadoClassifications}
+                                    onPersistData={handlePersistImobilizado}
+                                    onProcessedDataChange={setProcessedData}
                                 /> 
                                 : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" e carregue a planilha Sienge para habilitar a conciliação.</p></CardContent></Card>
                             )}
@@ -794,7 +797,7 @@ export function AutomatorClientPage() {
                              {activeMainTab === 'difal' && <DifalAnalysis /> }
                             
                             {activeMainTab === 'analyses' && (
-                                !analysisTabDisabled && processedData ? <AdvancedAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
+                                !analysisTabDisabled && processedData ? <AdvancedAnalyses processedData={processedData} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
                             )}
                          
                              {activeMainTab === 'pending' && (
