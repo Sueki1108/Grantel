@@ -47,7 +47,6 @@ export interface ReconciliationResults {
     reconciled: any[];
     onlyInSienge: any[];
     onlyInXml: any[];
-    allReconciledItems: any[];
 }
 export interface ProcessedData {
     sheets: DataFrames;
@@ -352,19 +351,31 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 
 
 export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any[], xmlSaidaItems: any[], xmlCteItems: any[]): ReconciliationResults {
-    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], allReconciledItems: [] };
-    
-    const allXmlItems = [
-        ...(xmlEntradaItems || []),
-        ...(xmlSaidaItems || []),
-        ...(xmlCteItems || []).map(item => ({...item, 'Valor Total': item['Valor da Prestação'], 'Número da Nota': item['Número']}))
-    ];
+    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [] };
 
-    if (!siengeData || siengeData.length === 0 || allXmlItems.length === 0) {
-        return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: allXmlItems };
+    if (!siengeData || siengeData.length === 0) {
+        return { ...emptyResult, onlyInXml: [...(xmlEntradaItems || []), ...(xmlSaidaItems || []), ...(xmlCteItems || [])] };
+    }
+
+    const allXmlItems = [...(xmlEntradaItems || []), ...(xmlSaidaItems || []), ...(xmlCteItems || [])];
+    if (allXmlItems.length === 0) {
+        return { ...emptyResult, onlyInSienge: siengeData };
     }
 
     try {
+        // Step 1: Aggregate XML items by note
+        const xmlNotesMap = new Map<string, { total: number, items: any[] }>();
+        allXmlItems.forEach(item => {
+            const key = item['Chave Unica'];
+            if (!xmlNotesMap.has(key)) {
+                xmlNotesMap.set(key, { total: 0, items: [] });
+            }
+            const note = xmlNotesMap.get(key)!;
+            note.total += item['Valor Total'] || item['Valor da Prestação'] || 0;
+            note.items.push(item);
+        });
+
+        // Step 2: Find headers in Sienge data
         const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
             if (!data || data.length === 0 || !data[0]) return undefined;
             const headers = Object.keys(data[0]);
@@ -384,63 +395,59 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
         };
 
         if (!h.cnpj || !h.numero || !h.valorTotal || !h.cfop) {
-            console.error("Colunas essenciais (CPF/CNPJ, Número, Valor Total, CFOP) não encontradas no Sienge. Cabeçalhos encontrados:", Object.keys(siengeData[0] || {}));
-            return {...emptyResult, onlyInXml: allXmlItems, onlyInSienge: siengeData };
+            console.error("Colunas essenciais (CPF/CNPJ, Número, Valor Total, CFOP) não encontradas no Sienge.");
+            return { ...emptyResult, onlyInSienge: siengeData, onlyInXml: allXmlItems };
         }
-        
-        const siengeMap = new Map<string, any[]>();
-        siengeData.forEach(siengeItem => {
-            const partnerCnpj = cleanAndToStr(siengeItem[h.cnpj!]);
-            const key = `${cleanAndToStr(siengeItem[h.numero!])}-${partnerCnpj}`;
-            if (!siengeMap.has(key)) siengeMap.set(key, []);
-            siengeMap.get(key)!.push(siengeItem);
-        });
-        
-        const reconciled: any[] = [];
-        const onlyInXml: any[] = [];
-        
-        allXmlItems.forEach(xmlItem => {
-            const partnerCnpj = cleanAndToStr(xmlItem['CPF/CNPJ do Emitente'] || xmlItem['CPF/CNPJ do Destinatário']);
-            const key = `${cleanAndToStr(xmlItem['Número da Nota'] || xmlItem['Número'] || '')}-${partnerCnpj}`;
-            
-            const siengeMatches = siengeMap.get(key);
 
-            let matched = false;
-            if (siengeMatches && siengeMatches.length > 0) {
-                const xmlValue = xmlItem['Valor Total'];
-                const bestMatchIndex = siengeMatches.findIndex(s => {
-                    const siengeValue = parseFloat(String(s[h.valorTotal!]).replace(',','.'));
-                    return Math.abs(siengeValue - xmlValue) < 0.01;
-                });
+        const reconciledItems: any[] = [];
+        const onlyInXmlItems: any[] = [];
+        const matchedSiengeItems = new Set<any>();
 
-                if (bestMatchIndex > -1) {
-                    const bestMatch = siengeMatches[bestMatchIndex];
-                    reconciled.push({
-                        ...xmlItem,
-                        Sienge_CFOP: bestMatch[h.cfop!],
-                    });
-                    siengeMatches.splice(bestMatchIndex, 1);
-                    matched = true;
+        // Step 3: Iterate through aggregated XML notes and try to match
+        xmlNotesMap.forEach((xmlNote, key) => {
+            const [xmlNumero, xmlCnpj] = key.split(/(?=\d{14}$)/); // Heuristic split
+
+            let matchFound = false;
+            for (const siengeItem of siengeData) {
+                if (matchedSiengeItems.has(siengeItem)) continue;
+
+                const siengeNumero = cleanAndToStr(siengeItem[h.numero!]);
+                const siengeCnpj = cleanAndToStr(siengeItem[h.cnpj!]);
+
+                if (siengeNumero === xmlNumero && siengeCnpj === xmlCnpj) {
+                    const siengeValue = parseFloat(String(siengeItem[h.valorTotal!]).replace(',', '.'));
+                    
+                    // The multi-pass logic happens here for each potential match
+                    if (Math.abs(xmlNote.total - siengeValue) < 0.01) {
+                        xmlNote.items.forEach(item => {
+                            reconciledItems.push({
+                                ...item,
+                                Sienge_CFOP: siengeItem[h.cfop!],
+                            });
+                        });
+                        matchedSiengeItems.add(siengeItem);
+                        matchFound = true;
+                        break; // Found a match for this XML note, move to the next
+                    }
+                    // TODO: Add more value comparison passes here (e.g., with discount, freight)
                 }
             }
 
-            if (!matched) {
-                onlyInXml.push(xmlItem);
+            if (!matchFound) {
+                onlyInXmlItems.push(...xmlNote.items);
             }
         });
-        
-        const onlyInSienge = Array.from(siengeMap.values()).flat();
-        const allReconciledItems = [...reconciled, ...onlyInXml.map(item => ({...item, Sienge_CFOP: 'N/A'}))];
+
+        const onlyInSiengeItems = siengeData.filter(item => !matchedSiengeItems.has(item));
 
         return {
-            reconciled,
-            onlyInSienge,
-            onlyInXml,
-            allReconciledItems
+            reconciled: reconciledItems,
+            onlyInSienge: onlyInSiengeItems,
+            onlyInXml: onlyInXmlItems,
         };
 
     } catch (err: any) {
         console.error("Reconciliation Error:", err.message);
-        return {...emptyResult, onlyInXml: allXmlItems, onlyInSienge: siengeData || []};
+        return { ...emptyResult, onlyInSienge: siengeData, onlyInXml: allXmlItems };
     }
 }
