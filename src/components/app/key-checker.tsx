@@ -646,8 +646,12 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
              const xmlUF = nota.destUF?.trim().toUpperCase();
              baseDivergence['IE no XML'] = xmlIE || 'Em branco';
              baseDivergence['UF no XML'] = xmlUF || 'Em branco';
-            if (xmlUF !== GRANTEL_UF) divergenceMessages.push("UF");
-            if (xmlIE !== GRANTEL_IE) divergenceMessages.push("IE");
+
+            // Regra atualizada: adicionar divergência apenas se AMBOS estiverem errados
+            if (xmlUF !== GRANTEL_UF && xmlIE !== GRANTEL_IE) {
+                divergenceMessages.push("IE e UF");
+            }
+
         } else if (docType === 'CTE' && cleanAndToStr(nota.tomadorCNPJ) === GRANTEL_CNPJ) {
              const participant = spedDoc.codPart ? participantData.get(spedDoc.codPart) : null;
              if(participant) {
@@ -655,8 +659,11 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                  const spedUF = participant.uf?.trim().toUpperCase();
                  baseDivergence['IE no XML'] = spedIE || 'Em branco';
                  baseDivergence['UF no XML'] = spedUF || 'Em branco';
-                if (spedUF !== GRANTEL_UF) divergenceMessages.push("UF");
-                if (spedIE !== GRANTEL_IE) divergenceMessages.push("IE");
+
+                 // Regra atualizada: adicionar divergência apenas se AMBOS estiverem errados
+                 if (spedUF !== GRANTEL_UF && spedIE !== GRANTEL_IE) {
+                    divergenceMessages.push("IE e UF");
+                }
              }
         }
 
@@ -669,10 +676,11 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
 
     const consolidatedDivergences = Array.from(consolidatedDivergencesMap.values());
     
+    // As listas específicas agora derivam da lista consolidada, refletindo a nova regra
     const dateDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('Data')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'Data Emissão XML': d['Data Emissão XML'], 'Data Emissão SPED': d['Data Emissão SPED'], 'Data Entrada/Saída SPED': d['Data Entrada/Saída SPED'] }));
     const valueDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('Valor')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'Valor XML': d['Valor XML'], 'Valor SPED': d['Valor SPED'] }));
-    const ufDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('UF')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'CNPJ do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitCNPJ || '', 'Nome do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitName || '', 'UF no XML': d['UF no XML'] }));
-    const ieDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('IE')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'CNPJ do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitCNPJ || '', 'Nome do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitName || '', 'IE no XML': d['IE no XML'] }));
+    const ufDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('IE e UF')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'CNPJ do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitCNPJ || '', 'Nome do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitName || '', 'UF no XML': d['UF no XML'] }));
+    const ieDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('IE e UF')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'CNPJ do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitCNPJ || '', 'Nome do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitName || '', 'IE no XML': d['IE no XML'] }));
 
     logFn(`- ${ufDivergences.length} divergências de UF encontradas.`);
     logFn(`- ${ieDivergences.length} divergências de IE encontradas.`);
@@ -815,10 +823,10 @@ export function KeyChecker({
 
         setTimeout(async () => {
             try {
-                const ieDivergentKeys = new Set(results.ieDivergences?.map(d => d['Chave de Acesso']));
-                const ufDivergentKeys = new Set(results.ufDivergences?.map(d => d['Chave de Acesso']));
-                
-                const divergentKeys = new Set([...ieDivergentKeys].filter(key => ufDivergentKeys.has(key)));
+                const divergentKeys = new Set(results.consolidatedDivergences
+                    .filter(d => d['Resumo das Divergências'].includes('IE e UF'))
+                    .map(d => d['Chave de Acesso'])
+                );
                 
                 const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
                 const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData, divergentKeys, correctionConfig);
@@ -1092,7 +1100,7 @@ export function KeyChecker({
                                                     </TabsContent>
                                                     <TabsContent value="removed0150" className="h-full">
                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de participantes (0150) que não estavam associados a nenhum documento fiscal (C100/D100/D500) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de participantes (0150) que não estavam associados a nenhum documento fiscal (C100/D100) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
                                                             <span>Participantes não utilizados foram removidos.</span>
                                                         </div>
                                                         <RemovedLinesDisplay logs={correctionResult.modifications.removed0150} logType="0150" />
