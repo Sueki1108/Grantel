@@ -1,3 +1,4 @@
+
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import type { KeyCheckResult } from '@/components/app/key-checker';
@@ -353,13 +354,13 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any[], xmlSaidaItems: any[], xmlCteItems: any[]): ReconciliationResults {
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], allReconciledItems: [] };
     
-    if (!siengeData) {
+    if (!siengeData || !xmlEntradaItems) {
         return emptyResult;
     }
 
     const allXmlItems = [
-        ...(xmlEntradaItems || []).map(item => ({ ...item })),
-        ...(xmlSaidaItems || []).map(item => ({ ...item })),
+        ...(xmlEntradaItems || []),
+        ...(xmlSaidaItems || []),
         ...(xmlCteItems || []).map(item => ({...item, 'Valor Total': item['Valor da Prestação'], 'Número da Nota': item['Número']}))
     ];
 
@@ -376,16 +377,16 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
         };
 
         const h = {
-            cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpfcnpj do fornecedor', 'cpfcnpj do destinatario']),
-            numero: findHeader(siengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
-            valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total']),
+            cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpf/cnpj do destinatário', 'cpfcnpj do fornecedor']),
+            numero: findHeader(siengeData, ['número', 'numero', 'numero da nota', 'nota fiscal', 'numerodanota']),
+            valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total', 'valortotal']),
             cfop: findHeader(siengeData, ['cfop'])
         };
         
 
         if (!h.cnpj || !h.numero || !h.valorTotal || !h.cfop) {
             console.error("Colunas essenciais (CPF/CNPJ, Número, Valor Total, CFOP) não encontradas no Sienge. Cabeçalhos encontrados:", Object.keys(siengeData[0] || {}));
-            return emptyResult;
+            return {...emptyResult, onlyInXml: allXmlItems, onlyInSienge: siengeData };
         }
 
         const siengeMap = new Map<string, any[]>();
@@ -441,6 +442,8 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
 
     } catch (err: any) {
         console.error("Reconciliation Error:", err.message);
-        return emptyResult;
+        return {...emptyResult, onlyInXml: allXmlItems, onlyInSienge: siengeData || []};
     }
 }
+
+    
