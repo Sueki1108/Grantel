@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent, useCallback } from "react";
+import { useState, type ChangeEvent, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -11,7 +11,7 @@ import JSZip from 'jszip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
 import { getColumns } from "@/components/app/columns-helper";
-import type { ProcessedData, SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
+import { runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { cleanAndToStr, normalizeKey } from "@/lib/utils";
 import { KeyChecker } from "./key-checker";
@@ -23,6 +23,7 @@ import { SiengeTaxCheck } from "./sienge-tax-check";
 
 interface AdvancedAnalysesProps {
     processedData: ProcessedData;
+    onProcessedDataChange: (data: ProcessedData) => void;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
     siengeFile: File | null;
@@ -36,6 +37,7 @@ interface AdvancedAnalysesProps {
 
 export function AdvancedAnalyses({ 
     processedData, 
+    onProcessedDataChange,
     onSiengeFileChange, 
     onClearSiengeFile, 
     siengeFile, 
@@ -48,6 +50,25 @@ export function AdvancedAnalyses({
 }: AdvancedAnalysesProps) {
     const { toast } = useToast();
     
+    // Run reconciliation logic whenever relevant data changes
+    useEffect(() => {
+        if (processedData.sheets && (processedData.siengeSheetData || Object.keys(processedData.sheets).length > 0)) {
+            const reconciliationResults = runReconciliation(
+                processedData.siengeSheetData, 
+                processedData.sheets['Itens Válidos'] || [], 
+                processedData.sheets['Itens Válidos Saídas'] || [], 
+                processedData.sheets['Notas Válidas']?.filter(n => !n.destUF) || [] // CTes
+            );
+            
+            // Update the parent's state with the new reconciliation results
+            onProcessedDataChange({
+                ...processedData,
+                reconciliationResults,
+            });
+        }
+    }, [processedData.sheets, processedData.siengeSheetData]);
+
+
     const reconciliationResults = processedData.reconciliationResults;
 
     const [isExporting, setIsExporting] = useState(false);

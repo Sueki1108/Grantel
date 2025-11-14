@@ -604,14 +604,7 @@ export function AutomatorClientPage() {
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
-                const reconciliationResults = runReconciliation(
-                    processedData?.siengeSheetData, 
-                    resultData.sheets['Itens Válidos'] || [], 
-                    resultData.sheets['Itens Válidos Saídas'] || [], 
-                    resultData.sheets['Notas Válidas']?.filter(n => !n.destUF) || [] // Apenas CTes para conciliação por enquanto
-                );
-
-                setProcessedData({...resultData, competence, reconciliationResults, siengeSheetData: processedData?.siengeSheetData });
+                setProcessedData({...resultData, competence, siengeSheetData: processedData?.siengeSheetData });
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
 
             } catch (err: any) {
@@ -777,7 +770,7 @@ export function AutomatorClientPage() {
                              {activeMainTab === 'difal' && <DifalAnalysis /> }
                             
                             {activeMainTab === 'analyses' && (
-                                !analysisTabDisabled && processedData ? <AdvancedAnalyses processedData={processedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
+                                !analysisTabDisabled && processedData ? <AdvancedAnalyses processedData={processedData} onProcessedDataChange={setProcessedData} siengeFile={siengeFile} onSiengeFileChange={handleSiengeFileChange} onClearSiengeFile={() => setSiengeFile(null)} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
                             )}
                          
                              {activeMainTab === 'pending' && (
