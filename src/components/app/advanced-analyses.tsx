@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FileSearch, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Save, FileJson, Validate } from "lucide-react";
+import { FileSearch, Archive, AlertCircle, Loader2, Download, AlertTriangle, UploadCloud, Trash2, GitCompareArrows, Save, FileJson } from "lucide-react";
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,10 +15,7 @@ import type { ProcessedData, SpedInfo, SpedCorrectionResult } from "@/lib/excel-
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { cleanAndToStr, normalizeKey } from "@/lib/utils";
 import { KeyChecker } from "./key-checker";
-import { CfopValidator } from "./cfop-validator";
 import { SiengeTaxCheck } from "./sienge-tax-check";
-import type { AllClassifications } from "./imobilizado-analysis";
-
 
 // ===============================================================
 // Componente Principal
@@ -26,7 +23,6 @@ import type { AllClassifications } from "./imobilizado-analysis";
 
 interface AdvancedAnalysesProps {
     processedData: ProcessedData;
-    onProcessedDataChange: (fn: (prevData: ProcessedData | null) => ProcessedData | null) => void;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
     siengeFile: File | null;
@@ -223,10 +219,9 @@ export function AdvancedAnalyses({
              </Card>
 
             <Tabs defaultValue="sped" className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="sped">Verificação SPED</TabsTrigger>
                     <TabsTrigger value="reconciliation">Conciliação XML x Sienge</TabsTrigger>
-                    <TabsTrigger value="cfop_validation"><Validate className="mr-2 h-4 w-4"/>Validação CFOP</TabsTrigger>
                     <TabsTrigger value="conferencias">Conferência Sienge</TabsTrigger>
                 </TabsList>
 
@@ -309,15 +304,6 @@ export function AdvancedAnalyses({
                     </Card>
                 </TabsContent>
                 
-                <TabsContent value="cfop_validation" className="mt-6">
-                    <CfopValidator 
-                        reconciledData={processedData.reconciliationResults?.allReconciledItems || []}
-                        competence={competence}
-                        allPersistedClassifications={{} as AllClassifications}
-                        onPersistAllClassifications={() => {}}
-                    />
-                </TabsContent>
-
                 <TabsContent value="conferencias" className="mt-6 space-y-6">
                      <Card>
                         <CardHeader>
@@ -408,3 +394,4 @@ export function AdvancedAnalyses({
         </div>
     );
 }
+    
