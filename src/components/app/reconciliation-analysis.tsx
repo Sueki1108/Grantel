@@ -24,6 +24,8 @@ interface ReconciliationAnalysisProps {
     siengeFile: File | null;
     onSiengeFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
+    allPersistedData: AllClassifications;
+    onPersistData: (allDataToSave: AllClassifications) => void;
 }
 
 
@@ -32,6 +34,8 @@ export function ReconciliationAnalysis({
     siengeFile, 
     onSiengeFileChange, 
     onClearSiengeFile,
+    allPersistedData,
+    onPersistData,
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
@@ -138,8 +142,8 @@ export function ReconciliationAnalysis({
                         <p className='text-sm text-muted-foreground mb-4'>A tabela abaixo mostra **apenas** os itens que foram conciliados com sucesso. Utilize-a para validar se o CFOP do XML corresponde ao CFOP utilizado no Sienge.</p>
                         <CfopValidator 
                             items={reconciliationResults?.reconciled || []} 
-                            allPersistedData={processedData?.imobilizadoClassifications || {}}
-                            onPersistData={() => {}}
+                            allPersistedData={allPersistedData}
+                            onPersistData={onPersistData}
                             competence={processedData?.competence || null}
                         />
                     </TabsContent>
