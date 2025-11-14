@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList, GitCompareArrows } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -16,7 +16,7 @@ import Link from "next/link";
 import * as XLSX from 'xlsx';
 import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
-import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
+import { processDataFrames, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdvancedAnalyses } from "@/components/app/advanced-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
@@ -33,6 +33,7 @@ import { DifalAnalysis } from "@/components/app/difal-analysis";
 import { PendingIssuesReport } from "@/components/app/pending-issues-report";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { ReconciliationAnalysis } from "@/components/app/reconciliation-analysis";
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -272,18 +273,12 @@ export function AutomatorClientPage() {
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
                         
                         setProcessedData(prev => ({
-                            sheets: {}, 
-                            spedInfo: null, 
-                            keyCheckResults: null, 
-                            competence: null,
-                            reconciliationResults: null,
-                            resaleAnalysis: null,
-                            spedCorrections: null,
                             ...prev,
-                            siengeSheetData: jsonData
-                        }));
+                            siengeSheetData: jsonData,
+                            reconciliationResults: null, // Reset reconciliation results
+                        } as ProcessedData));
                         
-                        toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises avançadas.' });
+                        toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises.' });
     
                     } catch (err: any) {
                          toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
@@ -302,8 +297,8 @@ export function AutomatorClientPage() {
         } else {
              setProcessedData(prev => {
                 if (!prev) return null;
-                const { siengeSheetData, ...rest } = prev;
-                return rest as ProcessedData;
+                const { siengeSheetData, reconciliationResults, ...rest } = prev;
+                return { ...rest, siengeSheetData: null, reconciliationResults: null } as ProcessedData;
              });
         }
     };
@@ -604,14 +599,14 @@ export function AutomatorClientPage() {
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
-                const reconciliationResults = runReconciliation(
-                    resultData.siengeSheetData, 
-                    resultData.sheets['Itens Válidos'] || [], 
-                    resultData.sheets['Itens Válidos Saídas'] || [], 
-                    resultData.sheets['CTEs Válidos'] || []
-                );
+                setProcessedData({
+                    ...resultData, 
+                    competence,
+                    siengeSheetData: processedData?.siengeSheetData,
+                    reconciliationResults: null, // Será calculado na aba de reconciliação
+                    imobilizadoClassifications: imobilizadoClassifications, // Persistir as classificações
+                });
 
-                setProcessedData({...resultData, competence, reconciliationResults });
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
 
             } catch (err: any) {
@@ -648,6 +643,7 @@ export function AutomatorClientPage() {
     const isClearButtonVisible = Object.keys(files).length > 0 || xmlFiles.nfeEntrada.length > 0 || xmlFiles.cte.length > 0 || xmlFiles.nfeSaida.length > 0 || xmlFiles.nfse.length > 0 || !!processedData || logs.length > 0 || error !== null;
 
     const saidasNfeTabDisabled = !processedData?.sheets['Saídas'] || processedData.sheets['Saídas'].length === 0;
+    const reconciliationTabDisabled = !processedData?.sheets['Itens Válidos'] && !processedData?.sheets['Itens Válidos Saídas'];
     const nfseTabDisabled = xmlFiles.nfse.length === 0 && (!processedData || !processedData.fileNames?.nfse || processedData.fileNames.nfse.length === 0);
     const analysisTabDisabled = !processedData?.sheets['Chaves Válidas'] || processedData.sheets['Chaves Válidas'].length === 0;
     const imobilizadoTabDisabled = !processedData?.sheets['Imobilizados'] || processedData.sheets['Imobilizados'].length === 0;
@@ -690,27 +686,31 @@ export function AutomatorClientPage() {
                                     processedData && Object.keys(processedData.sheets).length > 0 ? <CheckCircle className="h-5 w-5 text-green-600" /> : <AlertTriangle className="h-5 w-5 text-yellow-600" />
                                 )}
                             </TabsTrigger>
+                             <TabsTrigger value="reconciliation" disabled={reconciliationTabDisabled} className="flex items-center gap-2">
+                                2. Conciliação & CFOP
+                                {processedData?.reconciliationResults && <CheckCircle className="h-5 w-5 text-green-600" />}
+                            </TabsTrigger>
                             <TabsTrigger value="saidas-nfe" disabled={saidasNfeTabDisabled} className="flex items-center gap-2">
-                                2. Análise Saídas
+                                3. Análise Saídas
                                 {processedData?.sheets['Saídas'] && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                             <TabsTrigger value="nfse" disabled={nfseTabDisabled} className="flex items-center gap-2">
-                                3. Análise NFS-e
+                                4. Análise NFS-e
                                 {(!nfseTabDisabled) && <FilePieChart className="h-5 w-5 text-primary" />}
                             </TabsTrigger>
                             <TabsTrigger value="imobilizado" disabled={imobilizadoTabDisabled}>
-                                4. Imobilizado
+                                5. Imobilizado
                                 {processedData?.sheets['Imobilizados'] && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                              <TabsTrigger value="difal" className="flex items-center gap-2">
-                                <TicketPercent className="h-5 w-5" /> Guia DIFAL
+                                <TicketPercent className="h-5 w-5" /> 6. Guia DIFAL
                             </TabsTrigger>
                             <TabsTrigger value="analyses" disabled={analysisTabDisabled} className="flex items-center gap-2">
-                                5. Análises Avançadas
+                                7. Análises Avançadas
                                 {processedData?.keyCheckResults && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                              <TabsTrigger value="pending" className="flex items-center gap-2">
-                                <ClipboardList className="h-5 w-5" /> 6. Pendências
+                                <ClipboardList className="h-5 w-5" /> 8. Pendências
                             </TabsTrigger>
                         </TabsList>
                         
@@ -762,6 +762,20 @@ export function AutomatorClientPage() {
                                 </div>
                             )}
 
+                            {activeMainTab === 'reconciliation' && (
+                                !reconciliationTabDisabled ? 
+                                <ReconciliationAnalysis 
+                                    processedData={processedData} 
+                                    onProcessedDataChange={setProcessedData}
+                                    allPersistedData={imobilizadoClassifications}
+                                    onPersistData={handlePersistImobilizado}
+                                    siengeFile={siengeFile} 
+                                    onSiengeFileChange={handleSiengeFileChange}
+                                    onClearSiengeFile={() => setSiengeFile(null)}
+                                /> 
+                                : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" e carregue a planilha Sienge para habilitar a conciliação.</p></CardContent></Card>
+                            )}
+
                              {activeMainTab === 'saidas-nfe' && (
                                 !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
                             )}
@@ -777,7 +791,7 @@ export function AutomatorClientPage() {
                              {activeMainTab === 'difal' && <DifalAnalysis /> }
                             
                             {activeMainTab === 'analyses' && (
-                                !analysisTabDisabled && processedData ? <AdvancedAnalyses processedData={processedData} onSiengeFileChange={handleSiengeFileChange} onClearSiengeFile={() => setSiengeFile(null)} siengeFile={siengeFile} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
+                                !analysisTabDisabled && processedData ? <AdvancedAnalyses processedData={processedData} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
                             )}
                          
                              {activeMainTab === 'pending' && (
@@ -851,4 +865,3 @@ export function AutomatorClientPage() {
         </div>
     );
 }
-    
