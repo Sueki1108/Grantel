@@ -278,8 +278,9 @@ const processSpedFileInBrowser = (
         const usedProductCodes = new Set<string>();
         intermediateLines.forEach(line => {
             const parts = line.split('|');
-            if (parts.length > 2 && parts[1] === 'C170' && parts[2]) {
-                usedProductCodes.add(parts[2]);
+            // Correctly check C170, COD_ITEM is at index 3
+            if (parts.length > 3 && parts[1] === 'C170' && parts[3]) {
+                usedProductCodes.add(parts[3]);
             }
         });
 
@@ -287,6 +288,7 @@ const processSpedFileInBrowser = (
         for (let i = 0; i < intermediateLines.length; i++) {
             const line = intermediateLines[i];
             const parts = line.split('|');
+            // Correctly check 0200, COD_ITEM is at index 2
             if (parts.length > 2 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
                 modifications.removed0200.push({ lineNumber: i + 1, line });
                 linesModifiedCount++;
@@ -1181,4 +1183,3 @@ export function KeyChecker({
     );
 }
 
-    
