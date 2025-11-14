@@ -26,6 +26,7 @@ import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
 import { LogDisplay } from "@/components/app/log-display";
+import { SpedDuplicate } from "@/lib/types";
 
 
 // Types
@@ -39,10 +40,10 @@ export type KeyInfo = {
     destIE?: string;
     destUF?: string;
     destCNPJ?: string;
-    tomadorCNPJ?: string;
     recebCNPJ?: string;
     recebUF?: string;
     recebIE?: string;
+    tomadorCNPJ?: string;
     emitCNPJ?: string;
     emitName?: string;
     emitIE?: string;
@@ -85,7 +86,6 @@ export type KeyCheckResult = {
     keysNotFoundInTxt: KeyInfo[];
     keysInTxtNotInSheet: KeyInfo[];
     duplicateKeysInSheet: string[];
-    duplicateKeysInTxt: string[];
     validKeys: KeyInfo[];
     dateDivergences: DateValueDivergence[];
     valueDivergences: DateValueDivergence[];
@@ -306,10 +306,8 @@ const processSpedFileInBrowser = (
         const usedParticipantCodes = new Set<string>();
         intermediateLines.forEach(line => {
             const parts = line.split('|');
-            if (parts.length > 4) {
-                if ((parts[1] === 'C100' || parts[1] === 'D100' || parts[1] === 'D500') && parts[4]) {
-                    usedParticipantCodes.add(parts[4]);
-                }
+            if (parts.length > 4 && (parts[1] === 'C100' || parts[1] === 'D100' || parts[1] === 'D500') && parts[4]) {
+                usedParticipantCodes.add(parts[4]);
             }
         });
 
@@ -506,10 +504,11 @@ const processSpedFileInBrowser = (
 
 const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: string[], logFn: (message: string) => void): Promise<{
     keyCheckResults?: KeyCheckResult;
+    spedDuplicates?: SpedDuplicate[];
     spedInfo?: SpedInfo | null;
     error?: string;
 }> => {
-    logFn("Iniciando verificação de chaves SPED no navegador.");
+    logFn("Iniciando verificação de chaves e duplicidade SPED no navegador.");
 
     if (!chavesValidas || chavesValidas.length === 0) {
         throw new Error("Dados de 'Chaves Válidas' não encontrados. Execute a Validação NF-Stock primeiro.");
@@ -519,7 +518,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     const chavesValidasMap = new Map<string, any>(chavesValidas.map(item => [cleanAndToStr(item['Chave de acesso']), item]));
     logFn(`${chavesValidasMap.size} chaves únicas da planilha mapeadas.`);
 
-    const findDuplicates = (arr: any[], keyAccessor: (item: any) => string): string[] => {
+    const findDuplicatesInSheet = (arr: any[], keyAccessor: (item: any) => string): string[] => {
         const seen = new Set<string>();
         const duplicates = new Set<string>();
         arr.forEach(item => {
@@ -528,14 +527,14 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
         });
         return Array.from(duplicates);
     };
-    const duplicateKeysInSheet = findDuplicates(chavesValidas, item => item['Chave de acesso']);
+    const duplicateKeysInSheet = findDuplicatesInSheet(chavesValidas, item => item['Chave de acesso']);
 
-    logFn("Processando arquivo SPED para extrair chaves, datas, valores e participantes...");
+    logFn("Processando arquivo SPED...");
     
     const spedDocData = new Map<string, any>();
     const participantData = new Map<string, any>();
-    const allTxtKeysForDuplicateCheck: string[] = [];
     let currentSpedInfo: SpedInfo | null = null;
+    const duplicateCheckMap = new Map<string, {line: number, record: string}[]>();
     
     const parseSpedInfo = (spedLine: string): SpedInfo | null => {    
         if (!spedLine || !spedLine.startsWith('|0000|')) return null;
@@ -550,32 +549,50 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
 
     for (const content of spedFileContents) {
         const lines = content.split(/\r?\n/);
-        for (const line of lines) {
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const lineNumber = i + 1;
             const parts = line.split('|');
             if (parts.length < 2) continue;
             const reg = parts[1];
 
             if (reg === '0000' && !currentSpedInfo) currentSpedInfo = parseSpedInfo(line);
-
             if (reg === '0150') {
                 const codPart = parts[2];
                 if (codPart) participantData.set(codPart, { nome: parts[3], cnpj: parts[5], ie: parts[7], uf: parts[9] });
                 continue;
             }
 
-            let key: string | undefined, docData: any;
+            let docKey: string | undefined;
+            let compositeKey: string | undefined;
+            let docData: any;
 
-            if (reg === 'C100' && parts.length > 9 && parts[9]?.length === 44) {
-                key = parts[9];
-                docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12], vlDesc: parts[14] };
-            } else if (reg === 'D100' && parts.length > 17 && parts[10]?.length === 44) {
-                key = parts[10];
-                docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
-            }
+            try {
+                if ((reg === 'C100' && parts.length > 9 && parts[9]?.length === 44)) {
+                     docKey = parts[9];
+                     docData = { key: docKey, reg, codPart: parts[4], ser: parts[6], numDoc: parts[7], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12] };
+                } else if ((reg === 'D100' && parts.length > 17 && parts[10]?.length === 44)) {
+                     docKey = parts[10];
+                     docData = { key: docKey, reg, codPart: parts[4], ser: parts[7], numDoc: parts[9], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
+                } else if (['C500', 'D500', 'C600', 'C800'].includes(reg)) {
+                    docData = { reg, codPart: parts[4], ser: parts[6], numDoc: parts[7], dtDoc: parts[8], vlDoc: parts[10] };
+                }
+                
+                if (docData) {
+                    const participantCnpjCpf = docData.codPart ? participantData.get(docData.codPart)?.cnpj : 'N/A';
+                    compositeKey = `${cleanAndToStr(participantCnpjCpf)}-${docData.ser || ''}-${docData.numDoc || ''}`;
 
-            if (key && docData) {
-                spedDocData.set(key, docData);
-                allTxtKeysForDuplicateCheck.push(key);
+                    if (docKey && !spedDocData.has(docKey)) spedDocData.set(docKey, docData);
+
+                    if (compositeKey) {
+                        if (!duplicateCheckMap.has(compositeKey)) {
+                            duplicateCheckMap.set(compositeKey, []);
+                        }
+                        duplicateCheckMap.get(compositeKey)!.push({ line: lineNumber, record: line });
+                    }
+                }
+            } catch (e) {
+                 logFn(`Aviso: Erro ao processar linha ${lineNumber}: ${line}. Erro: ${(e as Error).message}`);
             }
         }
     }
@@ -584,12 +601,34 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     logFn(`${spedDocData.size} documentos (NFe/CTe) únicos encontrados no SPED.`);
     logFn(`${participantData.size} participantes (0150) encontrados.`);
 
-    const duplicateKeysInTxt = findDuplicates(allTxtKeysForDuplicateCheck, key => key);
+    const spedDuplicates = Array.from(duplicateCheckMap.values())
+        .filter(records => records.length > 1)
+        .map(records => {
+            const firstRecordParts = records[0].record.split('|');
+            const reg = firstRecordParts[1];
+            const codPart = firstRecordParts[4] || 'N/A';
+            const participant = participantData.get(codPart);
+            let numDoc, value;
+            if (reg === 'C100') { numDoc = firstRecordParts[7]; value = firstRecordParts[12]; }
+            else if (reg === 'D100') { numDoc = firstRecordParts[9]; value = firstRecordParts[16]; }
+            else if (['C500', 'D500', 'C600', 'C800'].includes(reg)) { numDoc = firstRecordParts[7]; value = firstRecordParts[10]; }
 
-    logFn("Comparando chaves...");
+            return {
+                key: `${participant?.cnpj || 'N/A'}-${numDoc}`,
+                type: reg,
+                docNumber: numDoc || 'N/A',
+                participant: participant?.nome || codPart,
+                value: parseFloat(String(value || '0').replace(',', '.')),
+                lines: records.map(r => r.line)
+            };
+        });
+
+    logFn(`Encontrados ${spedDuplicates.length} conjuntos de registos duplicados no SPED.`);
+
+    logFn("Comparando chaves com 'Chaves Válidas'...");
     const keysNotFoundInTxt = [...chavesValidasMap.values()]
-        .filter(item => !spedDocData.has(item['Chave de acesso']))
-        .map(item => ({ ...item, key: item['Chave de acesso'], type: item['Tipo'] || 'N/A' }));
+        .filter(item => !spedDocData.has(cleanAndToStr(item['Chave de acesso'])))
+        .map(item => ({ ...item, key: cleanAndToStr(item['Chave de acesso']), type: item['Tipo'] || 'N/A' }));
 
     const keysInTxtNotInSheet = [...spedDocData.values()]
         .filter(spedDoc => !chavesValidasMap.has(spedDoc.key))
@@ -607,8 +646,8 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
         });
 
     const validKeys = [...chavesValidasMap.values()]
-        .filter(item => spedDocData.has(item['Chave de acesso']))
-        .map(item => ({ ...item, key: item['Chave de acesso'], type: item['Tipo'] || 'N/A' }));
+        .filter(item => spedDocData.has(cleanAndToStr(item['Chave de acesso'])))
+        .map(item => ({ ...item, key: cleanAndToStr(item['Chave de acesso']), type: item['Tipo'] || 'N/A' }));
     
     logFn("Verificando divergências de data, valor e cadastro (IE/UF).");
     
@@ -689,11 +728,11 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     logFn(`- Total de ${consolidatedDivergences.length} chaves com alguma divergência.`);
     
     const keyCheckResults: KeyCheckResult = { 
-        keysNotFoundInTxt, keysInTxtNotInSheet, duplicateKeysInSheet, duplicateKeysInTxt, validKeys,
+        keysNotFoundInTxt, keysInTxtNotInSheet, duplicateKeysInSheet, validKeys,
         dateDivergences, valueDivergences, ufDivergences, ieDivergences, consolidatedDivergences,
     };
 
-    return { keyCheckResults, spedInfo: currentSpedInfo };
+    return { keyCheckResults, spedInfo: currentSpedInfo, spedDuplicates };
 }
 
 // Main Component
@@ -701,9 +740,10 @@ interface KeyCheckerProps {
     chavesValidas: any[];
     spedFiles: File[];
     onFilesChange: (files: File[]) => void;
-    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => void;
+    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null, spedDuplicates: SpedDuplicate[] | null) => void;
     initialSpedInfo: SpedInfo | null;
     initialKeyCheckResults: KeyCheckResult | null;
+    initialSpedDuplicates: SpedDuplicate[] | null;
     nfeEntradaData: any[];
     cteData: any[];
 }
@@ -714,7 +754,8 @@ export function KeyChecker({
     onFilesChange, 
     onSpedProcessed, 
     initialSpedInfo, 
-    initialKeyCheckResults, 
+    initialKeyCheckResults,
+    initialSpedDuplicates,
     nfeEntradaData,
     cteData
 }: KeyCheckerProps) {
@@ -786,7 +827,7 @@ export function KeyChecker({
             try {
                 const fileContents = await Promise.all(spedFiles.map(file => readFileAsTextWithEncoding(file)));
                 
-                const { keyCheckResults, spedInfo, error } = await checkSpedKeysInBrowser(chavesValidas, fileContents, () => {});
+                const { keyCheckResults, spedInfo, spedDuplicates, error } = await checkSpedKeysInBrowser(chavesValidas, fileContents, () => {});
                 
                 if (error) throw new Error(error);
                 if (!keyCheckResults) throw new Error("Não foi possível extrair as chaves do arquivo SPED.");
@@ -794,7 +835,7 @@ export function KeyChecker({
                 setResults(keyCheckResults);
                 setSpedInfo(spedInfo);
                 
-                onSpedProcessed(spedInfo, keyCheckResults, null); 
+                onSpedProcessed(spedInfo, keyCheckResults, null, spedDuplicates || null); 
                 
                 toast({ title: "Verificação concluída", description: "As chaves foram comparadas com sucesso. Prossiga para as abas de análise." });
 
@@ -823,16 +864,16 @@ export function KeyChecker({
 
         setTimeout(async () => {
             try {
-                const divergentKeys = new Set(results.consolidatedDivergences
-                    .filter(d => d['Resumo das Divergências'].includes('IE e UF'))
-                    .map(d => d['Chave de Acesso'])
-                );
+                const ieDivergentKeys = new Set(results.ieDivergences?.map(d => d['Chave de Acesso']));
+                const ufDivergentKeys = new Set(results.ufDivergences?.map(d => d['Chave de Acesso']));
+                
+                const divergentKeys = new Set([...ieDivergentKeys].filter(key => ufDivergentKeys.has(key)));
                 
                 const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
                 const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData, divergentKeys, correctionConfig);
                 
                 setCorrectionResult(result);
-                onSpedProcessed(spedInfo, results, result);
+                onSpedProcessed(spedInfo, results, result, initialSpedDuplicates);
                 
                 toast({ title: "Correção Concluída", description: "O arquivo SPED foi analisado e está pronto para ser baixado." });
             } catch (err: any) {
@@ -857,7 +898,7 @@ export function KeyChecker({
         setSpedInfo(null);
         setCorrectionResult(null);
         onFilesChange([]);
-        onSpedProcessed(null, null, null);
+        onSpedProcessed(null, null, null, null);
 
         const spedInput = document.getElementById('sped-upload') as HTMLInputElement;
         if (spedInput) spedInput.value = "";
@@ -900,7 +941,7 @@ export function KeyChecker({
         );
     };
 
-    const ModificationDisplay = ({ logs }: { logs: ModificationLog[] }) => {
+    const ModificationDisplay = ({ logs, title }: { logs: ModificationLog[], title: string }) => {
         if (!logs || logs.length === 0) return <p className="text-muted-foreground text-center p-4">Nenhuma modificação deste tipo.</p>;
         return (
             <ScrollArea className="h-[calc(80vh-280px)] pr-4">
@@ -1119,12 +1160,12 @@ export function KeyChecker({
                                                         </div>
                                                         <RemovedLinesDisplay logs={correctionResult.modifications.removed0190} logType="0190" />
                                                     </TabsContent>
-                                                    <TabsContent value="counters" className="h-full"><ModificationDisplay logs={[...correctionResult.modifications.blockCount, ...correctionResult.modifications.totalLineCount, ...correctionResult.modifications.count9900]} /></TabsContent>
-                                                    <TabsContent value="ie" className="h-full"><ModificationDisplay logs={correctionResult.modifications.ieCorrection} /></TabsContent>
-                                                    <TabsContent value="cte_series" className="h-full"><ModificationDisplay logs={correctionResult.modifications.cteSeriesCorrection} /></TabsContent>
-                                                    <TabsContent value="address" className="h-full"><ModificationDisplay logs={correctionResult.modifications.addressSpaces} /></TabsContent>
-                                                    <TabsContent value="truncation" className="h-full"><ModificationDisplay logs={correctionResult.modifications.truncation} /></TabsContent>
-                                                    <TabsContent value="units" className="h-full"><ModificationDisplay logs={correctionResult.modifications.unitStandardization} /></TabsContent>
+                                                    <TabsContent value="counters" className="h-full"><ModificationDisplay title="Contadores" logs={[...correctionResult.modifications.blockCount, ...correctionResult.modifications.totalLineCount, ...correctionResult.modifications.count9900]} /></TabsContent>
+                                                    <TabsContent value="ie" className="h-full"><ModificationDisplay title="Correção de IE" logs={correctionResult.modifications.ieCorrection} /></TabsContent>
+                                                    <TabsContent value="cte_series" className="h-full"><ModificationDisplay title="Correção de Série de CT-e" logs={correctionResult.modifications.cteSeriesCorrection} /></TabsContent>
+                                                    <TabsContent value="address" className="h-full"><ModificationDisplay title="Correção de Endereços" logs={correctionResult.modifications.addressSpaces} /></TabsContent>
+                                                    <TabsContent value="truncation" className="h-full"><ModificationDisplay title="Truncamento de Campos" logs={correctionResult.modifications.truncation} /></TabsContent>
+                                                    <TabsContent value="units" className="h-full"><ModificationDisplay title="Padronização de Unidades" logs={correctionResult.modifications.unitStandardization} /></TabsContent>
                                                 </div>
                                             </Tabs>
                                         </TabsContent>
