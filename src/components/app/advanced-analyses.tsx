@@ -12,6 +12,7 @@ import { cleanAndToStr, normalizeKey } from "@/lib/utils";
 import { KeyChecker } from "./key-checker";
 import { DataTable } from "./data-table";
 import { getColumns } from "./columns-helper";
+import type { SpedDuplicate } from "@/lib/types";
 
 
 // ===============================================================
@@ -23,7 +24,7 @@ interface AdvancedAnalysesProps {
     allXmlFiles: File[];
     spedFiles: File[];
     onSpedFilesChange: (files: File[]) => void;
-    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null, spedCorrections: SpedCorrectionResult | null, spedDuplicates: any[] | null) => void;
+    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: any | null, spedCorrections: SpedCorrectionResult | null, spedDuplicates: SpedDuplicate[] | null) => void;
     competence: string | null;
     onExportSession: () => void;
 }

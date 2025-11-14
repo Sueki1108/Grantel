@@ -373,67 +373,87 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[]):
         const h = {
             numero: findHeader(siengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
             cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
-            ncm: findHeader(siengeData, ['ncm']),
+            cfop: findHeader(siengeData, ['cfop']),
             valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total']),
         };
         
-        if (!h.numero || !h.cnpj || !h.ncm || !h.valorTotal) {
-            throw new Error(`Colunas essenciais não encontradas no Sienge: ${!h.numero ? 'Número' : ''} ${!h.cnpj ? 'CNPJ' : ''} ${!h.ncm ? 'NCM' : ''} ${!h.valorTotal ? 'Valor Total' : ''}`);
+        if (!h.numero || !h.cnpj || !h.valorTotal) {
+            throw new Error(`Colunas essenciais não encontradas no Sienge: ${!h.numero ? 'Número' : ''} ${!h.cnpj ? 'CNPJ' : ''} ${!h.valorTotal ? 'Valor Total' : ''}`);
         }
 
-        // 1. Agregar itens do XML por Nota + NCM
-        const xmlAggregatedMap = new Map<string, { totalValue: number; items: any[] }>();
+        const createNoteKey = (numero: any, cnpj: any) => `${cleanAndToStr(numero)}-${cleanAndToStr(cnpj)}`;
+
+        // Mapear todos os itens do XML e do Sienge pela chave da nota
+        const xmlItemsByNoteMap = new Map<string, any[]>();
         allXmlItems.forEach(item => {
-            if (!item.NCM) return;
-            const key = `${cleanAndToStr(item['Número da Nota'])}-${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item.NCM)}`;
-            
-            if (!xmlAggregatedMap.has(key)) {
-                xmlAggregatedMap.set(key, { totalValue: 0, items: [] });
-            }
-            const entry = xmlAggregatedMap.get(key)!;
-            entry.totalValue += item['Valor Total'];
-            entry.items.push(item);
+            const noteKey = createNoteKey(item['Número da Nota'], item['CPF/CNPJ do Emitente']);
+            if (!xmlItemsByNoteMap.has(noteKey)) xmlItemsByNoteMap.set(noteKey, []);
+            xmlItemsByNoteMap.get(noteKey)!.push(item);
         });
 
-        // 2. Agregar itens do Sienge por Nota + NCM
-        const siengeAggregatedMap = new Map<string, { totalValue: number; items: any[] }>();
+        const siengeItemsByNote = new Map<string, any[]>();
         siengeData.forEach(item => {
-            const ncmValue = item[h.ncm!];
-            if (!ncmValue) return;
-            const key = `${cleanAndToStr(item[h.numero!])}-${cleanAndToStr(item[h.cnpj!])}-${cleanAndToStr(ncmValue)}`;
-
-            if (!siengeAggregatedMap.has(key)) {
-                siengeAggregatedMap.set(key, { totalValue: 0, items: [] });
-            }
-            const entry = siengeAggregatedMap.get(key)!;
-            const itemValue = parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) || 0;
-            entry.totalValue += itemValue;
-            entry.items.push(item);
+            const noteKey = createNoteKey(item[h.numero!], item[h.cnpj!]);
+            if (!siengeItemsByNote.has(noteKey)) siengeItemsByNote.set(noteKey, []);
+            siengeItemsByNote.get(noteKey)!.push(item);
         });
 
         const reconciled: any[] = [];
         const usedXmlItems = new Set<any>();
         const usedSiengeItems = new Set<any>();
 
-        // 3. Conciliar
-        for (const [key, siengeEntry] of siengeAggregatedMap.entries()) {
-            const xmlEntry = xmlAggregatedMap.get(key);
-            if (xmlEntry && Math.abs(siengeEntry.totalValue - xmlEntry.totalValue) < 0.01) {
-                // Marcar todos os itens como usados e adicionar à lista de conciliados
-                siengeEntry.items.forEach(item => {
-                    const primaryXmlItem = xmlEntry.items[0]; // Usar o primeiro item do XML como base
-                    reconciled.push({
-                        ...primaryXmlItem,
-                        Sienge_CFOP: item[h.cfop!], // Adicionar o CFOP do Sienge para validação posterior
-                        'Valor Total': siengeEntry.totalValue, // Usar o valor agregado
-                        'Quantidade': siengeEntry.items.reduce((sum, i) => sum + (parseFloat(String(i['Qtde'] || '0').replace(',', '.')) || 0), 0)
-                    });
-                    usedSiengeItems.add(item);
+        // Iterar sobre as notas do Sienge para iniciar a conciliação
+        for (const [noteKey, siengeItems] of siengeItemsByNote.entries()) {
+            const xmlItems = xmlItemsByNoteMap.get(noteKey);
+            if (!xmlItems) continue;
+
+            const localUsedXmlItems = new Set<any>();
+            const localUsedSiengeItems = new Set<any>();
+            
+            const matchItems = (
+                getSiengeValue: (item: any) => number, 
+                getXmlValue: (item: any) => number,
+                passName: string
+            ) => {
+                const siengeValueCounts = new Map<string, number>();
+                 siengeItems.forEach(item => {
+                    if (localUsedSiengeItems.has(item)) return;
+                    const value = getSiengeValue(item).toFixed(2);
+                    siengeValueCounts.set(value, (siengeValueCounts.get(value) || 0) + 1);
                 });
-                xmlEntry.items.forEach(item => usedXmlItems.add(item));
-            }
+
+                 xmlItems.forEach(xmlItem => {
+                    if (localUsedXmlItems.has(xmlItem)) return;
+                    const xmlValueStr = getXmlValue(xmlItem).toFixed(2);
+                    
+                    if (siengeValueCounts.has(xmlValueStr) && siengeValueCounts.get(xmlValueStr)! > 0) {
+                        const siengeItem = siengeItems.find(si => !localUsedSiengeItems.has(si) && getSiengeValue(si).toFixed(2) === xmlValueStr);
+
+                        if (siengeItem) {
+                            reconciled.push({
+                                ...xmlItem,
+                                Sienge_CFOP: siengeItem[h.cfop!],
+                                'Observações': `Conciliado via ${passName}`
+                            });
+                            localUsedXmlItems.add(xmlItem);
+                            localUsedSiengeItems.add(siengeItem);
+                            siengeValueCounts.set(xmlValueStr, siengeValueCounts.get(xmlValueStr)! - 1);
+                        }
+                    }
+                });
+            };
+            
+            const passDefinitions = [
+                { name: 'Valor Total', getSienge: (i: any) => parseFloat(String(i[h.valorTotal!] || '0').replace(',', '.')), getXml: (i: any) => i['Valor Total'] },
+                { name: 'Valor Unitário', getSienge: (i: any) => parseFloat(String(i['preço unitário'] || '0').replace(',', '.')), getXml: (i: any) => i['Valor Unitário'] },
+            ];
+
+            passDefinitions.forEach(pass => matchItems(pass.getSienge, pass.getXml, pass.name));
+
+            localUsedXmlItems.forEach(item => usedXmlItems.add(item));
+            localUsedSiengeItems.forEach(item => usedSiengeItems.add(item));
         }
-        
+
         const onlyInSienge = siengeData.filter(item => !usedSiengeItems.has(item));
         const onlyInXml = allXmlItems.filter(item => !usedXmlItems.has(item));
 

@@ -17,7 +17,7 @@ import Link from "next/link";
 import * as XLSX from 'xlsx';
 import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
-import { processDataFrames, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
+import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdvancedAnalyses } from "@/components/app/advanced-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
@@ -35,6 +35,7 @@ import { PendingIssuesReport } from "@/components/app/pending-issues-report";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ReconciliationAnalysis } from "@/components/app/reconciliation-analysis";
+import { SpedDuplicate } from "@/lib/types";
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -606,13 +607,12 @@ export function AutomatorClientPage() {
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
-                setProcessedData({
-                    ...resultData, 
-                    competence,
-                    siengeSheetData: processedData?.siengeSheetData,
-                    reconciliationResults: null, 
-                });
+                const reconciliationResults = runReconciliation(
+                    processedData?.siengeSheetData, 
+                    resultData.sheets['Itens Válidos'] || []
+                );
 
+                setProcessedData({...resultData, competence, reconciliationResults });
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
 
             } catch (err: any) {
@@ -627,10 +627,10 @@ export function AutomatorClientPage() {
         }, 50);
     };
 
-    const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => {
+    const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null, spedDuplicates: SpedDuplicate[] | null) => {
         setProcessedData(prevData => {
-            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null };
-            return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections };
+            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null, spedDuplicates: null };
+            return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections, spedDuplicates };
         });
     }, []);
     
