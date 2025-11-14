@@ -23,7 +23,6 @@ import { SiengeTaxCheck } from "./sienge-tax-check";
 
 interface AdvancedAnalysesProps {
     processedData: ProcessedData;
-    onProcessedDataChange: (data: ProcessedData) => void;
     onSiengeFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
     siengeFile: File | null;
@@ -37,7 +36,6 @@ interface AdvancedAnalysesProps {
 
 export function AdvancedAnalyses({ 
     processedData, 
-    onProcessedDataChange,
     onSiengeFileChange, 
     onClearSiengeFile, 
     siengeFile, 
@@ -49,25 +47,6 @@ export function AdvancedAnalyses({
     onExportSession,
 }: AdvancedAnalysesProps) {
     const { toast } = useToast();
-    
-    // Run reconciliation logic whenever relevant data changes
-    useEffect(() => {
-        if (processedData.sheets && (processedData.siengeSheetData || Object.keys(processedData.sheets).length > 0)) {
-            const reconciliationResults = runReconciliation(
-                processedData.siengeSheetData, 
-                processedData.sheets['Itens Válidos'] || [], 
-                processedData.sheets['Itens Válidos Saídas'] || [], 
-                processedData.sheets['Notas Válidas']?.filter(n => !n.destUF) || [] // CTes
-            );
-            
-            // Update the parent's state with the new reconciliation results
-            onProcessedDataChange({
-                ...processedData,
-                reconciliationResults,
-            });
-        }
-    }, [processedData.sheets, processedData.siengeSheetData]);
-
 
     const reconciliationResults = processedData.reconciliationResults;
 
@@ -415,3 +394,4 @@ export function AdvancedAnalyses({
         </div>
     );
 }
+    
