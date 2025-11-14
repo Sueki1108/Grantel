@@ -2,7 +2,7 @@
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import type { KeyCheckResult } from '@/components/app/key-checker';
-import type { AllClassifications } from './imobilizado-analysis';
+import type { AllClassifications } from '@/components/app/imobilizado-analysis';
 import { normalizeKey, cleanAndToStr } from './utils';
 
 // Types
@@ -352,7 +352,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 
 export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any[], xmlSaidaItems: any[], xmlCteItems: any[]): ReconciliationResults {
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [] };
-
+    
     const allXmlItems = [...(xmlEntradaItems || []), ...(xmlSaidaItems || []), ...(xmlCteItems || [])];
     
     if (!siengeData || siengeData.length === 0) {
@@ -389,7 +389,7 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
         const reconciled: any[] = [];
         const onlyInXml: any[] = [];
         const matchedSiengeIndices = new Set<number>();
-
+        
         const xmlItemsByNote = new Map<string, any[]>();
         allXmlItems.forEach(item => {
             const key = item['Chave Unica'];
@@ -410,41 +410,50 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
 
         xmlItemsByNote.forEach((xmlItems, xmlNoteKey) => {
             const potentialSiengeMatches = siengeItemsByNote.get(xmlNoteKey);
-
+            
             if (!potentialSiengeMatches) {
                 onlyInXml.push(...xmlItems);
                 return;
             }
 
-            const siengeValueCount = new Map<string, any[]>();
-            potentialSiengeMatches.forEach(si => {
-                const value = parseFloat(String(si[h.valorTotal!]).replace(',', '.')).toFixed(2);
-                if (!siengeValueCount.has(value)) {
-                    siengeValueCount.set(value, []);
+            const xmlValueCounts = new Map<string, any[]>();
+            xmlItems.forEach(item => {
+                const value = (item['Valor Total'] || 0).toFixed(2);
+                if (!xmlValueCounts.has(value)) {
+                    xmlValueCounts.set(value, []);
                 }
-                siengeValueCount.get(value)!.push(si);
+                xmlValueCounts.get(value)!.push(item);
+            });
+            
+            const siengeValueCounts = new Map<string, any[]>();
+            potentialSiengeMatches.forEach(item => {
+                const value = parseFloat(String(item[h.valorTotal!]).replace(',', '.')).toFixed(2);
+                if (!siengeValueCounts.has(value)) {
+                    siengeValueCounts.set(value, []);
+                }
+                siengeValueCounts.get(value)!.push(item);
             });
 
-            const unmatchedXmlItems = [];
-
-            for (const xmlItem of xmlItems) {
-                const xmlValue = (xmlItem['Valor Total'] || 0).toFixed(2);
-                const matchingSiengeGroup = siengeValueCount.get(xmlValue);
-
-                if (matchingSiengeGroup && matchingSiengeGroup.length > 0) {
-                    const siengeItem = matchingSiengeGroup.pop()!;
-                    reconciled.push({
-                        ...xmlItem,
-                        Sienge_CFOP: siengeItem[h.cfop!],
-                    });
-                    matchedSiengeIndices.add(siengeItem.__originalIndex);
-                } else {
-                    unmatchedXmlItems.push(xmlItem);
+            xmlValueCounts.forEach((xmlItemGroup, value) => {
+                const siengeItemGroup = siengeValueCounts.get(value);
+                
+                if (siengeItemGroup) {
+                    const matchCount = Math.min(xmlItemGroup.length, siengeItemGroup.length);
+                    for (let i = 0; i < matchCount; i++) {
+                        const xmlItem = xmlItemGroup.pop()!;
+                        const siengeItem = siengeItemGroup.pop()!;
+                        reconciled.push({
+                            ...xmlItem,
+                            Sienge_CFOP: siengeItem[h.cfop!],
+                        });
+                        matchedSiengeIndices.add(siengeItem.__originalIndex);
+                    }
                 }
-            }
+            });
 
-            if (unmatchedXmlItems.length > 0) {
-                onlyInXml.push(...unmatchedXmlItems);
+            const remainingXmlItems = Array.from(xmlValueCounts.values()).flat();
+            if(remainingXmlItems.length > 0) {
+                onlyInXml.push(...remainingXmlItems);
             }
         });
 
