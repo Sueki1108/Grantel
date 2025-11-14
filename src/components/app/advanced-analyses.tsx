@@ -11,8 +11,9 @@ import { type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/
 import { cleanAndToStr, normalizeKey } from "@/lib/utils";
 import { KeyChecker } from "./key-checker";
 import { DataTable } from "./data-table";
-import { getColumns } from "./columns-helper";
+import { getColumns, getColumnsWithCustomRender } from "./columns-helper";
 import type { SpedDuplicate } from "@/lib/types";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 
 
 // ===============================================================
@@ -179,6 +180,18 @@ export function AdvancedAnalyses({
         }
     };
     
+    const spedDuplicatesByType = useMemo(() => {
+        if (!processedData?.spedDuplicates) return {};
+        return processedData.spedDuplicates.reduce((acc, item) => {
+            const type = item['Tipo de Registo'];
+            if (!acc[type]) {
+                acc[type] = [];
+            }
+            acc[type].push(item);
+            return acc;
+        }, {} as Record<string, SpedDuplicate[]>);
+    }, [processedData?.spedDuplicates]);
+
     return (
         <div className="space-y-6">
              <Card>
@@ -216,16 +229,27 @@ export function AdvancedAnalyses({
                             <div>
                                 <CardTitle>Análise de Duplicidade Interna no SPED</CardTitle>
                                 <CardDescription>
-                                    Foram encontrados registos duplicados dentro do próprio ficheiro SPED. Verifique os itens abaixo.
+                                    Foram encontrados registos duplicados dentro do próprio ficheiro SPED. Verifique os itens abaixo, separados por tipo de registo.
                                 </CardDescription>
                             </div>
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <DataTable 
-                            columns={getColumns(processedData.spedDuplicates)} 
-                            data={processedData.spedDuplicates} 
-                        />
+                        <Tabs defaultValue={Object.keys(spedDuplicatesByType)[0]} className="w-full">
+                            <TabsList>
+                                {Object.entries(spedDuplicatesByType).map(([type, items]) => (
+                                    <TabsTrigger key={type} value={type}>{type} ({items.length})</TabsTrigger>
+                                ))}
+                            </TabsList>
+                            {Object.entries(spedDuplicatesByType).map(([type, items]) => (
+                                <TabsContent key={type} value={type} className="mt-4">
+                                    <DataTable 
+                                        columns={getColumnsWithCustomRender(items, ['Número do Documento', 'Série', 'CNPJ/CPF', 'Fornecedor', 'Data Emissão', 'Valor Total', 'Linhas'])} 
+                                        data={items} 
+                                    />
+                                </TabsContent>
+                            ))}
+                        </Tabs>
                     </CardContent>
                 </Card>
             )}

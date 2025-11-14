@@ -16,10 +16,12 @@ export interface SaidaItem {
 }
 
 export type SpedDuplicate = {
-    key: string;
-    type: string;
-    docNumber: string;
-    participant: string;
-    value: number;
-    lines: number[];
+    'Tipo de Registo': string;
+    'Número do Documento': string;
+    'Série': string;
+    'CNPJ/CPF': string;
+    'Fornecedor': string;
+    'Data Emissão': string;
+    'Valor Total': number;
+    'Linhas': string;
 };

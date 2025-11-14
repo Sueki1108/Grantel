@@ -292,8 +292,8 @@ const processSpedFileInBrowser = (
         const usedProductCodes = new Set<string>();
         intermediateLines.forEach(line => {
             const parts = line.split('|');
-            if (parts.length > 3 && parts[1] === 'C170' && parts[3]) {
-                usedProductCodes.add(parts[3]);
+            if (parts.length > 3 && parts[1] === 'C170' && parts[2]) {
+                usedProductCodes.add(parts[2]);
             }
         });
 
@@ -560,7 +560,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     };
 
     const seriesPositions: Record<string, number> = {
-        C100: 6, C500: 6, C600: 6, C800: 6, D100: 7, D500: 6
+        C100: 6, C500: 6, C600: 6, C800: 6, D100: 7, D300: 4, D400: 4, D500: 6
     };
 
     for (const content of spedFileContents) {
@@ -605,19 +605,30 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                     }
                 }
 
-                if ((reg === 'C100' && parts.length > 9 && parts[9]?.length === 44)) {
-                     docKey = parts[9];
-                     docData = { key: docKey, reg, codPart: parts[4], ser: parts[6], numDoc: parts[7], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12] };
-                } else if ((reg === 'D100' && parts.length > 17 && parts[10]?.length === 44)) {
-                     docKey = parts[10];
-                     docData = { key: docKey, reg, codPart: parts[4], ser: parts[7], numDoc: parts[9], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
-                } else if (['C500', 'C600', 'C800', 'D500'].includes(reg)) {
-                    docData = { reg, codPart: parts[4], ser: parts[6], numDoc: parts[7], dtDoc: parts[8], vlDoc: parts[10] };
+                 if (['C100', 'C500', 'C600', 'C800', 'D100', 'D300', 'D400', 'D500'].includes(reg)) {
+                    docData = { reg, line: lineNumber };
+                    docData.codPart = parts[4];
+                    
+                    const participant = participantData.get(docData.codPart);
+                    if(participant) {
+                        docData.participantName = participant.nome;
+                        docData.participantCnpjCpf = participant.cnpj;
+                    }
+                    
+                    switch (reg) {
+                        case 'C100': docKey = parts[9]; docData = {...docData, ser: parts[6], numDoc: parts[7], dtDoc: parts[10], vlDoc: parts[12]}; break;
+                        case 'D100': docKey = parts[10]; docData = {...docData, ser: parts[7], numDoc: parts[9], dtDoc: parts[8], vlDoc: parts[16]}; break;
+                        case 'C500': docData = {...docData, ser: parts[6], numDoc: parts[7], dtDoc: parts[8], vlDoc: parts[10]}; break;
+                        case 'C600': docData = {...docData, ser: parts[6], numDoc: parts[7], dtDoc: parts[8], vlDoc: parts[10]}; break;
+                        case 'C800': docData = {...docData, ser: parts[6], numDoc: parts[7], dtDoc: parts[8], vlDoc: parts[10]}; break;
+                        case 'D500': docData = {...docData, ser: parts[6], numDoc: parts[7], dtDoc: parts[8], vlDoc: parts[10]}; break;
+                        case 'D300': docData = {...docData, ser: parts[4], numDoc: parts[5], dtDoc: parts[6], vlDoc: parts[7]}; break;
+                        case 'D400': docData = {...docData, ser: parts[4], numDoc: parts[5], dtDoc: parts[6], vlDoc: parts[7]}; break;
+                    }
                 }
                 
                 if (docData) {
-                    const participantCnpjCpf = docData.codPart ? participantData.get(docData.codPart)?.cnpj : 'N/A';
-                    compositeKey = `${cleanAndToStr(participantCnpjCpf)}-${docData.ser || ''}-${docData.numDoc || ''}`;
+                    compositeKey = `${cleanAndToStr(docData.participantCnpjCpf)}-${docData.ser || ''}-${docData.numDoc || ''}`;
 
                     if (docKey && !spedDocData.has(docKey)) spedDocData.set(docKey, docData);
 
@@ -639,31 +650,43 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     logFn(`${participantData.size} participantes (0150) encontrados.`);
     logFn(`${missingSeriesDivergences.length} registos encontrados sem série informada.`);
 
-    const spedDuplicates = Array.from(duplicateCheckMap.values())
+     const spedDuplicates: SpedDuplicate[] = Array.from(duplicateCheckMap.values())
         .filter(records => records.length > 1)
-        .map(records => {
-            const firstRecordParts = records[0].record.split('|');
-            const reg = firstRecordParts[1];
-            const codPart = firstRecordParts[4] || 'N/A';
-            const participant = participantData.get(codPart);
-            let numDoc, value;
-            const serIndex = seriesPositions[reg];
+        .flatMap(records => {
+            return records.map(recordInfo => {
+                const parts = recordInfo.record.split('|');
+                const reg = parts[1];
+                const codPart = parts[4] || 'N/A';
+                const participant = participantData.get(codPart);
+                
+                let numDoc: string = 'N/A', value: string = 'N/A', ser: string = 'N/A', dtDoc: string = 'N/A';
+                
+                switch(reg) {
+                    case 'C100': ser = parts[6]; numDoc = parts[7]; dtDoc = parts[10]; value = parts[12]; break;
+                    case 'D100': ser = parts[7]; numDoc = parts[9]; dtDoc = parts[8]; value = parts[16]; break;
+                    case 'C500': ser = parts[6]; numDoc = parts[7]; dtDoc = parts[8]; value = parts[10]; break;
+                    case 'C600': ser = parts[6]; numDoc = parts[7]; dtDoc = parts[8]; value = parts[10]; break;
+                    case 'C800': ser = parts[6]; numDoc = parts[7]; dtDoc = parts[8]; value = parts[10]; break;
+                    case 'D500': ser = parts[6]; numDoc = parts[7]; dtDoc = parts[8]; value = parts[10]; break;
+                    case 'D300': ser = parts[4]; numDoc = parts[5]; dtDoc = parts[6]; value = parts[7]; break;
+                    case 'D400': ser = parts[4]; numDoc = parts[5]; dtDoc = parts[6]; value = parts[7]; break;
+                }
+                const parsedDate = parseSpedDate(dtDoc);
 
-            if (reg === 'C100') { numDoc = firstRecordParts[7]; value = firstRecordParts[12]; }
-            else if (reg === 'D100') { numDoc = firstRecordParts[9]; value = firstRecordParts[16]; }
-            else if (['C500', 'D500', 'C600', 'C800'].includes(reg)) { numDoc = firstRecordParts[7]; value = firstRecordParts[10]; }
-
-            return {
-                key: `${participant?.cnpj || 'N/A'}-${firstRecordParts[serIndex] || ''}-${numDoc}`,
-                type: reg,
-                docNumber: numDoc || 'N/A',
-                participant: participant?.nome || codPart,
-                value: parseFloat(String(value || '0').replace(',', '.')),
-                lines: records.map(r => r.line)
-            };
+                return {
+                    'Tipo de Registo': reg,
+                    'Número do Documento': numDoc,
+                    'Série': ser,
+                    'CNPJ/CPF': participant?.cnpj || 'N/A',
+                    'Fornecedor': participant?.nome || codPart,
+                    'Data Emissão': !isNaN(parsedDate.getTime()) ? `${parsedDate.getDate().toString().padStart(2,'0')}/${(parsedDate.getMonth()+1).toString().padStart(2,'0')}/${parsedDate.getFullYear()}` : dtDoc,
+                    'Valor Total': parseFloat(String(value || '0').replace(',', '.')),
+                    'Linhas': records.map(r => r.line).join('; ')
+                };
+            });
         });
 
-    logFn(`Encontrados ${spedDuplicates.length} conjuntos de registos duplicados no SPED.`);
+    logFn(`Encontrados ${spedDuplicates.length} registos duplicados no SPED.`);
 
     logFn("Comparando chaves com 'Chaves Válidas'...");
     const keysNotFoundInTxt = [...chavesValidasMap.values()]
@@ -753,8 +776,8 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     
     const dateDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('Data')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'Data Emissão XML': d['Data Emissão XML'], 'Data Emissão SPED': d['Data Emissão SPED'], 'Data Entrada/Saída SPED': d['Data Entrada/Saída SPED'] }));
     const valueDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('Valor')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'Valor XML': d['Valor XML'], 'Valor SPED': d['Valor SPED'] }));
-    const ufDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('IE e UF')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'CNPJ do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitCNPJ || '', 'Nome do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitName || '', 'UF no XML': d['UF no XML'] }));
-    const ieDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('IE e UF')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'CNPJ do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitCNPJ || '', 'Nome do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitName || '', 'IE no XML': d['IE no XML'] }));
+    const ufDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('UF')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'CNPJ do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitCNPJ || '', 'Nome do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitName || '', 'UF no XML': d['UF no XML'] }));
+    const ieDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('IE')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'CNPJ do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitCNPJ || '', 'Nome do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitName || '', 'IE no XML': d['IE no XML'] }));
 
     logFn(`- ${ufDivergences.length} divergências de UF encontradas.`);
     logFn(`- ${ieDivergences.length} divergências de IE encontradas.`);
@@ -900,9 +923,9 @@ export function KeyChecker({
 
         setTimeout(async () => {
             try {
-                const divergentKeys = new Set(
-                    (results.ieDivergences || [])
-                        .filter(d => (results.ufDivergences || []).some(uf => uf['Chave de Acesso'] === d['Chave de Acesso']))
+                 const divergentKeys = new Set(
+                    (results.consolidatedDivergences || [])
+                        .filter(d => d['Resumo das Divergências'].includes('IE e UF'))
                         .map(d => d['Chave de Acesso'])
                 );
                 
@@ -1172,7 +1195,7 @@ export function KeyChecker({
                                                     </TabsContent>
                                                     <TabsContent value="removed0150" className="h-full">
                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de participantes (0150) que não estavam associados a nenhum documento fiscal (C100/D100) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de participantes (0150) que não estavam associados a nenhum documento fiscal (C100/D100/D500) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
                                                             <span>Participantes não utilizados foram removidos.</span>
                                                         </div>
                                                         <ModificationDisplay logs={correctionResult.modifications.removed0150} />
@@ -1260,6 +1283,3 @@ export function KeyChecker({
         </div>
     );
 }
-
-
-  
