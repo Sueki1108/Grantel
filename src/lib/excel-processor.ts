@@ -2,7 +2,7 @@
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import type { KeyCheckResult } from '@/components/app/key-checker';
-import type { AllClassifications } from '@/components/app/imobilizado-analysis';
+import type { AllClassifications } from './imobilizado-analysis';
 import { normalizeKey, cleanAndToStr } from './utils';
 
 // Types
@@ -354,15 +354,15 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any[], xmlSaidaItems: any[], xmlCteItems: any[]): ReconciliationResults {
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], allReconciledItems: [] };
     
-    if (!siengeData || !xmlEntradaItems) {
-        return emptyResult;
-    }
-
     const allXmlItems = [
         ...(xmlEntradaItems || []),
         ...(xmlSaidaItems || []),
         ...(xmlCteItems || []).map(item => ({...item, 'Valor Total': item['Valor da Prestação'], 'Número da Nota': item['Número']}))
     ];
+
+    if (!siengeData || siengeData.length === 0 || allXmlItems.length === 0) {
+        return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: allXmlItems };
+    }
 
     try {
         const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
@@ -377,18 +377,17 @@ export function runReconciliation(siengeData: any[] | null, xmlEntradaItems: any
         };
 
         const h = {
-            cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpf/cnpj do destinatário', 'cpfcnpj do fornecedor']),
+            cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpf/cnpj do destinatário', 'cpfcnpj do fornecedor', 'cpfcnpj']),
             numero: findHeader(siengeData, ['número', 'numero', 'numero da nota', 'nota fiscal', 'numerodanota']),
             valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total', 'valortotal']),
             cfop: findHeader(siengeData, ['cfop'])
         };
-        
 
         if (!h.cnpj || !h.numero || !h.valorTotal || !h.cfop) {
             console.error("Colunas essenciais (CPF/CNPJ, Número, Valor Total, CFOP) não encontradas no Sienge. Cabeçalhos encontrados:", Object.keys(siengeData[0] || {}));
             return {...emptyResult, onlyInXml: allXmlItems, onlyInSienge: siengeData };
         }
-
+        
         const siengeMap = new Map<string, any[]>();
         siengeData.forEach(siengeItem => {
             const partnerCnpj = cleanAndToStr(siengeItem[h.cnpj!]);

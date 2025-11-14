@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -136,7 +137,7 @@ export function ReconciliationAnalysis({
                     <TabsContent value="cfop_validation" className="mt-4">
                         <p className='text-sm text-muted-foreground mb-4'>A tabela abaixo mostra **apenas** os itens que foram conciliados com sucesso. Utilize-a para validar se o CFOP do XML corresponde ao CFOP utilizado no Sienge.</p>
                         <CfopValidator 
-                            items={reconciliationResults?.allReconciledItems || []} 
+                            items={reconciliationResults?.reconciled || []} 
                             allPersistedData={processedData?.imobilizadoClassifications || {}}
                             onPersistData={() => {}}
                             competence={processedData?.competence || null}
