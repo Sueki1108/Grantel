@@ -82,6 +82,16 @@ export type IEUFDivergence = {
     'IE no XML'?: string;
 };
 
+export type MissingSeriesDivergence = {
+    'Tipo de Registo': string;
+    'Linha no Ficheiro': number;
+    'Número do Documento'?: string;
+    'CNPJ do Participante'?: string;
+    'Nome do Participante'?: string;
+    'Valor do Documento'?: number;
+    'Chave de Acesso'?: string;
+};
+
 export type KeyCheckResult = {
     keysNotFoundInTxt: KeyInfo[];
     keysInTxtNotInSheet: KeyInfo[];
@@ -91,6 +101,7 @@ export type KeyCheckResult = {
     valueDivergences: DateValueDivergence[];
     ufDivergences: IEUFDivergence[];
     ieDivergences: IEUFDivergence[];
+    missingSeriesDivergences: MissingSeriesDivergence[];
     consolidatedDivergences: ConsolidatedDivergence[];
 };
 
@@ -535,6 +546,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     const participantData = new Map<string, any>();
     let currentSpedInfo: SpedInfo | null = null;
     const duplicateCheckMap = new Map<string, {line: number, record: string}[]>();
+    const missingSeriesDivergences: MissingSeriesDivergence[] = [];
     
     const parseSpedInfo = (spedLine: string): SpedInfo | null => {    
         if (!spedLine || !spedLine.startsWith('|0000|')) return null;
@@ -545,6 +557,10 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
         const month = startDate.substring(2, 4), year = startDate.substring(4, 8);
         const competence = `${month}/${year}`;
         return { cnpj, companyName, competence };
+    };
+
+    const seriesPositions: Record<string, number> = {
+        C100: 6, C500: 6, C600: 6, C800: 6, D100: 7, D500: 6
     };
 
     for (const content of spedFileContents) {
@@ -568,13 +584,34 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             let docData: any;
 
             try {
+                if (seriesPositions[reg]) {
+                    const serIndex = seriesPositions[reg];
+                    if (!parts[serIndex] || parts[serIndex].trim() === '') {
+                        const codPart = parts[4];
+                        const participant = participantData.get(codPart);
+                        const numDocIndex = reg === 'D100' ? 9 : 7;
+                        const valorIndex = reg === 'D100' ? 16 : 10;
+                        const chaveIndex = reg === 'C100' ? 9 : reg === 'D100' ? 10 : undefined;
+                        
+                        missingSeriesDivergences.push({
+                            'Tipo de Registo': reg,
+                            'Linha no Ficheiro': lineNumber,
+                            'Número do Documento': parts[numDocIndex],
+                            'CNPJ do Participante': participant?.cnpj,
+                            'Nome do Participante': participant?.nome,
+                            'Valor do Documento': parseFloat(String(parts[valorIndex] || '0').replace(',', '.')),
+                            'Chave de Acesso': chaveIndex ? parts[chaveIndex] : 'N/A',
+                        });
+                    }
+                }
+
                 if ((reg === 'C100' && parts.length > 9 && parts[9]?.length === 44)) {
                      docKey = parts[9];
                      docData = { key: docKey, reg, codPart: parts[4], ser: parts[6], numDoc: parts[7], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12] };
                 } else if ((reg === 'D100' && parts.length > 17 && parts[10]?.length === 44)) {
                      docKey = parts[10];
                      docData = { key: docKey, reg, codPart: parts[4], ser: parts[7], numDoc: parts[9], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
-                } else if (['C500', 'D500', 'C600', 'C800'].includes(reg)) {
+                } else if (['C500', 'C600', 'C800', 'D500'].includes(reg)) {
                     docData = { reg, codPart: parts[4], ser: parts[6], numDoc: parts[7], dtDoc: parts[8], vlDoc: parts[10] };
                 }
                 
@@ -600,6 +637,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     if(currentSpedInfo) logFn(`Informações do SPED: CNPJ ${currentSpedInfo.cnpj}, Empresa ${currentSpedInfo.companyName}, Competência ${currentSpedInfo.competence}.`);
     logFn(`${spedDocData.size} documentos (NFe/CTe) únicos encontrados no SPED.`);
     logFn(`${participantData.size} participantes (0150) encontrados.`);
+    logFn(`${missingSeriesDivergences.length} registos encontrados sem série informada.`);
 
     const spedDuplicates = Array.from(duplicateCheckMap.values())
         .filter(records => records.length > 1)
@@ -609,12 +647,14 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             const codPart = firstRecordParts[4] || 'N/A';
             const participant = participantData.get(codPart);
             let numDoc, value;
+            const serIndex = seriesPositions[reg];
+
             if (reg === 'C100') { numDoc = firstRecordParts[7]; value = firstRecordParts[12]; }
             else if (reg === 'D100') { numDoc = firstRecordParts[9]; value = firstRecordParts[16]; }
             else if (['C500', 'D500', 'C600', 'C800'].includes(reg)) { numDoc = firstRecordParts[7]; value = firstRecordParts[10]; }
 
             return {
-                key: `${participant?.cnpj || 'N/A'}-${numDoc}`,
+                key: `${participant?.cnpj || 'N/A'}-${firstRecordParts[serIndex] || ''}-${numDoc}`,
                 type: reg,
                 docNumber: numDoc || 'N/A',
                 participant: participant?.nome || codPart,
@@ -688,8 +728,6 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
              const xmlUF = nota.destUF?.trim().toUpperCase();
              baseDivergence['IE no XML'] = xmlIE || 'Em branco';
              baseDivergence['UF no XML'] = xmlUF || 'Em branco';
-
-            // Regra atualizada: adicionar divergência apenas se AMBOS estiverem errados
             if (xmlUF !== GRANTEL_UF && xmlIE !== GRANTEL_IE) {
                 divergenceMessages.push("IE e UF");
             }
@@ -699,8 +737,6 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
              const xmlUF = nota.recebUF?.trim().toUpperCase();
              baseDivergence['IE no XML'] = xmlIE || 'Em branco';
              baseDivergence['UF no XML'] = xmlUF || 'Em branco';
-
-             // Regra atualizada: adicionar divergência apenas se AMBOS estiverem errados
              if (xmlUF !== GRANTEL_UF && xmlIE !== GRANTEL_IE) {
                 divergenceMessages.push("IE e UF");
             }
@@ -715,7 +751,6 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
 
     const consolidatedDivergences = Array.from(consolidatedDivergencesMap.values());
     
-    // As listas específicas agora derivam da lista consolidada, refletindo a nova regra
     const dateDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('Data')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'Data Emissão XML': d['Data Emissão XML'], 'Data Emissão SPED': d['Data Emissão SPED'], 'Data Entrada/Saída SPED': d['Data Entrada/Saída SPED'] }));
     const valueDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('Valor')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'Valor XML': d['Valor XML'], 'Valor SPED': d['Valor SPED'] }));
     const ufDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('IE e UF')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'CNPJ do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitCNPJ || '', 'Nome do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitName || '', 'UF no XML': d['UF no XML'] }));
@@ -730,6 +765,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     const keyCheckResults: KeyCheckResult = { 
         keysNotFoundInTxt, keysInTxtNotInSheet, duplicateKeysInSheet, validKeys,
         dateDivergences, valueDivergences, ufDivergences, ieDivergences, consolidatedDivergences,
+        missingSeriesDivergences,
     };
 
     return { keyCheckResults, spedInfo: currentSpedInfo, spedDuplicates };
@@ -864,10 +900,11 @@ export function KeyChecker({
 
         setTimeout(async () => {
             try {
-                const ieDivergentKeys = new Set(results.ieDivergences?.map(d => d['Chave de Acesso']));
-                const ufDivergentKeys = new Set(results.ufDivergences?.map(d => d['Chave de Acesso']));
-                
-                const divergentKeys = new Set([...ieDivergentKeys].filter(key => ufDivergentKeys.has(key)));
+                const divergentKeys = new Set(
+                    (results.ieDivergences || [])
+                        .filter(d => (results.ufDivergences || []).some(uf => uf['Chave de Acesso'] === d['Chave de Acesso']))
+                        .map(d => d['Chave de Acesso'])
+                );
                 
                 const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
                 const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData, divergentKeys, correctionConfig);
@@ -941,16 +978,25 @@ export function KeyChecker({
         );
     };
 
-    const ModificationDisplay = ({ logs, title }: { logs: ModificationLog[], title: string }) => {
+    const ModificationDisplay = ({ logs }: { logs: (ModificationLog[] | RemovedLineLog[])}) => {
         if (!logs || logs.length === 0) return <p className="text-muted-foreground text-center p-4">Nenhuma modificação deste tipo.</p>;
+        
+        const isModificationLog = (log: any): log is ModificationLog => 'original' in log && 'corrected' in log;
+
         return (
             <ScrollArea className="h-[calc(80vh-280px)] pr-4">
                 <div className="text-sm font-mono whitespace-pre-wrap space-y-4">
                     {logs.map((log, index) => (
                         <div key={index} className="p-2 rounded-md border">
                             <p className="font-bold text-muted-foreground">Linha {log.lineNumber}:</p>
-                            <p className="text-red-600 dark:text-red-400"><b>Original:</b> {log.original}</p>
-                            <p className="text-green-600 dark:text-green-400"><b>Corrigida:</b> {log.corrected}</p>
+                            {isModificationLog(log) ? (
+                                <>
+                                <p className="text-red-600 dark:text-red-400"><b>Original:</b> {log.original}</p>
+                                <p className="text-green-600 dark:text-green-400"><b>Corrigida:</b> {log.corrected}</p>
+                                </>
+                            ) : (
+                                <p className="text-yellow-600 dark:text-yellow-400"><b>Removida:</b> {log.line}</p>
+                            )}
                         </div>
                     ))}
                 </div>
@@ -958,21 +1004,6 @@ export function KeyChecker({
         );
     };
     
-    const RemovedLinesDisplay = ({ logs, logType }: { logs: RemovedLineLog[], logType: string }) => {
-        if (!logs || logs.length === 0) return <p className="text-muted-foreground text-center p-4">Nenhuma linha deste tipo foi removida.</p>;
-        return (
-            <ScrollArea className="h-[calc(80vh-280px)] pr-4">
-                <div className="text-sm font-mono whitespace-pre-wrap space-y-2">
-                    {logs.map((log, index) => (
-                        <div key={index} className="p-2 rounded-md border bg-yellow-100 dark:bg-yellow-900/30">
-                            <p><b>Removida (Linha {log.lineNumber}):</b> {log.line}</p>
-                        </div>
-                    ))}
-                </div>
-            </ScrollArea>
-        );
-    };
-
     return (
         <div className="space-y-8">
             {spedInfo && (
@@ -1122,12 +1153,12 @@ export function KeyChecker({
                                                     <TabsTrigger value="removed0150">Part. (0150) Removidos ({correctionResult.modifications.removed0150.length})</TabsTrigger>
                                                     <TabsTrigger value="removed0200">Prod. (0200) Removidos ({correctionResult.modifications.removed0200.length})</TabsTrigger>
                                                     <TabsTrigger value="removed0190">0190 Removidos ({correctionResult.modifications.removed0190.length})</TabsTrigger>
-                                                    <TabsTrigger value="counters">Contadores</TabsTrigger>
-                                                    <TabsTrigger value="ie">IE (NF-e)</TabsTrigger>
-                                                    <TabsTrigger value="cte_series">Série (CT-e)</TabsTrigger>
-                                                    <TabsTrigger value="address">Endereços</TabsTrigger>
-                                                    <TabsTrigger value="truncation">Truncamento</TabsTrigger>
-                                                    <TabsTrigger value="units">Unidades</TabsTrigger>
+                                                    <TabsTrigger value="counters">Contadores ({correctionResult.modifications.blockCount.length + correctionResult.modifications.totalLineCount.length})</TabsTrigger>
+                                                    <TabsTrigger value="ie">IE (NF-e) ({correctionResult.modifications.ieCorrection.length})</TabsTrigger>
+                                                    <TabsTrigger value="cte_series">Série (CT-e) ({correctionResult.modifications.cteSeriesCorrection.length})</TabsTrigger>
+                                                    <TabsTrigger value="address">Endereços ({correctionResult.modifications.addressSpaces.length})</TabsTrigger>
+                                                    <TabsTrigger value="truncation">Truncamento ({correctionResult.modifications.truncation.length})</TabsTrigger>
+                                                    <TabsTrigger value="units">Unidades ({correctionResult.modifications.unitStandardization.length})</TabsTrigger>
                                                 </TabsList>
                                                 <div className="flex-grow overflow-hidden mt-2">
                                                     <TabsContent value="divergenceRemoval" className="h-full">
@@ -1144,28 +1175,28 @@ export function KeyChecker({
                                                             <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de participantes (0150) que não estavam associados a nenhum documento fiscal (C100/D100) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
                                                             <span>Participantes não utilizados foram removidos.</span>
                                                         </div>
-                                                        <RemovedLinesDisplay logs={correctionResult.modifications.removed0150} logType="0150" />
+                                                        <ModificationDisplay logs={correctionResult.modifications.removed0150} />
                                                     </TabsContent>
                                                     <TabsContent value="removed0200" className="h-full">
                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
                                                             <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de produtos (0200) que não foram utilizados em nenhum item de nota fiscal (C170) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
                                                             <span>Produtos não utilizados foram removidos.</span>
                                                         </div>
-                                                        <RemovedLinesDisplay logs={correctionResult.modifications.removed0200} logType="0200" />
+                                                        <ModificationDisplay logs={correctionResult.modifications.removed0200} />
                                                     </TabsContent>
                                                     <TabsContent value="removed0190" className="h-full">
                                                          <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
                                                             <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registros do tipo '0190' desnecessários (todos exceto 'un' e 'pc') foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
                                                             <span>Registros '0190' desnecessários foram removidos.</span>
                                                         </div>
-                                                        <RemovedLinesDisplay logs={correctionResult.modifications.removed0190} logType="0190" />
+                                                        <ModificationDisplay logs={correctionResult.modifications.removed0190} />
                                                     </TabsContent>
-                                                    <TabsContent value="counters" className="h-full"><ModificationDisplay title="Contadores" logs={[...correctionResult.modifications.blockCount, ...correctionResult.modifications.totalLineCount, ...correctionResult.modifications.count9900]} /></TabsContent>
-                                                    <TabsContent value="ie" className="h-full"><ModificationDisplay title="Correção de IE" logs={correctionResult.modifications.ieCorrection} /></TabsContent>
-                                                    <TabsContent value="cte_series" className="h-full"><ModificationDisplay title="Correção de Série de CT-e" logs={correctionResult.modifications.cteSeriesCorrection} /></TabsContent>
-                                                    <TabsContent value="address" className="h-full"><ModificationDisplay title="Correção de Endereços" logs={correctionResult.modifications.addressSpaces} /></TabsContent>
-                                                    <TabsContent value="truncation" className="h-full"><ModificationDisplay title="Truncamento de Campos" logs={correctionResult.modifications.truncation} /></TabsContent>
-                                                    <TabsContent value="units" className="h-full"><ModificationDisplay title="Padronização de Unidades" logs={correctionResult.modifications.unitStandardization} /></TabsContent>
+                                                    <TabsContent value="counters" className="h-full"><ModificationDisplay logs={[...correctionResult.modifications.blockCount, ...correctionResult.modifications.totalLineCount, ...correctionResult.modifications.count9900]} /></TabsContent>
+                                                    <TabsContent value="ie" className="h-full"><ModificationDisplay logs={correctionResult.modifications.ieCorrection} /></TabsContent>
+                                                    <TabsContent value="cte_series" className="h-full"><ModificationDisplay logs={correctionResult.modifications.cteSeriesCorrection} /></TabsContent>
+                                                    <TabsContent value="address" className="h-full"><ModificationDisplay logs={correctionResult.modifications.addressSpaces} /></TabsContent>
+                                                    <TabsContent value="truncation" className="h-full"><ModificationDisplay logs={correctionResult.modifications.truncation} /></TabsContent>
+                                                    <TabsContent value="units" className="h-full"><ModificationDisplay logs={correctionResult.modifications.unitStandardization} /></TabsContent>
                                                 </div>
                                             </Tabs>
                                         </TabsContent>
@@ -1229,3 +1260,6 @@ export function KeyChecker({
         </div>
     );
 }
+
+
+  
