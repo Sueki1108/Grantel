@@ -80,7 +80,7 @@ export function AutomatorClientPage() {
     const [selectedPeriods, setSelectedPeriods] = useState<Record<string, boolean>>({});
     const [isPreProcessing, setIsPreProcessing] = useState(false);
     
-    const [activeMainTab, setActiveMainTab] = useState("nf-stock");
+    const [activeMainTab, setActiveMainTab] = useState("history");
     const [isWideMode, setIsWideMode] = useState(false);
 
 
@@ -607,12 +607,13 @@ export function AutomatorClientPage() {
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
-                const reconciliationResults = runReconciliation(
-                    processedData?.siengeSheetData, 
-                    resultData.sheets['Itens Válidos'] || []
-                );
+                setProcessedData({
+                    ...resultData, 
+                    competence,
+                    siengeSheetData: processedData?.siengeSheetData,
+                    reconciliationResults: null, 
+                });
 
-                setProcessedData({...resultData, competence, reconciliationResults });
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
 
             } catch (err: any) {
