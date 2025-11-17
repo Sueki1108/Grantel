@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
+import { format } from 'date-fns';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -1155,7 +1156,7 @@ export function KeyChecker({
                                                     </TabsContent>
                                                     <TabsContent value="removed0150" className="h-full">
                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de participantes (0150) que não estavam associados a nenhum documento fiscal (C100/D100/D500) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de participantes (0150) que não estavam associados a nenhum documento fiscal (C100/D100) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
                                                             <span>Participantes não utilizados foram removidos.</span>
                                                         </div>
                                                         <RemovedLinesDisplay logs={correctionResult.modifications.removed0150} logType="0150" />
