@@ -2,10 +2,11 @@
 "use client";
 
 import { useState, useMemo, type ChangeEvent, useCallback, useEffect } from "react";
+import * as XLSX from 'xlsx';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { FileSearch, Archive, AlertCircle, Loader2, Download, AlertTriangle, FileJson, Copy, Repeat } from "lucide-react";
+import { FileSearch, Archive, AlertCircle, Loader2, Download, AlertTriangle, FileJson, Repeat } from "lucide-react";
 import JSZip from 'jszip';
 import { type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
 import { cleanAndToStr, normalizeKey } from "@/lib/utils";
@@ -192,6 +193,17 @@ export function AdvancedAnalyses({
         }, {} as Record<string, SpedDuplicate[]>);
     }, [processedData?.spedDuplicates]);
 
+    const handleDownloadDuplicates = (data: SpedDuplicate[], type: string) => {
+        if (!data || data.length === 0) {
+            toast({ variant: 'destructive', title: "Nenhum dado para exportar" });
+            return;
+        }
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, `Duplicados_${type}`);
+        XLSX.writeFile(workbook, `Duplicados_SPED_${type}.xlsx`);
+    };
+
     return (
         <div className="space-y-6">
              <Card>
@@ -243,6 +255,15 @@ export function AdvancedAnalyses({
                             </TabsList>
                             {Object.entries(spedDuplicatesByType).map(([type, items]) => (
                                 <TabsContent key={type} value={type} className="mt-4">
+                                     <Button
+                                        onClick={() => handleDownloadDuplicates(items, type)}
+                                        variant="outline"
+                                        size="sm"
+                                        className="mb-4"
+                                    >
+                                        <Download className="mr-2 h-4 w-4" />
+                                        Baixar esta Aba
+                                    </Button>
                                     <DataTable 
                                         columns={getColumnsWithCustomRender(items, ['Número do Documento', 'Série', 'CNPJ/CPF', 'Fornecedor', 'Data Emissão', 'Valor Total', 'Linhas'])} 
                                         data={items} 
