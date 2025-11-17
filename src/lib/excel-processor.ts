@@ -484,9 +484,8 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[], 
         ];
 
         for (const pass of passDefinitions) {
-            // Check if the pass is valid by seeing if a key can be generated
             const siengeKeyGen = pass.getSienge;
-            if (siengeKeyGen && siengeKeyGen({ [h.numero!]: '', [h.cnpj!]: '' })) { // Dummy check
+            if (siengeKeyGen && siengeKeyGen({ [h.numero!]: '', [h.cnpj!]: '' })) { // Dummy check to see if required headers exist
                 const result = reconciliationPass(remainingSiengeItems, remainingXmlItems, siengeKeyGen, pass.getXml, pass.name);
                 reconciled.push(...result.matched);
                 remainingSiengeItems = result.remainingSienge;
@@ -494,15 +493,14 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[], 
             }
         }
         
-        // Add comparison key to unmatched items for debugging
         const finalOnlyInSienge = remainingSiengeItems.map(item => ({
-            ...item,
-            'Chave de Comparação': getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]) || 'Inválida'
+            'Chave de Comparação': getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]) || 'Inválida',
+            ...item
         }));
         
         const finalOnlyInXml = remainingXmlItems.map(item => ({
-            ...item,
-            'Chave de Comparação': getXmlKey(item, 'Valor Total') || 'Inválida'
+            'Chave de Comparação': getXmlKey(item, 'Valor Total') || 'Inválida',
+            ...item
         }));
 
         return { reconciled, onlyInSienge: finalOnlyInSienge, onlyInXml: finalOnlyInXml };
@@ -511,3 +509,5 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[], 
         return { ...emptyResult, onlyInSienge: siengeData, onlyInXml: allXmlItems };
     }
 }
+
+    
