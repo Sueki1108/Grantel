@@ -26,7 +26,7 @@ interface ReconciliationAnalysisProps {
     onClearSiengeFile: () => void;
     allPersistedData: AllClassifications;
     onPersistData: (allDataToSave: AllClassifications) => void;
-    onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData) => ProcessedData)) => void;
+    onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData | null) => ProcessedData | null)) => void;
 }
 
 
@@ -41,25 +41,30 @@ export function ReconciliationAnalysis({
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
+    // This effect will run when the sienge data is loaded and processed data exists
     useEffect(() => {
         const siengeSheetData = processedData?.siengeSheetData;
         const xmlItemsEntrada = processedData?.sheets?.['Itens Válidos'];
         const xmlItemsSaida = processedData?.sheets?.['Itens Válidos Saídas'];
         const xmlCte = processedData?.sheets?.['CTEs Válidos'];
-        const allXmlItems = [...(xmlItemsEntrada || []), ...(xmlItemsSaida || []), ...(xmlCte || [])];
-        
-        if (processedData && allXmlItems.length > 0 && siengeSheetData) {
-            const reconciliationResults = runReconciliation(
-                siengeSheetData,
-                allXmlItems
-            );
 
-             onProcessedDataChange(prev => ({
-                ...prev!,
-                reconciliationResults,
-            }));
+        // Ensure we have all necessary data before running reconciliation
+        if (processedData && siengeSheetData && (xmlItemsEntrada || xmlItemsSaida || xmlCte)) {
+            const allXmlItems = [...(xmlItemsEntrada || []), ...(xmlItemsSaida || []), ...(xmlCte || [])];
+            if(allXmlItems.length > 0) {
+                 const reconciliationResults = runReconciliation(
+                    siengeSheetData,
+                    allXmlItems
+                );
+    
+                // Update the parent's state with the new reconciliation results
+                onProcessedDataChange(prev => prev ? ({
+                    ...prev,
+                    reconciliationResults,
+                }) : null);
+            }
         }
-    }, [processedData?.sheets, processedData?.siengeSheetData, onProcessedDataChange]);
+    }, [processedData?.siengeSheetData, processedData?.sheets, onProcessedDataChange]);
 
 
     const handleDownload = (data: any[], title: string) => {

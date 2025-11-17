@@ -282,6 +282,7 @@ export function AutomatorClientPage() {
                             reconciliationResults: null,
                             resaleAnalysis: null,
                             spedCorrections: null,
+                            spedDuplicates: null,
                             ...prev,
                             siengeSheetData: jsonData
                         }));
@@ -607,11 +608,26 @@ export function AutomatorClientPage() {
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
+                const siengeDataForRecon = processedData?.siengeSheetData;
+                let reconciliationResults = null;
+                if (siengeDataForRecon) {
+                    log("Executando conciliação de itens (XML vs Sienge)...");
+                     reconciliationResults = runReconciliation(
+                        siengeDataForRecon,
+                        [
+                            ...(resultData.sheets['Itens Válidos'] || []),
+                            ...(resultData.sheets['Itens Válidos Saídas'] || []),
+                            ...(resultData.sheets['CTEs Válidos'] || [])
+                        ]
+                    );
+                    log(`Conciliação concluída: ${reconciliationResults.reconciled.length} itens conciliados.`);
+                }
+
                 setProcessedData({
                     ...resultData, 
                     competence,
-                    siengeSheetData: processedData?.siengeSheetData,
-                    reconciliationResults: null, 
+                    siengeSheetData: siengeDataForRecon,
+                    reconciliationResults, 
                 });
 
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
@@ -694,7 +710,7 @@ export function AutomatorClientPage() {
                                 )}
                             </TabsTrigger>
                              <TabsTrigger value="reconciliation" disabled={reconciliationTabDisabled} className="flex items-center gap-2">
-                                2. Itens XML VS Sienge
+                                2. XML VS Sienge
                                 {processedData?.reconciliationResults && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                             <TabsTrigger value="saidas-nfe" disabled={saidasNfeTabDisabled} className="flex items-center gap-2">
@@ -872,3 +888,4 @@ export function AutomatorClientPage() {
         </div>
     );
 }
+
