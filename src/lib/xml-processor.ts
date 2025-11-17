@@ -121,6 +121,10 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'infCpl': infCpl,
     };
     
+    // Universal key generation based on emitter
+    const chaveUnica = `${cleanAndToStr(nNF)}-${cleanAndToStr(emitCNPJ)}`;
+    notaFiscal['Chave Unica'] = chaveUnica;
+
     if (entrega) {
         notaFiscal.entrega_UF = getTagValue(entrega, 'UF');
         notaFiscal.entrega_xMun = getTagValue(entrega, 'xMun');
@@ -143,9 +147,6 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         notaFiscal['destUF'] = destUF;
     }
     
-    const chaveUnica = cleanAndToStr(nNF) + (isSaida ? cleanAndToStr(destCNPJ) : cleanAndToStr(emitCNPJ));
-    notaFiscal['Chave Unica'] = chaveUnica;
-
     const itens: any[] = [];
     for (let i = 0; i < detList.length; i++) {
         const det = detList[i];
@@ -155,11 +156,11 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         if (!prod) continue;
         
         let item: any = {
-            'Chave Unica': chaveUnica,
+            'Chave Unica': chaveUnica, // Use the consistent key
             'Item': getAttributeValue(det, 'nItem'),
             'Chave de acesso': chaveAcesso,
             'Número da Nota': nNF,
-            'CPF/CNPJ do Emitente': emitCNPJ,
+            'CPF/CNPJ do Emitente': emitCNPJ, // Always include emitter CNPJ
         };
 
         for (const child of Array.from(prod.children)) {
@@ -268,6 +269,7 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'Emissão': dhEmiRaw,
         'Fornecedor': getCteTagValue(emit, 'xNome'),
         'CPF/CNPJ do Fornecedor': emitCNPJ,
+        'emitCNPJ': emitCNPJ,
         'emitIE': emitIE,
         'Remetente': getCteTagValue(rem, 'xNome'),
         'CPF/CNPJ do Remetente': getCteTagValue(rem, 'CNPJ'),
@@ -275,7 +277,7 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'CPF/CNPJ do Destinatário': getCteTagValue(dest, 'CNPJ'),
         'Valor da Prestação': parseFloat(vTPrest) || 0,
         'Status': status,
-        'Chave Unica': cleanAndToStr(nCT) + cleanAndToStr(emitCNPJ),
+        'Chave Unica': `${cleanAndToStr(nCT)}-${cleanAndToStr(emitCNPJ)}`,
         'tomadorCNPJ': tomadorCnpj,
     };
     

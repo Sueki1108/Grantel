@@ -82,16 +82,28 @@ export interface ProcessedData {
 const addChaveUnica = (df: DataFrame): DataFrame => {
     if (!df || df.length === 0 || !df[0]) return df;
     
-    const findKey = (possibleNames: string[]) => Object.keys(df[0]).find(k => possibleNames.includes(k.toLowerCase()));
+    const findKey = (possibleNames: string[]) => Object.keys(df[0]).find(k => possibleNames.includes(normalizeKey(k)));
 
     const numeroKey = findKey(['número', 'numero']);
-    const cpfCnpjKey = findKey(['cpf/cnpj do fornecedor', 'cpf/cnpj', 'cpf/cnpj do destinatário']);
+    const emitenteCnpjKey = findKey(['cpf/cnpj do fornecedor', 'emitcnpj']);
+    const destCnpjKey = findKey(['cpf/cnpj do destinatário', 'destcnpj']);
     
-    if (!numeroKey || !cpfCnpjKey) return df;
+    if (!numeroKey) return df;
 
     return df.map(row => {
-        if(row && typeof row === 'object' && numeroKey in row && cpfCnpjKey in row) {
-            const chaveUnica = cleanAndToStr(row[numeroKey]) + cleanAndToStr(row[cpfCnpjKey]);
+        if(row && typeof row === 'object' && numeroKey in row) {
+            const numeroLimpo = cleanAndToStr(row[numeroKey]);
+            let parceiroCnpjLimpo = '';
+            
+            // Para saídas, a chave é com o destinatário. Para entradas, é com o emitente.
+            const isSaida = !!destCnpjKey && !!row[destCnpjKey] && (!emitenteCnpjKey || !row[emitenteCnpjKey]);
+            if (isSaida && destCnpjKey) {
+                parceiroCnpjLimpo = cleanAndToStr(row[destCnpjKey]);
+            } else if (emitenteCnpjKey && row[emitenteCnpjKey]) {
+                parceiroCnpjLimpo = cleanAndToStr(row[emitenteCnpjKey]);
+            }
+
+            const chaveUnica = `${numeroLimpo}-${parceiroCnpjLimpo}`;
             return { "Chave Unica": chaveUnica, ...row };
         }
         return row;
@@ -192,7 +204,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 
     const itensMap = new Map<string, any[]>();
     itens.forEach(item => {
-        const chaveUnica = cleanAndToStr(item["Chave Unica"]);
+        const chaveUnica = item["Chave Unica"];
         if (!itensMap.has(chaveUnica)) {
             itensMap.set(chaveUnica, []);
         }
@@ -215,7 +227,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
                 devolucoesDeCompra.push(nota);
             }
         } else {
-            const notaItens = itensMap.get(cleanAndToStr(nota["Chave Unica"])) || [];
+            const notaItens = itensMap.get(nota["Chave Unica"]) || [];
             const isDevolucaoCliente = notaItens.some(item => {
                 const cfop = cleanAndToStr(item.CFOP);
                 return cfop.startsWith('1') || cfop.startsWith('2');
@@ -234,14 +246,14 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     log(`- Total de ${devolucoesDeClientes.length} devoluções de clientes (CFOP 1xxx/2xxx) identificadas.`);
     log(`- Total de ${remessasEretornos.length} remessas/retornos/transferências identificados.`);
     
-    const chavesNotasValidas = new Set(notasValidas.map(row => cleanAndToStr(row["Chave Unica"])));
-    let itensValidos = itens.filter(item => chavesNotasValidas.has(cleanAndToStr(item["Chave Unica"])));
+    const chavesNotasValidas = new Set(notasValidas.map(row => row["Chave Unica"]));
+    let itensValidos = itens.filter(item => chavesNotasValidas.has(item["Chave Unica"]));
     log(`- ${itensValidos.length} itens válidos de entrada correspondentes.`);
 
     let saidasValidas = saidas.filter(row => !chavesExcecao.has(cleanAndToStr(row['Chave de acesso'])));
     log(`- ${saidasValidas.length} saídas válidas encontradas.`);
-    const chavesSaidasValidas = new Set(saidasValidas.map(row => cleanAndToStr(row["Chave Unica"])));
-    const itensValidosSaidas = itensSaidas.filter(item => chavesSaidasValidas.has(cleanAndToStr(item["Chave Unica"])));
+    const chavesSaidasValidas = new Set(saidasValidas.map(row => row["Chave Unica"]));
+    const itensValidosSaidas = itensSaidas.filter(item => chavesSaidasValidas.has(item["Chave Unica"]));
     log(`- ${itensValidosSaidas.length} itens de saída válidos correspondentes.`);
     
     log("Identificando itens para análise de imobilizado a partir dos itens válidos...");
@@ -252,7 +264,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
             return parseFloat(String(item['Valor Unitário'])) > 1200;
         }).map((item) => {
             const uniqueItemId = `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
-            const id = `${cleanAndToStr(item['Chave Unica'])}-${item['Item']}`;
+            const id = `${item['Chave Unica']}-${item['Item']}`;
             const header = nfeHeaderMap.get(item['Chave Unica']);
             const fornecedor = header?.Fornecedor || item.Fornecedor || 'N/A';
             return { ...item, id, uniqueItemId, Fornecedor: fornecedor };
@@ -354,13 +366,30 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 }
 
 
-export function runReconciliation(siengeData: any[] | null, allXmlItems: any[]): ReconciliationResults {
+export function runReconciliation(siengeData: any[] | null, allXmlItems: any[], allNoteHeaders: any[]): ReconciliationResults {
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [] };
     if (!siengeData || !allXmlItems) {
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: allXmlItems || [] };
     }
 
     try {
+        // Create a map from Chave Unica to the full note header object
+        const headerMap = new Map<string, any>();
+        allNoteHeaders.forEach(header => {
+            if (header["Chave Unica"]) {
+                headerMap.set(header["Chave Unica"], header);
+            }
+        });
+        
+        // Enrich XML items with emitter CNPJ from the header map
+        const enrichedXmlItems = allXmlItems.map(item => {
+            const header = headerMap.get(item["Chave Unica"]);
+            return {
+                ...item,
+                'CPF/CNPJ do Emitente': header ? (header['CPF/CNPJ do Fornecedor'] || header['emitCNPJ']) : item['CPF/CNPJ do Emitente']
+            };
+        });
+
         const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
             if (!data || data.length === 0 || !data[0]) return undefined;
             const headers = Object.keys(data[0]);
@@ -382,24 +411,21 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[]):
             numero: findHeader(filteredSiengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
             cfop: findHeader(siengeData, ['cfop']),
             valorTotal: findHeader(filteredSiengeData, ['valor total', 'valor', 'vlr total']),
-            icmsOutras: findHeader(filteredSiengeData, ['icms outras', 'icmsoutras']),
+            precoUnitario: findHeader(filteredSiengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
+            // Add other Sienge variation headers here
             desconto: findHeader(filteredSiengeData, ['desconto']),
             frete: findHeader(filteredSiengeData, ['frete']),
             ipiDespesas: findHeader(filteredSiengeData, ['ipi despesas', 'ipidespesas']),
             icmsSt: findHeader(filteredSiengeData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
-            despesasAcessorias: findHeader(filteredSiengeData, ['despesas acessórias', 'despesasacessorias', 'voutro']),
-            precoUnitario: findHeader(filteredSiengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
-            produtoFiscal: findHeader(filteredSiengeData, ['produto fiscal', 'descrição do item', 'descrição']),
         };
         
-
         if (!h.cnpj || !h.numero || !h.valorTotal) {
             throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge.");
         }
 
         const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
             const cleanNumero = cleanAndToStr(numero);
-            const cleanCnpj = String(cnpj).replace(/\D/g, '');
+            const cleanCnpj = cleanAndToStr(cnpj);
             const cleanValor = parseFloat(String(valor || '0').replace(',', '.')).toFixed(2);
             if (!cleanNumero || !cleanCnpj || cleanValor === 'NaN') return null;
             return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
@@ -414,8 +440,8 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[]):
         };
 
 
-        const reconciled: any[] = [];
-        let remainingXmlItems = [...allXmlItems];
+        let reconciled: any[] = [];
+        let remainingXmlItems = [...enrichedXmlItems];
         let remainingSiengeItems = [...filteredSiengeData];
 
         const reconciliationPass = (
@@ -459,13 +485,9 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[]):
 
         const passDefinitions = [
             { name: 'Valor Total', getSienge: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]), getXml: (item: any) => getXmlKey(item, 'Valor Total') },
-            { name: 'ICMS Outras', getSienge: (item: any) => h.icmsOutras ? getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.icmsOutras]) : null, getXml: (item: any) => getXmlKey(item, 'Valor Total') },
             { name: 'Valor Total + Desconto', getSienge: (item: any) => h.desconto ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto] || '0').replace(',', '.'))) : null, getXml: (item: any) => getXmlKey(item, 'Valor Total') },
             { name: 'Valor Total - Frete', getSienge: (item: any) => h.frete ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.frete] || '0').replace(',', '.'))) : null, getXml: (item: any) => getXmlKey(item, 'Valor Total') },
             { name: 'Valor Total - IPI/ICMS ST', getSienge: (item: any) => (h.ipiDespesas || h.icmsSt) ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0) - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)) : null, getXml: (item: any) => getXmlKey(item, 'Valor Total') },
-            { name: 'Valor Total - Frete/IPI', getSienge: (item: any) => (h.frete || h.ipiDespesas) ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0)) : null, getXml: (item: any) => getXmlKey(item, 'Valor Total') },
-            { name: 'Valor Total + Desc - Frete', getSienge: (item: any) => (h.desconto || h.frete) ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + (h.desconto ? parseFloat(String(item[h.desconto] || '0').replace(',', '.')) : 0) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0)) : null, getXml: (item: any) => getXmlKey(item, 'Valor Total') },
-            { name: 'Valor Total - Desp. Acess.', getSienge: (item: any) => h.despesasAcessorias ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.despesasAcessorias] || '0').replace(',', '.'))) : null, getXml: (item: any) => getXmlKey(item, 'Valor Total') },
             { name: 'Preço Unitário', getSienge: (item: any) => h.precoUnitario ? getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.precoUnitario]) : null, getXml: (item: any) => getXmlKey(item, 'Valor Unitário') },
         ];
 
