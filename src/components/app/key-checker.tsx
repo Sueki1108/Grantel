@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -259,7 +258,7 @@ const processSpedFileInBrowser = (
             if (regType === 'C100' || regType === 'D100') {
                 isInsideDivergentBlock = false;
                 currentDivergentKey = null;
-                const keyIndex = regType === 'C100' ? 9 : 10;
+                const keyIndex = regType === 'C100' ? 9 : 20;
                 const key = parts.length > keyIndex ? cleanAndToStr(parts[keyIndex]) : '';
                 
                 if (key && divergentKeys.has(key)) {
@@ -601,13 +600,13 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 if (seriesPositions[reg]) {
                     const serIndex = seriesPositions[reg];
                     if (!parts[serIndex] || parts[serIndex].trim() === '') {
-                        const codPart = parts[reg === 'C100' || reg === 'D100' ? 4 : (reg === 'C500' || reg === 'D500' || reg === 'C600' || reg === 'C800' || reg === 'D300' || reg === 'D400' ? 2 : 2)];
+                        const codPart = parts[reg === 'C100' || reg === 'D100' ? 4 : 2];
                         const participant = participantData.get(codPart);
                         
                         let numDoc: string | undefined, valor: string | undefined, chave: string | undefined;
                         switch (reg) {
                             case 'C100': numDoc = parts[8]; valor = parts[12]; chave = parts[9]; break;
-                            case 'D100': numDoc = parts[9]; valor = parts[16]; chave = parts[10]; break;
+                            case 'D100': numDoc = parts[9]; valor = parts[16]; chave = parts[20]; break;
                             default: numDoc = parts[6]; valor = parts[7]; chave = 'N/A'; break;
                         }
 
@@ -624,7 +623,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 }
                  const docTypes: { [key: string]: { codPart: number, ser: number, numDoc: number, dtDoc: number, vlDoc: number, chave?: number } } = {
                     'C100': { codPart: 4, ser: 6, numDoc: 8, dtDoc: 10, vlDoc: 12, chave: 9 },
-                    'D100': { codPart: 6, ser: 7, numDoc: 9, dtDoc: 12, vlDoc: 14, chave: 20 },
+                    'D100': { codPart: 4, ser: 7, numDoc: 9, dtDoc: 12, vlDoc: 14, chave: 20 },
                     'C500': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 4, vlDoc: 7 },
                     'D500': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 4, vlDoc: 7 },
                     'C600': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 7, vlDoc: 9 },
@@ -673,7 +672,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 const reg = parts[1];
                  const docTypes: { [key: string]: { codPart: number, ser: number, numDoc: number, dtDoc: number, vlDoc: number } } = {
                     'C100': { codPart: 4, ser: 6, numDoc: 8, dtDoc: 10, vlDoc: 12 },
-                    'D100': { codPart: 6, ser: 7, numDoc: 9, dtDoc: 12, vlDoc: 14 },
+                    'D100': { codPart: 4, ser: 7, numDoc: 9, dtDoc: 12, vlDoc: 14 },
                     'C500': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 4, vlDoc: 7 },
                     'D500': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 4, vlDoc: 7 },
                     'C600': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 7, vlDoc: 9 },
@@ -1020,25 +1019,16 @@ export function KeyChecker({
         );
     };
 
-    const ModificationDisplay = ({ logs }: { logs: (ModificationLog[] | RemovedLineLog[])}) => {
+    const ModificationDisplay = ({ logs }: { logs: ModificationLog[] }) => {
         if (!logs || logs.length === 0) return <p className="text-muted-foreground text-center p-4">Nenhuma modificação deste tipo.</p>;
-        
-        const isModificationLog = (log: any): log is ModificationLog => 'original' in log && 'corrected' in log;
-
         return (
             <ScrollArea className="h-[calc(80vh-280px)] pr-4">
                 <div className="text-sm font-mono whitespace-pre-wrap space-y-4">
                     {logs.map((log, index) => (
                         <div key={index} className="p-2 rounded-md border">
                             <p className="font-bold text-muted-foreground">Linha {log.lineNumber}:</p>
-                            {isModificationLog(log) ? (
-                                <>
-                                <p className="text-red-600 dark:text-red-400"><b>Original:</b> {log.original}</p>
-                                <p className="text-green-600 dark:text-green-400"><b>Corrigida:</b> {log.corrected}</p>
-                                </>
-                            ) : (
-                                <p className="text-yellow-600 dark:text-yellow-400"><b>Removida:</b> {log.line}</p>
-                            )}
+                            <p className="text-red-600 dark:text-red-400"><b>Original:</b> {log.original}</p>
+                            <p className="text-green-600 dark:text-green-400"><b>Corrigida:</b> {log.corrected}</p>
                         </div>
                     ))}
                 </div>
@@ -1046,6 +1036,21 @@ export function KeyChecker({
         );
     };
     
+    const RemovedLinesDisplay = ({ logs, logType }: { logs: RemovedLineLog[], logType: string }) => {
+        if (!logs || logs.length === 0) return <p className="text-muted-foreground text-center p-4">Nenhuma linha deste tipo foi removida.</p>;
+        return (
+            <ScrollArea className="h-[calc(80vh-280px)] pr-4">
+                <div className="text-sm font-mono whitespace-pre-wrap space-y-2">
+                    {logs.map((log, index) => (
+                        <div key={index} className="p-2 rounded-md border bg-yellow-100 dark:bg-yellow-900/30">
+                            <p><b>Removida (Linha {log.lineNumber}):</b> {log.line}</p>
+                        </div>
+                    ))}
+                </div>
+            </ScrollArea>
+        );
+    };
+
     return (
         <div className="space-y-8">
             {spedInfo && (
@@ -1302,4 +1307,3 @@ export function KeyChecker({
         </div>
     );
 }
-
