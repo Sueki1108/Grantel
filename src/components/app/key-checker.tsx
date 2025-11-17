@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -258,7 +259,7 @@ const processSpedFileInBrowser = (
             if (regType === 'C100' || regType === 'D100') {
                 isInsideDivergentBlock = false;
                 currentDivergentKey = null;
-                const keyIndex = regType === 'C100' ? 9 : 20;
+                const keyIndex = regType === 'C100' ? 9 : 10;
                 const key = parts.length > keyIndex ? cleanAndToStr(parts[keyIndex]) : '';
                 
                 if (key && divergentKeys.has(key)) {
@@ -606,7 +607,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                         let numDoc: string | undefined, valor: string | undefined, chave: string | undefined;
                         switch (reg) {
                             case 'C100': numDoc = parts[8]; valor = parts[12]; chave = parts[9]; break;
-                            case 'D100': numDoc = parts[9]; valor = parts[16]; chave = parts[20]; break;
+                            case 'D100': numDoc = parts[9]; valor = parts[16]; chave = parts[10]; break;
                             default: numDoc = parts[6]; valor = parts[7]; chave = 'N/A'; break;
                         }
 
@@ -623,7 +624,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 }
                  const docTypes: { [key: string]: { codPart: number, ser: number, numDoc: number, dtDoc: number, vlDoc: number, chave?: number } } = {
                     'C100': { codPart: 4, ser: 6, numDoc: 8, dtDoc: 10, vlDoc: 12, chave: 9 },
-                    'D100': { codPart: 4, ser: 7, numDoc: 9, dtDoc: 12, vlDoc: 14, chave: 20 },
+                    'D100': { codPart: 4, ser: 7, numDoc: 9, dtDoc: 12, vlDoc: 16, chave: 10 },
                     'C500': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 4, vlDoc: 7 },
                     'D500': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 4, vlDoc: 7 },
                     'C600': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 7, vlDoc: 9 },
@@ -672,7 +673,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 const reg = parts[1];
                  const docTypes: { [key: string]: { codPart: number, ser: number, numDoc: number, dtDoc: number, vlDoc: number } } = {
                     'C100': { codPart: 4, ser: 6, numDoc: 8, dtDoc: 10, vlDoc: 12 },
-                    'D100': { codPart: 4, ser: 7, numDoc: 9, dtDoc: 12, vlDoc: 14 },
+                    'D100': { codPart: 4, ser: 7, numDoc: 9, dtDoc: 12, vlDoc: 16 },
                     'C500': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 4, vlDoc: 7 },
                     'D500': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 4, vlDoc: 7 },
                     'C600': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 7, vlDoc: 9 },
@@ -1307,3 +1308,5 @@ export function KeyChecker({
         </div>
     );
 }
+
+    
