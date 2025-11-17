@@ -558,10 +558,6 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
         const competence = `${month}/${year}`;
         return { cnpj, companyName, competence };
     };
-
-    const seriesPositions: Record<string, number> = {
-        C100: 6, C500: 5, C600: 5, C800: 5, D100: 7, D300: 4, D400: 4, D500: 5
-    };
     
     for (const content of spedFileContents) {
         const lines = content.split(/\r?\n/);
@@ -598,35 +594,11 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             let compositeKey: string | undefined;
 
             try {
-                if (seriesPositions[reg]) {
-                    const serIndex = seriesPositions[reg];
-                    if (!parts[serIndex] || parts[serIndex].trim() === '') {
-                        const codPart = parts[reg === 'C100' || reg === 'D100' ? 4 : 2];
-                        const participant = participantData.get(codPart);
-                        
-                        let numDoc: string | undefined, valor: string | undefined, chave: string | undefined;
-                        switch (reg) {
-                            case 'C100': numDoc = parts[8]; valor = parts[12]; chave = parts[9]; break;
-                            case 'D100': numDoc = parts[9]; valor = parts[16]; chave = parts[10]; break;
-                            default: numDoc = parts[6]; valor = parts[7]; chave = 'N/A'; break;
-                        }
-
-                        missingSeriesDivergences.push({
-                            'Tipo de Registo': reg,
-                            'Linha no Ficheiro': lineNumber,
-                            'Número do Documento': numDoc,
-                            'CNPJ do Participante': participant?.cnpj,
-                            'Nome do Participante': participant?.nome,
-                            'Valor do Documento': parseFloat(String(valor || '0').replace(',', '.')),
-                            'Chave de Acesso': chave,
-                        });
-                    }
-                }
-                 const docTypes: { [key: string]: { codPart: number, ser: number, numDoc: number, dtDoc: number, vlDoc: number, chave?: number } } = {
+                const docTypes: { [key: string]: { codPart: number, ser: number, numDoc: number, dtDoc: number, vlDoc: number, chave?: number } } = {
                     'C100': { codPart: 4, ser: 6, numDoc: 8, dtDoc: 10, vlDoc: 12, chave: 9 },
                     'D100': { codPart: 4, ser: 7, numDoc: 9, dtDoc: 12, vlDoc: 16, chave: 10 },
-                    'C500': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 4, vlDoc: 7 },
-                    'D500': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 4, vlDoc: 7 },
+                    'C500': { codPart: 3, ser: 5, numDoc: 10, dtDoc: 11, vlDoc: 12 },
+                    'D500': { codPart: 3, ser: 5, numDoc: 6, dtDoc: 5, vlDoc: 7 },
                     'C600': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 7, vlDoc: 9 },
                     'C800': { codPart: 2, ser: 5, numDoc: 4, dtDoc: 6, vlDoc: 8 },
                     'D300': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 6, vlDoc: 7 },
@@ -635,6 +607,20 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
 
                 if (docTypes[reg]) {
                     const mapping = docTypes[reg];
+                    
+                    if (!parts[mapping.ser] || parts[mapping.ser].trim() === '') {
+                         const participant = participantData.get(parts[mapping.codPart]);
+                         missingSeriesDivergences.push({
+                            'Tipo de Registo': reg,
+                            'Linha no Ficheiro': lineNumber,
+                            'Número do Documento': parts[mapping.numDoc],
+                            'CNPJ do Participante': participant?.cnpj,
+                            'Nome do Participante': participant?.nome,
+                            'Valor do Documento': parseFloat(String(parts[mapping.vlDoc] || '0').replace(',', '.')),
+                            'Chave de Acesso': mapping.chave ? parts[mapping.chave] : 'N/A',
+                        });
+                    }
+                    
                     const participant = participantData.get(parts[mapping.codPart]);
                     docData = { ...docData, 
                         codPart: parts[mapping.codPart], 
@@ -649,7 +635,12 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                         spedDocData.set(parts[mapping.chave], docData);
                     }
 
-                    compositeKey = `${cleanAndToStr(docData.participantCnpjCpf)}-${docData.ser || ''}-${docData.numDoc || ''}`;
+                    if (reg === 'C500') {
+                         compositeKey = `${parts[mapping.codPart]}-${parts[mapping.numDoc]}-${parts[mapping.dtDoc]}-${parts[mapping.vlDoc]}`;
+                    } else {
+                         compositeKey = `${cleanAndToStr(docData.participantCnpjCpf)}-${docData.ser || ''}-${docData.numDoc || ''}`;
+                    }
+                    
 
                     if (compositeKey) {
                         if (!duplicateCheckMap.has(compositeKey)) {
@@ -674,8 +665,8 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                  const docTypes: { [key: string]: { codPart: number, ser: number, numDoc: number, dtDoc: number, vlDoc: number } } = {
                     'C100': { codPart: 4, ser: 6, numDoc: 8, dtDoc: 10, vlDoc: 12 },
                     'D100': { codPart: 4, ser: 7, numDoc: 9, dtDoc: 12, vlDoc: 16 },
-                    'C500': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 4, vlDoc: 7 },
-                    'D500': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 4, vlDoc: 7 },
+                    'C500': { codPart: 3, ser: 5, numDoc: 10, dtDoc: 11, vlDoc: 12 },
+                    'D500': { codPart: 3, ser: 5, numDoc: 6, dtDoc: 5, vlDoc: 7 },
                     'C600': { codPart: 2, ser: 5, numDoc: 6, dtDoc: 7, vlDoc: 9 },
                     'C800': { codPart: 2, ser: 5, numDoc: 4, dtDoc: 6, vlDoc: 8 },
                     'D300': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 6, vlDoc: 7 },
@@ -942,11 +933,10 @@ export function KeyChecker({
 
         setTimeout(async () => {
             try {
-                 const divergentKeys = new Set(
-                    (results.consolidatedDivergences || [])
-                        .filter(d => d['Resumo das Divergências'].includes('IE e UF'))
-                        .map(d => d['Chave de Acesso'])
-                );
+                const ieDivergentKeys = new Set(results.ieDivergences?.map(d => d['Chave de Acesso']));
+                const ufDivergentKeys = new Set(results.ufDivergences?.map(d => d['Chave de Acesso']));
+                
+                const divergentKeys = new Set([...ieDivergentKeys].filter(key => ufDivergentKeys.has(key)));
                 
                 const fileContent = await readFileAsTextWithEncoding(spedFiles[0]);
                 const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData, divergentKeys, correctionConfig);
