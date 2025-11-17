@@ -292,7 +292,7 @@ export function AdvancedAnalyses({
                         <div className="p-8 text-center text-muted-foreground">
                             <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
                             <h3 className="text-xl font-semibold mb-2">Aguardando dados Sienge</h3>
-                            <p>Carregue a planilha "Itens do Sienge" na aba "Itens XML VS Sienge" para identificar as notas de revenda.</p>
+                            <p>Carregue a planilha "Itens do Sienge" na aba "XML VS Sienge" para identificar as notas de revenda.</p>
                         </div>
                     ) : (
                         <div className="flex flex-col items-start gap-4">

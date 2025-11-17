@@ -602,41 +602,40 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
 
     const spedDuplicates: SpedDuplicate[] = Array.from(duplicateCheckMap.values())
         .filter(records => records.length > 1)
-        .flatMap(records => {
-             return records.map(recordInfo => {
-                const parts = recordInfo.record.split('|');
-                const reg = parts[1];
-                let participant: any = null;
-                const docInfo: Partial<SpedDuplicate> = {};
+        .map(records => { // Alterado de flatMap para map
+            const firstRecordInfo = records[0]; // Processar apenas o primeiro registo do grupo de duplicados
+            const parts = firstRecordInfo.record.split('|');
+            const reg = parts[1];
+            let participant: any = null;
+            const docInfo: Partial<SpedDuplicate> = {};
 
-                try {
-                    let dateField = '';
-                    let codPart = '';
-                    if (reg === 'C100' && parts.length > 13) { codPart = parts[4]; docInfo['Número do Documento'] = parts[9] || 'N/A'; docInfo['Série'] = parts[7]; dateField = parts[11]; docInfo['Valor Total'] = parseFloat(String(parts[13] || '0').replace(',', '.')); }
-                    else if (reg === 'C500' && parts.length > 13) { codPart = parts[4]; docInfo['Número do Documento'] = parts[10] || 'N/A'; dateField = parts[11]; docInfo['Valor Total'] = parseFloat(String(parts[13] || '0').replace(',', '.')); }
-                    else if (reg === 'D100' && parts.length > 14) { codPart = parts[6]; docInfo['Número do Documento'] = parts[10] || 'N/A'; dateField = parts[12]; docInfo['Valor Total'] = parseFloat(String(parts[14] || '0').replace(',', '.')); }
-                    else if (reg === 'D500' && parts.length > 12) { codPart = parts[4]; docInfo['Número do Documento'] = parts[9] || 'N/A'; dateField = parts[10]; docInfo['Valor Total'] = parseFloat(String(parts[12] || '0').replace(',', '.')); }
-                    
-                    participant = participantData.get(codPart);
-                    const parsedDate = parseSpedDate(dateField);
-                    docInfo['Data Emissão'] = !isNaN(parsedDate.getTime()) ? format(parsedDate, 'dd/MM/yyyy') : 'Data Inválida';
+            try {
+                let dateField = '';
+                let codPart = '';
+                 if (reg === 'C100' && parts.length > 13) { codPart = parts[4]; docInfo['Número do Documento'] = parts[9] || 'N/A'; docInfo['Série'] = parts[7] || 'N/A'; dateField = parts[11]; docInfo['Valor Total'] = parseFloat(String(parts[13] || '0').replace(',', '.')); }
+                else if (reg === 'C500' && parts.length > 13) { codPart = parts[4]; docInfo['Número do Documento'] = parts[10] || 'N/A'; docInfo['Série'] = parts[6] || 'N/A'; dateField = parts[11]; docInfo['Valor Total'] = parseFloat(String(parts[13] || '0').replace(',', '.')); }
+                else if (reg === 'D100' && parts.length > 14) { codPart = parts[6]; docInfo['Número do Documento'] = parts[10] || 'N/A'; docInfo['Série'] = parts[7] || 'N/A'; dateField = parts[12]; docInfo['Valor Total'] = parseFloat(String(parts[14] || '0').replace(',', '.')); }
+                else if (reg === 'D500' && parts.length > 12) { codPart = parts[4]; docInfo['Número do Documento'] = parts[9] || 'N/A'; docInfo['Série'] = parts[6] || 'N/A'; dateField = parts[10]; docInfo['Valor Total'] = parseFloat(String(parts[12] || '0').replace(',', '.')); }
+                
+                participant = participantData.get(codPart);
+                const parsedDate = parseSpedDate(dateField);
+                docInfo['Data Emissão'] = !isNaN(parsedDate.getTime()) ? format(parsedDate, 'dd/MM/yyyy') : 'Data Inválida';
 
-                } catch (e) {
-                    console.error("Error parsing duplicate record", e);
-                }
+            } catch (e) {
+                console.error("Error parsing duplicate record", e);
+            }
 
-                return {
-                    'Tipo de Registo': reg || 'N/A',
-                    'Número do Documento': docInfo['Número do Documento'] || 'N/A',
-                    'Série': docInfo['Série'] || 'N/A',
-                    'CNPJ/CPF': participant?.cnpj || 'Não encontrado no 0150',
-                    'Fornecedor': participant?.nome || 'Não encontrado no 0150',
-                    'Data Emissão': docInfo['Data Emissão'] || 'N/A',
-                    'Valor Total': docInfo['Valor Total'] || 0,
-                    'Linhas': records.map(r => r.line).join('; ')
-                };
-            }).filter(Boolean);
-        });
+            return {
+                'Tipo de Registo': reg || 'N/A',
+                'Número do Documento': docInfo['Número do Documento'] || 'N/A',
+                'Série': docInfo['Série'] || 'N/A',
+                'CNPJ/CPF': participant?.cnpj || 'Não encontrado no 0150',
+                'Fornecedor': participant?.nome || 'Não encontrado no 0150',
+                'Data Emissão': docInfo['Data Emissão'] || 'N/A',
+                'Valor Total': docInfo['Valor Total'] || 0,
+                'Linhas': records.map(r => r.line).join('; ')
+            };
+        }).filter(Boolean);
     logFn(`Encontrados ${spedDuplicates.length} registos duplicados no SPED.`);
 
     // Etapa 3: Verificação de Chaves (XML vs. SPED)
@@ -678,7 +677,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
              const spedDate = parseSpedDate(spedDoc.dtDoc);
              return {
                 key: spedDoc.key, type: isCte ? 'CTE' : 'NFE',
-                Fornecedor: participant ? participant.nome : 'N/A', Emissão: isNaN(spedDate.getTime()) ? spedDoc.dtDoc : spedDate,
+                Fornecedor: participant ? participant.nome : 'Não encontrado no 0150', Emissão: isNaN(spedDate.getTime()) ? 'Data Inválida' : spedDate,
                 Total: parseFloat(String(spedDoc.vlDoc || '0').replace(',', '.')),
             };
         });
@@ -707,7 +706,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
 
         const baseDivergence: ConsolidatedDivergence = {
             'Tipo': docType, 'Chave de Acesso': nota.key,
-            'Data Emissão XML': xmlDateStr && !isNaN(new Date(xmlDateStr).getTime()) ? format(new Date(xmlDateStr), 'dd/MM/yyyy') : 'Inválida',
+            'Data Emissão XML': xmlDateStr && !isNaN(new Date(xmlDateStr).getTime()) ? format(new Date(xmlDateStr), 'dd/MM/yyyy') : 'Data Inválida',
             'Data Emissão SPED': !isNaN(spedDateDtDoc.getTime()) ? format(spedDateDtDoc, 'dd/MM/yyyy') : 'Data Inválida',
             'Data Entrada/Saída SPED': !isNaN(spedDateDtEs.getTime()) ? format(spedDateDtEs, 'dd/MM/yyyy') : 'Data Inválida',
             'Valor XML': 0, 'Valor SPED': 0, 'UF no XML': 'N/A', 'IE no XML': 'N/A', 'Resumo das Divergências': '',
@@ -1192,7 +1191,11 @@ export function KeyChecker({
                                         </TabsContent>
 
                                         <TabsContent value="full_log" className="mt-4 flex-grow overflow-hidden">
-                                            <LogDisplay logs={correctionResult.log} />
+                                            <div className="h-full w-full rounded-md border bg-muted/50 overflow-y-auto">
+                                                <div className="p-4 text-sm font-mono whitespace-pre-wrap">
+                                                    {correctionResult.log.map((log, index) => ( <p key={index}>{log}</p> ))}
+                                                </div>
+                                            </div>
                                         </TabsContent>
                                     </Tabs>
                                 ) : null}
@@ -1250,4 +1253,3 @@ export function KeyChecker({
         </div>
     );
 }
-
