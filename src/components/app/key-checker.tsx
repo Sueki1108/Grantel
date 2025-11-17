@@ -514,6 +514,15 @@ const processSpedFileInBrowser = (
     };
 };
 
+const findDuplicates = (arr: string[]): string[] => {
+    const seen = new Set<string>();
+    const duplicates = new Set<string>();
+    arr.forEach(item => {
+        if (seen.has(item)) duplicates.add(item); else seen.add(item);
+    });
+    return Array.from(duplicates);
+};
+
 const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: string[], logFn: (message: string) => void): Promise<{
     keyCheckResults?: KeyCheckResult;
     spedDuplicates?: SpedDuplicate[];
@@ -602,11 +611,13 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
 
                 try {
                     let dateField = '';
-                    if (reg === 'C100' && parts.length > 11) { participant = participantData.get(parts[4]); docInfo['Número do Documento'] = parts[9] || 'N/A'; docInfo['Série'] = parts[7]; dateField = parts[11]; docInfo['Valor Total'] = parseFloat(String(parts[13] || '0').replace(',', '.')); }
-                    else if (reg === 'C500' && parts.length > 11) { participant = participantData.get(parts[4]); docInfo['Número do Documento'] = parts[10] || 'N/A'; dateField = parts[11]; docInfo['Valor Total'] = parseFloat(String(parts[13] || '0').replace(',', '.')); }
-                    else if (reg === 'D100' && parts.length > 12) { participant = participantData.get(parts[6]); docInfo['Número do Documento'] = parts[10] || 'N/A'; dateField = parts[12]; docInfo['Valor Total'] = parseFloat(String(parts[14] || '0').replace(',', '.')); }
-                    else if (reg === 'D500' && parts.length > 10) { participant = participantData.get(parts[4]); docInfo['Número do Documento'] = parts[9] || 'N/A'; dateField = parts[10]; docInfo['Valor Total'] = parseFloat(String(parts[12] || '0').replace(',', '.')); }
+                    let codPart = '';
+                    if (reg === 'C100' && parts.length > 13) { codPart = parts[4]; docInfo['Número do Documento'] = parts[9] || 'N/A'; docInfo['Série'] = parts[7]; dateField = parts[11]; docInfo['Valor Total'] = parseFloat(String(parts[13] || '0').replace(',', '.')); }
+                    else if (reg === 'C500' && parts.length > 13) { codPart = parts[4]; docInfo['Número do Documento'] = parts[10] || 'N/A'; dateField = parts[11]; docInfo['Valor Total'] = parseFloat(String(parts[13] || '0').replace(',', '.')); }
+                    else if (reg === 'D100' && parts.length > 14) { codPart = parts[6]; docInfo['Número do Documento'] = parts[10] || 'N/A'; dateField = parts[12]; docInfo['Valor Total'] = parseFloat(String(parts[14] || '0').replace(',', '.')); }
+                    else if (reg === 'D500' && parts.length > 12) { codPart = parts[4]; docInfo['Número do Documento'] = parts[9] || 'N/A'; dateField = parts[10]; docInfo['Valor Total'] = parseFloat(String(parts[12] || '0').replace(',', '.')); }
                     
+                    participant = participantData.get(codPart);
                     const parsedDate = parseSpedDate(dateField);
                     docInfo['Data Emissão'] = !isNaN(parsedDate.getTime()) ? format(parsedDate, 'dd/MM/yyyy') : 'Data Inválida';
 
@@ -696,7 +707,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
 
         const baseDivergence: ConsolidatedDivergence = {
             'Tipo': docType, 'Chave de Acesso': nota.key,
-            'Data Emissão XML': xmlDateStr ? format(new Date(xmlDateStr), 'dd/MM/yyyy') : 'Inválida',
+            'Data Emissão XML': xmlDateStr && !isNaN(new Date(xmlDateStr).getTime()) ? format(new Date(xmlDateStr), 'dd/MM/yyyy') : 'Inválida',
             'Data Emissão SPED': !isNaN(spedDateDtDoc.getTime()) ? format(spedDateDtDoc, 'dd/MM/yyyy') : 'Data Inválida',
             'Data Entrada/Saída SPED': !isNaN(spedDateDtEs.getTime()) ? format(spedDateDtEs, 'dd/MM/yyyy') : 'Data Inválida',
             'Valor XML': 0, 'Valor SPED': 0, 'UF no XML': 'N/A', 'IE no XML': 'N/A', 'Resumo das Divergências': '',
@@ -737,7 +748,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     logFn(`- ${consolidatedDivergences.length} chaves com alguma divergência encontradas.`);
     
     const keyCheckResults: KeyCheckResult = { 
-        keysNotFoundInTxt, keysInTxtNotInSheet, duplicateKeysInSheet: findDuplicates(chavesValidas, item => item['Chave de acesso']), validKeys,
+        keysNotFoundInTxt, keysInTxtNotInSheet, duplicateKeysInSheet: findDuplicates(chavesValidas.map(item => item['Chave de acesso'])), validKeys,
         dateDivergences, valueDivergences, ufDivergences, ieDivergences, consolidatedDivergences,
         missingSeriesDivergences: [],
     };
@@ -1240,5 +1251,3 @@ export function KeyChecker({
     );
 }
 
-
-    
