@@ -1,14 +1,13 @@
 "use client";
 
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUploadForm } from "@/components/app/file-upload-form";
-import type { ProcessedData, ReconciliationResults } from '@/lib/excel-processor';
-import { runReconciliation } from '@/lib/excel-processor';
+import type { ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2 } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
@@ -23,9 +22,8 @@ interface ReconciliationAnalysisProps {
     siengeFile: File | null;
     onSiengeFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
-    allPersistedData: AllClassifications;
-    onPersistData: (allDataToSave: AllClassifications) => void;
-    onProcessedDataChange: (data: ProcessedData | ((prev: ProcessedData | null) => ProcessedData | null)) => void;
+    onRunReconciliation: () => void;
+    isReconciliationRunning: boolean;
 }
 
 
@@ -34,60 +32,11 @@ export function ReconciliationAnalysis({
     siengeFile, 
     onSiengeFileChange, 
     onClearSiengeFile,
-    allPersistedData,
-    onPersistData,
-    onProcessedDataChange,
+    onRunReconciliation,
+    isReconciliationRunning,
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
-    const [isLoadingSienge, setIsLoadingSienge] = useState(false);
     const reconciliationResults = processedData?.reconciliationResults;
-
-    useEffect(() => {
-        const processSiengeAndReconcile = async () => {
-            if (!siengeFile || !processedData) return;
-
-            setIsLoadingSienge(true);
-            try {
-                const data = await siengeFile.arrayBuffer();
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
-
-                const worksheet = workbook.Sheets[sheetName];
-                const siengeSheetData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-                
-                toast({ title: 'Planilha Sienge Processada', description: 'A executar a conciliação...' });
-
-                const allXmlItems = [
-                    ...(processedData.sheets['Itens Válidos'] || []),
-                    ...(processedData.sheets['Itens Válidos Saídas'] || []),
-                    ...(processedData.sheets['CTEs Válidos'] || [])
-                ];
-
-                const newReconciliationResults = runReconciliation(siengeSheetData, allXmlItems);
-
-                onProcessedDataChange(prev => {
-                    if (!prev) return null;
-                    return {
-                        ...prev,
-                        siengeSheetData,
-                        reconciliationResults: newReconciliationResults,
-                    };
-                });
-                
-                toast({ title: 'Conciliação Concluída', description: `${newReconciliationResults.reconciled.length} itens foram conciliados.` });
-
-            } catch (err: any) {
-                toast({ variant: 'destructive', title: 'Erro ao processar Sienge', description: err.message });
-            } finally {
-                setIsLoadingSienge(false);
-            }
-        };
-
-        processSiengeAndReconcile();
-
-    }, [siengeFile, processedData?.sheets, onProcessedDataChange, toast]);
-
 
     const handleDownload = (data: any[], title: string) => {
         if (!data || data.length === 0) {
@@ -108,18 +57,23 @@ export function ReconciliationAnalysis({
                     <GitCompareArrows className="h-8 w-8 text-primary" />
                     <div>
                         <CardTitle className="font-headline text-2xl">XML VS Sienge</CardTitle>
-                        <CardDescription>Carregue a planilha do Sienge para cruzar informações com os XMLs processados.</CardDescription>
+                        <CardDescription>Carregue a planilha do Sienge e clique no botão para cruzar informações com os XMLs.</CardDescription>
                     </div>
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
-                <FileUploadForm
-                    displayName="Itens do Sienge"
-                    formId="sienge-for-reconciliation"
-                    files={{ 'sienge-for-reconciliation': !!siengeFile }}
-                    onFileChange={onSiengeFileChange}
-                    onClearFile={onClearSiengeFile}
-                />
+                 <div className='grid grid-cols-1 md:grid-cols-2 gap-6 items-end'>
+                    <FileUploadForm
+                        displayName="Itens do Sienge"
+                        formId="sienge-for-reconciliation"
+                        files={{ 'sienge-for-reconciliation': !!siengeFile }}
+                        onFileChange={onSiengeFileChange}
+                        onClearFile={onClearSiengeFile}
+                    />
+                    <Button onClick={onRunReconciliation} disabled={isReconciliationRunning || !siengeFile}>
+                        {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Executar Conciliação</>}
+                    </Button>
+                </div>
                 
                 <Tabs defaultValue="reconciliation">
                     <TabsList className="grid w-full grid-cols-3">
@@ -137,12 +91,7 @@ export function ReconciliationAnalysis({
                                 </AlertDescription>
                             </Alert>
                         )}
-                        {isLoadingSienge ? (
-                             <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
-                                <Loader2 className="h-12 w-12 text-primary animate-spin" />
-                                <p className="mt-4 text-center">A processar a planilha Sienge e a executar a conciliação...</p>
-                            </div>
-                        ) : reconciliationResults ? (
+                        {reconciliationResults ? (
                             <div className="mt-6">
                                 <Tabs defaultValue="reconciled">
                                     <TabsList className="grid w-full grid-cols-3">
@@ -169,7 +118,7 @@ export function ReconciliationAnalysis({
                         ) : (
                             <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
                                 <FileSearch className="h-12 w-12 text-primary" />
-                                <p className="mt-4 text-center">Aguardando a planilha "Itens do Sienge" para executar a conciliação...</p>
+                                <p className="mt-4 text-center">Carregue a planilha "Itens do Sienge" e clique em "Executar Conciliação".</p>
                             </div>
                         )}
                     </TabsContent>
@@ -177,8 +126,8 @@ export function ReconciliationAnalysis({
                         <p className='text-sm text-muted-foreground mb-4'>A tabela abaixo mostra **apenas** os itens que foram conciliados com sucesso. Utilize-a para validar se o CFOP do XML corresponde ao CFOP utilizado no Sienge.</p>
                         <CfopValidator 
                             items={reconciliationResults?.reconciled || []} 
-                            allPersistedData={allPersistedData}
-                            onPersistData={onPersistData}
+                            allPersistedData={processedData?.imobilizadoClassifications || {}}
+                            onPersistData={() => {}}
                             competence={processedData?.competence || null}
                         />
                     </TabsContent>

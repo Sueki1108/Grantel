@@ -16,7 +16,7 @@ import Link from "next/link";
 import * as XLSX from 'xlsx';
 import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
-import { processDataFrames, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
+import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdvancedAnalyses } from "@/components/app/advanced-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
@@ -256,7 +256,7 @@ export function AutomatorClientPage() {
     
     const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        setSiengeFile(file || null); // Just set the file, the analysis component will handle it
+        setSiengeFile(file || null);
     };
 
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>, category: 'nfeEntrada' | 'cte' | 'nfeSaida' | 'nfse') => {
@@ -555,8 +555,13 @@ export function AutomatorClientPage() {
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
-                setProcessedData({...resultData, competence });
-                toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
+                setProcessedData({
+                    ...resultData, 
+                    competence,
+                    reconciliationResults: null, 
+                });
+
+                toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas." });
 
             } catch (err: any) {
                 const errorMessage = err.message || "Ocorreu um erro desconhecido durante o processamento.";
@@ -568,6 +573,49 @@ export function AutomatorClientPage() {
                 setProcessing(false);
             }
         }, 50);
+    };
+
+    const handleRunReconciliation = async () => {
+        if (!siengeFile) {
+            toast({ variant: 'destructive', title: 'Ficheiro Sienge em falta', description: 'Por favor, carregue a planilha "Itens do Sienge".' });
+            return;
+        }
+        if (!processedData || !processedData.sheets) {
+            toast({ variant: 'destructive', title: 'Dados XML em falta', description: 'Por favor, execute a "Validação de Documentos" primeiro.' });
+            return;
+        }
+
+        setProcessing(true);
+        try {
+            const data = await siengeFile.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
+
+            const worksheet = workbook.Sheets[sheetName];
+            const siengeSheetData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+            
+            const allXmlItems = [
+                ...(processedData.sheets['Itens Válidos'] || []),
+                ...(processedData.sheets['Itens Válidos Saídas'] || []),
+                ...(processedData.sheets['CTEs Válidos'] || [])
+            ];
+
+            const newReconciliationResults = runReconciliation(siengeSheetData, allXmlItems);
+
+            setProcessedData(prev => ({
+                ...prev!,
+                siengeSheetData,
+                reconciliationResults: newReconciliationResults,
+            }));
+            
+            toast({ title: 'Conciliação Concluída', description: `${newReconciliationResults.reconciled.length} itens foram conciliados.` });
+
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Erro na Conciliação', description: err.message });
+        } finally {
+            setProcessing(false);
+        }
     };
 
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null, spedDuplicates: SpedDuplicate[] | null) => {
@@ -718,11 +766,10 @@ export function AutomatorClientPage() {
                                     siengeFile={siengeFile} 
                                     onSiengeFileChange={handleSiengeFileChange}
                                     onClearSiengeFile={() => setSiengeFile(null)}
-                                    allPersistedData={imobilizadoClassifications}
-                                    onPersistData={handlePersistImobilizado}
-                                    onProcessedDataChange={setProcessedData}
+                                    onRunReconciliation={handleRunReconciliation}
+                                    isReconciliationRunning={processing}
                                 /> 
-                                : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" e carregue a planilha Sienge para habilitar a conciliação.</p></CardContent></Card>
+                                : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a conciliação.</p></CardContent></Card>
                             )}
 
                              {activeMainTab === 'saidas-nfe' && (
