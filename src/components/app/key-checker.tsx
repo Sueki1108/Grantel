@@ -378,12 +378,12 @@ const processSpedFileInBrowser = (
         }
 
         if (config.fixCteSeries && codeType === 'D100' && parts.length > 10 && cteKeyToSeriesMap.size > 0) {
-            const cteKey = cleanAndToStr(parts[10]);
+            const cteKey = cleanAndToStr(parts[9]); // Chave do CTe é no campo 10 (índice 9)
             const correctSeries = cteKeyToSeriesMap.get(cteKey);
             if (correctSeries) {
                 const formattedSeries = correctSeries.padStart(3, '0');
-                if (parts[7] !== formattedSeries) {
-                    parts[7] = formattedSeries;
+                if (parts[6] !== formattedSeries) { // Série é no campo 7 (índice 6)
+                    parts[6] = formattedSeries;
                     currentLine = parts.join('|');
                     modifications.cteSeriesCorrection.push({ lineNumber: i + 1, original: originalLine, corrected: currentLine });
                     lineWasModified = true;
@@ -518,7 +518,7 @@ const findDuplicates = (arr: string[]): string[] => {
     const seen = new Set<string>();
     const duplicates = new Set<string>();
     arr.forEach(item => {
-        if (seen.has(item)) duplicates.add(item); else seen.add(item);
+        if (seen.has(item)) duplicates.add(item); else seen.add(key);
     });
     return Array.from(duplicates);
 };
@@ -1191,11 +1191,7 @@ export function KeyChecker({
                                         </TabsContent>
 
                                         <TabsContent value="full_log" className="mt-4 flex-grow overflow-hidden">
-                                            <div className="h-full w-full rounded-md border bg-muted/50 overflow-y-auto">
-                                                <div className="p-4 text-sm font-mono whitespace-pre-wrap">
-                                                    {correctionResult.log.map((log, index) => ( <p key={index}>{log}</p> ))}
-                                                </div>
-                                            </div>
+                                            <LogDisplay logs={correctionResult.log} />
                                         </TabsContent>
                                     </Tabs>
                                 ) : null}
