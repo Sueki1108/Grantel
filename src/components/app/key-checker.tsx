@@ -599,19 +599,19 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                     docData = { ...docData, codPart: parts[5], ser: parts[7], numDoc: parts[9], dtDoc: parts[11], vlDoc: parts[13], chave: parts[10]};
                     compositeKey = `${cleanAndToStr(participant?.cnpj)}-${docData.ser || ''}-${docData.numDoc || ''}`;
 
-                } else if (reg === 'D100' && parts.length > 6) {
+                } else if (reg === 'D100' && parts.length > 12) {
                     const participant = participantData.get(parts[6]);
-                    docData = { ...docData, codPart: parts[6], numDoc: parts[10], dtDoc: parts[12], vlDoc: parts[14], chave: parts[20] };
+                    docData = { ...docData, codPart: parts[6], numDoc: parts[10], dtDoc: parts[12], vlDoc: parts[14], chave: parts[9] };
                     compositeKey = `${cleanAndToStr(participant?.cnpj)}-${docData.numDoc}-${docData.dtDoc}-${docData.vlDoc}`;
 
-                } else if (reg === 'C500' && parts.length > 3) {
-                    const participant = participantData.get(parts[3]);
-                    docData = { ...docData, codPart: parts[3], numDoc: parts[6], dtDoc: parts[5], vlDoc: parts[7] };
+                } else if (reg === 'C500' && parts.length > 13) {
+                    const participant = participantData.get(parts[4]);
+                    docData = { ...docData, codPart: parts[4], numDoc: parts[10], dtDoc: parts[11], vlDoc: parts[13] };
                     compositeKey = `${cleanAndToStr(participant?.cnpj)}-${docData.numDoc}-${docData.dtDoc}-${docData.vlDoc}`;
 
-                } else if (reg === 'D500' && parts.length > 3) {
-                    const participant = participantData.get(parts[3]);
-                    docData = { ...docData, codPart: parts[3], numDoc: parts[6], dtDoc: parts[5], vlDoc: parts[7] };
+                } else if (reg === 'D500' && parts.length > 7) {
+                    const participant = participantData.get(parts[4]);
+                    docData = { ...docData, codPart: parts[4], numDoc: parts[9], dtDoc: parts[10], vlDoc: parts[12] };
                     compositeKey = `${cleanAndToStr(participant?.cnpj)}-${docData.numDoc}-${docData.dtDoc}-${docData.vlDoc}`;
                 }
 
@@ -642,8 +642,8 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 const docTypes: { [key: string]: { codPart: number, ser?: number, numDoc: number, dtDoc: number, vlDoc: number } } = {
                     'C100': { codPart: 5, ser: 7, numDoc: 9, dtDoc: 11, vlDoc: 13 },
                     'D100': { codPart: 6, ser: 8, numDoc: 10, dtDoc: 12, vlDoc: 14 },
-                    'C500': { codPart: 3, numDoc: 6, dtDoc: 5, vlDoc: 7 },
-                    'D500': { codPart: 3, numDoc: 6, dtDoc: 5, vlDoc: 7 },
+                    'C500': { codPart: 4, numDoc: 10, dtDoc: 11, vlDoc: 13 },
+                    'D500': { codPart: 4, numDoc: 9, dtDoc: 10, vlDoc: 12 },
                 };
 
                 const mapping = docTypes[reg];
@@ -1272,3 +1272,4 @@ export function KeyChecker({
     );
 }
 
+    
