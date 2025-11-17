@@ -1,4 +1,5 @@
 
+      
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -571,7 +572,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 if (codPart) {
                     participantData.set(codPart, { 
                         nome: parts[3], 
-                        cnpj: parts[5] || parts[6], 
+                        cnpj: parts[5] || parts[6], // CNPJ or CPF
                         ie: parts[7], 
                         uf: parts[9] 
                     });
@@ -623,14 +624,15 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                     if (mapping.chave && parts[mapping.chave]) {
                         spedDocData.set(parts[mapping.chave], docData);
                     }
-
-                    if(reg === 'C500') {
+                    
+                    if (reg === 'C500') {
                         compositeKey = `${parts[mapping.codPart]}-${parts[mapping.numDoc]}-${parts[mapping.dtDoc]}-${parts[mapping.vlDoc]}`;
                     } else if (reg === 'D500') {
                         compositeKey = `${parts[mapping.codPart]}-${parts[mapping.numDoc]}-${parts[mapping.dtDoc]}-${parts[mapping.vlDoc]}`;
                     } else {
                         compositeKey = `${cleanAndToStr(docData.participantCnpjCpf)}-${docData.ser || ''}-${docData.numDoc || ''}`;
                     }
+
 
                     if (compositeKey) {
                         if (!duplicateCheckMap.has(compositeKey)) {
@@ -1200,7 +1202,7 @@ export function KeyChecker({
                                                     </TabsContent>
                                                     <TabsContent value="removed0150" className="h-full">
                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de participantes (0150) que não estavam associados a nenhum documento fiscal (C100/D100) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de participantes (0150) que não estavam associados a nenhum documento fiscal (C100/D100/D500) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
                                                             <span>Participantes não utilizados foram removidos.</span>
                                                         </div>
                                                         <RemovedLinesDisplay logs={correctionResult.modifications.removed0150} logType="0150" />
@@ -1289,3 +1291,4 @@ export function KeyChecker({
     );
 }
 
+    
