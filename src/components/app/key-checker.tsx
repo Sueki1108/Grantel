@@ -594,50 +594,38 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             let compositeKey: string | undefined;
 
             try {
-                const docTypes: { [key: string]: { codPart: number, ser: number, numDoc: number, dtDoc: number, vlDoc: number, chave?: number } } = {
-                    'C100': { codPart: 4, ser: 6, numDoc: 8, dtDoc: 10, vlDoc: 12, chave: 9 },
-                    'D100': { codPart: 5, ser: 7, numDoc: 9, dtDoc: 11, vlDoc: 13, chave: 10 },
-                    'C500': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 4, vlDoc: 6 },
-                    'D500': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 6 },
-                };
+                if (reg === 'C100' && parts.length > 9) { // NFe
+                    const participant = participantData.get(parts[4]);
+                    docData = { ...docData, ser: parts[6], numDoc: parts[8], dtDoc: parts[10], vlDoc: parts[12], chave: parts[9], participant };
+                    compositeKey = `${cleanAndToStr(participant?.cnpj)}-${docData.ser || ''}-${docData.numDoc || ''}`;
 
-                if (docTypes[reg]) {
-                    const mapping = docTypes[reg];
-                    
-                    const participant = participantData.get(parts[mapping.codPart]);
-                    docData = { 
-                        ...docData, 
-                        codPart: parts[mapping.codPart], 
-                        ser: parts[mapping.ser], 
-                        numDoc: parts[mapping.numDoc], 
-                        dtDoc: parts[mapping.dtDoc], 
-                        vlDoc: parts[mapping.vlDoc],
-                        participantName: participant?.nome || 'N/A',
-                        participantCnpjCpf: participant?.cnpj || 'N/A'
-                    };
-                    
-                    if (mapping.chave && parts[mapping.chave] && parts[mapping.chave].length === 44) {
-                        spedDocData.set(parts[mapping.chave], docData);
-                    }
-                    
-                    if (reg === 'C100') {
-                        compositeKey = `${cleanAndToStr(docData.participantCnpjCpf)}-${docData.ser || ''}-${docData.numDoc || ''}`;
-                    } else if (reg === 'D100') {
-                        compositeKey = `${cleanAndToStr(docData.participantCnpjCpf)}-${docData.numDoc}-${docData.dtDoc}-${docData.vlDoc}`;
-                    } else if (reg === 'C500') {
-                        compositeKey = `${cleanAndToStr(docData.participantCnpjCpf)}-${docData.numDoc}-${docData.dtDoc}-${docData.vlDoc}`;
-                    } else if (reg === 'D500') {
-                         compositeKey = `${cleanAndToStr(docData.participantCnpjCpf)}-${docData.numDoc}-${docData.dtDoc}-${docData.vlDoc}`;
-                    }
+                } else if (reg === 'D100' && parts.length > 13) { // CTe
+                    const participant = participantData.get(parts[5]);
+                    docData = { ...docData, numDoc: parts[9], dtDoc: parts[11], vlDoc: parts[13], chave: parts[10], participant };
+                    compositeKey = `${cleanAndToStr(participant?.cnpj)}-${docData.numDoc}-${docData.dtDoc}-${docData.vlDoc}`;
 
+                } else if (reg === 'C500' && parts.length > 11) { // Energia Elétrica
+                    const participant = participantData.get(parts[3]);
+                    docData = { ...docData, numDoc: parts[9], dtDoc: parts[10], vlDoc: parts[11], participant };
+                    compositeKey = `${cleanAndToStr(participant?.cnpj)}-${docData.numDoc}-${docData.dtDoc}-${docData.vlDoc}`;
 
-                    if (compositeKey) {
-                        if (!duplicateCheckMap.has(compositeKey)) {
-                            duplicateCheckMap.set(compositeKey, []);
-                        }
-                        duplicateCheckMap.get(compositeKey)!.push({ line: lineNumber, record: line });
-                    }
+                } else if (reg === 'D500' && parts.length > 12) { // Comunicação
+                    const participant = participantData.get(parts[3]);
+                    docData = { ...docData, numDoc: parts[8], dtDoc: parts[9], vlDoc: parts[11], participant };
+                    compositeKey = `${cleanAndToStr(participant?.cnpj)}-${docData.numDoc}-${docData.dtDoc}-${docData.vlDoc}`;
                 }
+
+                if (docData.chave && docData.chave.length === 44) {
+                    spedDocData.set(docData.chave, docData);
+                }
+                
+                if (compositeKey) {
+                    if (!duplicateCheckMap.has(compositeKey)) {
+                        duplicateCheckMap.set(compositeKey, []);
+                    }
+                    duplicateCheckMap.get(compositeKey)!.push({ line: lineNumber, record: line });
+                }
+
             } catch (e) {
                  logFn(`Aviso: Erro ao processar linha ${lineNumber}: ${line}. Erro: ${(e as Error).message}`);
             }
@@ -651,11 +639,12 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             return records.map(recordInfo => {
                 const parts = recordInfo.record.split('|');
                 const reg = parts[1];
-                 const docTypes: { [key: string]: { codPart: number, ser: number, numDoc: number, dtDoc: number, vlDoc: number } } = {
+
+                const docTypes: { [key: string]: { codPart: number, ser?: number, numDoc: number, dtDoc: number, vlDoc: number } } = {
                     'C100': { codPart: 4, ser: 6, numDoc: 8, dtDoc: 10, vlDoc: 12 },
                     'D100': { codPart: 5, ser: 7, numDoc: 9, dtDoc: 11, vlDoc: 13 },
-                    'C500': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 4, vlDoc: 6 },
-                    'D500': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 4, vlDoc: 6 },
+                    'C500': { codPart: 3, numDoc: 9, dtDoc: 10, vlDoc: 11 },
+                    'D500': { codPart: 3, numDoc: 8, dtDoc: 9, vlDoc: 11 },
                 };
 
                 const mapping = docTypes[reg];
@@ -667,7 +656,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 return {
                     'Tipo de Registo': reg,
                     'Número do Documento': parts[mapping.numDoc],
-                    'Série': parts[mapping.ser],
+                    'Série': mapping.ser ? parts[mapping.ser] : 'N/A',
                     'CNPJ/CPF': participant?.cnpj || 'N/A',
                     'Fornecedor': participant?.nome || 'N/A',
                     'Data Emissão': !isNaN(parsedDate.getTime()) ? `${parsedDate.getDate().toString().padStart(2,'0')}/${(parsedDate.getMonth()+1).toString().padStart(2,'0')}/${parsedDate.getFullYear()}` : parts[mapping.dtDoc],
@@ -743,21 +732,21 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
              const xmlUF = nota.destUF?.trim().toUpperCase();
              baseDivergence['IE no XML'] = xmlIE || 'Em branco';
              baseDivergence['UF no XML'] = xmlUF || 'Em branco';
-            if (xmlUF !== GRANTEL_UF && xmlIE !== GRANTEL_IE) {
+            if (xmlUF !== GRANTEL_UF || xmlIE !== GRANTEL_IE) {
                 hasIeUfDivergence = true;
             }
 
-        } else if (docType === 'CTE' && cleanAndToStr(nota.recebCNPJ) === GRANTEL_CNPJ) {
+        } else if (docType === 'CTE' && (cleanAndToStr(nota.recebCNPJ) === GRANTEL_CNPJ || cleanAndToStr(nota.tomadorCNPJ) === GRANTEL_CNPJ)) {
              const xmlIE = cleanAndToStr(nota.recebIE);
              const xmlUF = nota.recebUF?.trim().toUpperCase();
              baseDivergence['IE no XML'] = xmlIE || 'Em branco';
              baseDivergence['UF no XML'] = xmlUF || 'Em branco';
-             if (xmlUF !== GRANTEL_UF && xmlIE !== GRANTEL_IE) {
+             if (xmlUF !== GRANTEL_UF || xmlIE !== GRANTEL_IE) {
                 hasIeUfDivergence = true;
             }
         }
         if (hasIeUfDivergence) {
-            divergenceMessages.push("IE e UF");
+            divergenceMessages.push("IE ou UF");
         }
 
 
@@ -1091,7 +1080,7 @@ export function KeyChecker({
                    
                     <div className="flex flex-col sm:flex-row gap-2">
                          <Button onClick={handleVerify} disabled={loading !== null || !spedFiles || spedFiles.length === 0} className="w-full">
-                            {loading === 'verify' ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verificando...</> : 'Verificar Chaves'}
+                            {loading === 'verify' ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verificando...</> : 'Verificar Chaves e Duplicados'}
                         </Button>
                          <Dialog>
                             <DialogTrigger asChild>
@@ -1195,7 +1184,7 @@ export function KeyChecker({
                                                     </TabsContent>
                                                     <TabsContent value="removed0150" className="h-full">
                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de participantes (0150) que não estavam associados a nenhum documento fiscal (C100/D100) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de participantes (0150) que não estavam associados a nenhum documento fiscal (C100/D100/D500) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
                                                             <span>Participantes não utilizados foram removidos.</span>
                                                         </div>
                                                         <RemovedLinesDisplay logs={correctionResult.modifications.removed0150} logType="0150" />
@@ -1283,3 +1272,4 @@ export function KeyChecker({
         </div>
     );
 }
+
