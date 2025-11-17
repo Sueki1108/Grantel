@@ -86,7 +86,6 @@ const addChaveUnica = (df: DataFrame): DataFrame => {
 
     const numeroKey = findKey(['número', 'numero']);
     const emitenteCnpjKey = findKey(['cpf/cnpj do fornecedor', 'emitcnpj']);
-    const destCnpjKey = findKey(['cpf/cnpj do destinatário', 'destcnpj']);
     
     if (!numeroKey) return df;
 
@@ -95,11 +94,7 @@ const addChaveUnica = (df: DataFrame): DataFrame => {
             const numeroLimpo = cleanAndToStr(row[numeroKey]);
             let parceiroCnpjLimpo = '';
             
-            // Para saídas, a chave é com o destinatário. Para entradas, é com o emitente.
-            const isSaida = !!destCnpjKey && !!row[destCnpjKey] && (!emitenteCnpjKey || !row[emitenteCnpjKey]);
-            if (isSaida && destCnpjKey) {
-                parceiroCnpjLimpo = cleanAndToStr(row[destCnpjKey]);
-            } else if (emitenteCnpjKey && row[emitenteCnpjKey]) {
+            if (emitenteCnpjKey && row[emitenteCnpjKey]) {
                 parceiroCnpjLimpo = cleanAndToStr(row[emitenteCnpjKey]);
             }
 
@@ -373,7 +368,6 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[], 
     }
 
     try {
-        // Create a map from Chave Unica to the full note header object
         const headerMap = new Map<string, any>();
         allNoteHeaders.forEach(header => {
             if (header["Chave Unica"]) {
@@ -381,7 +375,6 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[], 
             }
         });
         
-        // Enrich XML items with emitter CNPJ from the header map
         const enrichedXmlItems = allXmlItems.map(item => {
             const header = headerMap.get(item["Chave Unica"]);
             return {
@@ -412,7 +405,6 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[], 
             cfop: findHeader(siengeData, ['cfop']),
             valorTotal: findHeader(filteredSiengeData, ['valor total', 'valor', 'vlr total']),
             precoUnitario: findHeader(filteredSiengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
-            // Add other Sienge variation headers here
             desconto: findHeader(filteredSiengeData, ['desconto']),
             frete: findHeader(filteredSiengeData, ['frete']),
             ipiDespesas: findHeader(filteredSiengeData, ['ipi despesas', 'ipidespesas']),
@@ -493,15 +485,27 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[], 
 
         for (const pass of passDefinitions) {
             // Check if the pass is valid by seeing if a key can be generated
-            if (pass.getSienge({ [h.numero!]: '', [h.cnpj!]: '' })) {
-                const result = reconciliationPass(remainingSiengeItems, remainingXmlItems, pass.getSienge, pass.getXml, pass.name);
+            const siengeKeyGen = pass.getSienge;
+            if (siengeKeyGen && siengeKeyGen({ [h.numero!]: '', [h.cnpj!]: '' })) { // Dummy check
+                const result = reconciliationPass(remainingSiengeItems, remainingXmlItems, siengeKeyGen, pass.getXml, pass.name);
                 reconciled.push(...result.matched);
                 remainingSiengeItems = result.remainingSienge;
                 remainingXmlItems = result.remainingXml;
             }
         }
         
-        return { reconciled, onlyInSienge: remainingSiengeItems, onlyInXml: remainingXmlItems };
+        // Add comparison key to unmatched items for debugging
+        const finalOnlyInSienge = remainingSiengeItems.map(item => ({
+            ...item,
+            'Chave de Comparação': getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]) || 'Inválida'
+        }));
+        
+        const finalOnlyInXml = remainingXmlItems.map(item => ({
+            ...item,
+            'Chave de Comparação': getXmlKey(item, 'Valor Total') || 'Inválida'
+        }));
+
+        return { reconciled, onlyInSienge: finalOnlyInSienge, onlyInXml: finalOnlyInXml };
     } catch (err: any) {
         console.error("Reconciliation Error:", err);
         return { ...emptyResult, onlyInSienge: siengeData, onlyInXml: allXmlItems };
