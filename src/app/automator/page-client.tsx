@@ -259,55 +259,7 @@ export function AutomatorClientPage() {
         setSiengeFile(file || null);
     
         if (file) {
-            try {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const data = event.target?.result;
-                        if (!data) throw new Error("Não foi possível ler o conteúdo do ficheiro.");
-    
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        const sheetName = workbook.SheetNames[0];
-                        if (!sheetName) throw new Error("A planilha não contém nenhuma aba.");
-                        
-                        const worksheet = workbook.Sheets[sheetName];
-                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-                        
-                        setProcessedData(prev => {
-                            const newState: ProcessedData = prev ? { ...prev, siengeSheetData: jsonData } : {
-                                sheets: {}, spedInfo: null, keyCheckResults: null, competence: null,
-                                reconciliationResults: null, resaleAnalysis: null, spedCorrections: null,
-                                spedDuplicates: null, siengeSheetData: jsonData
-                            };
-
-                             // Se já tivermos dados de XML, executamos a conciliação imediatamente
-                            if (newState && newState.sheets && newState.siengeSheetData) {
-                                const allXmlItems = [
-                                    ...(newState.sheets['Itens Válidos'] || []),
-                                    ...(newState.sheets['Itens Válidos Saídas'] || []),
-                                    ...(newState.sheets['CTEs Válidos'] || [])
-                                ];
-                                if (allXmlItems.length > 0) {
-                                    const reconciliationResults = runReconciliation(newState.siengeSheetData, allXmlItems);
-                                    newState.reconciliationResults = reconciliationResults;
-                                    toast({ title: "Conciliação Executada", description: `${reconciliationResults.reconciled.length} itens conciliados.` });
-                                }
-                            }
-
-                            return newState;
-                        });
-                        
-                        toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises avançadas.' });
-    
-                    } catch (err: any) {
-                         toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
-                    }
-                };
-                reader.onerror = (error) => { throw error };
-                reader.readAsArrayBuffer(file);
-            } catch (error: any) {
-                 toast({ variant: 'destructive', title: 'Erro ao Ler Ficheiro Sienge', description: error.message });
-            }
+            toast({ title: 'Planilha Sienge Selecionada', description: 'A planilha será processada e a conciliação executada ao clicar em "Validar Dados".' });
         } else {
              setProcessedData(prev => {
                 if (!prev) return null;
@@ -536,13 +488,7 @@ export function AutomatorClientPage() {
     const handleSubmit = () => {
         setError(null);
         setLogs([]);
-        setProcessedData(prev => ({
-            ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, siengeSheetData: null }),
-            sheets: {},
-            spedInfo: null,
-            keyCheckResults: null,
-        }));
-
+        setProcessedData(null);
         setIsPeriodModalOpen(false);
         setProcessing(true);
         
@@ -614,17 +560,32 @@ export function AutomatorClientPage() {
                     }
                 }
 
+                // Process Sienge File
+                let localSiengeData = null;
+                if (siengeFile) {
+                    log("Processando planilha Sienge...");
+                    const data = await siengeFile.arrayBuffer();
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    if (sheetName) {
+                        const worksheet = workbook.Sheets[sheetName];
+                        localSiengeData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+                        log(`Planilha Sienge processada com ${localSiengeData?.length || 0} registos.`);
+                    } else {
+                        log("AVISO: Planilha Sienge não contém abas.");
+                    }
+                }
+
                 const resultData = processDataFrames(dataToProcess, eventCanceledKeys, log);
                 setLogs(localLogs);
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
-                const siengeDataForRecon = processedData?.siengeSheetData;
                 let reconciliationResults = null;
-                if (siengeDataForRecon) {
+                if (localSiengeData) {
                     log("Executando conciliação de itens (XML vs Sienge)...");
                      reconciliationResults = runReconciliation(
-                        siengeDataForRecon,
+                        localSiengeData,
                         [
                             ...(resultData.sheets['Itens Válidos'] || []),
                             ...(resultData.sheets['Itens Válidos Saídas'] || []),
@@ -637,7 +598,7 @@ export function AutomatorClientPage() {
                 setProcessedData({
                     ...resultData, 
                     competence,
-                    siengeSheetData: siengeDataForRecon,
+                    siengeSheetData: localSiengeData,
                     reconciliationResults, 
                 });
 
