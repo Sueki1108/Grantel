@@ -1,5 +1,4 @@
 
-      
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -597,13 +596,9 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             try {
                 const docTypes: { [key: string]: { codPart: number, ser: number, numDoc: number, dtDoc: number, vlDoc: number, chave?: number } } = {
                     'C100': { codPart: 4, ser: 6, numDoc: 8, dtDoc: 10, vlDoc: 12, chave: 9 },
-                    'D100': { codPart: 4, ser: 7, numDoc: 8, dtDoc: 11, vlDoc: 13, chave: 10 },
-                    'C500': { codPart: 3, ser: 5, numDoc: 10, dtDoc: 11, vlDoc: 12 },
-                    'D500': { codPart: 3, ser: 5, numDoc: 6, dtDoc: 5, vlDoc: 7 },
-                    'C600': { codPart: 2, ser: 4, numDoc: 6, dtDoc: 7, vlDoc: 9 },
-                    'C800': { codPart: 2, ser: 4, numDoc: 4, dtDoc: 6, vlDoc: 8 },
-                    'D300': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 6, vlDoc: 7 },
-                    'D400': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 6, vlDoc: 7 },
+                    'D100': { codPart: 5, ser: 7, numDoc: 9, dtDoc: 11, vlDoc: 13, chave: 10 },
+                    'C500': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 4, vlDoc: 6 },
+                    'D500': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 6 },
                 };
 
                 if (docTypes[reg]) {
@@ -621,16 +616,18 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                         participantCnpjCpf: participant?.cnpj || 'N/A'
                     };
                     
-                    if (mapping.chave && parts[mapping.chave]) {
+                    if (mapping.chave && parts[mapping.chave] && parts[mapping.chave].length === 44) {
                         spedDocData.set(parts[mapping.chave], docData);
                     }
                     
-                    if (reg === 'C500') {
-                        compositeKey = `${parts[mapping.codPart]}-${parts[mapping.numDoc]}-${parts[mapping.dtDoc]}-${parts[mapping.vlDoc]}`;
-                    } else if (reg === 'D500') {
-                        compositeKey = `${parts[mapping.codPart]}-${parts[mapping.numDoc]}-${parts[mapping.dtDoc]}-${parts[mapping.vlDoc]}`;
-                    } else {
+                    if (reg === 'C100') {
                         compositeKey = `${cleanAndToStr(docData.participantCnpjCpf)}-${docData.ser || ''}-${docData.numDoc || ''}`;
+                    } else if (reg === 'D100') {
+                        compositeKey = `${cleanAndToStr(docData.participantCnpjCpf)}-${docData.numDoc}-${docData.dtDoc}-${docData.vlDoc}`;
+                    } else if (reg === 'C500') {
+                        compositeKey = `${cleanAndToStr(docData.participantCnpjCpf)}-${docData.numDoc}-${docData.dtDoc}-${docData.vlDoc}`;
+                    } else if (reg === 'D500') {
+                         compositeKey = `${cleanAndToStr(docData.participantCnpjCpf)}-${docData.numDoc}-${docData.dtDoc}-${docData.vlDoc}`;
                     }
 
 
@@ -656,13 +653,9 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 const reg = parts[1];
                  const docTypes: { [key: string]: { codPart: number, ser: number, numDoc: number, dtDoc: number, vlDoc: number } } = {
                     'C100': { codPart: 4, ser: 6, numDoc: 8, dtDoc: 10, vlDoc: 12 },
-                    'D100': { codPart: 4, ser: 7, numDoc: 8, dtDoc: 11, vlDoc: 13 },
-                    'C500': { codPart: 3, ser: 5, numDoc: 10, dtDoc: 11, vlDoc: 12 },
-                    'D500': { codPart: 3, ser: 5, numDoc: 6, dtDoc: 5, vlDoc: 7 },
-                    'C600': { codPart: 2, ser: 4, numDoc: 6, dtDoc: 7, vlDoc: 9 },
-                    'C800': { codPart: 2, ser: 4, numDoc: 4, dtDoc: 6, vlDoc: 8 },
-                    'D300': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 6, vlDoc: 7 },
-                    'D400': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 6, vlDoc: 7 },
+                    'D100': { codPart: 5, ser: 7, numDoc: 9, dtDoc: 11, vlDoc: 13 },
+                    'C500': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 4, vlDoc: 6 },
+                    'D500': { codPart: 2, ser: 4, numDoc: 5, dtDoc: 4, vlDoc: 6 },
                 };
 
                 const mapping = docTypes[reg];
@@ -1202,7 +1195,7 @@ export function KeyChecker({
                                                     </TabsContent>
                                                     <TabsContent value="removed0150" className="h-full">
                                                         <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de participantes (0150) que não estavam associados a nenhum documento fiscal (C100/D100/D500) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
+                                                            <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registos de participantes (0150) que não estavam associados a nenhum documento fiscal (C100/D100) foram removidos.</p></TooltipContent></Tooltip></TooltipProvider>
                                                             <span>Participantes não utilizados foram removidos.</span>
                                                         </div>
                                                         <RemovedLinesDisplay logs={correctionResult.modifications.removed0150} logType="0150" />
@@ -1290,5 +1283,3 @@ export function KeyChecker({
         </div>
     );
 }
-
-    
