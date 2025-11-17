@@ -16,7 +16,7 @@ import Link from "next/link";
 import * as XLSX from 'xlsx';
 import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
-import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
+import { processDataFrames, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdvancedAnalyses } from "@/components/app/advanced-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
@@ -256,17 +256,7 @@ export function AutomatorClientPage() {
     
     const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        setSiengeFile(file || null);
-    
-        if (file) {
-            toast({ title: 'Planilha Sienge Selecionada', description: 'A planilha será processada e a conciliação executada ao clicar em "Validar Dados".' });
-        } else {
-             setProcessedData(prev => {
-                if (!prev) return null;
-                const { siengeSheetData, reconciliationResults, ...rest } = prev;
-                return { ...rest, siengeSheetData: null, reconciliationResults: null } as ProcessedData;
-             });
-        }
+        setSiengeFile(file || null); // Just set the file, the analysis component will handle it
     };
 
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>, category: 'nfeEntrada' | 'cte' | 'nfeSaida' | 'nfse') => {
@@ -528,7 +518,7 @@ export function AutomatorClientPage() {
                         return rows.filter(row => {
                             const emissionValue = row['Emissão'] || row['Data de Emissão'];
                             if (!emissionValue) return true;
-                            if (typeof emissionValue === 'string' && emissionValue.length >= 10) {
+                            if (typeof emissionValue === 'string' && emissionValue.length >= 7) {
                                 return activePeriods.includes(emissionValue.substring(0, 7));
                             }
                             try {
@@ -560,48 +550,12 @@ export function AutomatorClientPage() {
                     }
                 }
 
-                // Process Sienge File
-                let localSiengeData = null;
-                if (siengeFile) {
-                    log("Processando planilha Sienge...");
-                    const data = await siengeFile.arrayBuffer();
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const sheetName = workbook.SheetNames[0];
-                    if (sheetName) {
-                        const worksheet = workbook.Sheets[sheetName];
-                        localSiengeData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-                        log(`Planilha Sienge processada com ${localSiengeData?.length || 0} registos.`);
-                    } else {
-                        log("AVISO: Planilha Sienge não contém abas.");
-                    }
-                }
-
                 const resultData = processDataFrames(dataToProcess, eventCanceledKeys, log);
                 setLogs(localLogs);
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
-                let reconciliationResults = null;
-                if (localSiengeData) {
-                    log("Executando conciliação de itens (XML vs Sienge)...");
-                     reconciliationResults = runReconciliation(
-                        localSiengeData,
-                        [
-                            ...(resultData.sheets['Itens Válidos'] || []),
-                            ...(resultData.sheets['Itens Válidos Saídas'] || []),
-                            ...(resultData.sheets['CTEs Válidos'] || [])
-                        ]
-                    );
-                    log(`Conciliação concluída: ${reconciliationResults.reconciled.length} itens conciliados.`);
-                }
-
-                setProcessedData({
-                    ...resultData, 
-                    competence,
-                    siengeSheetData: localSiengeData,
-                    reconciliationResults, 
-                });
-
+                setProcessedData({...resultData, competence });
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
 
             } catch (err: any) {
@@ -763,12 +717,10 @@ export function AutomatorClientPage() {
                                     processedData={processedData} 
                                     siengeFile={siengeFile} 
                                     onSiengeFileChange={handleSiengeFileChange}
-                                    onClearSiengeFile={() => {
-                                        setSiengeFile(null);
-                                        setProcessedData(prev => prev ? ({...prev, siengeSheetData: null, reconciliationResults: null}) : null);
-                                    }}
+                                    onClearSiengeFile={() => setSiengeFile(null)}
                                     allPersistedData={imobilizadoClassifications}
                                     onPersistData={handlePersistImobilizado}
+                                    onProcessedDataChange={setProcessedData}
                                 /> 
                                 : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" e carregue a planilha Sienge para habilitar a conciliação.</p></CardContent></Card>
                             )}

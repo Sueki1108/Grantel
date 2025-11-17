@@ -1,14 +1,15 @@
 "use client";
 
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUploadForm } from "@/components/app/file-upload-form";
-import type { ProcessedData } from '@/lib/excel-processor';
+import type { ProcessedData, ReconciliationResults } from '@/lib/excel-processor';
+import { runReconciliation } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import * as XLSX from 'xlsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
 import { getColumns } from "@/components/app/columns-helper";
@@ -24,6 +25,7 @@ interface ReconciliationAnalysisProps {
     onClearSiengeFile: () => void;
     allPersistedData: AllClassifications;
     onPersistData: (allDataToSave: AllClassifications) => void;
+    onProcessedDataChange: (data: ProcessedData | ((prev: ProcessedData | null) => ProcessedData | null)) => void;
 }
 
 
@@ -34,9 +36,58 @@ export function ReconciliationAnalysis({
     onClearSiengeFile,
     allPersistedData,
     onPersistData,
+    onProcessedDataChange,
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
+    const [isLoadingSienge, setIsLoadingSienge] = useState(false);
     const reconciliationResults = processedData?.reconciliationResults;
+
+    useEffect(() => {
+        const processSiengeAndReconcile = async () => {
+            if (!siengeFile || !processedData) return;
+
+            setIsLoadingSienge(true);
+            try {
+                const data = await siengeFile.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
+
+                const worksheet = workbook.Sheets[sheetName];
+                const siengeSheetData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+                
+                toast({ title: 'Planilha Sienge Processada', description: 'A executar a conciliação...' });
+
+                const allXmlItems = [
+                    ...(processedData.sheets['Itens Válidos'] || []),
+                    ...(processedData.sheets['Itens Válidos Saídas'] || []),
+                    ...(processedData.sheets['CTEs Válidos'] || [])
+                ];
+
+                const newReconciliationResults = runReconciliation(siengeSheetData, allXmlItems);
+
+                onProcessedDataChange(prev => {
+                    if (!prev) return null;
+                    return {
+                        ...prev,
+                        siengeSheetData,
+                        reconciliationResults: newReconciliationResults,
+                    };
+                });
+                
+                toast({ title: 'Conciliação Concluída', description: `${newReconciliationResults.reconciled.length} itens foram conciliados.` });
+
+            } catch (err: any) {
+                toast({ variant: 'destructive', title: 'Erro ao processar Sienge', description: err.message });
+            } finally {
+                setIsLoadingSienge(false);
+            }
+        };
+
+        processSiengeAndReconcile();
+
+    }, [siengeFile, processedData?.sheets, onProcessedDataChange, toast]);
+
 
     const handleDownload = (data: any[], title: string) => {
         if (!data || data.length === 0) {
@@ -86,7 +137,12 @@ export function ReconciliationAnalysis({
                                 </AlertDescription>
                             </Alert>
                         )}
-                        {reconciliationResults ? (
+                        {isLoadingSienge ? (
+                             <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
+                                <Loader2 className="h-12 w-12 text-primary animate-spin" />
+                                <p className="mt-4 text-center">A processar a planilha Sienge e a executar a conciliação...</p>
+                            </div>
+                        ) : reconciliationResults ? (
                             <div className="mt-6">
                                 <Tabs defaultValue="reconciled">
                                     <TabsList className="grid w-full grid-cols-3">
@@ -113,7 +169,7 @@ export function ReconciliationAnalysis({
                         ) : (
                             <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
                                 <FileSearch className="h-12 w-12 text-primary" />
-                                <p className="mt-4 text-center">Aguardando dados para executar a conciliação...</p>
+                                <p className="mt-4 text-center">Aguardando a planilha "Itens do Sienge" para executar a conciliação...</p>
                             </div>
                         )}
                     </TabsContent>
