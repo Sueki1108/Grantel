@@ -579,13 +579,13 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             
             let compositeKey: string | undefined;
 
-            if (reg === 'C100') {
+            if (reg === 'C100' && parts.length > 13) {
                 compositeKey = `${parts[4]}-${parts[9]}-${parts[11]}-${parts[13]}`;
-            } else if (reg === 'C500') {
+            } else if (reg === 'C500' && parts.length > 13) {
                 compositeKey = `${parts[4]}-${parts[10]}-${parts[11]}-${parts[13]}`;
-            } else if (reg === 'D100') {
+            } else if (reg === 'D100' && parts.length > 14) {
                 compositeKey = `${parts[6]}-${parts[10]}-${parts[12]}-${parts[14]}`;
-            } else if (reg === 'D500') {
+            } else if (reg === 'D500' && parts.length > 12) {
                 compositeKey = `${parts[4]}-${parts[9]}-${parts[10]}-${parts[12]}`;
             }
 
@@ -606,19 +606,26 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 const docInfo: Partial<SpedDuplicate> = {};
 
                 try {
-                    if (reg === 'C100') { participant = participantData.get(parts[4]); docInfo['Número do Documento'] = parts[9]; docInfo['Série'] = parts[7]; docInfo['Data Emissão'] = parts[11]; docInfo['Valor Total'] = parseFloat(String(parts[13] || '0').replace(',', '.')); }
-                    else if (reg === 'C500') { participant = participantData.get(parts[4]); docInfo['Número do Documento'] = parts[10]; docInfo['Data Emissão'] = parts[11]; docInfo['Valor Total'] = parseFloat(String(parts[13] || '0').replace(',', '.')); }
-                    else if (reg === 'D100') { participant = participantData.get(parts[6]); docInfo['Número do Documento'] = parts[10]; docInfo['Data Emissão'] = parts[12]; docInfo['Valor Total'] = parseFloat(String(parts[14] || '0').replace(',', '.')); }
-                    else if (reg === 'D500') { participant = participantData.get(parts[4]); docInfo['Número do Documento'] = parts[9]; docInfo['Data Emissão'] = parts[10]; docInfo['Valor Total'] = parseFloat(String(parts[12] || '0').replace(',', '.')); }
-                } catch {}
+                    let dateField = '';
+                    if (reg === 'C100' && parts.length > 11) { participant = participantData.get(parts[4]); docInfo['Número do Documento'] = parts[9] || 'N/A'; docInfo['Série'] = parts[7]; dateField = parts[11]; docInfo['Valor Total'] = parseFloat(String(parts[13] || '0').replace(',', '.')); }
+                    else if (reg === 'C500' && parts.length > 11) { participant = participantData.get(parts[4]); docInfo['Número do Documento'] = parts[10] || 'N/A'; dateField = parts[11]; docInfo['Valor Total'] = parseFloat(String(parts[13] || '0').replace(',', '.')); }
+                    else if (reg === 'D100' && parts.length > 12) { participant = participantData.get(parts[6]); docInfo['Número do Documento'] = parts[10] || 'N/A'; dateField = parts[12]; docInfo['Valor Total'] = parseFloat(String(parts[14] || '0').replace(',', '.')); }
+                    else if (reg === 'D500' && parts.length > 10) { participant = participantData.get(parts[4]); docInfo['Número do Documento'] = parts[9] || 'N/A'; dateField = parts[10]; docInfo['Valor Total'] = parseFloat(String(parts[12] || '0').replace(',', '.')); }
+
+                    const parsedDate = parseSpedDate(dateField);
+                    docInfo['Data Emissão'] = !isNaN(parsedDate.getTime()) ? format(parsedDate, 'dd/MM/yyyy') : 'Data Inválida';
+
+                } catch (e) {
+                    console.error("Error parsing duplicate record", e);
+                }
 
                 return {
-                    'Tipo de Registo': reg,
+                    'Tipo de Registo': reg || 'N/A',
                     'Número do Documento': docInfo['Número do Documento'] || 'N/A',
                     'Série': docInfo['Série'] || 'N/A',
                     'CNPJ/CPF': participant?.cnpj || 'Não encontrado no 0150',
                     'Fornecedor': participant?.nome || 'Não encontrado no 0150',
-                    'Data Emissão': docInfo['Data Emissão'] ? format(parseSpedDate(docInfo['Data Emissão']), 'dd/MM/yyyy') : 'N/A',
+                    'Data Emissão': docInfo['Data Emissão'] || 'N/A',
                     'Valor Total': docInfo['Valor Total'] || 0,
                     'Linhas': records.map(r => r.line).join('; ')
                 };
