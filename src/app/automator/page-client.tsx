@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -274,28 +273,34 @@ export function AutomatorClientPage() {
                         const worksheet = workbook.Sheets[sheetName];
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
                         
-                        setProcessedData(prev => ({
-                            sheets: {}, 
-                            spedInfo: null, 
-                            keyCheckResults: null, 
-                            competence: null,
-                            reconciliationResults: null,
-                            resaleAnalysis: null,
-                            spedCorrections: null,
-                            spedDuplicates: null,
-                            ...prev,
-                            siengeSheetData: jsonData
-                        }));
+                        setProcessedData(prev => {
+                            const newState: ProcessedData = prev ? { ...prev, siengeSheetData: jsonData } : {
+                                sheets: {}, spedInfo: null, keyCheckResults: null, competence: null,
+                                reconciliationResults: null, resaleAnalysis: null, spedCorrections: null,
+                                spedDuplicates: null, siengeSheetData: jsonData
+                            };
+
+                             // Se já tivermos dados de XML, executamos a conciliação imediatamente
+                            if (newState && newState.sheets && newState.siengeSheetData) {
+                                const allXmlItems = [
+                                    ...(newState.sheets['Itens Válidos'] || []),
+                                    ...(newState.sheets['Itens Válidos Saídas'] || []),
+                                    ...(newState.sheets['CTEs Válidos'] || [])
+                                ];
+                                if (allXmlItems.length > 0) {
+                                    const reconciliationResults = runReconciliation(newState.siengeSheetData, allXmlItems);
+                                    newState.reconciliationResults = reconciliationResults;
+                                    toast({ title: "Conciliação Executada", description: `${reconciliationResults.reconciled.length} itens conciliados.` });
+                                }
+                            }
+
+                            return newState;
+                        });
                         
                         toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises avançadas.' });
     
                     } catch (err: any) {
                          toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
-                         setProcessedData(prev => {
-                            if (!prev) return null;
-                            const { siengeSheetData, ...rest } = prev;
-                            return rest as ProcessedData;
-                         });
                     }
                 };
                 reader.onerror = (error) => { throw error };
@@ -531,7 +536,13 @@ export function AutomatorClientPage() {
     const handleSubmit = () => {
         setError(null);
         setLogs([]);
-        setProcessedData(null);
+        setProcessedData(prev => ({
+            ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, siengeSheetData: null }),
+            sheets: {},
+            spedInfo: null,
+            keyCheckResults: null,
+        }));
+
         setIsPeriodModalOpen(false);
         setProcessing(true);
         
@@ -791,10 +802,12 @@ export function AutomatorClientPage() {
                                     processedData={processedData} 
                                     siengeFile={siengeFile} 
                                     onSiengeFileChange={handleSiengeFileChange}
-                                    onClearSiengeFile={() => setSiengeFile(null)}
+                                    onClearSiengeFile={() => {
+                                        setSiengeFile(null);
+                                        setProcessedData(prev => prev ? ({...prev, siengeSheetData: null, reconciliationResults: null}) : null);
+                                    }}
                                     allPersistedData={imobilizadoClassifications}
                                     onPersistData={handlePersistImobilizado}
-                                    onProcessedDataChange={setProcessedData}
                                 /> 
                                 : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" e carregue a planilha Sienge para habilitar a conciliação.</p></CardContent></Card>
                             )}
@@ -888,4 +901,3 @@ export function AutomatorClientPage() {
         </div>
     );
 }
-

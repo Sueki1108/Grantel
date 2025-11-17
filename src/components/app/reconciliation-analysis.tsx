@@ -1,12 +1,10 @@
-
 "use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import type { ProcessedData } from '@/lib/excel-processor';
-import { runReconciliation } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { GitCompareArrows, AlertTriangle, Download, FileSearch } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
@@ -26,7 +24,6 @@ interface ReconciliationAnalysisProps {
     onClearSiengeFile: () => void;
     allPersistedData: AllClassifications;
     onPersistData: (allDataToSave: AllClassifications) => void;
-    onProcessedDataChange: (data: ProcessedData | ((prevData: ProcessedData | null) => ProcessedData | null)) => void;
 }
 
 
@@ -37,35 +34,9 @@ export function ReconciliationAnalysis({
     onClearSiengeFile,
     allPersistedData,
     onPersistData,
-    onProcessedDataChange,
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
-    
-    // This effect will run when the sienge data is loaded and processed data exists
-    useEffect(() => {
-        const siengeSheetData = processedData?.siengeSheetData;
-        const xmlItemsEntrada = processedData?.sheets?.['Itens Válidos'];
-        const xmlItemsSaida = processedData?.sheets?.['Itens Válidos Saídas'];
-        const xmlCte = processedData?.sheets?.['CTEs Válidos'];
-
-        // Ensure we have all necessary data before running reconciliation
-        if (processedData && siengeSheetData && (xmlItemsEntrada || xmlItemsSaida || xmlCte)) {
-            const allXmlItems = [...(xmlItemsEntrada || []), ...(xmlItemsSaida || []), ...(xmlCte || [])];
-            if(allXmlItems.length > 0) {
-                 const reconciliationResults = runReconciliation(
-                    siengeSheetData,
-                    allXmlItems
-                );
-    
-                // Update the parent's state with the new reconciliation results
-                onProcessedDataChange(prev => prev ? ({
-                    ...prev,
-                    reconciliationResults,
-                }) : null);
-            }
-        }
-    }, [processedData?.siengeSheetData, processedData?.sheets, onProcessedDataChange]);
-
+    const reconciliationResults = processedData?.reconciliationResults;
 
     const handleDownload = (data: any[], title: string) => {
         if (!data || data.length === 0) {
@@ -115,26 +86,26 @@ export function ReconciliationAnalysis({
                                 </AlertDescription>
                             </Alert>
                         )}
-                        {processedData?.reconciliationResults ? (
+                        {reconciliationResults ? (
                             <div className="mt-6">
                                 <Tabs defaultValue="reconciled">
                                     <TabsList className="grid w-full grid-cols-3">
-                                        <TabsTrigger value="reconciled">Conciliados ({processedData.reconciliationResults.reconciled.length})</TabsTrigger>
-                                        <TabsTrigger value="onlyInSienge">Apenas no Sienge ({processedData.reconciliationResults.onlyInSienge.length})</TabsTrigger>
-                                        <TabsTrigger value="onlyInXml">Apenas no XML ({processedData.reconciliationResults.onlyInXml.length})</TabsTrigger>
+                                        <TabsTrigger value="reconciled">Conciliados ({reconciliationResults.reconciled.length})</TabsTrigger>
+                                        <TabsTrigger value="onlyInSienge">Apenas no Sienge ({reconciliationResults.onlyInSienge.length})</TabsTrigger>
+                                        <TabsTrigger value="onlyInXml">Apenas no XML ({reconciliationResults.onlyInXml.length})</TabsTrigger>
                                     </TabsList>
                                     <div className="mt-4">
                                         <TabsContent value="reconciled">
-                                            <Button onClick={() => handleDownload(processedData!.reconciliationResults!.reconciled, 'Itens_Conciliados')} size="sm" className="mb-4" disabled={processedData!.reconciliationResults!.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                            <DataTable columns={getColumns(processedData.reconciliationResults.reconciled)} data={processedData.reconciliationResults.reconciled} />
+                                            <Button onClick={() => handleDownload(reconciliationResults.reconciled, 'Itens_Conciliados')} size="sm" className="mb-4" disabled={reconciliationResults.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                            <DataTable columns={getColumns(reconciliationResults.reconciled)} data={reconciliationResults.reconciled} />
                                         </TabsContent>
                                         <TabsContent value="onlyInSienge">
-                                            <Button onClick={() => handleDownload(processedData!.reconciliationResults!.onlyInSienge, 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={processedData!.reconciliationResults!.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                            <DataTable columns={getColumns(processedData.reconciliationResults.onlyInSienge)} data={processedData.reconciliationResults.onlyInSienge} />
+                                            <Button onClick={() => handleDownload(reconciliationResults.onlyInSienge, 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                            <DataTable columns={getColumns(reconciliationResults.onlyInSienge)} data={reconciliationResults.onlyInSienge} />
                                         </TabsContent>
                                         <TabsContent value="onlyInXml">
-                                            <Button onClick={() => handleDownload(processedData!.reconciliationResults!.onlyInXml, 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={processedData!.reconciliationResults!.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                            <DataTable columns={getColumns(processedData.reconciliationResults.onlyInXml)} data={processedData.reconciliationResults.onlyInXml} />
+                                            <Button onClick={() => handleDownload(reconciliationResults.onlyInXml, 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                            <DataTable columns={getColumns(reconciliationResults.onlyInXml)} data={reconciliationResults.onlyInXml} />
                                         </TabsContent>
                                     </div>
                                 </Tabs>
@@ -149,7 +120,7 @@ export function ReconciliationAnalysis({
                     <TabsContent value="cfop_validation" className="mt-4">
                         <p className='text-sm text-muted-foreground mb-4'>A tabela abaixo mostra **apenas** os itens que foram conciliados com sucesso. Utilize-a para validar se o CFOP do XML corresponde ao CFOP utilizado no Sienge.</p>
                         <CfopValidator 
-                            items={processedData?.reconciliationResults?.reconciled || []} 
+                            items={reconciliationResults?.reconciled || []} 
                             allPersistedData={allPersistedData}
                             onPersistData={onPersistData}
                             competence={processedData?.competence || null}
