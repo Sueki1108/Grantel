@@ -449,7 +449,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                         if (status === activeStatusTab && allCfopsForStatus.length > 0 && !activeCfopTabs[status]) {
                             setActiveCfopTabs(prev => ({...prev, [status]: allCfopsForStatus[0]}));
                         }
-                    }, [status, activeStatusTab, allCfopsForStatus, activeCfopTabs]);
+                    }, [status, activeStatusTab, allCfopsForStatus]);
 
                     return (
                         <TabsContent key={status} value={status} className="mt-4">
