@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -150,7 +149,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     };
 
     const columns = useMemo(() => {
-        const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'CST do ICMS', 'Alíq. ICMS (%)', 'Valor Total'];
+        const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'Sienge_CFOP', 'CST do ICMS', 'Alíq. ICMS (%)', 'Valor Total'];
         
         return getColumnsWithCustomRender(
             items,
@@ -159,7 +158,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 const value = row.original[id as keyof typeof row.original];
                 
                 const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
-                    <div className="flex items-center justify-between gap-1">
+                     <div className="flex items-center justify-between gap-1">
                         <span className="truncate">{displayValue}</span>
                         <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => copyToClipboard(copyValue, typeName)}>
                             <Copy className="h-3 w-3" />
@@ -190,7 +189,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
                 }
 
-                if (id === 'CFOP') {
+                if (id === 'CFOP' || id === 'Sienge_CFOP') {
                     return (
                         <div className="flex items-center gap-1">
                             <span>{value}</span>
@@ -205,7 +204,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 id: 'actions',
                 header: 'Ações',
                 cell: ({ row }) => {
-                    const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
+                    const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(row.original['Código'] || '')}-${row.original['CFOP']}`;
                     const validation = cfopValidations[uniqueKey];
                     const classification = validation?.classification || 'unvalidated';
                     const isDifal = validation?.isDifal;
@@ -249,7 +248,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         };
     
         items.forEach(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['CFOP']}`;
             const classification = cfopValidations[uniqueKey]?.classification || 'unvalidated';
             const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
             
@@ -404,9 +403,9 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                         <div className="h-6 border-l" />
                         
                         <div className="flex gap-1">
-                             <Button size="sm" className={cn(bulkActionState.classification === 'correct' && "bg-green-600 hover:bg-green-700", bulkActionState.classification !== 'correct' && 'bg-secondary')} onClick={() => setBulkActionState(prev => ({...prev, classification: 'correct'}))}><Check className="mr-2 h-4 w-4" /> Correto</Button>
+                             <Button size="sm" className={cn('bg-secondary', bulkActionState.classification === 'correct' && "bg-green-600 hover:bg-green-700 text-white")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'correct'}))}><Check className="mr-2 h-4 w-4" /> Correto</Button>
                             <Button size="sm" variant={bulkActionState.classification === 'incorrect' ? "destructive" : "secondary"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'incorrect'}))}><X className="mr-2 h-4 w-4" /> Incorreto</Button>
-                            <Button size="sm" variant={bulkActionState.classification === 'verify' ? 'secondary' : 'secondary'} className={cn(bulkActionState.classification === 'verify' && 'bg-yellow-500 hover:bg-yellow-600') } onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
+                            <Button size="sm" variant={bulkActionState.classification === 'verify' ? 'secondary' : 'secondary'} className={cn(bulkActionState.classification === 'verify' && 'bg-yellow-500 hover:bg-yellow-600 text-white') } onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
                             <Button size="sm" variant="outline" onClick={() => setBulkActionState(prev => ({...prev, classification: 'unvalidated'}))}><RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
                             <Button size="sm" variant={bulkActionState.isDifal ? 'default' : 'outline'} onClick={() => setBulkActionState(prev => ({...prev, isDifal: prev.isDifal === null ? true : !prev.isDifal}))}><Ticket className="mr-2 h-4 w-4" /> DIFAL</Button>
                         </div>
@@ -450,7 +449,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                                     const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
                                                     return (
                                                         currentFilters.xmlCsts.has(String(item['CST do ICMS'] || '')) &&
-                                                        currentFilters.xmlPicms.has(String(item.pICMS || '0')) &&
+                                                        currentFilters.xmlPicms.has(String(item['Alíq. ICMS (%)'] || '0')) &&
                                                         currentFilters.xmlCfopDescriptions.has(fullDescription)
                                                     );
                                                 }).length;
@@ -468,7 +467,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                             const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
                                             return (
                                                 currentFilters.xmlCsts.has(String(item['CST do ICMS'] || '')) &&
-                                                currentFilters.xmlPicms.has(String(item.pICMS || '0')) &&
+                                                currentFilters.xmlPicms.has(String(item['Alíq. ICMS (%)'] || '0')) &&
                                                 currentFilters.xmlCfopDescriptions.has(fullDescription)
                                             );
                                         }) || [];
@@ -496,6 +495,3 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
-
-
-    
