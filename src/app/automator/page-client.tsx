@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -35,7 +34,7 @@ import { PendingIssuesReport } from "@/components/app/pending-issues-report";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ReconciliationAnalysis } from "@/components/app/reconciliation-analysis";
-import { SpedDuplicate } from "@/lib/types";
+import type { SpedDuplicate } from "@/lib/types";
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -258,7 +257,41 @@ export function AutomatorClientPage() {
     const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         setSiengeFile(file || null);
+        
+        if (!file) {
+            setProcessedData(prev => {
+                if (!prev) return null;
+                const { siengeSheetData, reconciliationResults, ...rest } = prev;
+                return { ...rest, siengeSheetData: null, reconciliationResults: null } as ProcessedData;
+            });
+            return;
+        }
+        
+        setProcessing(true);
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
+
+            const worksheet = workbook.Sheets[sheetName];
+            const siengeSheetData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+
+            setProcessedData(prev => ({
+                ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
+                siengeSheetData,
+                reconciliationResults: null, // Reset reconciliation results on new file
+            }));
+            
+            toast({ title: 'Planilha Sienge Carregada', description: 'Clique em "Conciliar XML vs Sienge" para executar a análise.' });
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
+            setSiengeFile(null);
+        } finally {
+            setProcessing(false);
+        }
     };
+
 
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>, category: 'nfeEntrada' | 'cte' | 'nfeSaida' | 'nfse') => {
         const selectedFiles = e.target.files;
@@ -559,10 +592,11 @@ export function AutomatorClientPage() {
                 setProcessedData({
                     ...resultData, 
                     competence,
+                    siengeSheetData: processedData?.siengeSheetData,
                     reconciliationResults: null, 
                 });
 
-                toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas." });
+                toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
 
             } catch (err: any) {
                 const errorMessage = err.message || "Ocorreu um erro desconhecido durante o processamento.";
@@ -577,7 +611,7 @@ export function AutomatorClientPage() {
     };
 
     const handleRunReconciliation = async () => {
-        if (!siengeFile) {
+        if (!processedData?.siengeSheetData) {
             toast({ variant: 'destructive', title: 'Ficheiro Sienge em falta', description: 'Por favor, carregue a planilha "Itens do Sienge".' });
             return;
         }
@@ -588,22 +622,15 @@ export function AutomatorClientPage() {
 
         setProcessing(true);
         try {
-            const data = await siengeFile.arrayBuffer();
-            const workbook = XLSX.read(data, { type: 'array' });
-            const sheetName = workbook.SheetNames[0];
-            if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
-
-            const worksheet = workbook.Sheets[sheetName];
-            const siengeSheetData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-            
             const newReconciliationResults = runReconciliation(
-                siengeSheetData, 
-                processedData.sheets['Itens Válidos'] || []
+                processedData.siengeSheetData, 
+                processedData.sheets['Itens Válidos'] || [],
+                processedData.sheets['Notas Válidas'] || [], 
+                processedData.sheets['CTEs Válidos'] || []
             );
 
             setProcessedData(prev => ({
                 ...prev!,
-                siengeSheetData,
                 reconciliationResults: newReconciliationResults,
             }));
             
@@ -638,7 +665,7 @@ export function AutomatorClientPage() {
     const isClearButtonVisible = Object.keys(files).length > 0 || xmlFiles.nfeEntrada.length > 0 || xmlFiles.cte.length > 0 || xmlFiles.nfeSaida.length > 0 || xmlFiles.nfse.length > 0 || !!processedData || logs.length > 0 || error !== null;
 
     const saidasNfeTabDisabled = !processedData?.sheets['Saídas'] || processedData.sheets['Saídas'].length === 0;
-    const reconciliationTabDisabled = !processedData?.sheets['Itens Válidos'];
+    const reconciliationTabDisabled = !processedData?.sheets['Itens Válidos'] && !processedData?.sheets['Itens Válidos Saídas'];
     const nfseTabDisabled = xmlFiles.nfse.length === 0 && (!processedData || !processedData.fileNames?.nfse || processedData.fileNames.nfse.length === 0);
     const analysisTabDisabled = !processedData?.sheets['Chaves Válidas'] || processedData.sheets['Chaves Válidas'].length === 0;
     const imobilizadoTabDisabled = !processedData?.sheets['Imobilizados'] || processedData.sheets['Imobilizados'].length === 0;

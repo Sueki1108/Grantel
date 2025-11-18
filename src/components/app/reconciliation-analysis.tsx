@@ -23,6 +23,8 @@ interface ReconciliationAnalysisProps {
     siengeFile: File | null;
     onSiengeFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
+    onRunReconciliation: () => void;
+    isReconciliationRunning: boolean;
 }
 
 const getColumnsForDivergentTabs = (data: any[]): ColumnDef<any>[] => {
@@ -49,6 +51,8 @@ export function ReconciliationAnalysis({
     siengeFile, 
     onSiengeFileChange, 
     onClearSiengeFile,
+    onRunReconciliation,
+    isReconciliationRunning
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     const reconciliationResults = processedData?.reconciliationResults;
@@ -77,7 +81,7 @@ export function ReconciliationAnalysis({
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
-                 <div className='grid grid-cols-1'>
+                 <div className='grid grid-cols-1 md:grid-cols-2 gap-6 items-end'>
                     <FileUploadForm
                         displayName="Itens do Sienge"
                         formId="sienge-for-reconciliation"
@@ -85,6 +89,9 @@ export function ReconciliationAnalysis({
                         onFileChange={onSiengeFileChange}
                         onClearFile={onClearSiengeFile}
                     />
+                    <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full md:w-auto">
+                        {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
+                    </Button>
                 </div>
                 
                 <Tabs defaultValue="reconciliation">
@@ -130,7 +137,7 @@ export function ReconciliationAnalysis({
                         ) : (
                             <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
                                 <FileSearch className="h-12 w-12 text-primary" />
-                                <p className="mt-4 text-center">Carregue a planilha "Itens do Sienge" e execute a validação na primeira aba para ver os resultados da conciliação.</p>
+                                <p className="mt-4 text-center">Carregue a planilha "Itens do Sienge" e clique no botão "Conciliar XML vs Sienge" para ver os resultados.</p>
                             </div>
                         )}
                     </TabsContent>
