@@ -28,7 +28,6 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -165,7 +164,7 @@ export function DataTable<TData, TValue>({
                       key={cell.id} 
                       onClick={(e) => {
                         // Prevent row click from toggling selection if clicking on a cell with interactive content
-                        if (['actions', 'select', 'accountCode'].includes(cell.column.id)) {
+                        if (['actions', 'select', 'validation'].includes(cell.column.id)) {
                           e.stopPropagation();
                         }
                       }}
