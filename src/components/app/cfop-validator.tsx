@@ -206,7 +206,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 header: 'Ações',
                 cell: ({ row }) => {
                     const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
-                    const validation = cfopValidations[uniqueKey]?.classification || 'unvalidated';
                     const isDifal = cfopValidations[uniqueKey]?.isDifal;
 
                     return (
@@ -420,7 +419,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     return (
         <div className='relative'>
             {numSelected > 0 && (
-                <div className="absolute top-0 right-0 z-20">
+                <div className="sticky top-4 right-0 z-20 flex justify-end">
                     <Card className="flex items-center gap-4 p-2 shadow-lg animate-in fade-in-0 slide-in-from-top-5">
                         <span className="text-sm font-medium pl-2">{numSelected} selecionado(s)</span>
                         <div className="h-6 border-l" />
