@@ -1,21 +1,23 @@
+
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import type { ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, Check, X, RotateCw, HelpCircle } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
 import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { SiengeTaxCheck } from './sienge-tax-check';
-import { ColumnDef } from '@tanstack/react-table';
+import { ColumnDef, Row } from '@tanstack/react-table';
 import { CfopValidator } from './cfop-validator';
-import { AllClassifications } from './imobilizado-analysis';
+import { AllClassifications, DifalClassification, DifalStatus } from './imobilizado-analysis';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 
 interface ReconciliationAnalysisProps {
@@ -62,43 +64,37 @@ export function ReconciliationAnalysis({
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
-    const { reconciliationResults, siengeDataForTaxCheck, difalItems, difalItemsByCfop, difalColumns } = useMemo(() => {
-        const results = processedData?.reconciliationResults;
-        const sData = processedData?.siengeSheetData;
-        const competenceKey = competence || 'default';
-        const cfopValidations = allClassifications[competenceKey]?.cfopValidations?.classifications || {};
-
-        let difalItems: any[] = [];
-        if (results?.reconciled) {
-             difalItems = results.reconciled.filter(item => {
-                const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
-                return cfopValidations[uniqueKey]?.isDifal === true;
-            });
-        }
-        
-        const difalItemsByCfop = difalItems.reduce((acc, item) => {
-            const cfop = item.Sienge_CFOP || 'N/A';
-            if (!acc[cfop]) {
-                acc[cfop] = [];
-            }
-            acc[cfop].push(item);
-            return acc;
-        }, {} as Record<string, any[]>);
-
-        const difalColumns = getColumnsWithCustomRender(
-            difalItems,
-            ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'Sienge_CFOP', 'pICMS', 'Descricao CFOP', 'Valor Unitário', 'Valor Total']
-        );
-        
+    const { reconciliationResults, siengeDataForTaxCheck } = useMemo(() => {
         return {
-            reconciliationResults: results,
-            siengeDataForTaxCheck: sData || null,
-            difalItems,
-            difalItemsByCfop,
-            difalColumns
+            reconciliationResults: processedData?.reconciliationResults,
+            siengeDataForTaxCheck: processedData?.siengeSheetData,
         };
-    }, [processedData, competence, allClassifications]);
+    }, [processedData]);
 
+    const difalItems = useMemo(() => {
+        const cfopValidations = (competence && allClassifications[competence]?.cfopValidations?.classifications) || {};
+        return (processedData?.reconciliationResults?.reconciled || []).filter(item => {
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            return cfopValidations[uniqueKey]?.isDifal === true;
+        });
+    }, [processedData?.reconciliationResults?.reconciled, competence, allClassifications]);
+    
+    const handleDifalStatusChange = (itemsToUpdate: any[], newStatus: DifalStatus) => {
+        if (!competence) return;
+
+        const newClassifications = { ...allClassifications };
+        if (!newClassifications[competence]) newClassifications[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {} }};
+        if (!newClassifications[competence].difalValidations) newClassifications[competence].difalValidations = { classifications: {} };
+        
+        itemsToUpdate.forEach(item => {
+            const itemKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            newClassifications[competence].difalValidations!.classifications[itemKey] = { status: newStatus };
+        });
+
+        onPersistClassifications(newClassifications);
+        toast({ title: 'Classificação DIFAL atualizada!'});
+    };
+    
     const handleDownload = (data: any[], title: string) => {
         if (!data || data.length === 0) {
             toast({ title: "Nenhum dado para exportar", description: `Não há itens na aba "${title}".` });
@@ -199,34 +195,152 @@ export function ReconciliationAnalysis({
                     </TabsContent>
 
                     <TabsContent value="difal" className="mt-4">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Itens Marcados para DIFAL</CardTitle>
-                                <CardDescription>Esta lista contém todos os itens que foram marcados com a opção "DIFAL" na aba de Validação CFOP, agrupados por CFOP.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                {difalItems.length > 0 ? (
-                                    <Tabs defaultValue={Object.keys(difalItemsByCfop)[0] || ''} className="w-full">
-                                        <TabsList>
-                                            {Object.keys(difalItemsByCfop).map(cfop => (
-                                                <TabsTrigger key={cfop} value={cfop}>CFOP {cfop} ({difalItemsByCfop[cfop].length})</TabsTrigger>
-                                            ))}
-                                        </TabsList>
-                                        {Object.entries(difalItemsByCfop).map(([cfop, items]) => (
-                                            <TabsContent key={cfop} value={cfop} className='mt-4'>
-                                                 <Button onClick={() => handleDownload(items, `DIFAL_CFOP_${cfop}`)} size="sm" className="mb-4" disabled={items.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar Aba</Button>
-                                                <DataTable columns={difalColumns} data={items} />
-                                            </TabsContent>
-                                        ))}
-                                    </Tabs>
-                                ) : (
-                                    <p className="text-muted-foreground text-center p-4">Nenhum item marcado como DIFAL.</p>
-                                )}
-                            </CardContent>
-                        </Card>
+                        <DifalItemsAnalysis 
+                            items={difalItems} 
+                            allClassifications={allClassifications} 
+                            competence={competence} 
+                            onClassificationChange={handleDifalStatusChange}
+                        />
                     </TabsContent>
                 </Tabs>
             </CardContent>
          </Card>
     );
+}
+
+// Sub-component for DIFAL Analysis
+interface DifalItemsAnalysisProps {
+    items: any[];
+    allClassifications: AllClassifications;
+    competence: string | null;
+    onClassificationChange: (items: any[], newStatus: DifalStatus) => void;
+}
+
+function DifalItemsAnalysis({ items, allClassifications, competence, onClassificationChange }: DifalItemsAnalysisProps) {
+    
+    const { pending, subject, disregarded } = useMemo(() => {
+        const difalValidations = (competence && allClassifications[competence]?.difalValidations?.classifications) || {};
+        const pending: any[] = [];
+        const subject: any[] = [];
+        const disregarded: any[] = [];
+
+        items.forEach(item => {
+            const itemKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const status = difalValidations[itemKey]?.status || 'pending';
+            if (status === 'subject-to-difal') subject.push(item);
+            else if (status === 'disregard') disregarded.push(item);
+            else pending.push(item);
+        });
+
+        return { pending, subject, disregarded };
+    }, [items, allClassifications, competence]);
+
+    const difalColumns = useMemo(() => {
+         const baseCols = getColumnsWithCustomRender(
+            items,
+            ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'Sienge_CFOP', 'pICMS', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'],
+            (row: Row<any>, id: string) => {
+                const value = row.original[id];
+                 if (id === 'Descricao CFOP') {
+                    return <span className="truncate max-w-[200px]">{String(value || '')}</span>
+                }
+                 if (id === 'Valor Unitário' || id === 'Valor Total') {
+                     return <div className="text-right">{Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                 }
+                return String(value || '');
+            }
+        );
+        
+        baseCols.push({
+            id: 'actions',
+            header: 'Ações',
+            cell: ({row}) => {
+                return (
+                    <div className="flex gap-1 justify-center">
+                        <TooltipProvider>
+                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onClassificationChange([row.original], 'subject-to-difal')}><Check className="h-4 w-4 text-green-600"/></Button></TooltipTrigger><TooltipContent><p>Sujeito ao DIFAL</p></TooltipContent></Tooltip>
+                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onClassificationChange([row.original], 'disregard')}><X className="h-4 w-4 text-red-600"/></Button></TooltipTrigger><TooltipContent><p>Desconsiderar</p></TooltipContent></Tooltip>
+                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onClassificationChange([row.original], 'pending')}><RotateCw className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent><p>Reverter para Pendente</p></TooltipContent></Tooltip>
+                        </TooltipProvider>
+                    </div>
+                )
+            }
+        });
+        return baseCols;
+
+    }, [items, onClassificationChange]);
+
+
+    if (items.length === 0) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Análise de Itens para DIFAL</CardTitle>
+                </CardHeader>
+                <CardContent className="text-muted-foreground text-center p-4">
+                    Nenhum item foi marcado como "DIFAL" na aba de Validação de CFOP.
+                </CardContent>
+            </Card>
+        );
+    }
+    
+    const itemsByCfop = (data: any[]) => data.reduce((acc, item) => {
+        const cfop = item.Sienge_CFOP || 'N/A';
+        if (!acc[cfop]) acc[cfop] = [];
+        acc[cfop].push(item);
+        return acc;
+    }, {} as Record<string, any[]>);
+
+    const pendingByCfop = itemsByCfop(pending);
+    const subjectByCfop = itemsByCfop(subject);
+    const disregardedByCfop = itemsByCfop(disregarded);
+
+
+    const RenderCfopTabs = ({dataByCfop}: {dataByCfop: Record<string, any[]>}) => {
+        const cfops = Object.keys(dataByCfop);
+        if (cfops.length === 0) return <p className="text-muted-foreground text-center p-4">Nenhum item nesta categoria.</p>;
+
+        return (
+             <Tabs defaultValue={cfops[0]} className="w-full">
+                <TabsList>
+                    {cfops.map(cfop => (
+                        <TabsTrigger key={cfop} value={cfop}>CFOP {cfop} ({dataByCfop[cfop].length})</TabsTrigger>
+                    ))}
+                </TabsList>
+                {cfops.map(cfop => (
+                    <TabsContent key={cfop} value={cfop} className='mt-4'>
+                        <DataTable columns={difalColumns} data={dataByCfop[cfop]} />
+                    </TabsContent>
+                ))}
+            </Tabs>
+        )
+    };
+
+
+    return (
+         <Card>
+            <CardHeader>
+                <CardTitle>Análise de Itens para DIFAL</CardTitle>
+                <CardDescription>Classifique os itens que foram pré-selecionados para análise de DIFAL.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Tabs defaultValue="pending">
+                    <TabsList className="grid w-full grid-cols-3">
+                        <TabsTrigger value="pending">Pendentes ({pending.length})</TabsTrigger>
+                        <TabsTrigger value="subject">Sujeito ao DIFAL ({subject.length})</TabsTrigger>
+                        <TabsTrigger value="disregarded">Desconsiderados ({disregarded.length})</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="pending" className="mt-4">
+                        <RenderCfopTabs dataByCfop={pendingByCfop} />
+                    </TabsContent>
+                    <TabsContent value="subject" className="mt-4">
+                        <RenderCfopTabs dataByCfop={subjectByCfop} />
+                    </TabsContent>
+                    <TabsContent value="disregarded" className="mt-4">
+                        <RenderCfopTabs dataByCfop={disregardedByCfop} />
+                    </TabsContent>
+                </Tabs>
+            </CardContent>
+        </Card>
+    )
 }

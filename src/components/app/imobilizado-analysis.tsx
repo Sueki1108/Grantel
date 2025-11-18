@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Building, Download, List, Factory, Wrench, HardHat, RotateCcw, Save, Settings, X, EyeOff, Copy } from "lucide-react";
+import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Save, Settings, X, EyeOff, Copy } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -25,6 +25,8 @@ import { cleanAndToStr } from '@/lib/utils';
 
 // Tipos
 export type Classification = 'unclassified' | 'imobilizado' | 'uso-consumo' | 'utilizado-em-obra';
+export type DifalStatus = 'pending' | 'subject-to-difal' | 'disregard';
+
 
 export interface ImobilizadoItemData extends Record<string, any> {
     id: string; // Chave Única da Nota + N° do Item. Identificador único por linha.
@@ -46,6 +48,10 @@ export interface CfopClassification {
     isDifal: boolean;
 }
 
+export interface DifalClassification {
+    status: DifalStatus;
+}
+
 
 // Estrutura geral para guardar as classificações e os códigos
 export interface AllClassifications {
@@ -55,6 +61,11 @@ export interface AllClassifications {
         cfopValidations?: {
              classifications: {
                 [uniqueProductKey: string]: CfopClassification
+            }
+        },
+        difalValidations?: {
+            classifications: {
+                [uniqueProductKey: string]: DifalClassification
             }
         }
     };
@@ -221,7 +232,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'unclassified')}>
-                                            <RotateCcw className="h-5 w-5 text-destructive" />
+                                            <RotateCw className="h-5 w-5 text-destructive" />
                                         </Button>
                                     </TooltipTrigger><TooltipContent><p>Reverter para Não Classificado</p></TooltipContent>
                                 </Tooltip>
@@ -438,7 +449,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
     
         const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
         if (!updatedPersistedData[competence]) {
-            updatedPersistedData[competence] = { classifications: {}, accountCodes: {} };
+            updatedPersistedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {} } };
         }
         if (!updatedPersistedData[competence].classifications) {
             updatedPersistedData[competence].classifications = {};
@@ -558,7 +569,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                              <Button size="sm" onClick={() => handleBulkClassification('imobilizado')}><Factory className="mr-2 h-4 w-4" /> Imobilizado</Button>
                              <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('uso-consumo')}><Wrench className="mr-2 h-4 w-4" /> Uso e Consumo</Button>
                              <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('utilizado-em-obra')}><HardHat className="mr-2 h-4 w-4" /> Utilizado em Obra</Button>
-                              <Button size="sm" variant="outline" onClick={() => handleBulkClassification('unclassified')}><RotateCcw className="mr-2 h-4 w-4" /> Reverter</Button>
+                              <Button size="sm" variant="outline" onClick={() => handleBulkClassification('unclassified')}><RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
                          </div>
                     </Card>
                 </div>
