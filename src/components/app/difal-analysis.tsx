@@ -260,15 +260,14 @@ export function DifalAnalysis() {
                     )}
                     
                     {processedItems.length > 0 && (
-                        <Card className="flex-grow overflow-hidden">
-                            <CardContent className='pt-6 h-full'>
+                         <div className="flex-grow overflow-hidden">
                             <DataTable 
                                 columns={columns}
                                 data={processedItems}
                             />
-                            </CardContent>
-                        </Card>
+                        </div>
                     )}
+
                     <DialogFooter>
                          <Button onClick={handleDownloadExcel} disabled={processedItems.length === 0} variant="outline">
                             <Download className="mr-2 h-4 w-4" /> Baixar Excel
