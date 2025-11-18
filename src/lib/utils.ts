@@ -17,7 +17,7 @@ export const cleanAndToStr = (value: any): string => {
     let strValue = String(value).trim();
     // Limpa strings que são representações de floats, como "1234.0"
     if (/^\d+\.0+$/.test(strValue)) strValue = strValue.split('.')[0];
-    return strValue;
+    return strValue.replace(/\D/g, '');
 };
 
 
