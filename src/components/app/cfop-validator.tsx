@@ -143,13 +143,21 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     const columns = useMemo(() => {
         const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'CST do ICMS', 'pICMS', 'Valor Total'];
         
+        const copyToClipboard = (text: string | number, type: string) => {
+            const textToCopy = String(text);
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: textToCopy });
+            }).catch(() => {
+                toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
+            });
+        };
+
         return getColumnsWithCustomRender(
             items,
             columnsToShow,
             (row, id) => {
                 const value = row.original[id as keyof typeof row.original];
                 const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
-                const isDifal = cfopValidations[uniqueKey]?.isDifal;
                 
                 const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
                     <div className="group flex items-center justify-between gap-1">
@@ -236,16 +244,9 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 }
             },
         ]);
-    }, [items, cfopValidations, toast]);
+    }, [items, cfopValidations, toast, updateAndPersistValidations]);
     
-    const copyToClipboard = (text: string | number, type: string) => {
-        const textToCopy = String(text);
-        navigator.clipboard.writeText(textToCopy).then(() => {
-            toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: textToCopy });
-        }).catch(() => {
-            toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
-        });
-    };
+    
 
     const itemsByStatus = useMemo(() => {
         const byStatus: Record<ValidationStatus, any[]> = {
@@ -436,7 +437,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                              <Button size="sm" variant={bulkActionState.classification === 'incorrect' ? "destructive" : "secondary"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'incorrect'}))}><X className="mr-2 h-4 w-4" /> Incorreto</Button>
                              <Button size="sm" variant={bulkActionState.classification === 'verify' ? "secondary" : "outline"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
                              <Button size="sm" variant={bulkActionState.classification === 'unvalidated' ? "destructive" : "outline"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'unvalidated'}))}><RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
-                             <Button size="sm" variant={bulkActionState.isDifal ? "default" : "outline"} onClick={() => setBulkActionState(prev => ({...prev, isDifal: prev.isDifal === null ? true : !prev.isDifal}))}><Ticket className="mr-2 h-4 w-4" /> DIFAL</Button>
+                             <Button size="sm" variant={bulkActionState.isDifal ? 'default' : 'outline'} onClick={() => setBulkActionState(prev => ({...prev, isDifal: prev.isDifal === null ? true : !prev.isDifal}))}><Ticket className="mr-2 h-4 w-4" /> DIFAL</Button>
                         </div>
                          <Button onClick={handleBulkAction}>Aplicar</Button>
                     </Card>
@@ -509,3 +510,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
+
+
+    
