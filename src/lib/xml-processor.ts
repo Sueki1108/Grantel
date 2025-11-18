@@ -272,7 +272,7 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'Remetente': getCteTagValue(rem, 'xNome'),
         'CPF/CNPJ do Remetente': getCteTagValue(rem, 'CNPJ'),
         'Destinatário': getCteTagValue(dest, 'xNome'),
-        'CPF/CNPJ do Destinatário': getCteTagValue(dest, 'CNPJ'),
+        'CPF/CNPJ do Destinatário': getCteTagValue(dest, 'CNPJ') || getCteTagValue(dest, 'CPF'),
         'Valor da Prestação': parseFloat(vTPrest) || 0,
         'Status': status,
         'Chave Unica': `${cleanAndToStr(nCT)}-${cleanAndToStr(emitCNPJ)}`,
