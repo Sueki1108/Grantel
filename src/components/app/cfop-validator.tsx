@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -114,7 +115,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     };
 
     const columns = useMemo(() => {
-        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Valor Unitário', 'Valor Total', 'pICMS'];
+        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Valor Unitário', 'pICMS', 'Valor Total'];
         
         return getColumnsWithCustomRender(
             items,
@@ -164,12 +165,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     return renderCellWithCopy(display, value, 'Descrição');
                 }
                 
-                if (id === 'Descricao CFOP' && typeof value === 'string') {
-                     const summarizedDesc = value.length > 15 ? `${value.substring(0, 15)}...` : value;
-                    const fullDescription = cfopDescriptions[parseInt(row.original.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-                     return renderCellWithTooltip(summarizedDesc, fullDescription);
-                }
-                
                 return <div>{String(value ?? '')}</div>;
             }
         ).concat([
@@ -208,9 +203,11 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         if (!currentFilters) return statusFiltered;
         
         return statusFiltered.filter(item => {
-            const cstMatch = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(String(item['CST do ICMS']));
-            const picmsMatch = currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(String(item.pICMS || '0'));
-            const descMatch = currentFilters.xmlCfopDescriptions.size === 0 || currentFilters.xmlCfopDescriptions.has(String(item['Descricao CFOP']));
+            const cstMatch = currentFilters.xmlCsts.has(String(item['CST do ICMS']));
+            const picmsMatch = currentFilters.xmlPicms.has(String(item.pICMS || '0'));
+            const fullDesc = cfopDescriptions[parseInt(item['CFOP'], 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+            const shortDesc = fullDesc.substring(0, 15);
+            const descMatch = currentFilters.xmlCfopDescriptions.has(shortDesc);
             return cstMatch && picmsMatch && descMatch;
         });
     };
@@ -228,7 +225,9 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             items.forEach(item => {
                 if (item['CST do ICMS']) xmlCsts.add(String(item['CST do ICMS']));
                 if (item.pICMS !== undefined) xmlPicms.add(String(item.pICMS));
-                if (item['Descricao CFOP']) xmlCfopDescriptions.add(String(item['Descricao CFOP']));
+                const fullDescription = cfopDescriptions[parseInt(item['CFOP'], 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+                const shortDescription = fullDescription.substring(0, 15);
+                if (shortDescription) xmlCfopDescriptions.add(shortDescription);
             });
             return {
                 xmlCsts: Array.from(xmlCsts).sort(),
@@ -282,7 +281,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         
         const FilterCheckboxList = ({ options, filterSet, filterKey }: { options: string[], filterSet: Set<string>, filterKey: keyof TabFilters }) => (
             <ScrollArea className="h-64">
-                <div className="grid grid-cols-2 gap-2 mt-2 p-1">
+                <div className="flex flex-col gap-2 mt-2 p-1">
                     {options.map(opt => (
                         <div key={`${filterKey}-${opt}`} className="flex items-center space-x-2">
                             <Checkbox id={`${filterKey}-${opt}`} checked={filterSet.has(opt)} onCheckedChange={checked => handleFilterChange(filterKey, opt, !!checked)} />
@@ -325,7 +324,12 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                         </TabsContent>
                     </Tabs>
                      <DialogFooter>
-                        <Button onClick={() => { /* O Dialog fechará automaticamente */ }}>Fechar</Button>
+                        <Dialog.Close asChild>
+                             <Button variant="outline">Fechar</Button>
+                        </Dialog.Close>
+                        <Dialog.Close asChild>
+                            <Button>Aplicar e Fechar</Button>
+                        </Dialog.Close>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
