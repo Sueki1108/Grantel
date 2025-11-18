@@ -10,7 +10,7 @@ import { Loader2, Download, Cpu, TicketPercent, Copy, Hash, Sigma, Coins, Clipbo
 import { format, parseISO } from 'date-fns';
 import { DataTable } from '@/components/app/data-table';
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '../ui/dialog';
 import { processUploadedXmls } from '@/lib/xml-processor';
 import JSZip from 'jszip';
 import { FileUploadForm } from './file-upload-form';
@@ -86,19 +86,18 @@ export function DifalAnalysis() {
             const allItems = [...nfe, ...saidas];
             
             const difalData: DifalDataItem[] = allItems
-                .filter(item => item.entrega_UF && item.destUF && item.entrega_UF !== item.destUF)
                 .map(item => ({
                     'Chave de Acesso': item['Chave de acesso'],
                     'Número da Nota': item['Número'],
                     'Data de Emissão': item['Emissão'],
                     'Valor Total da Nota': item['Total'],
                     'Valor da Guia (11%)': parseFloat((item['Total'] * 0.11).toFixed(2)),
-                    'Entrega': item.entrega_UF,
+                    'Entrega': item.entrega_UF || item.destUF,
                 }));
 
             setProcessedItems(difalData);
             setIsResultsModalOpen(true);
-            toast({ title: "Análise DIFAL Concluída", description: `${difalData.length} notas elegíveis para DIFAL encontradas.` });
+            toast({ title: "Extração Concluída", description: `${difalData.length} notas encontradas nos XMLs.` });
         } catch (err: any) {
             toast({ variant: "destructive", title: "Erro ao processar XMLs", description: err.message });
         } finally {
@@ -152,7 +151,11 @@ export function DifalAnalysis() {
             let displayValue: React.ReactNode = String(value ?? '');
             
              if (id === 'Data de Emissão' && typeof value === 'string') {
-                displayValue = format(parseISO(value), 'dd/MM/yyyy');
+                try {
+                    displayValue = format(parseISO(value), 'dd/MM/yyyy');
+                } catch (e) {
+                    displayValue = "Data Inválida";
+                }
              } else if (typeof value === 'number') {
                 displayValue = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
              }
