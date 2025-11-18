@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -54,12 +53,14 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
 
 
     const handleValidationChange = (uniqueKey: string, classification: ValidationStatus) => {
-        const newValidations = { ...cfopValidations };
-        newValidations[uniqueKey] = {
-            ...(newValidations[uniqueKey] || { isDifal: false }),
-            classification,
-        };
-        setCfopValidations(newValidations);
+        setCfopValidations(prev => {
+            const newValidations = { ...prev };
+            newValidations[uniqueKey] = {
+                ...(newValidations[uniqueKey] || { isDifal: false }),
+                classification,
+            };
+            return newValidations;
+        });
         setHasChanges(true);
     };
 
@@ -111,11 +112,10 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
 
     const columns = useMemo(() => getColumnsWithCustomRender(
         items,
-        ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'Descricao CFOP', 'CST do ICMS', 'pICMS', 'Valor Unitário', 'Valor Total'],
+        ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'pICMS', 'Descricao CFOP', 'CST do ICMS', 'Valor Unitário', 'Valor Total'],
         (row, id) => {
             const value = row.original[id];
 
-            // Render com ícone de cópia
             const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
                 <div className="group flex items-center justify-between gap-1" onClick={(e) => e.stopPropagation()}>
                     <span className="truncate">{displayValue}</span>
@@ -125,7 +125,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 </div>
             );
             
-            // Render com tooltip
             const renderCellWithTooltip = (displayValue: string, fullValue: string) => (
                 <TooltipProvider>
                     <Tooltip><TooltipTrigger asChild><span>{displayValue}</span></TooltipTrigger><TooltipContent><p>{fullValue}</p></TooltipContent></Tooltip>
@@ -145,7 +144,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             }
 
             if (id === 'Fornecedor') {
-                const name = String(value || '');
+                 const name = String(value || '');
                 if (!name) return <div>N/A</div>;
                 const summarizedName = name.length > 25 ? `${name.substring(0, 25)}...` : name;
                 const display = renderCellWithTooltip(summarizedName, name);
