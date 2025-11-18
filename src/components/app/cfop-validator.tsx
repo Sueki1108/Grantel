@@ -113,7 +113,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
 
     const columns = useMemo(() => getColumnsWithCustomRender(
         items,
-        ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'Descricao CFOP', 'CST do ICMS', 'Valor Unitário', 'Valor Total', 'pICMS'],
+        ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Descricao CFOP', 'Valor Unitário', 'Valor Total', 'pICMS'],
         (row, id) => {
             const value = row.original[id as keyof typeof row.original];
 
@@ -156,6 +156,12 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 const summarizedDesc = value.length > 30 ? `${value.substring(0, 30)}...` : value;
                 const display = renderCellWithTooltip(summarizedDesc, value);
                 return renderCellWithCopy(display, value, 'Descrição');
+            }
+            
+            if (id === 'Descricao CFOP' && typeof value === 'string') {
+                const summarizedDesc = value.length > 15 ? `${value.substring(0, 15)}...` : value;
+                const fullDescription = cfopDescriptions[parseInt(row.original.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+                 return renderCellWithTooltip(summarizedDesc, fullDescription);
             }
             
             return <div>{String(value ?? '')}</div>;
@@ -286,7 +292,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                         {availableOptions.xmlCfopDescriptions.map(opt => (
                                             <div key={`desc-${opt}`} className="flex items-center space-x-2">
                                                 <Checkbox id={`desc-${opt}`} checked={filters.xmlCfopDescriptions.has(opt)} onCheckedChange={checked => handleFilterChange('xmlCfopDescriptions', opt, !!checked)} />
-                                                <Label htmlFor={`desc-${opt}`}>{opt}</Label>
+                                                <Label htmlFor={`desc-${opt}`}>{opt.substring(0,25)}...</Label>
                                             </div>
                                         ))}
                                     </div>
