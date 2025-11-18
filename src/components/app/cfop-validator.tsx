@@ -284,7 +284,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     };
 
     const columns = useMemo(() => {
-        const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'CST do ICMS', 'Alíq. ICMS (%)', 'Valor Total'];
+        const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'Sienge_Esp', 'CFOP', 'CST do ICMS', 'Alíq. ICMS (%)', 'Valor Total'];
         
         return getColumnsWithCustomRender(
             items,
@@ -339,7 +339,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 id: 'actions',
                 header: 'Ações',
                 cell: ({ row }) => {
-                    const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(row.original['Código'] || '')}-${row.original['CFOP']}`;
+                    const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
                     const validation = cfopValidations[uniqueKey];
                     const classification = validation?.classification || 'unvalidated';
                     const isDifal = validation?.isDifal;
@@ -383,7 +383,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         };
     
         items.forEach(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['CFOP']}`;
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const classification = cfopValidations[uniqueKey]?.classification || 'unvalidated';
             const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
             

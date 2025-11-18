@@ -397,6 +397,7 @@ export function runReconciliation(
             cnpj: findHeader(filteredSiengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
             numero: findHeader(filteredSiengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
             cfop: findHeader(siengeData, ['cfop']),
+            esp: findHeader(siengeData, ['esp']),
             valorTotal: findHeader(filteredSiengeData, ['valor total', 'valor', 'vlr total']),
             precoUnitario: findHeader(filteredSiengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
             desconto: findHeader(filteredSiengeData, ['desconto']),
@@ -457,7 +458,12 @@ export function runReconciliation(
                         if (matchedXmlItems.length === 0) {
                             xmlMap.delete(key);
                         }
-                        matchedInPass.push({ ...matchedXmlItem, Sienge_CFOP: siengeItem[h.cfop!], 'Observações': `Conciliado via ${passName}` });
+                        matchedInPass.push({ 
+                            ...matchedXmlItem, 
+                            Sienge_CFOP: siengeItem[h.cfop!],
+                            Sienge_Esp: siengeItem[h.esp!],
+                            'Observações': `Conciliado via ${passName}` 
+                        });
                         return;
                     }
                 }
