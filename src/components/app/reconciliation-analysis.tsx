@@ -55,7 +55,31 @@ export function ReconciliationAnalysis({
     isReconciliationRunning
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
-    const reconciliationResults = processedData?.reconciliationResults;
+    
+    const { reconciliationResults, reconciledWithInfo, siengeDataForTaxCheck } = useMemo(() => {
+        const results = processedData?.reconciliationResults;
+        if (!results) {
+            return { reconciliationResults: null, reconciledWithInfo: [], siengeDataForTaxCheck: processedData?.siengeSheetData || null };
+        }
+
+        const nfeHeaderMap = new Map();
+        [...(processedData?.sheets['Notas Válidas'] || []), ...(processedData?.sheets['CTEs Válidos'] || [])].forEach(n => nfeHeaderMap.set(n['Chave Unica'], n));
+        
+        const enrichedReconciled = results.reconciled.map(item => {
+            const header = nfeHeaderMap.get(item['Chave Unica']);
+            return {
+                ...item,
+                Fornecedor: header?.Fornecedor || 'N/A',
+                pICMS: item.pICMS || 0, // Ensure pICMS is carried over
+            };
+        });
+
+        return {
+            reconciliationResults: results,
+            reconciledWithInfo: enrichedReconciled,
+            siengeDataForTaxCheck: processedData?.siengeSheetData || null,
+        };
+    }, [processedData]);
 
     const handleDownload = (data: any[], title: string) => {
         if (!data || data.length === 0) {
@@ -98,7 +122,7 @@ export function ReconciliationAnalysis({
                     <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="reconciliation" disabled={!reconciliationResults}>Conciliação de Itens</TabsTrigger>
                         <TabsTrigger value="cfop_validation" disabled={!reconciliationResults}>Validação de CFOP</TabsTrigger>
-                        <TabsTrigger value="tax_check" disabled={!processedData?.siengeSheetData}>Conferência de Impostos</TabsTrigger>
+                        <TabsTrigger value="tax_check" disabled={!siengeDataForTaxCheck}>Conferência de Impostos</TabsTrigger>
                     </TabsList>
                     <TabsContent value="reconciliation" className="mt-4">
                          {!processedData?.sheets['Itens Válidos'] && (
@@ -144,18 +168,17 @@ export function ReconciliationAnalysis({
                     <TabsContent value="cfop_validation" className="mt-4">
                         <p className='text-sm text-muted-foreground mb-4'>A tabela abaixo mostra **apenas** os itens que foram conciliados com sucesso. Utilize-a para validar se o CFOP do XML corresponde ao CFOP utilizado no Sienge.</p>
                          <CfopValidator 
-                            items={reconciliationResults?.reconciled || []} 
+                            items={reconciledWithInfo || []} 
                             allPersistedData={processedData?.imobilizadoClassifications || {}}
                             onPersistData={() => {}} // A persistência é gerida a nível superior
                             competence={processedData?.competence || null}
                         />
                     </TabsContent>
                     <TabsContent value="tax_check" className="mt-4">
-                        <SiengeTaxCheck siengeData={processedData?.siengeSheetData || null} />
+                        <SiengeTaxCheck siengeData={siengeDataForTaxCheck} />
                     </TabsContent>
                 </Tabs>
             </CardContent>
          </Card>
     );
 }
-    
