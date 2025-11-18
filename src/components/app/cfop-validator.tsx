@@ -137,7 +137,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     </TooltipProvider>
                 );
                 
-                 if (id === 'Fornecedor') {
+                if (id === 'Fornecedor') {
                     const name = String(value || 'N/A');
                     if (name === 'N/A') return <div>N/A</div>;
                     const summarizedName = name.length > 25 ? `${name.substring(0, 25)}...` : name;
@@ -208,9 +208,9 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         if (!currentFilters) return statusFiltered;
         
         return statusFiltered.filter(item => {
-            const cstMatch = currentFilters.xmlCsts.has(String(item['CST do ICMS']));
-            const picmsMatch = currentFilters.xmlPicms.has(String(item.pICMS || '0'));
-            const descMatch = currentFilters.xmlCfopDescriptions.has(String(item['Descricao CFOP']));
+            const cstMatch = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(String(item['CST do ICMS']));
+            const picmsMatch = currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(String(item.pICMS || '0'));
+            const descMatch = currentFilters.xmlCfopDescriptions.size === 0 || currentFilters.xmlCfopDescriptions.has(String(item['Descricao CFOP']));
             return cstMatch && picmsMatch && descMatch;
         });
     };
@@ -248,9 +248,9 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     }
                 }));
             }
-        }, [siengeCfop, availableOptions, tabFilters]);
+        }, [siengeCfop, availableOptions]);
         
-        const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() };
+        const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(availableOptions.xmlCsts), xmlPicms: new Set(availableOptions.xmlPicms), xmlCfopDescriptions: new Set(availableOptions.xmlCfopDescriptions) };
         const isFilterActive = filters.xmlCsts.size < availableOptions.xmlCsts.length ||
                                filters.xmlPicms.size < availableOptions.xmlPicms.length ||
                                filters.xmlCfopDescriptions.size < availableOptions.xmlCfopDescriptions.length;
@@ -375,8 +375,8 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                         <FilterDialog siengeCfop={cfop} items={cfopItems} />
                                     </div>
                                 </div>
-                                <div className='text-sm text-muted-foreground italic my-2 px-1'>
-                                    Descrição do CFOP da Aba: {cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}
+                                <div className='text-lg font-bold my-2 px-1'>
+                                    {cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}
                                 </div>
                                 <TabsContent value="all" className="mt-4">
                                     <DataTable columns={columns} data={filterItems(cfopItems, 'all', cfop)} />
