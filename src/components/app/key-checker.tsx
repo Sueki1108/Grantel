@@ -25,6 +25,7 @@ import { ScrollArea } from "../ui/scroll-area";
 import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
+import type { SpedDuplicate } from "@/lib/types";
 
 
 // Types
@@ -37,7 +38,7 @@ export type KeyInfo = {
     // Campos adicionais para verificação
     destIE?: string;
     destUF?: string;
-destCNPJ?: string;
+    destCNPJ?: string;
     tomadorCNPJ?: string;
     emitCNPJ?: string;
     emitName?: string;
@@ -135,8 +136,8 @@ const correctionConfigLabels: Record<keyof SpedCorrectionConfig, string> = {
     fixTruncation: "Limitar Campos de Texto a 235 Caracteres",
     fixUnits: "Padronizar Unidades de Medida para 'un'",
     remove0190: "Remover Registos 0190 Desnecessários",
-    removeUnusedProducts: "Remover Produtos (0200) Não Utilizados",
-    removeUnusedParticipants: "Remover Participantes (0150) Não Utilizados"
+    removeUnusedProducts: "Remover Produtos (0200) Associados a Documentos Removidos",
+    removeUnusedParticipants: "Remover Participantes (0150) Associados a Documentos Removidos"
 };
 
 
@@ -228,6 +229,7 @@ const processSpedFileInBrowser = (
     
     let intermediateLines: string[] = lines;
 
+    // --- Step 1: Remove divergent C100/D100 records if configured ---
     if (config.removeDivergent && divergentKeys.size > 0) {
         const filteredLines: string[] = [];
         let isInsideDivergentBlock = false;
@@ -239,12 +241,12 @@ const processSpedFileInBrowser = (
             if (!line) continue;
 
             const parts = line.split('|');
-            const regType = parts[1];
+            const codeType = parts[1];
 
-            if (regType === 'C100' || regType === 'D100') {
+            if (codeType === 'C100' || codeType === 'D100') {
                 isInsideDivergentBlock = false;
                 currentDivergentKey = null;
-                const keyIndex = regType === 'C100' ? 9 : 10;
+                const keyIndex = codeType === 'C100' ? 9 : 10;
                 const key = parts.length > keyIndex ? cleanAndToStr(parts[keyIndex]) : '';
                 
                 if (key && divergentKeys.has(key)) {
@@ -259,7 +261,7 @@ const processSpedFileInBrowser = (
             }
             
             if (isInsideDivergentBlock) {
-                 if (currentDivergentKey && regType !== 'C100' && regType !== 'D100') {
+                 if (currentDivergentKey && codeType !== 'C100' && codeType !== 'D100') {
                      modifications.divergenceRemoval[currentDivergentKey].childrenLines.push({ lineNumber: i + 1, line: line });
                  }
                 continue; 
@@ -271,7 +273,28 @@ const processSpedFileInBrowser = (
          _log(`Remoção por divergência concluída. ${totalRemoved} linhas removidas devido a ${Object.keys(modifications.divergenceRemoval).length} chaves com divergência.`);
         intermediateLines = filteredLines;
     }
+
+    // --- Step 2: Build sets of used products and participants from the CURRENT state of lines ---
+    const usedProductCodes = new Set<string>();
+    const usedParticipantCodes = new Set<string>();
+    if (config.removeUnusedProducts || config.removeUnusedParticipants) {
+        _log("Mapeando produtos (0200) e participantes (0150) em uso...");
+        intermediateLines.forEach(line => {
+            const parts = line.split('|');
+            if (parts.length > 2) {
+                if (parts[1] === 'C170' && parts[2]) { // Product in NF-e item
+                    usedProductCodes.add(parts[2]);
+                }
+                if ((parts[1] === 'C100' || parts[1] === 'D100') && parts.length > 4 && parts[4]) {
+                    usedParticipantCodes.add(parts[4]);
+                }
+            }
+        });
+        _log(`${usedProductCodes.size} códigos de produtos e ${usedParticipantCodes.size} códigos de participantes estão em uso.`);
+    }
+
     
+    // --- Step 3: Iterate again for all other modifications and orphan removal ---
     let modifiedLines: string[] = [];
     const TRUNCATION_CODES = new Set(['0450', '0460', 'C110']);
     const MAX_CHARS_TRUNCATION = 235;
@@ -284,6 +307,7 @@ const processSpedFileInBrowser = (
         const parts = originalLine.split('|');
         const codeType = parts[1];
         
+        // Orphan Removals
         if (config.remove0190 && codeType === '0190') {
             const lineToKeep1 = '|0190|un|Unidade|';
             const lineToKeep2 = '|0190|pc|Peça|';
@@ -291,13 +315,23 @@ const processSpedFileInBrowser = (
 
             if (trimmedLine !== lineToKeep1 && trimmedLine !== lineToKeep2) {
                 modifications.removed0190.push({ lineNumber: i + 1, line: originalLine });
-                if (!modifications.removed0190.find(log => log.line === originalLine)) linesModifiedCount++;
+                linesModifiedCount++;
                 continue;
             }
         }
-        
+        if (config.removeUnusedProducts && codeType === '0200' && parts.length > 2 && !usedProductCodes.has(parts[2])) {
+            modifications.removed0200.push({ lineNumber: i + 1, line: originalLine });
+            linesModifiedCount++;
+            continue;
+        }
+        if (config.removeUnusedParticipants && codeType === '0150' && parts.length > 2 && !usedParticipantCodes.has(parts[2])) {
+            modifications.removed0150.push({ lineNumber: i + 1, line: originalLine });
+            linesModifiedCount++;
+            continue;
+        }
+
+        // Data Corrections
         let currentLine = originalLine;
-        let lineWasModified = false;
         
         if (config.fixIE && codeType === '0150' && parts.length > 7 && cnpjToIeMap.size > 0) {
             const cnpj = cleanAndToStr(parts[5]);
@@ -307,7 +341,7 @@ const processSpedFileInBrowser = (
                 parts[7] = correctIE;
                 currentLine = parts.join('|');
                 modifications.ieCorrection.push({ lineNumber: i + 1, original: originalLine, corrected: currentLine });
-                lineWasModified = true;
+                linesModifiedCount++;
             }
         }
 
@@ -320,7 +354,7 @@ const processSpedFileInBrowser = (
                     parts[7] = formattedSeries;
                     currentLine = parts.join('|');
                     modifications.cteSeriesCorrection.push({ lineNumber: i + 1, original: originalLine, corrected: currentLine });
-                    lineWasModified = true;
+                    linesModifiedCount++;
                 }
             }
         }
@@ -331,7 +365,7 @@ const processSpedFileInBrowser = (
                 parts[12] = addressComplement.replace(/\s+/g, ' ').trim();
                 currentLine = parts.join('|');
                 modifications.addressSpaces.push({ lineNumber: i + 1, original: originalLine, corrected: currentLine });
-                lineWasModified = true;
+                linesModifiedCount++;
             }
         }
 
@@ -343,7 +377,7 @@ const processSpedFileInBrowser = (
                     parts[unitFieldIndex] = 'un';
                     currentLine = parts.join('|');
                     modifications.unitStandardization.push({ lineNumber: i + 1, original: originalLine, corrected: currentLine });
-                    lineWasModified = true;
+                    linesModifiedCount++;
                 }
             }
         }
@@ -357,73 +391,14 @@ const processSpedFileInBrowser = (
                     const truncatedContent = content.substring(0, MAX_CHARS_TRUNCATION).trimEnd();
                     currentLine = currentLine.substring(0, secondLastPipeIndex + 1) + truncatedContent + currentLine.substring(lastPipeIndex);
                     modifications.truncation.push({ lineNumber: i + 1, original: originalLine, corrected: currentLine });
-                    lineWasModified = true;
+                    linesModifiedCount++;
                 }
             }
-        }
-        
-        if (lineWasModified && originalLine !== currentLine && !modifications.truncation.some(log => log.original === originalLine) && !modifications.unitStandardization.some(log => log.original === originalLine) && !modifications.addressSpaces.some(log => log.original === originalLine) && !modifications.ieCorrection.some(log => log.original === originalLine) && !modifications.cteSeriesCorrection.some(log => log.original === originalLine)) {
-                 linesModifiedCount++;
         }
 
         modifiedLines.push(currentLine);
     }
     
-    // --- Orphan Removals (Second Pass) ---
-    intermediateLines = modifiedLines;
-
-    if (config.removeUnusedProducts) {
-        _log("Iniciando remoção de produtos (0200) não utilizados.");
-        const usedProductCodes = new Set<string>();
-        intermediateLines.forEach(line => {
-            const parts = line.split('|');
-            if (parts.length > 2 && parts[1] === 'C170' && parts[2]) {
-                usedProductCodes.add(parts[2]);
-            }
-        });
-
-        const filteredLines: string[] = [];
-        for (let i = 0; i < intermediateLines.length; i++) {
-            const line = intermediateLines[i];
-            const parts = line.split('|');
-            if (parts.length > 2 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
-                modifications.removed0200.push({ lineNumber: i + 1, line });
-                if (!modifications.removed0200.find(log => log.line === line)) linesModifiedCount++;
-                continue; // Skip this line
-            }
-            filteredLines.push(line);
-        }
-        _log(`Remoção de produtos não utilizados concluída. ${modifications.removed0200.length} registos 0200 removidos.`);
-        intermediateLines = filteredLines;
-    }
-    
-     if (config.removeUnusedParticipants) {
-        _log("Iniciando remoção de participantes (0150) não utilizados.");
-        const usedParticipantCodes = new Set<string>();
-        intermediateLines.forEach(line => {
-            const parts = line.split('|');
-            if (parts.length > 4 && (parts[1] === 'C100' || parts[1] === 'D100') && parts[4]) {
-                usedParticipantCodes.add(parts[4]);
-            }
-        });
-
-        const filteredLines: string[] = [];
-        for (let i = 0; i < intermediateLines.length; i++) {
-            const line = intermediateLines[i];
-            const parts = line.split('|');
-            if (parts.length > 2 && parts[1] === '0150' && !usedParticipantCodes.has(parts[2])) {
-                modifications.removed0150.push({ lineNumber: i + 1, line });
-                if (!modifications.removed0150.find(log => log.line === line)) linesModifiedCount++;
-                continue; // Skip this line
-            }
-            filteredLines.push(line);
-        }
-        _log(`Remoção de participantes não utilizados concluída. ${modifications.removed0150.length} registos 0150 removidos.`);
-        intermediateLines = filteredLines;
-    }
-
-    modifiedLines = intermediateLines;
-
     // --- Final Counter Recalculation ---
     if (config.fixCounters) {
         _log("Iniciando a recontagem de linhas dos blocos e registos.");
@@ -456,7 +431,7 @@ const processSpedFileInBrowser = (
                     parts[2] = String(expectedCount);
                     modifiedLines[i] = parts.join('|');
                     modifications.blockCount.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
-                    if (!modifications.blockCount.find(log => log.original === originalLine)) linesModifiedCount++;
+                    linesModifiedCount++;
                  }
             } else if (codeType && codeType.endsWith('990') && codeType !== '0990') {
                 const blockChar = codeType.charAt(0);
@@ -466,7 +441,7 @@ const processSpedFileInBrowser = (
                     parts[2] = String(expectedCount);
                     modifiedLines[i] = parts.join('|');
                     modifications.blockCount.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
-                    if (!modifications.blockCount.find(log => log.original === originalLine)) linesModifiedCount++;
+                    linesModifiedCount++;
                 }
             } else if (codeType === '9900' && parts.length > 3) {
                 const countedReg = parts[2];
@@ -476,7 +451,7 @@ const processSpedFileInBrowser = (
                     parts[3] = String(expectedCount);
                     modifiedLines[i] = parts.join('|');
                     modifications.count9900.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
-                    if (!modifications.count9900.find(log => log.original === originalLine)) linesModifiedCount++;
+                    linesModifiedCount++;
                 }
             } else if (codeType === '9999') {
                 const expectedTotal = modifiedLines.length;
@@ -485,7 +460,7 @@ const processSpedFileInBrowser = (
                     parts[2] = String(expectedTotal);
                     modifiedLines[i] = parts.join('|');
                     modifications.totalLineCount.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
-                    if (!modifications.totalLineCount.find(log => log.original === originalLine)) linesModifiedCount++;
+                    linesModifiedCount++;
                 }
             }
         }
@@ -508,6 +483,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     keyCheckResults?: KeyCheckResult;
     spedInfo?: SpedInfo | null;
     error?: string;
+    spedDuplicates?: SpedDuplicate[];
 }> => {
     logFn("Iniciando verificação de chaves SPED no navegador.");
 
@@ -534,7 +510,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     
     const spedDocData = new Map<string, any>();
     const participantData = new Map<string, any>();
-    const allTxtKeysForDuplicateCheck: string[] = [];
+    const docKeyLines = new Map<string, number[]>();
     let currentSpedInfo: SpedInfo | null = null;
     
     const parseSpedInfo = (spedLine: string): SpedInfo | null => {    
@@ -550,7 +526,8 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
 
     for (const content of spedFileContents) {
         const lines = content.split(/\r?\n/);
-        for (const line of lines) {
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
             const parts = line.split('|');
             if (parts.length < 2) continue;
             const reg = parts[1];
@@ -570,12 +547,17 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
                 docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12], vlDesc: parts[14] };
             } else if (reg === 'D100' && parts.length > 10 && parts[10]?.length === 44) {
                 key = parts[10];
-                docData = { key, reg, indOper: parts[2], codPart: parts[4], serie: parts[7], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
+                const vlDoc = parts.length > 16 ? parts[16] : '0';
+                docData = { key, reg, indOper: parts[2], codPart: parts[4], serie: parts[7], dtDoc: parts[8], dtES: parts[9], vlDoc: vlDoc };
             }
 
             if (key && docData) {
-                spedDocData.set(key, docData);
-                allTxtKeysForDuplicateCheck.push(key);
+                if (!docKeyLines.has(key)) docKeyLines.set(key, []);
+                docKeyLines.get(key)!.push(i + 1);
+
+                if (!spedDocData.has(key)) {
+                    spedDocData.set(key, docData);
+                }
             }
         }
     }
@@ -584,7 +566,25 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     logFn(`${spedDocData.size} documentos (NFe/CTe) únicos encontrados no SPED.`);
     logFn(`${participantData.size} participantes (0150) encontrados.`);
 
-    const duplicateKeysInTxt = findDuplicates(allTxtKeysForDuplicateCheck, key => key);
+    const duplicateKeysInTxt = Array.from(docKeyLines.entries())
+        .filter(([key, lines]) => lines.length > 1)
+        .map(([key]) => key);
+        
+    const spedDuplicates: SpedDuplicate[] = duplicateKeysInTxt.map(key => {
+        const doc = spedDocData.get(key)!;
+        const participant = participantData.get(doc.codPart);
+        return {
+            'Tipo de Registo': doc.reg,
+            'Número do Documento': doc.key.substring(25, 34),
+            'Série': doc.key.substring(22, 25),
+            'CNPJ/CPF': participant?.cnpj || 'N/A',
+            'Fornecedor': participant?.nome || 'N/A',
+            'Data Emissão': doc.dtDoc,
+            'Valor Total': parseFloat(String(doc.vlDoc || '0').replace(',', '.')),
+            'Linhas': docKeyLines.get(key)!.join(', '),
+        };
+    });
+
 
     logFn("Comparando chaves...");
     const keysNotFoundInTxt = [...chavesValidasMap.values()]
@@ -688,7 +688,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
         dateDivergences, valueDivergences, ufDivergences, ieDivergences, consolidatedDivergences,
     };
 
-    return { keyCheckResults, spedInfo: currentSpedInfo };
+    return { keyCheckResults, spedInfo: currentSpedInfo, spedDuplicates };
 }
 
 // Main Component
@@ -696,9 +696,10 @@ interface KeyCheckerProps {
     chavesValidas: any[];
     spedFiles: File[];
     onFilesChange: (files: File[]) => void;
-    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => void;
+    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null, spedDuplicates: SpedDuplicate[] | null) => void;
     initialSpedInfo: SpedInfo | null;
     initialKeyCheckResults: KeyCheckResult | null;
+    initialSpedDuplicates: SpedDuplicate[] | null;
     nfeEntradaData: any[];
     cteData: any[];
 }
@@ -709,12 +710,14 @@ export function KeyChecker({
     onFilesChange, 
     onSpedProcessed, 
     initialSpedInfo, 
-    initialKeyCheckResults, 
+    initialKeyCheckResults,
+    initialSpedDuplicates,
     nfeEntradaData,
     cteData
 }: KeyCheckerProps) {
     const [results, setResults] = useState<KeyCheckResult | null>(initialKeyCheckResults);
     const [spedInfo, setSpedInfo] = useState<SpedInfo | null>(initialSpedInfo);
+    const [spedDuplicates, setSpedDuplicates] = useState<SpedDuplicate[] | null>(initialSpedDuplicates);
     const [loading, setLoading] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const { toast } = useToast();
@@ -733,6 +736,10 @@ export function KeyChecker({
     useEffect(() => {
         setSpedInfo(initialSpedInfo);
     }, [initialSpedInfo]);
+    
+     useEffect(() => {
+        setSpedDuplicates(initialSpedDuplicates);
+    }, [initialSpedDuplicates]);
 
 
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -781,15 +788,16 @@ export function KeyChecker({
             try {
                 const fileContents = await Promise.all(spedFiles.map(file => readFileAsTextWithEncoding(file)));
                 
-                const { keyCheckResults, spedInfo, error } = await checkSpedKeysInBrowser(chavesValidas, fileContents, () => {});
+                const { keyCheckResults, spedInfo, error, spedDuplicates } = await checkSpedKeysInBrowser(chavesValidas, fileContents, () => {});
                 
                 if (error) throw new Error(error);
                 if (!keyCheckResults) throw new Error("Não foi possível extrair as chaves do arquivo SPED.");
                 
                 setResults(keyCheckResults);
                 setSpedInfo(spedInfo);
+                setSpedDuplicates(spedDuplicates || null);
                 
-                onSpedProcessed(spedInfo, keyCheckResults, null); 
+                onSpedProcessed(spedInfo, keyCheckResults, null, spedDuplicates || null); 
                 
                 toast({ title: "Verificação concluída", description: "As chaves foram comparadas com sucesso. Prossiga para as abas de análise." });
 
@@ -827,7 +835,7 @@ export function KeyChecker({
                 const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData, divergentKeys, correctionConfig);
                 
                 setCorrectionResult(result);
-                onSpedProcessed(spedInfo, results, result);
+                onSpedProcessed(spedInfo, results, result, spedDuplicates);
                 
                 toast({ title: "Correção Concluída", description: "O arquivo SPED foi analisado e está pronto para ser baixado." });
             } catch (err: any) {
@@ -851,8 +859,9 @@ export function KeyChecker({
         setError(null);
         setSpedInfo(null);
         setCorrectionResult(null);
+        setSpedDuplicates(null);
         onFilesChange([]);
-        onSpedProcessed(null, null, null);
+        onSpedProcessed(null, null, null, null);
 
         const spedInput = document.getElementById('sped-upload') as HTMLInputElement;
         if (spedInput) spedInput.value = "";
@@ -1123,10 +1132,6 @@ export function KeyChecker({
                                                 </div>
                                             </Tabs>
                                         </TabsContent>
-
-                                        <TabsContent value="full_log" className="mt-4 flex-grow overflow-hidden">
-                                            
-                                        </TabsContent>
                                     </Tabs>
                                 ) : null}
                                 </div>
@@ -1176,6 +1181,7 @@ export function KeyChecker({
                     <CardContent>
                         <KeyResultsDisplay 
                             results={results} 
+                            spedDuplicates={spedDuplicates}
                         />
                     </CardContent>
                 </Card>
