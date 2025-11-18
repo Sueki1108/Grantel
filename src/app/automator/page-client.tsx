@@ -35,6 +35,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ReconciliationAnalysis } from "@/components/app/reconciliation-analysis";
 import type { SpedDuplicate } from "@/lib/types";
+import { CfopValidator } from "@/components/app/cfop-validator";
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -67,7 +68,7 @@ export function AutomatorClientPage() {
     const [siengeFile, setSiengeFile] = useState<File | null>(null);
     const [lastSaidaNumber, setLastSaidaNumber] = useState<number>(0);
     const [disregardedNfseNotes, setDisregardedNfseNotes] = useState<Set<string>>(new Set());
-    const [imobilizadoClassifications, setImobilizadoClassifications] = useState<AllClassifications>({});
+    const [allClassifications, setAllClassifications] = useState<AllClassifications>({});
     const [saidasStatus, setSaidasStatus] = useState<Record<number, 'emitida' | 'cancelada' | 'inutilizada'>>({});
 
 
@@ -94,7 +95,7 @@ export function AutomatorClientPage() {
         // Load imobilizado classifications from localStorage
         try {
             const savedImobilizado = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
-            if (savedImobilizado) setImobilizadoClassifications(JSON.parse(savedImobilizado));
+            if (savedImobilizado) setAllClassifications(JSON.parse(savedImobilizado));
         } catch (e) {
             console.error("Failed to load imobilizado classifications from localStorage", e);
         }
@@ -109,14 +110,10 @@ export function AutomatorClientPage() {
         });
     };
 
-    const handlePersistImobilizado = (allDataToSave: AllClassifications) => {
-        setImobilizadoClassifications(allDataToSave);
+    const handlePersistClassifications = (allDataToSave: AllClassifications) => {
+        setAllClassifications(allDataToSave);
         try {
             localStorage.setItem(IMOBILIZADO_STORAGE_KEY, JSON.stringify(allDataToSave));
-            toast({
-                title: "Classificações Guardadas",
-                description: "As suas classificações foram guardadas no armazenamento local do navegador."
-            });
         } catch(e) {
             console.error("Failed to save classifications to localStorage", e);
             toast({ variant: 'destructive', title: "Erro ao guardar classificações"});
@@ -806,10 +803,10 @@ export function AutomatorClientPage() {
                             )}
                             
                             {activeMainTab === 'imobilizado' && (
-                                !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} siengeData={processedData?.siengeSheetData} onPersistData={handlePersistImobilizado} allPersistedData={imobilizadoClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card>
+                                !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} siengeData={processedData?.siengeSheetData} onPersistData={handlePersistClassifications} allPersistedData={allClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card>
                             )}
 
-                             {activeMainTab === 'difal' && <DifalAnalysis /> }
+                             {activeMainTab === 'difal' && <DifalAnalysis reconciledItems={processedData?.reconciliationResults?.reconciled} />}
                             
                             {activeMainTab === 'analyses' && (
                                 !analysisTabDisabled && processedData ? <AdvancedAnalyses processedData={processedData} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
@@ -818,10 +815,19 @@ export function AutomatorClientPage() {
                              {activeMainTab === 'pending' && (
                                 <PendingIssuesReport 
                                     processedData={processedData}
-                                    allPersistedClassifications={imobilizadoClassifications}
-                                    onForceUpdate={handlePersistImobilizado}
+                                    allPersistedClassifications={allClassifications}
+                                    onForceUpdate={handlePersistClassifications}
                                 />
                             )}
+                             <TabsContent value="cfop_validation" className="mt-4">
+                                <CfopValidator 
+                                    items={processedData?.reconciliationResults?.reconciled || []}
+                                    allPersistedData={allClassifications}
+                                    onPersistData={handlePersistClassifications}
+                                    competence={competence}
+                                />
+                            </TabsContent>
+
                         </div>
                     </Tabs>
                 </div>
