@@ -295,8 +295,7 @@ const processSpedFileInBrowser = (
             const parts = line.split('|');
             if (parts.length > 1) {
                 const regType = parts[1];
-                if (regType === 'C100' && parts[4]) usedParticipantCodes.add(parts[4]);
-                if (regType === 'D100' && parts[4]) usedParticipantCodes.add(parts[4]);
+                if ((regType === 'C100' || regType === 'D100') && parts[4]) usedParticipantCodes.add(parts[4]);
                 if (regType === 'C170' && parts[2]) usedProductCodes.add(parts[2]);
             }
         });
@@ -1246,3 +1245,4 @@ export function KeyChecker({
     );
 }
 
+    
