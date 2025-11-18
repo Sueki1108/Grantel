@@ -157,9 +157,9 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
 
 
                 const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
-                    <div className="group flex items-center justify-between gap-1" onClick={(e) => e.stopPropagation()}>
+                    <div className="group flex items-center justify-between gap-1">
                         <span className="truncate">{displayValue}</span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => copyToClipboard(copyValue, typeName)}>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => {e.stopPropagation(); copyToClipboard(copyValue, typeName)}}>
                             <Copy className="h-3 w-3" />
                         </Button>
                     </div>
