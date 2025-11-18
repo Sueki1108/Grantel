@@ -13,8 +13,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
 import { getColumns } from "@/components/app/columns-helper";
 import { CfopValidator } from './cfop-validator';
-import type { AllClassifications } from './imobilizado-analysis';
 import { SiengeTaxCheck } from './sienge-tax-check';
+import { ColumnDef } from '@tanstack/react-table';
 
 
 interface ReconciliationAnalysisProps {
@@ -50,6 +50,19 @@ export function ReconciliationAnalysis({
         XLSX.writeFile(workbook, fileName);
     };
 
+    const getColumnsForDivergentTabs = (data: any[]) => {
+        if (!data || data.length === 0) return [];
+
+        const comparisonKeyColumn: ColumnDef<any> = {
+            accessorKey: 'Chave de Comparação',
+            header: 'Chave de Comparação',
+        };
+
+        const otherColumns = getColumns(data).filter(col => col.id !== 'Chave de Comparação');
+
+        return [comparisonKeyColumn, ...otherColumns];
+    };
+    
     return (
          <Card>
             <CardHeader>
@@ -106,11 +119,11 @@ export function ReconciliationAnalysis({
                                         </TabsContent>
                                         <TabsContent value="onlyInSienge">
                                             <Button onClick={() => handleDownload(reconciliationResults.onlyInSienge, 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                            <DataTable columns={getColumns(reconciliationResults.onlyInSienge)} data={reconciliationResults.onlyInSienge} />
+                                            <DataTable columns={getColumnsForDivergentTabs(reconciliationResults.onlyInSienge)} data={reconciliationResults.onlyInSienge} />
                                         </TabsContent>
                                         <TabsContent value="onlyInXml">
                                             <Button onClick={() => handleDownload(reconciliationResults.onlyInXml, 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                            <DataTable columns={getColumns(reconciliationResults.onlyInXml)} data={reconciliationResults.onlyInXml} />
+                                            <DataTable columns={getColumnsForDivergentTabs(reconciliationResults.onlyInXml)} data={reconciliationResults.onlyInXml} />
                                         </TabsContent>
                                     </div>
                                 </Tabs>
