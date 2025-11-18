@@ -146,10 +146,11 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 return renderCellWithCopy(String(value ?? ''), String(value ?? ''), 'Número da Nota');
             }
 
-            if (id === 'Fornecedor' && typeof value === 'string') {
-                const summarizedName = value.length > 25 ? `${value.substring(0, 25)}...` : value;
-                const display = renderCellWithTooltip(summarizedName, value);
-                return renderCellWithCopy(display, value, 'Fornecedor');
+            if (id === 'Fornecedor') {
+                const name = String(value || '');
+                const summarizedName = name.length > 25 ? `${name.substring(0, 25)}...` : name;
+                const display = renderCellWithTooltip(summarizedName, name);
+                return renderCellWithCopy(display, name, 'Fornecedor');
             }
 
             if (id === 'Descrição' && typeof value === 'string') {

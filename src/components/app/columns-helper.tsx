@@ -1,3 +1,4 @@
+
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
@@ -79,6 +80,7 @@ export function getColumnsWithCustomRender<TData extends Record<string, any>>(
     }
 
     const availableColumns = Object.keys(data[0] as object) as (keyof TData)[];
+    // Filter columnsToShow to only include columns that actually exist in the data
     const columnsToRender = columnsToShow.filter(key => availableColumns.includes(key));
 
     return columnsToRender.map((key) => {
