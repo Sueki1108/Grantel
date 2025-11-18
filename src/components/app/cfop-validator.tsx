@@ -149,15 +149,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         });
     };
 
-    const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
-        <div className="group flex items-center justify-between gap-1">
-            <span className="truncate">{displayValue}</span>
-            <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => copyToClipboard(copyValue, typeName)}>
-                <Copy className="h-3 w-3" />
-            </Button>
-        </div>
-    );
-
     const columns = useMemo(() => {
         const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'CST do ICMS', 'pICMS', 'Valor Total'];
         
@@ -167,6 +158,15 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             (row, id) => {
                 const value = row.original[id as keyof typeof row.original];
                 
+                const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
+                    <div className="group flex items-center justify-between gap-1">
+                        <span className="truncate">{displayValue}</span>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => copyToClipboard(copyValue, typeName)}>
+                            <Copy className="h-3 w-3" />
+                        </Button>
+                    </div>
+                );
+
                 if (id === 'Número da Nota') {
                     return renderCellWithCopy(value, value, 'Número da Nota');
                 }
@@ -232,7 +232,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                              <TooltipProvider>
                                 <Tooltip><TooltipTrigger asChild><Button variant={classification === 'correct' ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'correct' && "bg-green-600 hover:bg-green-700")} onClick={() => handleValidationChange('correct')}><Check className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
                                 <Tooltip><TooltipTrigger asChild><Button variant={classification === 'incorrect' ? 'destructive' : 'ghost'} size="icon" className="h-7 w-7" onClick={() => handleValidationChange('incorrect')}><X className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
-                                <Tooltip><TooltipTrigger asChild><Button variant={classification === 'verify' ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'verify' && "bg-yellow-500 hover:bg-yellow-600")} onClick={() => handleValidationChange('verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>A Verificar</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button variant={classification === 'verify' ? 'secondary' : 'ghost'} size="icon" className="h-7 w-7" onClick={() => handleValidationChange('verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>A Verificar</p></TooltipContent></Tooltip>
                                 <Tooltip><TooltipTrigger asChild><Button variant={isDifal ? 'default' : 'ghost'} size="icon" className="h-7 w-7" onClick={() => handleDifalChange()}><Ticket className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>{isDifal ? 'Desmarcar DIFAL' : 'Marcar como DIFAL'}</p></TooltipContent></Tooltip>
                                 <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange('unvalidated')}><RotateCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Limpar Validação</p></TooltipContent></Tooltip>
                             </TooltipProvider>
@@ -404,11 +404,11 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                         <div className="h-6 border-l" />
                         
                         <div className="flex gap-1">
-                             <Button size="sm" className={cn(bulkActionState.classification === 'correct' ? 'bg-green-600 hover:bg-green-700' : 'bg-secondary')} onClick={() => setBulkActionState(prev => ({...prev, classification: 'correct'}))}><Check className="mr-2 h-4 w-4" /> Correto</Button>
-                             <Button size="sm" variant={bulkActionState.classification === 'incorrect' ? "destructive" : "secondary"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'incorrect'}))}><X className="mr-2 h-4 w-4" /> Incorreto</Button>
-                             <Button size="sm" className={cn(bulkActionState.classification === 'verify' ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-secondary')} onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
-                             <Button size="sm" variant={bulkActionState.classification === 'unvalidated' ? "destructive" : "outline"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'unvalidated'}))}><RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
-                             <Button size="sm" variant={bulkActionState.isDifal ? 'default' : 'outline'} onClick={() => setBulkActionState(prev => ({...prev, isDifal: prev.isDifal === null ? true : !prev.isDifal}))}><Ticket className="mr-2 h-4 w-4" /> DIFAL</Button>
+                            <Button size="sm" className={cn(bulkActionState.classification === 'correct' ? 'bg-green-600 hover:bg-green-700' : 'bg-secondary')} onClick={() => setBulkActionState(prev => ({...prev, classification: 'correct'}))}><Check className="mr-2 h-4 w-4" /> Correto</Button>
+                            <Button size="sm" variant={bulkActionState.classification === 'incorrect' ? "destructive" : "secondary"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'incorrect'}))}><X className="mr-2 h-4 w-4" /> Incorreto</Button>
+                            <Button size="sm" variant={bulkActionState.classification === 'verify' ? 'secondary' : 'secondary'} onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
+                            <Button size="sm" variant={bulkActionState.classification === 'unvalidated' ? "destructive" : "outline"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'unvalidated'}))}><RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
+                            <Button size="sm" variant={bulkActionState.isDifal ? 'default' : 'outline'} onClick={() => setBulkActionState(prev => ({...prev, isDifal: prev.isDifal === null ? true : !prev.isDifal}))}><Ticket className="mr-2 h-4 w-4" /> DIFAL</Button>
                         </div>
                          <Button onClick={handleBulkAction}>Aplicar</Button>
                     </Card>
@@ -497,3 +497,5 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     );
 }
 
+
+    
