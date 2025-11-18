@@ -85,8 +85,8 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     };
     
     const handleBulkAction = () => {
-        const activeTableData = filteredItemsByStatusAndCfop[activeStatusTab]?.[activeCfopTabs[activeStatusTab]] || [];
-        const selectedItemKeys = Object.keys(rowSelection).map(index => activeTableData[parseInt(index)].__itemKey);
+        const activeTableItems = itemsByStatus[activeStatusTab]?.[activeCfopTabs[activeStatusTab]] || [];
+        const selectedItemKeys = Object.keys(rowSelection).map(index => activeTableItems[parseInt(index)].__itemKey);
 
         if (selectedItemKeys.length === 0) return;
         
@@ -157,30 +157,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             columnsToShow,
             (row, id) => {
                 const value = row.original[id as keyof typeof row.original];
-                const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
-                
-                const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
-                    <div className="group flex items-center justify-between gap-1">
-                        <span className="truncate">{displayValue}</span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => copyToClipboard(copyValue, typeName)}>
-                            <Copy className="h-3 w-3" />
-                        </Button>
-                    </div>
-                );
-                
-                const renderCellWithTooltip = (displayValue: string, fullValue: string) => (
-                    <TooltipProvider>
-                        <Tooltip><TooltipTrigger asChild><span>{displayValue}</span></TooltipTrigger><TooltipContent><p>{fullValue}</p></TooltipContent></Tooltip>
-                    </TooltipProvider>
-                );
-                
-                if (id === 'Fornecedor') {
-                    const name = String(value || 'N/A');
-                    if (name === 'N/A') return <div>N/A</div>;
-                    const summarizedName = name.length > 25 ? `${name.substring(0, 25)}...` : name;
-                    const display = renderCellWithTooltip(summarizedName, name);
-                    return renderCellWithCopy(display, name, 'Fornecedor');
-                }
                 
                 if (id === 'pICMS') {
                     return <div className='text-center'>{typeof value === 'number' ? `${value.toFixed(2)}%` : 'N/A'}</div>;
@@ -192,8 +168,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
 
                 if (id === 'Descrição' && typeof value === 'string') {
                     const summarizedDesc = value.length > 30 ? `${value.substring(0, 30)}...` : value;
-                    const display = renderCellWithTooltip(summarizedDesc, value);
-                    return renderCellWithCopy(display, value, 'Descrição');
+                    return <TooltipProvider><Tooltip><TooltipTrigger asChild><span>{summarizedDesc}</span></TooltipTrigger><TooltipContent><p>{value}</p></TooltipContent></Tooltip></TooltipProvider>;
                 }
 
                 if (id === 'CFOP') {
@@ -247,53 +222,31 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     }, [items, cfopValidations, toast, updateAndPersistValidations]);
     
     
-
+    // This is the core logic fix. It now correctly groups items by status and then by CFOP.
     const itemsByStatus = useMemo(() => {
-        const byStatus: Record<ValidationStatus, any[]> = {
-            all: [], unvalidated: [], correct: [], incorrect: [], verify: []
+        const result: Record<string, Record<string, any[]>> = {
+            all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}
         };
     
         items.forEach(item => {
             const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const classification = cfopValidations[uniqueKey]?.classification || 'unvalidated';
             const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
-            byStatus[classification].push(itemWithKey);
-            byStatus.all.push(itemWithKey);
+            
+            const cfop = item.Sienge_CFOP || 'N/A';
+
+            // Add to 'all' status
+            if (!result.all[cfop]) result.all[cfop] = [];
+            result.all[cfop].push(itemWithKey);
+
+            // Add to specific status
+            if (!result[classification]) result[classification] = {};
+            if (!result[classification][cfop]) result[classification][cfop] = [];
+            result[classification][cfop].push(itemWithKey);
         });
-        return byStatus;
+        return result;
     }, [items, cfopValidations]);
 
-    const filteredItemsByStatusAndCfop = useMemo(() => {
-        const result: Record<ValidationStatus, Record<string, any[]>> = {
-            all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}
-        };
-    
-        for (const status of Object.keys(result) as ValidationStatus[]) {
-            const statusItems = itemsByStatus[status] || [];
-            result[status] = statusItems.reduce((acc, item) => {
-                const cfop = item.Sienge_CFOP || 'N/A';
-                
-                const currentFilters = tabFilters[cfop];
-                let matchesFilters = true;
-                if (currentFilters) {
-                    const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-                    matchesFilters = 
-                        currentFilters.xmlCsts.has(String(item['CST do ICMS'] || '')) &&
-                        currentFilters.xmlPicms.has(String(item.pICMS || '0')) &&
-                        currentFilters.xmlCfopDescriptions.has(fullDescription);
-                }
-    
-                if (matchesFilters) {
-                    if (!acc[cfop]) acc[cfop] = [];
-                    acc[cfop].push(item);
-                }
-                return acc;
-            }, {} as Record<string, any[]>);
-        }
-    
-        return result;
-    }, [itemsByStatus, tabFilters]);
-    
     const numSelected = Object.keys(rowSelection).length;
     
     if (!items || items.length === 0) {
@@ -447,17 +400,13 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             <Tabs value={activeStatusTab} onValueChange={(val) => setActiveStatusTab(val as ValidationStatus)} className="w-full">
                 <TabsList className="grid w-full grid-cols-5">
                      {statusTabs.map(({status, label}) => {
-                         const count = (itemsByStatus[status] || []).length;
+                         const count = Object.values(itemsByStatus[status] || {}).flat().length;
                          return <TabsTrigger key={status} value={status} disabled={count === 0}>{label} ({count})</TabsTrigger>
                      })}
                 </TabsList>
                 {statusTabs.map(({ status }) => {
-                    const cfopGroupsForStatus = filteredItemsByStatusAndCfop[status];
-                    const allCfopsForStatus = Object.keys(itemsByStatus[status].reduce((acc, item) => {
-                        const cfop = item.Sienge_CFOP || 'N/A';
-                        acc[cfop] = true;
-                        return acc;
-                    }, {} as Record<string, boolean>)).sort((a,b) => parseInt(a,10) - parseInt(b,10));
+                    const cfopGroupsForStatus = itemsByStatus[status] || {};
+                    const allCfopsForStatus = Object.keys(cfopGroupsForStatus).sort((a,b) => parseInt(a,10) - parseInt(b,10));
 
                      useEffect(() => {
                         if (status === activeStatusTab && allCfopsForStatus.length > 0 && !activeCfopTabs[status]) {
@@ -480,20 +429,30 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                                 return <TabsTrigger key={`${status}-${cfop}`} value={cfop} disabled={count === 0}>{cfop} ({count})</TabsTrigger>
                                             })}
                                         </TabsList>
-                                         <Button onClick={() => handleDownload(itemsByStatus[status], `Validacao_${status}`)} size="sm" variant="outline" disabled={itemsByStatus[status].length === 0}>
-                                            <Download className="mr-2 h-4 w-4" /> Baixar Aba ({itemsByStatus[status].length})
+                                         <Button onClick={() => handleDownload(Object.values(cfopGroupsForStatus).flat(), `Validacao_${status}`)} size="sm" variant="outline" disabled={Object.values(cfopGroupsForStatus).flat().length === 0}>
+                                            <Download className="mr-2 h-4 w-4" /> Baixar Aba ({Object.values(cfopGroupsForStatus).flat().length})
                                         </Button>
                                     </div>
                                     {allCfopsForStatus.map(cfop => {
-                                        const currentCfopData = cfopGroupsForStatus[cfop] || [];
-                                        const allItemsForCfopTab = itemsByStatus[status].filter(item => (item.Sienge_CFOP || 'N/A') === cfop);
+                                        const allItemsForCfop = cfopGroupsForStatus[cfop] || [];
+                                        const currentCfopData = allItemsForCfop.filter(item => {
+                                            const currentFilters = tabFilters[cfop];
+                                            if (!currentFilters) return true;
+                                            const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+                                            return (
+                                                currentFilters.xmlCsts.has(String(item['CST do ICMS'] || '')) &&
+                                                currentFilters.xmlPicms.has(String(item.pICMS || '0')) &&
+                                                currentFilters.xmlCfopDescriptions.has(fullDescription)
+                                            );
+                                        });
+
                                         return (
                                             <TabsContent key={`${status}-${cfop}`} value={cfop} className="mt-4">
                                                 <div className='flex justify-between items-center mb-2'>
                                                     <div className='text-lg font-bold'>
                                                         {cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}
                                                     </div>
-                                                    <FilterDialog siengeCfop={cfop} items={allItemsForCfopTab} />
+                                                    <FilterDialog siengeCfop={cfop} items={allItemsForCfop} />
                                                 </div>
                                                 <DataTable columns={columns} data={currentCfopData} rowSelection={rowSelection} setRowSelection={setRowSelection} />
                                             </TabsContent>
@@ -510,6 +469,3 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
-
-
-    
