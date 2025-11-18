@@ -54,12 +54,14 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
 
 
     const handleValidationChange = (uniqueKey: string, classification: ValidationStatus) => {
-        const newValidations = { ...cfopValidations };
-        newValidations[uniqueKey] = {
-            ...(newValidations[uniqueKey] || { isDifal: false }),
-            classification,
-        };
-        setCfopValidations(newValidations);
+        setCfopValidations(prev => {
+            const newValidations = { ...prev };
+            newValidations[uniqueKey] = {
+                ...(newValidations[uniqueKey] || { isDifal: false }),
+                classification,
+            };
+            return newValidations;
+        });
         setHasChanges(true);
     };
 
