@@ -648,12 +648,12 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             const reg = parts[1];
             let key: string | undefined, docData: any;
 
-            if (reg === 'C100' && parts.length > 10 && parts[9]?.length === 44) {
+            if (reg === 'C100' && parts.length > 12) {
                 key = parts[9];
-                docData = { key, reg, codPart: parts[4], dtDoc: parts[11], dtES: parts[12], vlDoc: parts[13] };
-            } else if (reg === 'D100' && parts.length > 17 && parts[10]?.length === 44) {
+                docData = { key, reg, codPart: parts[4], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12] };
+            } else if (reg === 'D100' && parts.length > 16) {
                 key = parts[10];
-                docData = { key, reg, codPart: parts[6], dtDoc: parts[12], dtES: parts[13], vlDoc: parts[14] };
+                docData = { key, reg, codPart: parts[4], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
             }
 
             if (key && docData) spedDocData.set(key, docData);
@@ -1189,6 +1189,7 @@ export function KeyChecker({
                                         </TabsContent>
 
                                         <TabsContent value="full_log" className="mt-4 flex-grow overflow-hidden">
+                                            
                                         </TabsContent>
                                     </Tabs>
                                 ) : null}
