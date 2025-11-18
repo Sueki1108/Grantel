@@ -105,7 +105,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
     };
 
     const columns = useMemo(() => {
-        const columnsToShow: (keyof ImobilizadoItemData)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
+        const columnsToShow: (keyof ImobilizadoItemData)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'pICMS', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
         const baseColumns = getColumnsWithCustomRender(
             data,
             columnsToShow,
@@ -113,6 +113,9 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
                 const value = row.original[id as keyof typeof row.original];
                  if ((id === 'Valor Total' || id === 'Valor Unitário') && typeof value === 'number') {
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
+                }
+                 if (id === 'pICMS' && typeof value === 'number') {
+                    return <div className="text-center">{value.toFixed(2)}%</div>
                 }
                 
                 const renderCellWithTooltip = (displayValue: string, fullValue: string) => (
@@ -670,4 +673,3 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         </div>
     );
 }
-
