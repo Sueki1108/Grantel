@@ -187,7 +187,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
                     <div className="group flex items-center justify-between gap-1">
                         <span className="truncate">{displayValue}</span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => {copyToClipboard(copyValue, typeName)}}>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(copyValue, typeName); }}>
                             <Copy className="h-3 w-3" />
                         </Button>
                     </div>
@@ -207,16 +207,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     return renderCellWithCopy(display, name, 'Fornecedor');
                 }
                 
-                if (id === 'CFOP') {
-                    const isDifal = cfopValidations[uniqueKey]?.isDifal;
-                     return (
-                        <div className='flex items-center gap-1'>
-                            {value}
-                            {isDifal && <Ticket className="h-4 w-4 text-purple-600" />}
-                        </div>
-                    );
-                }
-
                 if (id === 'pICMS') {
                     return <div className='text-center'>{typeof value === 'number' ? `${value.toFixed(2)}%` : 'N/A'}</div>;
                 }
@@ -247,7 +237,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                 <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange(uniqueKey, 'correct')}><Check className="h-4 w-4 text-green-600" /></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
                                 <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange(uniqueKey, 'incorrect')}><X className="h-4 w-4 text-red-600" /></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
                                 <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange(uniqueKey, 'verify')}><HelpCircle className="h-4 w-4 text-yellow-600" /></Button></TooltipTrigger><TooltipContent><p>A Verificar</p></TooltipContent></Tooltip>
-                                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDifalChange(uniqueKey)}><Ticket className={cn("h-4 w-4", isDifal && 'text-purple-600')} /></Button></TooltipTrigger><TooltipContent><p>{isDifal ? 'Desmarcar DIFAL' : 'Marcar como DIFAL'}</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button variant={isDifal ? 'default' : 'ghost'} size="icon" className="h-7 w-7" onClick={() => handleDifalChange(uniqueKey)}><Ticket className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>{isDifal ? 'Desmarcar DIFAL' : 'Marcar como DIFAL'}</p></TooltipContent></Tooltip>
                                 <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange(uniqueKey, 'unvalidated')}><RotateCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Limpar Validação</p></TooltipContent></Tooltip>
                             </TooltipProvider>
                         </div>
@@ -511,7 +501,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                                     </div>
                                                     <FilterDialog siengeCfop={cfop} items={currentCfopData} />
                                                 </div>
-                                                <DataTable columns={columns} data={currentCfopData} rowSelection={rowSelection} setRowSelection={setRowSelection} onSelectionChange={() => {}}/>
+                                                <DataTable columns={columns} data={currentCfopData} rowSelection={rowSelection} setRowSelection={setRowSelection} />
                                             </TabsContent>
                                         )
                                     })}
@@ -526,4 +516,3 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
-
