@@ -12,7 +12,7 @@ import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, Ti
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
+import { getColumns } from "@/components/app/columns-helper";
 import { CfopValidator } from './cfop-validator';
 import { SiengeTaxCheck } from './sienge-tax-check';
 import { ColumnDef } from '@tanstack/react-table';

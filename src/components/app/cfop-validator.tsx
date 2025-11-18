@@ -5,7 +5,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, X, HelpCircle, Save, RotateCw, ListFilter, Copy, Download, Factory, Wrench, HardHat, EyeOff, Settings, Ticket, MinusCircle } from "lucide-react";
+import { Check, X, HelpCircle, RotateCw, ListFilter, Copy, Download, Factory, Wrench, HardHat, EyeOff, Settings, Ticket } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import type { AllClassifications, CfopClassification } from './imobilizado-analysis';
 import {
@@ -51,7 +51,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     const { toast } = useToast();
     
     const [cfopValidations, setCfopValidations] = useState<Record<string, CfopClassification>>({});
-    const [hasChanges, setHasChanges] = useState(false);
     const [activeStatusTab, setActiveStatusTab] = useState<ValidationStatus>('unvalidated');
     const [activeCfopTabs, setActiveCfopTabs] = useState<Record<string, string>>({});
     const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
@@ -65,34 +64,45 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         } else {
             setCfopValidations({});
         }
-        setHasChanges(false);
     }, [competence, allPersistedData]);
 
 
+    const updateAndPersistValidations = (newValidations: Record<string, CfopClassification>) => {
+        setCfopValidations(newValidations);
+        if (!competence) return;
+
+        const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
+        if (!updatedPersistedData[competence]) {
+            updatedPersistedData[competence] = {};
+        }
+        if (!updatedPersistedData[competence].cfopValidations) {
+            updatedPersistedData[competence].cfopValidations = {};
+        }
+        updatedPersistedData[competence].cfopValidations.classifications = newValidations;
+        
+        onPersistData(updatedPersistedData);
+        toast({title: 'Validações de CFOP guardadas automaticamente.'});
+    };
+
     const handleValidationChange = (uniqueKey: string, classification: 'correct' | 'incorrect' | 'verify' | 'unvalidated') => {
-        setCfopValidations(prev => {
-            const newValidations = { ...prev };
-            newValidations[uniqueKey] = {
-                ...(newValidations[uniqueKey] || { isDifal: false }),
-                classification,
-            };
-            return newValidations;
-        });
-        setHasChanges(true);
+        const newValidations = { ...cfopValidations };
+        newValidations[uniqueKey] = {
+            ...(newValidations[uniqueKey] || { isDifal: false }),
+            classification,
+        };
+        updateAndPersistValidations(newValidations);
     };
     
     const handleDifalChange = (uniqueKey: string) => {
-        setCfopValidations(prev => {
-            const current = prev[uniqueKey] || { classification: 'unvalidated', isDifal: false };
-            return {
-                ...prev,
-                [uniqueKey]: {
-                    ...current,
-                    isDifal: !current.isDifal,
-                }
-            };
-        });
-        setHasChanges(true);
+        const current = cfopValidations[uniqueKey] || { classification: 'unvalidated', isDifal: false };
+        const newValidations = {
+            ...cfopValidations,
+            [uniqueKey]: {
+                ...current,
+                isDifal: !current.isDifal,
+            }
+        };
+        updateAndPersistValidations(newValidations);
     };
 
     const handleApplyBulkActions = () => {
@@ -106,7 +116,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
 
         selectedItemKeys.forEach(itemKey => {
             const uniqueKey = itemKey.replace('cfop-pending-', '');
-            const current = newValidations[uniqueKey] || { classification: 'unvalidated', isDifal: false };
+            const current = { ...(newValidations[uniqueKey] || { classification: 'unvalidated', isDifal: false }) };
             let itemChanged = false;
 
             if (bulkActionState.classification) {
@@ -129,40 +139,17 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         });
 
         if (changedCount > 0) {
-            setCfopValidations(newValidations);
-            setHasChanges(true);
+            updateAndPersistValidations(newValidations);
         }
         
-        // Reset for next bulk action
         setBulkActionState({ classification: null, isDifal: null });
         setRowSelection({});
         toast({
             title: "Ações em Massa Aplicadas",
-            description: `${changedCount} itens foram atualizados.`
+            description: `${changedCount} itens foram atualizados e guardados.`
         });
     };
 
-
-    const handleSaveChanges = () => {
-        if (!competence) {
-            toast({ variant: "destructive", title: "Competência não definida" });
-            return;
-        }
-
-        const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
-        if (!updatedPersistedData[competence]) {
-            updatedPersistedData[competence] = {};
-        }
-        if (!updatedPersistedData[competence].cfopValidations) {
-            updatedPersistedData[competence].cfopValidations = {};
-        }
-        updatedPersistedData[competence].cfopValidations.classifications = cfopValidations;
-        
-        onPersistData(updatedPersistedData);
-        setHasChanges(false);
-        toast({title: 'Validações de CFOP guardadas!'});
-    };
-    
     const handleDownload = (data: any[], title: string) => {
         if (!data || data.length === 0) {
             toast({ title: 'Nenhum dado para exportar', variant: 'destructive' });
@@ -182,12 +169,11 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             columnsToShow,
             (row, id) => {
                 const value = row.original[id as keyof typeof row.original];
-                const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
                 
                 const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
                     <div className="group flex items-center justify-between gap-1">
                         <span className="truncate">{displayValue}</span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(copyValue, typeName); }}>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => copyToClipboard(copyValue, typeName)}>
                             <Copy className="h-3 w-3" />
                         </Button>
                     </div>
@@ -436,7 +422,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 <div className="sticky top-4 right-0 z-20 flex justify-end">
                     <Card className="flex items-center gap-2 p-2 shadow-lg animate-in fade-in-0 slide-in-from-top-5">
                         <span className="text-sm font-medium pl-2">{numSelected} selecionado(s)</span>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setRowSelection({})}><MinusCircle className="h-4 w-4"/></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setRowSelection({})}><X className="h-4 w-4"/></Button>
                         <div className="h-6 border-l" />
                         
                         <div className="flex gap-1">
@@ -450,9 +436,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     </Card>
                 </div>
             )}
-            <div className="flex justify-end gap-2 mb-4">
-                <Button onClick={handleSaveChanges} disabled={!hasChanges}><Save className="mr-2 h-4 w-4" /> Guardar Validações</Button>
-            </div>
             
             <Tabs value={activeStatusTab} onValueChange={(val) => setActiveStatusTab(val as ValidationStatus)} className="w-full">
                 <TabsList className="grid w-full grid-cols-5">
