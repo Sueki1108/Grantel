@@ -16,7 +16,7 @@ import Link from "next/link";
 import * as XLSX from 'xlsx';
 import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
-import { processDataFrames, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
+import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdvancedAnalyses } from "@/components/app/advanced-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
@@ -589,7 +589,6 @@ export function AutomatorClientPage() {
                     ...resultData, 
                     competence,
                     siengeSheetData: processedData?.siengeSheetData,
-                    reconciliationResults: null, 
                 });
 
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
@@ -618,32 +617,19 @@ export function AutomatorClientPage() {
 
         setProcessing(true);
         try {
-            setProcessedData(prev => ({
-                ...prev!,
-                reconciliationResults: null, // Clear old results
-            }));
-
-            // Simulate async processing
             await new Promise(resolve => setTimeout(resolve, 50));
             
-            setProcessedData(prev => {
-                if (!prev) return null;
-                const newReconciliationResults = processDataFrames(
-                    {
-                        'Itens do Sienge': prev.siengeSheetData || [],
-                        'Itens Válidos': prev.sheets['Itens Válidos'] || [],
-                        'Notas Válidas': prev.sheets['Notas Válidas'] || [],
-                        'CTEs Válidos': prev.sheets['CTEs Válidos'] || [],
-                    },
-                    new Set(),
-                    () => {} // No-op logger for this specific run
-                ).reconciliationResults;
-                 
-                return {
-                    ...prev,
-                    reconciliationResults: newReconciliationResults,
-                };
-            });
+            const newReconciliationResults = runReconciliation(
+                processedData.siengeSheetData,
+                processedData.sheets['Itens Válidos'] || [],
+                processedData.sheets['Notas Válidas'] || [],
+                processedData.sheets['CTEs Válidos'] || []
+            );
+            
+            setProcessedData(prev => ({
+                ...prev!,
+                reconciliationResults: newReconciliationResults,
+            }));
             
             toast({ title: 'Conciliação Concluída', description: 'Os resultados estão prontos para visualização.' });
 
@@ -903,3 +889,4 @@ export function AutomatorClientPage() {
         </div>
     );
 }
+    
