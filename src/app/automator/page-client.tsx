@@ -16,7 +16,7 @@ import Link from "next/link";
 import * as XLSX from 'xlsx';
 import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
-import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
+import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdvancedAnalyses } from "@/components/app/advanced-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
@@ -647,6 +647,18 @@ export function AutomatorClientPage() {
         });
     }, []);
     
+    // Derived state for DIFAL tab
+    const difalItems = useMemo(() => {
+        const cfopValidations = (competence && allClassifications[competence]?.cfopValidations?.classifications) || {};
+        const reconciledItems = processedData?.reconciliationResults?.reconciled || [];
+
+        return reconciledItems.filter(item => {
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item.CFOP}`;
+            return cfopValidations[uniqueKey]?.isDifal === true;
+        });
+
+    }, [processedData?.reconciliationResults?.reconciled, allClassifications, competence]);
+
     // =================================================================
     // UI CONTROL AND RENDER
     // =================================================================
@@ -812,7 +824,7 @@ export function AutomatorClientPage() {
                         </TabsContent>
 
                         <TabsContent value="difal" className="mt-6">
-                            <DifalAnalysis />
+                            <DifalAnalysis difalItems={difalItems} />
                         </TabsContent>
                         
                         <TabsContent value="analyses" className="mt-6">

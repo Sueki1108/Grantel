@@ -1,13 +1,12 @@
 
 "use client";
 
-import { useState, useMemo, type ChangeEvent } from 'react';
+import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { FileUp, Loader2, Download, Cpu, TicketPercent, Copy, Calendar as CalendarIcon, Hash, Sigma, Coins, ClipboardCopy, X } from 'lucide-react';
-import JSZip from 'jszip';
+import { Loader2, Download, Cpu, TicketPercent, Copy, Calendar as CalendarIcon, Hash, Sigma, Coins, ClipboardCopy, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -16,13 +15,13 @@ import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
 import { Label } from '../ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogClose } from '../ui/dialog';
+import { generateGnreScript, GNRE_DEFAULT_CONFIGS } from '@/lib/gnre-script-generator';
 
 // ===============================================================
 // Tipos
 // ===============================================================
-
-type DifalData = {
+type DifalDataItem = {
     'Chave de Acesso': string;
     'Número da Nota': string;
     'Data de Emissão': string;
@@ -31,151 +30,57 @@ type DifalData = {
     'Entrega': string;
 };
 
-
-// ===============================================================
-// Helper Functions
-// ===============================================================
-const readFileAsText = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            if (event.target && event.target.result instanceof ArrayBuffer) {
-                const buffer = event.target.result;
-                try {
-                    const decoder = new TextDecoder('utf-8', { fatal: true });
-                    resolve(decoder.decode(buffer));
-                } catch (e) {
-                    const decoder = new TextDecoder('iso-8859-1');
-                    resolve(decoder.decode(buffer));
-                }
-            } else {
-                reject(new Error('Falha ao ler o ficheiro como ArrayBuffer.'));
-            }
-        };
-        reader.onerror = () => reject(new Error(`Erro ao ler o ficheiro: ${file.name}`));
-        reader.readAsArrayBuffer(file);
-    });
-};
-
-const getTagValue = (element: Element | null, tagName: string): string => {
-    if (!element) return '';
-    const tag = element.querySelector(tagName);
-    return tag?.textContent ?? '';
-};
+interface DifalAnalysisProps {
+    difalItems: any[];
+}
 
 
 // ===============================================================
 // Main Component
 // ===============================================================
-export function DifalAnalysis() {
-    const [xmlFiles, setXmlFiles] = useState<File[]>([]);
+export function DifalAnalysis({ difalItems }: DifalAnalysisProps) {
     const [isLoading, setIsLoading] = useState(false);
-    const [difalData, setDifalData] = useState<DifalData[]>([]);
-    const [dueDate, setDueDate] = useState<Date | undefined>(new Date());
     const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
+    const [dueDate, setDueDate] = useState<Date | undefined>(new Date());
+    const [paymentDate, setPaymentDate] = useState<Date | undefined>(new Date());
     const { toast } = useToast();
-    
-    const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-        const selectedFiles = e.target.files;
-        if (!selectedFiles) return;
-        
-        let newFiles: File[] = [];
-        let extractedCount = 0;
 
-        for (const file of Array.from(selectedFiles)) {
-             if (file.type === 'application/zip' || file.name.toLowerCase().endsWith('.zip')) {
-                try {
-                    const zip = await JSZip.loadAsync(file);
-                    for (const relativePath in zip.files) {
-                        const zipEntry = zip.files[relativePath];
-                        if (!zipEntry?.dir && relativePath.toLowerCase().endsWith('.xml')) {
-                            const content = await zipEntry.async('string');
-                            newFiles.push(new File([content], zipEntry.name, { type: 'application/xml' }));
-                            extractedCount++;
-                        }
-                    }
-                } catch (error) {
-                    toast({ variant: "destructive", title: `Erro ao descompactar ${file.name}` });
-                }
-            } else if (file.type === 'text/xml' || file.name.toLowerCase().endsWith('.xml')) {
-                newFiles.push(file);
-            }
-        }
-        
-        setXmlFiles(prev => [...prev, ...newFiles]);
-        toast({ title: `${newFiles.length} ficheiro(s) XML adicionados.`, description: `${extractedCount > 0 ? `(${extractedCount} de .zip)` : ''} Clique em processar para analisar.` });
-    };
-
-    const processXmls = async () => {
-        if (xmlFiles.length === 0) {
-            toast({ variant: "destructive", title: "Nenhum XML carregado", description: "Por favor, carregue os ficheiros XML." });
+    const processItems = async () => {
+        if (difalItems.length === 0) {
+            toast({ variant: "destructive", title: "Nenhum item DIFAL", description: "Nenhum item foi classificado como DIFAL para processar." });
             return;
         }
-
         setIsLoading(true);
-        setDifalData([]);
-        
-        const processedItems: DifalData[] = [];
-        const parser = new DOMParser();
-
-        for (const file of xmlFiles) {
-            try {
-                const xmlText = await readFileAsText(file);
-                const xmlDoc = parser.parseFromString(xmlText, "application/xml");
-                const infNFe = xmlDoc.querySelector('infNFe');
-                if (!infNFe) continue;
-
-                const chaveAcesso = infNFe.getAttribute('Id')?.replace('NFe', '') || 'N/A';
-                const nNF = getTagValue(infNFe, 'ide > nNF');
-                const dhEmi = getTagValue(infNFe, 'ide > dhEmi');
-                const vNF = parseFloat(getTagValue(infNFe, 'total > ICMSTot > vNF') || '0');
-                
-                const entrega = infNFe.querySelector('entrega');
-                const entregaMun = getTagValue(entrega, 'xMun');
-                const entregaUf = getTagValue(entrega, 'UF');
-                
-                processedItems.push({
-                    'Chave de Acesso': chaveAcesso,
-                    'Número da Nota': nNF,
-                    'Data de Emissão': dhEmi,
-                    'Valor Total da Nota': vNF,
-                    'Valor da Guia (11%)': parseFloat((vNF * 0.11).toFixed(2)),
-                    'Entrega': entregaMun ? `${entregaMun} - ${entregaUf}` : 'N/A',
-                });
-
-            } catch (err) {
-                console.error("Erro ao processar ficheiro", file.name, err);
-            }
-        }
-        
-        setDifalData(processedItems);
+        // Simulate processing, as data is already filtered
+        await new Promise(resolve => setTimeout(resolve, 300));
         setIsLoading(false);
-        if (processedItems.length > 0) {
-            setIsResultsModalOpen(true);
-            toast({ title: "Processamento Concluído", description: `${processedItems.length} XMLs analisados.` });
-        } else {
-            toast({ variant: "destructive", title: "Nenhum dado encontrado", description: "Não foi possível extrair dados dos XMLs fornecidos." });
-        }
+        setIsResultsModalOpen(true);
+        toast({ title: "Itens DIFAL Carregados", description: `${difalItems.length} itens prontos para geração de guia.` });
     };
 
     const totals = useMemo(() => {
-        if (difalData.length === 0) return null;
+        if (difalItems.length === 0) return null;
+        const totalNotesValue = difalItems.reduce((sum, item) => sum + item['Valor Total'], 0);
         return {
-            count: difalData.length,
-            totalNotesValue: difalData.reduce((sum, item) => sum + item['Valor Total da Nota'], 0),
-            totalGuideValue: difalData.reduce((sum, item) => sum + item['Valor da Guia (11%)'], 0)
+            count: difalItems.length,
+            totalNotesValue,
+            totalGuideValue: totalNotesValue * 0.11,
         }
-    }, [difalData]);
+    }, [difalItems]);
     
     const handleDownloadExcel = () => {
-        if (difalData.length === 0) {
+        if (difalItems.length === 0) {
             toast({ variant: 'destructive', title: 'Nenhum dado para exportar' });
             return;
         }
 
-        const dataToExport = difalData.map(item => ({
-            ...item,
-            'Data de Emissão': item['Data de Emissão'] ? format(parseISO(item['Data de Emissão']), 'dd/MM/yyyy') : 'N/A',
+        const dataToExport = difalItems.map(item => ({
+            'Chave de Acesso': item['Chave de acesso'],
+            'Número da Nota': item['Número da Nota'],
+            'Data de Emissão': item['Emissão'] ? format(parseISO(item['Emissão']), 'dd/MM/yyyy') : 'N/A',
+            'Valor Total da Nota': item['Valor Total'],
+            'Valor da Guia (11%)': parseFloat((item['Valor Total'] * 0.11).toFixed(2)),
+            'Entrega': item.destUF,
         }));
 
         const worksheet = XLSX.utils.json_to_sheet(dataToExport);
@@ -183,6 +88,39 @@ export function DifalAnalysis() {
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Dados DIFAL');
         XLSX.writeFile(workbook, `Relatorio_DIFAL.xlsx`);
         toast({ title: 'Relatório Excel Gerado' });
+    };
+
+    const handleGenerateScript = () => {
+        if (difalItems.length === 0 || !dueDate || !paymentDate) {
+            toast({ variant: 'destructive', title: 'Dados incompletos', description: 'Certifique-se de que há itens DIFAL e que as datas estão preenchidas.' });
+            return;
+        }
+    
+        const scriptData = difalItems.map(item => ({
+            filename: `nota_${item['Número da Nota']}.xml`,
+            chave_acesso: item['Chave de acesso'],
+            valor_principal_calculado: item['Valor Total'] * 0.11,
+            valor_principal_gnre: (item['Valor Total'] * 0.11).toFixed(2).replace('.', ','),
+        }));
+    
+        const scriptContent = generateGnreScript(
+            scriptData,
+            format(dueDate, 'ddMMyyyy'),
+            format(paymentDate, 'ddMMyyyy'),
+            GNRE_DEFAULT_CONFIGS
+        );
+        
+        const blob = new Blob([scriptContent], { type: 'text/python' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'gerar_guias_gnre.py';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    
+        toast({ title: "Script Python Gerado", description: "Execute o script 'gerar_guias_gnre.py' para automatizar a criação das guias." });
     };
 
     const copyToClipboard = (text: string | number) => {
@@ -195,16 +133,20 @@ export function DifalAnalysis() {
     };
 
     const columns = useMemo(() => getColumnsWithCustomRender(
-        difalData, 
-        ['Número da Nota', 'Chave de Acesso', 'Data de Emissão', 'Valor Total da Nota', 'Valor da Guia (11%)', 'Entrega'],
+        difalItems, 
+        ['Número da Nota', 'Chave de acesso', 'Emissão', 'Valor Total', 'Valor da Guia (11%)'],
         (row, id) => {
-            const value = row.original[id as keyof DifalData];
+            const item = row.original;
+            const value = item[id as keyof typeof item];
             let displayValue: React.ReactNode = String(value ?? '');
             
-             if (id === 'Data de Emissão' && typeof value === 'string') {
+             if (id === 'Emissão' && typeof value === 'string') {
                 displayValue = format(parseISO(value), 'dd/MM/yyyy');
              } else if (typeof value === 'number') {
                 displayValue = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+             } else if (id === 'Valor da Guia (11%)') {
+                 const guideValue = (item['Valor Total'] || 0) * 0.11;
+                 displayValue = guideValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
              }
              
              return (
@@ -213,7 +155,7 @@ export function DifalAnalysis() {
                 </div>
              )
         }
-    ), [difalData]);
+    ), [difalItems]);
 
 
     return (
@@ -225,53 +167,43 @@ export function DifalAnalysis() {
                         <div>
                             <CardTitle className="font-headline text-2xl">Ferramenta de Extração para Guia DIFAL</CardTitle>
                             <CardDescription>
-                                Carregue os XMLs de saída, processe os dados e exporte um relatório para facilitar a criação das guias.
+                                Esta aba exibe os itens que foram marcados como DIFAL. Defina as datas e gere o script de automação.
                             </CardDescription>
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-8">
                     <div>
-                        <h3 className="text-lg font-bold mb-4">Etapa 1: Carregar XMLs e Definir Data</h3>
+                        <h3 className="text-lg font-bold mb-4">Etapa 1: Definir Datas</h3>
                          <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-                            <div className='flex flex-col gap-2'>
-                                <Label>Carregar XMLs de Saída (.xml ou .zip)</Label>
-                                <label htmlFor="xml-upload-difal" className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 cursor-pointer hover:border-primary transition-colors h-full">
-                                    <FileUp className="h-8 w-8 text-muted-foreground mb-1" />
-                                    <span className="font-semibold text-sm">Clique ou arraste para carregar</span>
-                                    <input id="xml-upload-difal" type="file" className="sr-only" onChange={handleXmlFileChange} multiple accept=".xml,.zip" />
-                                </label>
-                                {xmlFiles.length > 0 && <div className="text-sm text-muted-foreground"><span className="font-bold">{xmlFiles.length}</span> ficheiro(s) carregados.</div>}
-                            </div>
                             <div>
-                                <Label htmlFor='due-date'>Data de Pagamento da Guia</Label>
+                                <Label htmlFor='due-date'>Data de Vencimento da Guia</Label>
                                 <div className="flex items-center gap-2">
                                      <Popover>
                                         <PopoverTrigger asChild>
-                                            <Button
-                                                id="due-date"
-                                                variant={"outline"}
-                                                className={cn(
-                                                    "w-full justify-start text-left font-normal",
-                                                    !dueDate && "text-muted-foreground"
-                                                )}
-                                            >
+                                            <Button id="due-date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dueDate && "text-muted-foreground")}>
                                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                                 {dueDate ? format(dueDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : <span>Selecione uma data</span>}
                                             </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0">
-                                            <Calendar
-                                                mode="single"
-                                                selected={dueDate}
-                                                onSelect={setDueDate}
-                                                initialFocus
-                                            />
-                                        </PopoverContent>
+                                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={dueDate} onSelect={setDueDate} initialFocus /></PopoverContent>
                                     </Popover>
-                                     <Button size="icon" variant="ghost" onClick={() => copyToClipboard(dueDate ? format(dueDate, 'dd/MM/yyyy') : '')} disabled={!dueDate}>
-                                        <ClipboardCopy className="h-6 w-6" />
-                                    </Button>
+                                     <Button size="icon" variant="ghost" onClick={() => copyToClipboard(dueDate ? format(dueDate, 'dd/MM/yyyy') : '')} disabled={!dueDate}><ClipboardCopy className="h-6 w-6" /></Button>
+                                </div>
+                            </div>
+                             <div>
+                                <Label htmlFor='payment-date'>Data de Pagamento da Guia</Label>
+                                <div className="flex items-center gap-2">
+                                     <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button id="payment-date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !paymentDate && "text-muted-foreground")}>
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {paymentDate ? format(paymentDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : <span>Selecione uma data</span>}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={paymentDate} onSelect={setPaymentDate} initialFocus /></PopoverContent>
+                                    </Popover>
+                                     <Button size="icon" variant="ghost" onClick={() => copyToClipboard(paymentDate ? format(paymentDate, 'dd/MM/yyyy') : '')} disabled={!paymentDate}><ClipboardCopy className="h-6 w-6" /></Button>
                                 </div>
                             </div>
                         </div>
@@ -279,10 +211,10 @@ export function DifalAnalysis() {
                      <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Etapa 2</span></div></div>
                      <div>
                         <h3 className="text-lg font-bold mb-2">Etapa 2: Processar e Exportar</h3>
-                         <p className='text-sm text-muted-foreground mb-4'>Clique para extrair os dados dos XMLs. Os resultados serão exibidos num diálogo.</p>
+                         <p className='text-sm text-muted-foreground mb-4'>Clique para visualizar os itens e gerar os relatórios.</p>
                         <div className='flex flex-col sm:flex-row gap-4'>
-                            <Button onClick={processXmls} disabled={isLoading || xmlFiles.length === 0} className="w-full">
-                                {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : <><Cpu className="mr-2 h-4 w-4" /> Processar XMLs</>}
+                            <Button onClick={processItems} disabled={isLoading || difalItems.length === 0} className="w-full">
+                                {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : <><Cpu className="mr-2 h-4 w-4" /> Visualizar Itens DIFAL</>}
                             </Button>
                         </div>
                     </div>
@@ -334,25 +266,28 @@ export function DifalAnalysis() {
             <Dialog open={isResultsModalOpen} onOpenChange={setIsResultsModalOpen}>
                 <DialogContent className="max-w-4xl h-auto max-h-[90vh] flex flex-col">
                      <DialogHeader>
-                        <DialogTitle>Resultados da Análise DIFAL</DialogTitle>
+                        <DialogTitle>Itens Marcados como DIFAL</DialogTitle>
                         <DialogDescription>
-                            Os dados foram extraídos dos XMLs carregados. Clique num valor para o copiar.
+                            Os dados foram extraídos dos itens marcados. Clique num valor para o copiar.
                         </DialogDescription>
                     </DialogHeader>
                     
-                    {difalData.length > 0 && (
+                    {difalItems.length > 0 && (
                         <Card className="flex-grow overflow-hidden">
                             <CardContent className='pt-6 h-full'>
                             <DataTable 
-                                    columns={columns}
-                                    data={difalData}
+                                columns={columns}
+                                data={difalItems}
                             />
                             </CardContent>
                         </Card>
                     )}
                     <DialogFooter>
-                         <Button onClick={handleDownloadExcel} disabled={difalData.length === 0}>
+                         <Button onClick={handleDownloadExcel} disabled={difalItems.length === 0} variant="outline">
                             <Download className="mr-2 h-4 w-4" /> Baixar Excel
+                        </Button>
+                         <Button onClick={handleGenerateScript} disabled={difalItems.length === 0}>
+                            <Download className="mr-2 h-4 w-4" /> Gerar Script Python
                         </Button>
                     </DialogFooter>
                      <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
