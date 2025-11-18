@@ -29,7 +29,7 @@ interface CfopValidatorProps {
     allPersistedData: AllClassifications;
 }
 
-type ValidationStatus = 'unvalidated' | 'correct' | 'incorrect' | 'verify';
+type ValidationStatus = 'all' | 'unvalidated' | 'correct' | 'incorrect' | 'verify';
 
 type TabFilters = {
     xmlCsts: Set<string>;
@@ -42,8 +42,9 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     
     const [cfopValidations, setCfopValidations] = useState<Record<string, CfopClassification>>({});
     const [hasChanges, setHasChanges] = useState(false);
-    const [activeCfopTab, setActiveCfopTab] = useState('');
-    const [activeStatusTabs, setActiveStatusTabs] = useState<Record<string, string>>({});
+    const [activeStatusTab, setActiveStatusTab] = useState<ValidationStatus>('unvalidated');
+    const [activeCfopTabs, setActiveCfopTabs] = useState<Record<string, string>>({});
+
     const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
 
     useEffect(() => {
@@ -56,7 +57,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     }, [competence, allPersistedData]);
 
 
-    const handleValidationChange = (uniqueKey: string, classification: ValidationStatus) => {
+    const handleValidationChange = (uniqueKey: string, classification: 'correct' | 'incorrect' | 'verify' | 'unvalidated') => {
         setCfopValidations(prev => {
             const newValidations = { ...prev };
             newValidations[uniqueKey] = {
@@ -89,22 +90,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     };
     
     
-    const groupedBySiengeCfop = useMemo(() => {
-        return items.reduce((acc, item) => {
-            const cfop = item.Sienge_CFOP || 'N/A';
-            if (!acc[cfop]) acc[cfop] = [];
-            acc[cfop].push(item);
-            return acc;
-        }, {} as Record<string, any[]>);
-    }, [items]);
-
-    useEffect(() => {
-        const firstCfop = Object.keys(groupedBySiengeCfop)[0];
-        if (firstCfop && !activeCfopTab) {
-            setActiveCfopTab(firstCfop);
-        }
-    }, [groupedBySiengeCfop, activeCfopTab]);
-    
     const copyToClipboard = (text: string | number, type: string) => {
         const textToCopy = String(text);
         navigator.clipboard.writeText(textToCopy).then(() => {
@@ -115,7 +100,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     };
 
     const columns = useMemo(() => {
-        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Valor Unitário', 'Valor Total', 'pICMS'];
+        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Valor Unitário', 'pICMS', 'Valor Total'];
         
         return getColumnsWithCustomRender(
             items,
@@ -190,8 +175,8 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         ]);
     }, [items, cfopValidations, toast]);
 
-    const filterItems = (items: any[], status: 'all' | ValidationStatus, siengeCfop: string) => {
-        const currentFilters = tabFilters[siengeCfop];
+    const getFilteredItems = (status: ValidationStatus, siengeCfop: string | null = null) => {
+        
         const statusFiltered = status === 'all'
             ? items
             : items.filter(item => {
@@ -199,10 +184,13 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 const classification = cfopValidations[uniqueKey]?.classification || 'unvalidated';
                 return classification === status;
             });
+            
+        const cfopFiltered = siengeCfop ? statusFiltered.filter(item => item.Sienge_CFOP === siengeCfop) : statusFiltered;
 
-        if (!currentFilters) return statusFiltered;
+        const currentFilters = tabFilters[siengeCfop || 'all'];
+        if (!currentFilters) return cfopFiltered;
         
-        return statusFiltered.filter(item => {
+        return cfopFiltered.filter(item => {
             const cstMatch = currentFilters.xmlCsts.has(String(item['CST do ICMS']));
             const picmsMatch = currentFilters.xmlPicms.has(String(item.pICMS || '0'));
             const fullDesc = cfopDescriptions[parseInt(item['CFOP'], 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
@@ -298,7 +286,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                         <ListFilter className="mr-2 h-4 w-4" /> Filtros
                     </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-2xl">
+                <DialogContent className="sm:max-w-xl">
                      <DialogHeader>
                         <DialogTitle>Filtros Avançados</DialogTitle>
                         <DialogDescription>Desmarque os itens que deseja ocultar da visualização.</DialogDescription>
@@ -318,12 +306,12 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                             </div>
                         </TabsContent>
                         <TabsContent value="cst" className='mt-4'>
-                            <div className="flex flex-col gap-2 mt-2 p-1">
+                             <div className="flex flex-col gap-2 mt-2 p-1">
                                  <FilterCheckboxList options={availableOptions.xmlCsts} filterSet={filters.xmlCsts} filterKey="xmlCsts" />
                              </div>
                         </TabsContent>
                         <TabsContent value="picms" className='mt-4'>
-                            <div className="flex flex-col gap-2 mt-2 p-1">
+                             <div className="flex flex-col gap-2 mt-2 p-1">
                                 <FilterCheckboxList options={availableOptions.xmlPicms} filterSet={filters.xmlPicms} filterKey="xmlPicms" />
                             </div>
                         </TabsContent>
@@ -337,72 +325,74 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         )
     };
 
-
+    const statusTabs: { status: ValidationStatus; label: string }[] = [
+        { status: 'unvalidated', label: 'Não Validado' },
+        { status: 'correct', label: 'Correto' },
+        { status: 'incorrect', label: 'Incorreto' },
+        { status: 'verify', label: 'Verificar' },
+        { status: 'all', label: 'Todos' },
+    ];
+    
     return (
         <div>
             <div className="flex justify-end gap-2 mb-4">
                 <Button onClick={handleSaveChanges} disabled={!hasChanges}><Save className="mr-2 h-4 w-4" /> Guardar Validações</Button>
             </div>
             
-            <Tabs value={activeCfopTab} onValueChange={setActiveCfopTab} className="w-full">
-                <TabsList className="h-auto flex-wrap justify-start">
-                    {Object.entries(groupedBySiengeCfop).map(([cfop, cfopItems]) => (
-                        <TabsTrigger key={cfop} value={cfop}>
-                            {cfop} ({cfopItems.length})
-                        </TabsTrigger>
-                    ))}
+            <Tabs value={activeStatusTab} onValueChange={(val) => setActiveStatusTab(val as ValidationStatus)} className="w-full">
+                <TabsList className="grid w-full grid-cols-5">
+                     {statusTabs.map(({status, label}) => {
+                         const count = getFilteredItems(status).length;
+                         return <TabsTrigger key={status} value={status} disabled={count === 0}>{label} ({count})</TabsTrigger>
+                     })}
                 </TabsList>
-                {Object.entries(groupedBySiengeCfop).map(([cfop, cfopItems]) => {
-                    const statusCounts = {
-                        all: filterItems(cfopItems, 'all', cfop).length,
-                        unvalidated: filterItems(cfopItems, 'unvalidated', cfop).length,
-                        correct: filterItems(cfopItems, 'correct', cfop).length,
-                        incorrect: filterItems(cfopItems, 'incorrect', cfop).length,
-                        verify: filterItems(cfopItems, 'verify', cfop).length,
-                    };
-                    
+                {statusTabs.map(({ status }) => {
+                     const itemsForStatus = getFilteredItems(status);
+                     const groupedByCfop = itemsForStatus.reduce((acc, item) => {
+                        const cfop = item.Sienge_CFOP || 'N/A';
+                        if (!acc[cfop]) acc[cfop] = [];
+                        acc[cfop].push(item);
+                        return acc;
+                    }, {} as Record<string, any[]>);
+                    const cfopsForStatus = Object.keys(groupedByCfop);
+
                     return (
-                        <TabsContent key={cfop} value={cfop} className="mt-4">
-                             <Tabs 
-                                value={activeStatusTabs[cfop] || 'all'} 
-                                onValueChange={(val) => setActiveStatusTabs(prev => ({...prev, [cfop]: val}))} 
-                                className="w-full"
-                            >
-                                <div className='flex justify-between items-center mb-2'>
-                                     <TabsList className="h-auto flex-wrap justify-start">
-                                        {statusCounts.all > 0 && <TabsTrigger value="all">Todos ({statusCounts.all})</TabsTrigger>}
-                                        {statusCounts.unvalidated > 0 && <TabsTrigger value="unvalidated">Não Validado ({statusCounts.unvalidated})</TabsTrigger>}
-                                        {statusCounts.correct > 0 && <TabsTrigger value="correct">Correto ({statusCounts.correct})</TabsTrigger>}
-                                        {statusCounts.incorrect > 0 && <TabsTrigger value="incorrect">Incorreto ({statusCounts.incorrect})</TabsTrigger>}
-                                        {statusCounts.verify > 0 && <TabsTrigger value="verify">Verificar ({statusCounts.verify})</TabsTrigger>}
-                                    </TabsList>
-                                    <div className='flex items-center gap-2'>
-                                        <FilterDialog siengeCfop={cfop} items={cfopItems} />
+                        <TabsContent key={status} value={status} className="mt-4">
+                            {itemsForStatus.length > 0 ? (
+                                <Tabs 
+                                    value={activeCfopTabs[status] || cfopsForStatus[0]} 
+                                    onValueChange={(val) => setActiveCfopTabs(prev => ({...prev, [status]: val}))}
+                                    className="w-full"
+                                >
+                                    <div className='flex justify-between items-center mb-2'>
+                                        <TabsList className="h-auto flex-wrap justify-start">
+                                            {cfopsForStatus.map(cfop => (
+                                                <TabsTrigger key={`${status}-${cfop}`} value={cfop}>
+                                                    {cfop} ({groupedByCfop[cfop].length})
+                                                </TabsTrigger>
+                                            ))}
+                                        </TabsList>
                                     </div>
-                                </div>
-                                <div className='text-lg font-bold my-2 px-1'>
-                                    {cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}
-                                </div>
-                                <TabsContent value="all" className="mt-4">
-                                    <DataTable columns={columns} data={filterItems(cfopItems, 'all', cfop)} />
-                                </TabsContent>
-                                <TabsContent value="unvalidated" className="mt-4">
-                                     <DataTable columns={columns} data={filterItems(cfopItems, 'unvalidated', cfop)} />
-                                </TabsContent>
-                                <TabsContent value="correct" className="mt-4">
-                                     <DataTable columns={columns} data={filterItems(cfopItems, 'correct', cfop)} />
-                                </TabsContent>
-                                <TabsContent value="incorrect" className="mt-4">
-                                     <DataTable columns={columns} data={filterItems(cfopItems, 'incorrect', cfop)} />
-                                </TabsContent>
-                                <TabsContent value="verify" className="mt-4">
-                                     <DataTable columns={columns} data={filterItems(cfopItems, 'verify', cfop)} />
-                                </TabsContent>
-                            </Tabs>
+                                    {cfopsForStatus.map(cfop => (
+                                        <TabsContent key={`${status}-${cfop}`} value={cfop} className="mt-4">
+                                            <div className='flex justify-between items-center mb-2'>
+                                                 <div className='text-lg font-bold'>
+                                                    {cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}
+                                                </div>
+                                                 <FilterDialog siengeCfop={cfop} items={groupedByCfop[cfop]} />
+                                            </div>
+                                            <DataTable columns={columns} data={getFilteredItems(status, cfop)} />
+                                        </TabsContent>
+                                    ))}
+                                </Tabs>
+                            ) : (
+                                <div className="text-center text-muted-foreground p-8">Nenhum item nesta categoria.</div>
+                            )}
                         </TabsContent>
-                    );
+                    )
                 })}
             </Tabs>
         </div>
     );
 }
+
