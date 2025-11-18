@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import type { ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, TicketPercent } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
@@ -16,7 +16,6 @@ import { SiengeTaxCheck } from './sienge-tax-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { CfopValidator } from './cfop-validator';
 import { AllClassifications } from './imobilizado-analysis';
-import { DifalAnalysis } from './difal-analysis';
 
 
 interface ReconciliationAnalysisProps {
@@ -63,27 +62,18 @@ export function ReconciliationAnalysis({
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
-    const { reconciliationResults, siengeDataForTaxCheck, difalItems } = useMemo(() => {
+    const { reconciliationResults, siengeDataForTaxCheck } = useMemo(() => {
         const results = processedData?.reconciliationResults;
         
-        const cfopValidations = (competence && allClassifications[competence]?.cfopValidations?.classifications) || {};
-        const reconciledItems = results?.reconciled || [];
-
-        const difal = reconciledItems.filter(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item.CFOP}`;
-            return cfopValidations[uniqueKey]?.isDifal === true;
-        });
-
         if (!results) {
-            return { reconciliationResults: null, siengeDataForTaxCheck: processedData?.siengeSheetData || null, difalItems: difal };
+            return { reconciliationResults: null, siengeDataForTaxCheck: processedData?.siengeSheetData || null };
         }
 
         return {
             reconciliationResults: results,
             siengeDataForTaxCheck: processedData?.siengeSheetData || null,
-            difalItems: difal
         };
-    }, [processedData, allClassifications, competence]);
+    }, [processedData]);
 
     const handleDownload = (data: any[], title: string) => {
         if (!data || data.length === 0) {
@@ -123,11 +113,10 @@ export function ReconciliationAnalysis({
                 </div>
                 
                 <Tabs defaultValue="reconciliation">
-                    <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="reconciliation" disabled={!reconciliationResults}>Conciliação</TabsTrigger>
+                    <TabsList className="grid w-full grid-cols-3">
+                        <TabsTrigger value="reconciliation" disabled={!reconciliationResults}>Conciliação de Itens</TabsTrigger>
                         <TabsTrigger value="tax_check" disabled={!siengeDataForTaxCheck}>Conferência de Impostos</TabsTrigger>
                         <TabsTrigger value="cfop_validation" disabled={!reconciliationResults}><BarChart className='h-4 w-4 mr-2'/>Validação CFOP</TabsTrigger>
-                        <TabsTrigger value="difal" disabled={!reconciliationResults}><TicketPercent className='h-4 w-4 mr-2'/>Guia DIFAL</TabsTrigger>
                     </TabsList>
                     <TabsContent value="reconciliation" className="mt-4">
                          {!processedData?.sheets['Itens Válidos'] && (
@@ -182,10 +171,6 @@ export function ReconciliationAnalysis({
                             onPersistData={onPersistClassifications}
                             competence={competence}
                         />
-                    </TabsContent>
-
-                    <TabsContent value="difal" className="mt-4">
-                        <DifalAnalysis difalItems={difalItems} />
                     </TabsContent>
                 </Tabs>
             </CardContent>
