@@ -29,7 +29,6 @@ import type { KeyCheckResult } from "@/components/app/key-checker";
 import { cn } from "@/lib/utils";
 import { ImobilizadoAnalysis, type AllClassifications } from "@/components/app/imobilizado-analysis";
 import { HistoryAnalysis, type SessionData } from "@/components/app/history-analysis";
-import { DifalAnalysis } from "@/components/app/difal-analysis";
 import { PendingIssuesReport } from "@/components/app/pending-issues-report";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -647,17 +646,6 @@ export function AutomatorClientPage() {
         });
     }, []);
     
-    // Derived state for DIFAL tab
-    const difalItems = useMemo(() => {
-        const cfopValidations = (competence && allClassifications[competence]?.cfopValidations?.classifications) || {};
-        const reconciledItems = processedData?.reconciliationResults?.reconciled || [];
-
-        return reconciledItems.filter(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item.CFOP}`;
-            return cfopValidations[uniqueKey]?.isDifal === true;
-        });
-
-    }, [processedData?.reconciliationResults?.reconciled, allClassifications, competence]);
 
     // =================================================================
     // UI CONTROL AND RENDER
@@ -733,15 +721,12 @@ export function AutomatorClientPage() {
                                 5. Imobilizado
                                 {processedData?.sheets['Imobilizados'] && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
-                             <TabsTrigger value="difal" className="flex items-center gap-2">
-                                <TicketPercent className="h-5 w-5" /> 6. Guia DIFAL
-                            </TabsTrigger>
                             <TabsTrigger value="analyses" disabled={analysisTabDisabled} className="flex items-center gap-2">
-                                7. SPED Fiscal
+                                6. SPED Fiscal
                                 {processedData?.keyCheckResults && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                              <TabsTrigger value="pending" className="flex items-center gap-2">
-                                <ClipboardList className="h-5 w-5" /> 8. Pendências
+                                <ClipboardList className="h-5 w-5" /> 7. Pendências
                             </TabsTrigger>
                         </TabsList>
                         
@@ -821,10 +806,6 @@ export function AutomatorClientPage() {
                         
                         <TabsContent value="imobilizado" className="mt-6">
                             { !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} siengeData={processedData?.siengeSheetData} onPersistData={handlePersistClassifications} allPersistedData={allClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card> }
-                        </TabsContent>
-
-                        <TabsContent value="difal" className="mt-6">
-                            <DifalAnalysis difalItems={difalItems} />
                         </TabsContent>
                         
                         <TabsContent value="analyses" className="mt-6">
