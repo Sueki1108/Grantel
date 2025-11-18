@@ -6,17 +6,11 @@ import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Loader2, Download, Cpu, TicketPercent, Copy, Calendar as CalendarIcon, Hash, Sigma, Coins, ClipboardCopy, X, FileUp, UploadCloud } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Loader2, Download, Cpu, TicketPercent, Copy, Hash, Sigma, Coins, ClipboardCopy, X, UploadCloud } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { DataTable } from '@/components/app/data-table';
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Calendar } from '../ui/calendar';
-import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '../ui/dialog';
-import { generateGnreScript, GNRE_DEFAULT_CONFIGS } from '@/lib/gnre-script-generator';
 import { processUploadedXmls } from '@/lib/xml-processor';
 import JSZip from 'jszip';
 import { FileUploadForm } from './file-upload-form';
@@ -41,7 +35,6 @@ type DifalDataItem = {
 export function DifalAnalysis() {
     const [isLoading, setIsLoading] = useState(false);
     const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
-    const [dueDate, setDueDate] = useState<Date | undefined>(new Date());
     const [difalXmlFiles, setDifalXmlFiles] = useState<File[]>([]);
     const [processedItems, setProcessedItems] = useState<DifalDataItem[]>([]);
     
@@ -140,38 +133,6 @@ export function DifalAnalysis() {
         toast({ title: 'Relatório Excel Gerado' });
     };
 
-    const handleGenerateScript = () => {
-        if (processedItems.length === 0 || !dueDate) {
-            toast({ variant: 'destructive', title: 'Dados incompletos', description: 'Certifique-se de que processou os itens e que a data de vencimento está preenchida.' });
-            return;
-        }
-    
-        const scriptData = processedItems.map(item => ({
-            filename: `nota_${item['Número da Nota']}.xml`,
-            chave_acesso: item['Chave de Acesso'],
-            valor_principal_calculado: item['Valor da Guia (11%)'],
-            valor_principal_gnre: (item['Valor da Guia (11%)']).toFixed(2).replace('.', ','),
-        }));
-    
-        const scriptContent = generateGnreScript(
-            scriptData,
-            format(dueDate, 'ddMMyyyy'),
-            GNRE_DEFAULT_CONFIGS
-        );
-        
-        const blob = new Blob([scriptContent], { type: 'text/python' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'gerar_guias_gnre.py';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    
-        toast({ title: "Script Python Gerado", description: "Execute o script 'gerar_guias_gnre.py' para automatizar a criação das guias." });
-    };
-
     const copyToClipboard = (text: string | number) => {
         const textToCopy = typeof text === 'number' ? text.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\./g, '').replace(',', '.') : text;
         navigator.clipboard.writeText(textToCopy).then(() => {
@@ -198,6 +159,7 @@ export function DifalAnalysis() {
              return (
                 <div className="cursor-pointer hover:bg-muted p-1 rounded group flex items-center gap-1 justify-between" onClick={() => copyToClipboard(String(value))}>
                     <span>{displayValue}</span>
+                    <ClipboardCopy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
              )
         }
@@ -211,9 +173,9 @@ export function DifalAnalysis() {
                     <div className="flex items-center gap-3">
                         <TicketPercent className="h-8 w-8 text-primary" />
                         <div>
-                            <CardTitle className="font-headline text-2xl">Ferramenta de Geração de Guia DIFAL</CardTitle>
+                            <CardTitle className="font-headline text-2xl">Ferramenta de Extração de Dados DIFAL</CardTitle>
                             <CardDescription>
-                                Carregue os XMLs, defina a data e processe para gerar o script de automação para as guias GNRE.
+                                Carregue os XMLs, processe e visualize os dados para análise de DIFAL.
                             </CardDescription>
                         </div>
                     </div>
@@ -230,33 +192,14 @@ export function DifalAnalysis() {
                             displayName="Carregar XMLs para DIFAL"
                         />
                     </div>
-                    <div>
-                        <h3 className="text-lg font-bold mb-4">Etapa 2: Definir Data</h3>
-                         <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-                            <div>
-                                <Label htmlFor='due-date'>Data de Vencimento da Guia</Label>
-                                <div className="flex items-center gap-2">
-                                     <Popover>
-                                        <PopoverTrigger asChild>
-                                            <Button id="due-date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dueDate && "text-muted-foreground")}>
-                                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {dueDate ? format(dueDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : <span>Selecione uma data</span>}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={dueDate} onSelect={setDueDate} initialFocus /></PopoverContent>
-                                    </Popover>
-                                     <Button size="icon" variant="ghost" onClick={() => copyToClipboard(dueDate ? format(dueDate, 'dd/MM/yyyy') : '')} disabled={!dueDate}><ClipboardCopy className="h-6 w-6" /></Button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    
                      <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Etapa Final</span></div></div>
                      <div>
-                        <h3 className="text-lg font-bold mb-2">Etapa 3: Processar e Exportar</h3>
-                         <p className='text-sm text-muted-foreground mb-4'>Clique para analisar os XMLs, ver os resultados e gerar os relatórios.</p>
+                        <h3 className="text-lg font-bold mb-2">Etapa 2: Processar e Visualizar</h3>
+                         <p className='text-sm text-muted-foreground mb-4'>Clique para analisar os XMLs e ver os resultados.</p>
                         <div className='flex flex-col sm:flex-row gap-4'>
                             <Button onClick={processDifalItems} disabled={isLoading || difalXmlFiles.length === 0} className="w-full">
-                                {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : <><Cpu className="mr-2 h-4 w-4" /> Processar e Gerar Guia</>}
+                                {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : <><Cpu className="mr-2 h-4 w-4" /> Processar e Ver Resultados</>}
                             </Button>
                         </div>
                     </div>
@@ -293,9 +236,6 @@ export function DifalAnalysis() {
                     <DialogFooter>
                          <Button onClick={handleDownloadExcel} disabled={processedItems.length === 0} variant="outline">
                             <Download className="mr-2 h-4 w-4" /> Baixar Excel
-                        </Button>
-                         <Button onClick={handleGenerateScript} disabled={processedItems.length === 0}>
-                            <Download className="mr-2 h-4 w-4" /> Gerar Script Python
                         </Button>
                     </DialogFooter>
                      <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">

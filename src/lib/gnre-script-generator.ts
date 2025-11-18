@@ -1,391 +1,249 @@
+"use client";
+
+import { useState, useMemo, type ChangeEvent } from 'react';
+import * as XLSX from 'xlsx';
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Loader2, Download, Cpu, TicketPercent, Copy, Hash, Sigma, Coins, ClipboardCopy, X, UploadCloud } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { DataTable } from '@/components/app/data-table';
+import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '../ui/dialog';
+import { processUploadedXmls } from '@/lib/xml-processor';
+import JSZip from 'jszip';
+import { FileUploadForm } from './file-upload-form';
 
 
-export type GnreConfig = {
-    URL_SITE: string;
-    UF_ALVO: string;
-    UF_ALVO_EMITENTE: string;
-    CNPJ_ALVO: string;
-    RAZAO_SOCIAL_ALVO: string;
-    ENDERECO_ALVO: string;
-    CEP_ALVO: string;
-    MUNICIPIO_ALVO_EMITENTE: string;
-    TELEFONE_ALVO: string;
-    RECEITA_ALVO: string;
-    CNPJ_DESTINATARIO: string;
-    RAZAO_SOCIAL_DESTINATARIO: string;
-    UF_DESTINATARIO: string;
-    MUNICIPIO_ALVO_DESTINATARIO: string;
+// ===============================================================
+// Tipos
+// ===============================================================
+type DifalDataItem = {
+    'Chave de Acesso': string;
+    'Número da Nota': string;
+    'Data de Emissão': string;
+    'Valor Total da Nota': number;
+    'Valor da Guia (11%)': number;
+    'Entrega': string;
 };
 
 
-type GnreDataItem = {
-    filename: string;
-    chave_acesso: string;
-    valor_principal_calculado: number;
-    valor_principal_gnre: string;
-};
-
-export const GNRE_DEFAULT_CONFIGS: GnreConfig = {
-    "URL_SITE": "https://www.gnre.pe.gov.br:444/gnre/v/guia/index",
-    "UF_ALVO": "MS",
-    "UF_ALVO_EMITENTE": "PR",
-    "CNPJ_ALVO": "81732042000119",
-    "RAZAO_SOCIAL_ALVO": "GRANTEL ENGENHARIA LTDA",
-    "ENDERECO_ALVO": "RUA PARANAGUA, 78",
-    "CEP_ALVO": "83410390",
-    "MUNICIPIO_ALVO_EMITENTE": "4105805", // Código para Colombo - PR
-    "TELEFONE_ALVO": "4133386454",
-    "RECEITA_ALVO": "100102",
-    "CNPJ_DESTINATARIO": "81732042000119",
-    "RAZAO_SOCIAL_DESTINATARIO": "GRANTEL ENGENHARIA LTDA",
-    "UF_DESTINATARIO": "MS",
-    "MUNICIPIO_ALVO_DESTINATARIO": "5007906"
-};
-
-export function generateGnreScript(
-    gnreData: GnreDataItem[],
-    vencimentoAlvo: string,
-    gnreConfigs: GnreConfig
-): string {
-
-    const seleniumImports = `
-# -*- coding: utf-8 -*-
-# --- CÓDIGO GERADO PELA APLICAÇÃO GRANTEL - NÃO ALTERE AS VARIÁVEIS PRINCIPAIS ---
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.common.exceptions import WebDriverException, NoSuchElementException, TimeoutException
-from selenium.webdriver.support.ui import Select
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import time
-import sys
-import os
-from selenium.webdriver.common.keys import Keys
-try:
-    from webdriver_manager.chrome import ChromeDriverManager
-except ImportError:
-    print("webdriver-manager não encontrado. A instalar...")
-    import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "webdriver-manager"])
-    from webdriver_manager.chrome import ChromeDriverManager
-`;
-
-    const gnreItemsString = gnreData.map(data => 
-        `    {"chave": "${data.chave_acesso}", "valor_gnre": "${data.valor_principal_gnre}", "valor_real": "${data.valor_principal_calculado.toFixed(2)}"}`
-    ).join(',\n');
-
-    const gnreListContent = `
-GNRE_LISTA_DADOS = [
-${gnreItemsString}
-]
-`;
-
-    const configVars = `
-# VARIÁVEIS DINÂMICAS (Datas inseridas na aplicação)
-VENCIMENTO_ALVO = "${vencimentoAlvo}"
-DATA_PAGAMENTO_ALVO = "${vencimentoAlvo}" # Usar a data de vencimento como data de pagamento
-
-# VARIÁVEIS FIXAS (Informações do Emitente/Destinatário)
-URL_SITE = "${gnreConfigs.URL_SITE}"
-UF_ALVO = "${gnreConfigs.UF_ALVO}"
-UF_ALVO_EMITENTE = "${gnreConfigs.UF_ALVO_EMITENTE}"
-CNPJ_ALVO = "${gnreConfigs.CNPJ_ALVO}"
-RAZAO_SOCIAL_ALVO = "${gnreConfigs.RAZAO_SOCIAL_ALVO}"
-ENDERECO_ALVO = "${gnreConfigs.ENDERECO_ALVO}"
-CEP_ALVO = "${gnreConfigs.CEP_ALVO}"
-MUNICIPIO_ALVO_EMITENTE = "${gnreConfigs.MUNICIPIO_ALVO_EMITENTE}"
-TELEFONE_ALVO = "${gnreConfigs.TELEFONE_ALVO}"
-RECEITA_ALVO = "${gnreConfigs.RECEITA_ALVO}"
-CNPJ_DESTINATARIO = "${gnreConfigs.CNPJ_DESTINATARIO}"
-RAZAO_SOCIAL_DESTINATARIO = "${gnreConfigs.RAZAO_SOCIAL_DESTINATARIO}"
-UF_DESTINATARIO = "${gnreConfigs.UF_DESTINATARIO}"
-MUNICIPIO_ALVO_DESTINATARIO = "${gnreConfigs.MUNICIPIO_ALVO_DESTINATARIO}"
-`;
-
-    const automationFunction = `
-# --- Seletores de Elementos (ID's do site GNRE) ---
-ID_DROPDOWN_UF = "ufFavorecida"
-ID_FIELDSET_TIPO_GNRE = "fsTipoGnre"
-ID_RADIO_SIMPLES = "optGnreSimples"
-
-# ... (outros IDs de elementos)
-ID_DROPDOWN_UF_EMITENTE = "ufEmitente"
-ID_RADIO_INSCRITO_NAO_EMITENTE = "optNaoInscrito"
-ID_RADIO_CNPJ = "tipoCNPJ"
-ID_CAMPO_CNPJ = "documentoEmitente"
-ID_CAMPO_RAZAO_SOCIAL = "razaoSocialEmitente"
-ID_CAMPO_ENDERECO = "enderecoEmitente"
-ID_CAMPO_CEP = "cepEmitente"
-ID_DROPDOWN_MUNICIPIO_EMITENTE = "municipioEmitente"
-ID_CAMPO_TELEFONE = "telefoneEmitente"
-ID_DROPDOWN_RECEITA = "receita"
-ID_CAMPO_VENCIMENTO = "dataVencimento"
-ID_CAMPO_VALOR_PRINCIPAL = "valor"
-ID_RADIO_INSCRITO_NAO_DESTINATARIO = "optNaoInscritoDest"
-ID_RADIO_CNPJ_DESTINATARIO = "tipoCNPJDest"
-ID_CAMPO_CNPJ_DESTINATARIO = "documentoDestinatario"
-ID_CAMPO_RAZAO_SOCIAL_DESTINATARIO = "razaoSocialDestinatario"
-ID_DROPDOWN_UF_DESTINATARIO = "ufDestinatario"
-ID_DROPDOWN_MUNICIPIO_DESTINATARIO = "municipioDestinatario"
-ID_CAMPO_CHAVE_ACESSO = "campoAdicional00"
-ID_CAMPO_DATA_PAGAMENTO = "dataPagamento"
-ID_BOTAO_INCLUIR = "btnIncluir"
-ID_BOTAO_VALIDAR = "validar"
-ID_BOTAO_BAIXAR = "baixar"
-ID_BOTAO_NOVA_GUIA = "novaGuia"
-
-TIMEOUT = 20 # Tempo máximo de espera aumentado
-
-def run_automation_for_item(driver, item_data, vencimento, data_pagamento):
-    # Executa a automação de uma GNRE, usando dados da nota fiscal.
+// ===============================================================
+// Componente Principal
+// ===============================================================
+export function DifalAnalysis() {
+    const [isLoading, setIsLoading] = useState(false);
+    const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
+    const [difalXmlFiles, setDifalXmlFiles] = useState<File[]>([]);
+    const [processedItems, setProcessedItems] = useState<DifalDataItem[]>([]);
     
-    CHAVE_ACESSO_ALVO = item_data['chave']
-    VALOR_PRINCIPAL_ALVO = item_data['valor_gnre']
-    VENCIMENTO_ALVO = vencimento
-    DATA_PAGAMENTO_ALVO = data_pagamento
-    
-    print(f"\\n--- Processando GNRE para Chave de Acesso: {CHAVE_ACESSO_ALVO} (Valor R$ {item_data['valor_real']}) ---")
-    sys.stdout.flush()
+    const { toast } = useToast();
 
-    try:
-        driver.get(URL_SITE)
-        WebDriverWait(driver, TIMEOUT).until(EC.presence_of_element_located((By.ID, ID_DROPDOWN_UF)))
-        time.sleep(1) # Pausa extra para garantir que a página está totalmente interativa
+    const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+        const selectedFiles = e.target.files;
+        if (!selectedFiles) return;
 
-        print(f"1. Selecionando UF Favorecida: {UF_ALVO}...")
-        dropdown_element = driver.find_element(By.ID, ID_DROPDOWN_UF)
-        select = Select(dropdown_element)
-        select.select_by_value(UF_ALVO)
+        const newFiles: File[] = [];
+        let extractedCount = 0;
 
-        WebDriverWait(driver, TIMEOUT).until(
-            EC.visibility_of_element_located((By.ID, ID_FIELDSET_TIPO_GNRE))
-        )
-        radio_simples_element = WebDriverWait(driver, TIMEOUT).until(
-            EC.element_to_be_clickable((By.ID, ID_RADIO_SIMPLES))
-        )
-        driver.execute_script("arguments[0].click();", radio_simples_element)
-        print("2. Opção 'GNRE Simples' marcada.")
-        time.sleep(1)
-
-        print("3. Preenchendo Dados do Emitente...")
-        
-        radio_inscrito_nao_emitente = WebDriverWait(driver, TIMEOUT).until(
-            EC.element_to_be_clickable((By.ID, ID_RADIO_INSCRITO_NAO_EMITENTE))
-        )
-        driver.execute_script("arguments[0].click();", radio_inscrito_nao_emitente)
-
-        radio_cnpj_element = driver.find_element(By.ID, ID_RADIO_CNPJ)
-        driver.execute_script("arguments[0].click();", radio_cnpj_element)
-        campo_cnpj_element = driver.find_element(By.ID, ID_CAMPO_CNPJ)
-        driver.execute_script(f"arguments[0].value = '{CNPJ_ALVO}';", campo_cnpj_element)
-        campo_cnpj_element.send_keys(Keys.TAB)
-        time.sleep(1.5)
-
-        campo_razao_social_element = WebDriverWait(driver, TIMEOUT).until(
-            EC.element_to_be_clickable((By.ID, ID_CAMPO_RAZAO_SOCIAL))
-        )
-        campo_razao_social_element.clear()
-        campo_razao_social_element.send_keys(RAZAO_SOCIAL_ALVO)
-        campo_razao_social_element.send_keys(Keys.TAB)
-
-        driver.find_element(By.ID, ID_CAMPO_ENDERECO).send_keys(ENDERECO_ALVO)
-        
-        # Inserção do CEP via JS para evitar máscara automática
-        campo_cep_element = driver.find_element(By.ID, ID_CAMPO_CEP)
-        driver.execute_script(f"arguments[0].value = '{CEP_ALVO}';", campo_cep_element)
-        # Dispara o evento 'change' para que o site processe a mudança e carregue os municípios
-        driver.execute_script("arguments[0].dispatchEvent(new Event('change', {'bubbles': true}));", campo_cep_element)
-        time.sleep(1) # Pausa para o JavaScript da página reagir
-
-        WebDriverWait(driver, TIMEOUT).until(
-            EC.visibility_of_element_located((By.ID, ID_DROPDOWN_UF_EMITENTE))
-        )
-        select_uf_emitente = Select(driver.find_element(By.ID, ID_DROPDOWN_UF_EMITENTE))
-        select_uf_emitente.select_by_value(UF_ALVO_EMITENTE)
-        time.sleep(1) # Pausa crucial após selecionar a UF para carregar os municípios
-
-        # Espera explícita para que a opção do município esteja presente no DOM
-        WebDriverWait(driver, TIMEOUT).until(
-            EC.presence_of_element_located((By.XPATH, f"//select[@id='{ID_DROPDOWN_MUNICIPIO_EMITENTE}']/option[@value='{MUNICIPIO_ALVO_EMITENTE}']"))
-        )
-        select_municipio_emitente = Select(driver.find_element(By.ID, ID_DROPDOWN_MUNICIPIO_EMITENTE))
-        select_municipio_emitente.select_by_value(MUNICIPIO_ALVO_EMITENTE)
-
-        campo_telefone_element = driver.find_element(By.ID, ID_CAMPO_TELEFONE)
-        driver.execute_script(f"arguments[0].value = '{TELEFONE_ALVO}';", campo_telefone_element)
-        campo_telefone_element.send_keys(Keys.TAB)
-
-        print("4. Preenchendo Receita, Vencimento e Valor Principal...")
-
-        WebDriverWait(driver, TIMEOUT).until(
-            EC.presence_of_element_located((By.XPATH, f"//select[@id='{ID_DROPDOWN_RECEITA}']/option[@value='{RECEITA_ALVO}']"))
-        )
-        select_receita = Select(driver.find_element(By.ID, ID_DROPDOWN_RECEITA))
-        select_receita.select_by_value(RECEITA_ALVO)
-
-        driver.find_element(By.ID, ID_CAMPO_VENCIMENTO).send_keys(VENCIMENTO_ALVO)
-        driver.find_element(By.ID, ID_CAMPO_VALOR_PRINCIPAL).send_keys(VALOR_PRINCIPAL_ALVO)
-
-        print("5. Preenchendo Dados do Destinatário...")
-
-        radio_inscrito_nao_destinatario = WebDriverWait(driver, TIMEOUT).until(
-            EC.element_to_be_clickable((By.ID, ID_RADIO_INSCRITO_NAO_DESTINATARIO))
-        )
-        driver.execute_script("arguments[0].click();", radio_inscrito_nao_destinatario)
-
-        WebDriverWait(driver, TIMEOUT).until(
-            EC.element_to_be_clickable((By.ID, ID_RADIO_CNPJ_DESTINATARIO))
-        ).click()
-
-        campo_cnpj_destinatario_element = driver.find_element(By.ID, ID_CAMPO_CNPJ_DESTINATARIO)
-        driver.execute_script(f"arguments[0].value = '{CNPJ_DESTINATARIO}';", campo_cnpj_destinatario_element)
-        campo_cnpj_destinatario_element.send_keys(Keys.TAB)
-        time.sleep(1.5)
-
-        campo_razao_social_destinatario_element = driver.find_element(By.ID, ID_CAMPO_RAZAO_SOCIAL_DESTINATARIO)
-        campo_razao_social_destinatario_element.clear()
-        campo_razao_social_destinatario_element.send_keys(RAZAO_SOCIAL_DESTINATARIO)
-        campo_razao_social_destinatario_element.send_keys(Keys.TAB)
-
-        WebDriverWait(driver, TIMEOUT).until(
-            EC.presence_of_element_located((By.XPATH, f"//select[@id='{ID_DROPDOWN_MUNICIPIO_DESTINATARIO}']/option[@value='{MUNICIPIO_ALVO_DESTINATARIO}']"))
-        )
-        select_municipio_destinatario = Select(driver.find_element(By.ID, ID_DROPDOWN_MUNICIPIO_DESTINATARIO))
-        select_municipio_destinatario.select_by_value(MUNICIPIO_ALVO_DESTINATARIO)
-
-        print("6. Preenchendo Outras Informações (Chave de Acesso e Data Pagamento)...")
-
-        WebDriverWait(driver, TIMEOUT).until(EC.presence_of_element_located((By.ID, ID_CAMPO_CHAVE_ACESSO)))
-        driver.find_element(By.ID, ID_CAMPO_CHAVE_ACESSO).send_keys(CHAVE_ACESSO_ALVO)
-
-        campo_data_pagamento = driver.find_element(By.ID, ID_CAMPO_DATA_PAGAMENTO)
-        campo_data_pagamento.send_keys(DATA_PAGAMENTO_ALVO)
-        campo_data_pagamento.send_keys(Keys.TAB)
-
-        print("7. Incluindo Item...")
-        try:
-            botao_incluir = WebDriverWait(driver, TIMEOUT).until(
-                EC.element_to_be_clickable((By.ID, ID_BOTAO_INCLUIR))
-            )
-            driver.execute_script("arguments[0].click();", botao_incluir)
-            time.sleep(3) 
-
-        except Exception as e:
-            print(f"AVISO: Não foi possível clicar no botão 'Incluir'. Pode haver um erro no formulário. Detalhe: {e}")
-            return False 
-
-        print("8. Validando Guia...")
-        try:
-            botao_validar = WebDriverWait(driver, TIMEOUT).until(
-                EC.element_to_be_clickable((By.ID, ID_BOTAO_VALIDAR))
-            )
-            driver.execute_script("arguments[0].click();", botao_validar)
-            time.sleep(5) 
-
-        except Exception as e:
-            print(f"AVISO: Não foi possível clicar no botão 'Validar'. Detalhe: {e}")
-            return False
-
-        print("9. Baixando PDF da Guia...")
-        try:
-            botao_baixar = WebDriverWait(driver, TIMEOUT).until(
-                EC.element_to_be_clickable((By.ID, ID_BOTAO_BAIXAR))
-            )
-            driver.execute_script("arguments[0].click();", botao_baixar)
-            print(f"\\nSUCESSO! Guia para a chave {CHAVE_ACESSO_ALVO} baixada. Aguardando 4 segundos...")
-            time.sleep(4)
-
-        except TimeoutException:
-            print("AVISO: Timeout ao esperar o botão de baixar. A guia pode ter sido gerada mas o botão não ficou clicável.")
-            return False
-        except Exception as e:
-            print(f"AVISO: Não foi possível clicar no botão 'Baixar PDF'. Verifique o download manual.")
-            return False
-
-        return True 
-
-    except NoSuchElementException as e:
-        print(f"FALHA CRÍTICA: Não foi possível encontrar um elemento na página. Automação encerrada para a nota {CHAVE_ACESSO_ALVO}. Detalhe: {e.msg}")
-        return False
-    except Exception as e:
-        print(f"OCORREU UM ERRO INESPERADO para a nota {CHAVE_ACESSO_ALVO}: {e}")
-        return False
-
-def main_loop():
-    driver = None
-    
-    download_dir = os.path.join(os.getcwd(), "guias_gnre")
-    if not os.path.exists(download_dir):
-        try:
-            os.makedirs(download_dir)
-        except OSError as e:
-            print(f"ERRO ao criar diretório de download: {e}. Usando diretório padrão.")
-            download_dir = None
-            
-    try:
-        print("\\n--- INICIANDO O PROCESSO DE AUTOMAÇÃO SELENIUM EM LOOP ---")
-        print("Instalando e iniciando o ChromeDriver...")
-        
-        options = webdriver.ChromeOptions()
-        # options.add_argument("--headless") 
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        
-        prefs = {
-            "download.prompt_for_download": False,
-            "download.directory_upgrade": True,
-            "plugins.always_open_pdf_externally": True 
+        for (const file of Array.from(selectedFiles)) {
+            if (file.type === 'application/zip' || file.name.toLowerCase().endsWith('.zip')) {
+                try {
+                    const zip = await JSZip.loadAsync(file);
+                    const xmlFilePromises: Promise<File>[] = [];
+                    zip.forEach((relativePath, zipEntry) => {
+                        if (!zipEntry.dir && relativePath.toLowerCase().endsWith('.xml')) {
+                            const promise = zipEntry.async('string').then(content => new File([content], zipEntry.name, { type: 'application/xml' }));
+                            xmlFilePromises.push(promise);
+                        }
+                    });
+                    const extractedFiles = await Promise.all(xmlFilePromises);
+                    newFiles.push(...extractedFiles);
+                    extractedCount += extractedFiles.length;
+                } catch (error) {
+                    toast({ variant: "destructive", title: `Erro ao descompactar ${file.name}` });
+                }
+            } else if (file.type === 'text/xml' || file.name.toLowerCase().endsWith('.xml')) {
+                newFiles.push(file);
+            }
         }
-        if download_dir:
-            prefs["download.default_directory"] = download_dir
-        options.add_experimental_option("prefs", prefs)
         
-        service = ChromeService(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options)
-        
-        print(f"Navegador iniciado com sucesso! Downloads serão salvos em: {download_dir if download_dir else 'diretório padrão'}")
+        setDifalXmlFiles(prev => [...prev, ...newFiles]);
+        toast({ title: "Ficheiros Adicionados", description: `${newFiles.length + extractedCount} ficheiros XML adicionados para análise DIFAL.` });
+    };
 
-        total_guias = len(GNRE_LISTA_DADOS)
-        print(f"Iniciando o loop para processar {total_guias} guias...")
+    const processDifalItems = async () => {
+        if (difalXmlFiles.length === 0) {
+            toast({ variant: "destructive", title: "Nenhum XML carregado", description: "Carregue os ficheiros XML para processar." });
+            return;
+        }
+        setIsLoading(true);
         
-        for i, item in enumerate(GNRE_LISTA_DADOS):
-            print(f"\\n================ [ GUIA {i+1} de {total_guias} ] ================")
+        try {
+            const { nfe, saidas } = await processUploadedXmls(difalXmlFiles);
+            const allItems = [...nfe, ...saidas];
             
-            success = run_automation_for_item(driver, item, VENCIMENTO_ALVO, DATA_PAGAMENTO_ALVO)
+            const difalData: DifalDataItem[] = allItems
+                .filter(item => item.entrega_UF && item.destUF && item.entrega_UF !== item.destUF)
+                .map(item => ({
+                    'Chave de Acesso': item['Chave de acesso'],
+                    'Número da Nota': item['Número'],
+                    'Data de Emissão': item['Emissão'],
+                    'Valor Total da Nota': item['Total'],
+                    'Valor da Guia (11%)': parseFloat((item['Total'] * 0.11).toFixed(2)),
+                    'Entrega': item.entrega_UF,
+                }));
+
+            setProcessedItems(difalData);
+            setIsResultsModalOpen(true);
+            toast({ title: "Análise DIFAL Concluída", description: `${difalData.length} notas elegíveis para DIFAL encontradas.` });
+        } catch (err: any) {
+            toast({ variant: "destructive", title: "Erro ao processar XMLs", description: err.message });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const totals = useMemo(() => {
+        if (processedItems.length === 0) return null;
+        const totalNotesValue = processedItems.reduce((sum, item) => sum + item['Valor Total da Nota'], 0);
+        return {
+            count: processedItems.length,
+            totalNotesValue,
+            totalGuideValue: totalNotesValue * 0.11,
+        }
+    }, [processedItems]);
+    
+    const handleDownloadExcel = () => {
+        if (processedItems.length === 0) {
+            toast({ variant: 'destructive', title: 'Nenhum dado para exportar' });
+            return;
+        }
+
+        const dataToExport = processedItems.map(item => ({
+            ...item,
+            'Data de Emissão': item['Data de Emissão'] ? format(parseISO(item['Data de Emissão']), 'dd/MM/yyyy') : 'N/A',
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Dados DIFAL');
+        XLSX.writeFile(workbook, `Relatorio_DIFAL.xlsx`);
+        toast({ title: 'Relatório Excel Gerado' });
+    };
+
+    const copyToClipboard = (text: string | number) => {
+        const textToCopy = typeof text === 'number' ? text.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\./g, '').replace(',', '.') : text;
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            toast({ title: 'Copiado!', description: `Valor "${textToCopy}" copiado para a área de transferência.` });
+        }).catch(err => {
+            toast({ variant: 'destructive', title: 'Falha ao copiar', description: 'Não foi possível copiar o valor.' });
+        });
+    };
+
+    const columns = useMemo(() => getColumnsWithCustomRender(
+        processedItems, 
+        ['Número da Nota', 'Chave de Acesso', 'Data de Emissão', 'Valor Total da Nota', 'Valor da Guia (11%)'],
+        (row, id) => {
+            const item = row.original as DifalDataItem;
+            const value = item[id as keyof DifalDataItem];
+            let displayValue: React.ReactNode = String(value ?? '');
             
-            if not success and i < total_guias - 1:
-                print(f"AVISO: A automação falhou na Guia {i+1}. Tentando a próxima guia em 5 segundos...")
-                time.sleep(5)
-            elif not success and i == total_guias - 1:
-                print("AVISO: A automação falhou na última Guia. Processo concluído com erros.")
-            
-            if i < total_guias - 1 and success:
-                print("Aguardando 2 segundos antes de iniciar a próxima GNRE...")
-                time.sleep(2)
-        
-        print("\\n" + "=" * 50)
-        print("PROCESSO DE AUTOMAÇÃO CONCLUÍDO. Verifique a pasta 'guias_gnre' pelos PDFs.")
-        print("Pressione ENTER para fechar o navegador...")
-        input() 
-        print("Fechando o navegador...")
+             if (id === 'Data de Emissão' && typeof value === 'string') {
+                displayValue = format(parseISO(value), 'dd/MM/yyyy');
+             } else if (typeof value === 'number') {
+                displayValue = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+             }
+             
+             return (
+                <div className="cursor-pointer hover:bg-muted p-1 rounded group flex items-center gap-1 justify-between" onClick={() => copyToClipboard(String(value))}>
+                    <span>{displayValue}</span>
+                    <ClipboardCopy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+             )
+        }
+    ), [processedItems]);
 
-    except WebDriverException as wde:
-        print("\\nFALHA CRÍTICA AO INICIAR O NAVEGADOR:")
-        print("Verifique a instalação do Chrome e do chromedriver.")
-        print(f"Detalhe: {wde}")
-        sys.exit(1)
-    except Exception as e:
-        print("\\nOCORREU UM ERRO INESPERADO NO LOOP PRINCIPAL:")
-        print(f"Detalhe: {e}")
-        sys.exit(1)
-    finally:
-        if driver:
-            driver.quit()
 
-if __name__ == '__main__':
-    main_loop()
-`;
+    return (
+        <div className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center gap-3">
+                        <TicketPercent className="h-8 w-8 text-primary" />
+                        <div>
+                            <CardTitle className="font-headline text-2xl">Ferramenta de Extração de Dados DIFAL</CardTitle>
+                            <CardDescription>
+                                Carregue os XMLs, processe e visualize os dados para análise de DIFAL.
+                            </CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-8">
+                     <div>
+                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><UploadCloud className="h-5 w-5" />Etapa 1: Carregar XMLs</h3>
+                        <FileUploadForm
+                            formId="xml-difal"
+                            files={{ 'xml-difal': difalXmlFiles.length > 0 }}
+                            onFileChange={handleXmlFileChange}
+                            onClearFile={() => setDifalXmlFiles([])}
+                            xmlFileCount={difalXmlFiles.length}
+                            displayName="Carregar XMLs para DIFAL"
+                        />
+                    </div>
+                    
+                     <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Etapa Final</span></div></div>
+                     <div>
+                        <h3 className="text-lg font-bold mb-2">Etapa 2: Processar e Visualizar</h3>
+                         <p className='text-sm text-muted-foreground mb-4'>Clique para analisar os XMLs e ver os resultados.</p>
+                        <div className='flex flex-col sm:flex-row gap-4'>
+                            <Button onClick={processDifalItems} disabled={isLoading || difalXmlFiles.length === 0} className="w-full">
+                                {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : <><Cpu className="mr-2 h-4 w-4" /> Processar e Ver Resultados</>}
+                            </Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
 
-    return `${seleniumImports}${gnreListContent}${configVars}${automationFunction}`;
+            <Dialog open={isResultsModalOpen} onOpenChange={setIsResultsModalOpen}>
+                <DialogContent className="max-w-4xl h-auto max-h-[90vh] flex flex-col">
+                     <DialogHeader>
+                        <DialogTitle>Resultados da Análise DIFAL</DialogTitle>
+                        <DialogDescription>
+                            Os dados foram extraídos dos XMLs. Clique num valor para o copiar para a área de transferência.
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    {totals && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-4">
+                             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total de Notas</CardTitle><Hash className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{totals.count}</div></CardContent></Card>
+                             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Valor Total das Notas</CardTitle><Sigma className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{totals.totalNotesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div></CardContent></Card>
+                             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Valor Total Guias (11%)</CardTitle><Coins className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{totals.totalGuideValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div></CardContent></Card>
+                        </div>
+                    )}
+                    
+                    {processedItems.length > 0 && (
+                        <Card className="flex-grow overflow-hidden">
+                            <CardContent className='pt-6 h-full'>
+                            <DataTable 
+                                columns={columns}
+                                data={processedItems}
+                            />
+                            </CardContent>
+                        </Card>
+                    )}
+                    <DialogFooter>
+                         <Button onClick={handleDownloadExcel} disabled={processedItems.length === 0} variant="outline">
+                            <Download className="mr-2 h-4 w-4" /> Baixar Excel
+                        </Button>
+                    </DialogFooter>
+                     <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+                        <X className="h-4 w-4" />
+                        <span className="sr-only">Close</span>
+                    </DialogClose>
+                </DialogContent>
+            </Dialog>
+
+        </div>
+    );
 }

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -723,14 +724,14 @@ export function AutomatorClientPage() {
                                 {processedData?.sheets['Imobilizados'] && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                              <TabsTrigger value="difal" className="flex items-center gap-2">
-                                <TicketPercent className="h-5 w-5" /> 6. Guia DIFAL
+                                6. Guia DIFAL
                             </TabsTrigger>
                             <TabsTrigger value="analyses" disabled={analysisTabDisabled} className="flex items-center gap-2">
                                 7. SPED Fiscal
                                 {processedData?.keyCheckResults && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                              <TabsTrigger value="pending" className="flex items-center gap-2">
-                                <ClipboardList className="h-5 w-5" /> 8. Pendências
+                                8. Pendências
                             </TabsTrigger>
                         </TabsList>
                         
@@ -890,4 +891,3 @@ export function AutomatorClientPage() {
         </div>
     );
 }
-    
