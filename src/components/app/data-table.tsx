@@ -151,24 +151,10 @@ export function DataTable<TData, TValue>({
                   return (
                     <TableHead key={header.id} className='p-2'>
                         {header.isPlaceholder ? null : (
-                            <>
-                                {flexRender(
-                                    header.column.columnDef.header,
-                                    header.getContext()
-                                )}
-                                {header.column.getCanFilter() ? (
-                                    <div className="mt-1">
-                                        <Input
-                                            type="text"
-                                            value={(header.column.getFilterValue() ?? '') as string}
-                                            onChange={e => header.column.setFilterValue(e.target.value)}
-                                            placeholder={`Filtrar...`}
-                                            className="w-full border-slate-200 h-8"
-                                            onClick={(e) => e.stopPropagation()}
-                                        />
-                                    </div>
-                                ) : null}
-                            </>
+                           flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                            )
                         )}
                     </TableHead>
                   )

@@ -10,7 +10,7 @@ import { Loader2, Download, Cpu, TicketPercent, Copy, Hash, Sigma, Coins, Clipbo
 import { format, parseISO } from 'date-fns';
 import { DataTable } from '@/components/app/data-table';
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { processUploadedXmls } from '@/lib/xml-processor';
 import JSZip from 'jszip';
 import { FileUploadForm } from './file-upload-form';
