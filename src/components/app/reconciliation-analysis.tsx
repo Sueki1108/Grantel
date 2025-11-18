@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import type { ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, Check, X, RotateCw, HelpCircle } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, Check, X, RotateCw } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
@@ -218,21 +218,23 @@ interface DifalItemsAnalysisProps {
 
 function DifalItemsAnalysis({ items, allClassifications, competence, onClassificationChange }: DifalItemsAnalysisProps) {
     
-    const { pending, subject, disregarded } = useMemo(() => {
+    const { subject, disregarded } = useMemo(() => {
         const difalValidations = (competence && allClassifications[competence]?.difalValidations?.classifications) || {};
-        const pending: any[] = [];
         const subject: any[] = [];
         const disregarded: any[] = [];
 
         items.forEach(item => {
             const itemKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
-            const status = difalValidations[itemKey]?.status || 'pending';
-            if (status === 'subject-to-difal') subject.push(item);
-            else if (status === 'disregard') disregarded.push(item);
-            else pending.push(item);
+            const status = difalValidations[itemKey]?.status || 'subject-to-difal';
+
+            if (status === 'disregard') {
+                disregarded.push(item);
+            } else {
+                subject.push(item);
+            }
         });
 
-        return { pending, subject, disregarded };
+        return { subject, disregarded };
     }, [items, allClassifications, competence]);
 
     const difalColumns = useMemo(() => {
@@ -244,7 +246,7 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
                  if (id === 'Descricao CFOP') {
                     const fullText = String(value || '');
                     const truncatedText = fullText.length > 20 ? `${fullText.substring(0, 20)}...` : fullText;
-                    return <span title={fullText}>{truncatedText}</span>;
+                    return <TooltipProvider><Tooltip><TooltipTrigger asChild><span>{truncatedText}</span></TooltipTrigger><TooltipContent><p>{fullText}</p></TooltipContent></Tooltip></TooltipProvider>;
                 }
                  if (id === 'Valor Unitário' || id === 'Valor Total') {
                      return <div className="text-right">{Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
@@ -257,12 +259,18 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
             id: 'actions',
             header: 'Ações',
             cell: ({row}) => {
+                 const itemKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
+                 const status = (competence && allClassifications[competence]?.difalValidations?.classifications[itemKey]?.status) || 'subject-to-difal';
+
                 return (
                     <div className="flex gap-1 justify-center">
                         <TooltipProvider>
-                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onClassificationChange([row.original], 'subject-to-difal')}><Check className="h-4 w-4 text-green-600"/></Button></TooltipTrigger><TooltipContent><p>Sujeito ao DIFAL</p></TooltipContent></Tooltip>
-                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onClassificationChange([row.original], 'disregard')}><X className="h-4 w-4 text-red-600"/></Button></TooltipTrigger><TooltipContent><p>Desconsiderar</p></TooltipContent></Tooltip>
-                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onClassificationChange([row.original], 'pending')}><RotateCw className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent><p>Reverter para Pendente</p></TooltipContent></Tooltip>
+                            {status !== 'disregard' && (
+                                 <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onClassificationChange([row.original], 'disregard')}><X className="h-4 w-4 text-red-600"/></Button></TooltipTrigger><TooltipContent><p>Desconsiderar</p></TooltipContent></Tooltip>
+                            )}
+                            {status === 'disregard' && (
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onClassificationChange([row.original], 'subject-to-difal')}><RotateCw className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent><p>Reverter para Sujeito ao DIFAL</p></TooltipContent></Tooltip>
+                            )}
                         </TooltipProvider>
                     </div>
                 )
@@ -270,7 +278,7 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
         });
         return baseCols;
 
-    }, [items, onClassificationChange]);
+    }, [items, onClassificationChange, competence, allClassifications]);
 
 
     if (items.length === 0) {
@@ -293,7 +301,6 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
         return acc;
     }, {} as Record<string, any[]>);
 
-    const pendingByCfop = itemsByCfop(pending);
     const subjectByCfop = itemsByCfop(subject);
     const disregardedByCfop = itemsByCfop(disregarded);
 
@@ -326,15 +333,11 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
                 <CardDescription>Classifique os itens que foram pré-selecionados para análise de DIFAL.</CardDescription>
             </CardHeader>
             <CardContent>
-                <Tabs defaultValue="pending">
-                    <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="pending">Pendentes ({pending.length})</TabsTrigger>
+                <Tabs defaultValue="subject">
+                    <TabsList className="grid w-full grid-cols-2">
                         <TabsTrigger value="subject">Sujeito ao DIFAL ({subject.length})</TabsTrigger>
                         <TabsTrigger value="disregarded">Desconsiderados ({disregarded.length})</TabsTrigger>
                     </TabsList>
-                    <TabsContent value="pending" className="mt-4">
-                        <RenderCfopTabs dataByCfop={pendingByCfop} />
-                    </TabsContent>
                     <TabsContent value="subject" className="mt-4">
                         <RenderCfopTabs dataByCfop={subjectByCfop} />
                     </TabsContent>
