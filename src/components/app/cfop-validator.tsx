@@ -1,15 +1,17 @@
+
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, X, HelpCircle, Save, History, RotateCw, ListFilter } from "lucide-react";
-import * as XLSX from 'xlsx';
+import { Check, X, HelpCircle, Save, RotateCw } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import type { AllClassifications, CfopClassification } from './imobilizado-analysis';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+
 
 interface CfopValidatorProps {
     items: any[];
@@ -23,6 +25,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     
     const [cfopValidations, setCfopValidations] = useState<Record<string, CfopClassification>>({});
     const [hasChanges, setHasChanges] = useState(false);
+    const [activeCfopTab, setActiveCfopTab] = useState('');
 
     useEffect(() => {
         if (competence && allPersistedData[competence]?.cfopValidations?.classifications) {
@@ -34,7 +37,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     }, [competence, allPersistedData]);
 
 
-    const handleValidationChange = (uniqueKey: string, classification: 'correct' | 'incorrect' | 'verify') => {
+    const handleValidationChange = (uniqueKey: string, classification: 'correct' | 'incorrect' | 'verify' | 'unvalidated') => {
         setCfopValidations(prev => ({
             ...prev,
             [uniqueKey]: {
@@ -65,7 +68,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         toast({title: 'Validações de CFOP guardadas!'});
     };
     
-    const getVariant = (status: CfopClassification['classification']): "default" | "destructive" | "secondary" | "outline" => {
+    const getVariant = (status?: CfopClassification['classification']): "default" | "destructive" | "secondary" | "outline" => {
         switch (status) {
             case 'correct': return "default";
             case 'incorrect': return "destructive";
@@ -73,7 +76,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             default: return "outline";
         }
     };
-    const getIcon = (status: CfopClassification['classification']) => {
+    const getIcon = (status?: CfopClassification['classification']) => {
         switch (status) {
             case 'correct': return <Check className="h-4 w-4" />;
             case 'incorrect': return <X className="h-4 w-4" />;
@@ -81,6 +84,23 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             default: return null;
         }
     };
+    
+    const groupedBySiengeCfop = useMemo(() => {
+        return items.reduce((acc, item) => {
+            const cfop = item.Sienge_CFOP || 'N/A';
+            if (!acc[cfop]) acc[cfop] = [];
+            acc[cfop].push(item);
+            return acc;
+        }, {} as Record<string, any[]>);
+    }, [items]);
+
+    useEffect(() => {
+        const firstCfop = Object.keys(groupedBySiengeCfop)[0];
+        if (firstCfop) {
+            setActiveCfopTab(firstCfop);
+        }
+    }, [groupedBySiengeCfop]);
+
 
     const columns = useMemo(() => getColumnsWithCustomRender(
         items,
@@ -124,8 +144,8 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             header: 'Status',
             cell: ({ row }) => {
                  const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
-                const validation = cfopValidations[uniqueKey]?.classification || 'unvalidated';
-                 return <Badge variant={getVariant(validation)}>{getIcon(validation)} <span className='ml-2'>{validation}</span></Badge>
+                const validation = cfopValidations[uniqueKey]?.classification;
+                 return <Badge variant={getVariant(validation)}>{getIcon(validation)} <span className='ml-2'>{validation || 'Não validado'}</span></Badge>
             }
         }
     ]), [items, cfopValidations]);
@@ -139,7 +159,22 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             <div className="flex justify-end gap-2 mb-4">
                 <Button onClick={handleSaveChanges} disabled={!hasChanges}><Save className="mr-2 h-4 w-4" /> Guardar Validações</Button>
             </div>
-            <DataTable columns={columns} data={items} />
+            
+            <Tabs value={activeCfopTab} onValueChange={setActiveCfopTab} className="w-full">
+                <TabsList className="h-auto flex-wrap justify-start">
+                    {Object.entries(groupedBySiengeCfop).map(([cfop, cfopItems]) => (
+                        <TabsTrigger key={cfop} value={cfop}>
+                            {cfop} ({cfopItems.length})
+                        </TabsTrigger>
+                    ))}
+                </TabsList>
+                {Object.entries(groupedBySiengeCfop).map(([cfop, cfopItems]) => (
+                     <TabsContent key={cfop} value={cfop} className="mt-4">
+                         <DataTable columns={columns} data={cfopItems} />
+                    </TabsContent>
+                ))}
+            </Tabs>
         </div>
     );
 }
+

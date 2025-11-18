@@ -51,18 +51,22 @@ export function ReconciliationAnalysis({
         XLSX.writeFile(workbook, fileName);
     };
 
-    // Função para garantir que 'Chave de Comparação' seja a primeira coluna
-    const getColumnsForDivergentTabs = (data: any[]) => {
+    const getColumnsForDivergentTabs = (data: any[]): ColumnDef<any>[] => {
         if (!data || data.length === 0) return [];
-
-        const comparisonKeyColumn: ColumnDef<any> = {
-            accessorKey: 'Chave de Comparação',
-            header: 'Chave de Comparação',
-        };
-
-        const otherColumns = getColumns(data).filter(col => col.id !== 'Chave de Comparação');
-
-        return [comparisonKeyColumn, ...otherColumns];
+    
+        const hasKeyColumn = data[0] && 'Chave de Comparação' in data[0];
+        
+        let allColumns = getColumns(data);
+    
+        if (hasKeyColumn) {
+            const keyColumn = allColumns.find(col => col.id === 'Chave de Comparação');
+            const otherColumns = allColumns.filter(col => col.id !== 'Chave de Comparação');
+            if (keyColumn) {
+                return [keyColumn, ...otherColumns];
+            }
+        }
+        
+        return allColumns;
     };
     
     return (
@@ -97,7 +101,7 @@ export function ReconciliationAnalysis({
                         <TabsTrigger value="tax_check">Conferência de Impostos</TabsTrigger>
                     </TabsList>
                     <TabsContent value="reconciliation" className="mt-4">
-                         {!processedData?.sheets['Itens Válidos'] && !processedData?.sheets['Itens Válidos Saídas'] && (
+                         {!processedData?.sheets['Itens Válidos'] && (
                              <Alert variant="destructive">
                                 <AlertTriangle className="h-4 w-4" />
                                 <AlertTitle>Dados XML em falta</AlertTitle>
