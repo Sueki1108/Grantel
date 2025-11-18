@@ -119,21 +119,17 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'Status': status,
         'Natureza da Operação': natOp,
         'infCpl': infCpl,
+        'destUF': destUF,
+        'entrega_UF': entrega ? getTagValue(entrega, 'UF') : null,
     };
     
     // Universal key generation based on emitter
     const chaveUnica = `${cleanAndToStr(nNF)}-${cleanAndToStr(emitCNPJ)}`;
     notaFiscal['Chave Unica'] = chaveUnica;
 
-    if (entrega) {
-        notaFiscal.entrega_UF = getTagValue(entrega, 'UF');
-        notaFiscal.entrega_xMun = getTagValue(entrega, 'xMun');
-    }
-
     if (isSaida) {
         notaFiscal['Destinatário'] = destNome;
         notaFiscal['CPF/CNPJ do Destinatário'] = destCNPJ;
-        notaFiscal['destUF'] = destUF; // Make sure destUF is available on 'saida' too
         notaFiscal['Base ICMS'] = parseFloat(vBC) || 0;
         notaFiscal['Valor ICMS'] = parseFloat(vICMS) || 0;
     } else { // entrada
@@ -145,7 +141,6 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         notaFiscal['emitIE'] = emitIE;
         notaFiscal['destCNPJ'] = destCNPJ;
         notaFiscal['destIE'] = destIE;
-        notaFiscal['destUF'] = destUF;
     }
     
     const itens: any[] = [];
