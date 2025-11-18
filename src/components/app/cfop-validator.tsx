@@ -29,7 +29,7 @@ import type { RowSelectionState } from '@tanstack/react-table';
 interface CfopValidatorProps {
     items: any[];
     competence: string | null; 
-    onPersistData: (allDataToSave: AllClassifications) => void;
+    onPersistData: (allData: AllClassifications) => void;
     allPersistedData: AllClassifications;
 }
 
@@ -88,7 +88,8 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     };
 
     const handleBulkAction = (action: 'correct' | 'incorrect' | 'verify' | 'unvalidated' | 'toggleDifal') => {
-        const selectedItemKeys = Object.keys(rowSelection).map(index => filteredItems[activeStatusTab][activeCfopTabs[activeStatusTab]][parseInt(index)].__itemKey);
+        const activeTableData = filteredItemsByStatusAndCfop[activeStatusTab]?.[activeCfopTabs[activeStatusTab]] || [];
+        const selectedItemKeys = Object.keys(rowSelection).map(index => activeTableData[parseInt(index)].__itemKey);
         
         const newValidations = { ...cfopValidations };
         let changed = false;
@@ -269,10 +270,11 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 const currentFilters = tabFilters[cfop];
                 let matchesFilters = true;
                 if (currentFilters) {
+                    const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
                     matchesFilters = 
                         currentFilters.xmlCsts.has(String(item['CST do ICMS'] || '')) &&
                         currentFilters.xmlPicms.has(String(item.pICMS || '0')) &&
-                        currentFilters.xmlCfopDescriptions.has(cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada");
+                        currentFilters.xmlCfopDescriptions.has(fullDescription);
                 }
     
                 if (matchesFilters) {
@@ -287,8 +289,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     }, [items, cfopValidations, tabFilters]);
     
     const numSelected = Object.keys(rowSelection).length;
-    const activeTableData = filteredItemsByStatusAndCfop[activeStatusTab]?.[activeCfopTabs[activeStatusTab]] || [];
-
+    
     if (!items || items.length === 0) {
         return <p className="text-center text-muted-foreground p-8">Nenhum item conciliado para validar o CFOP.</p>;
     }
@@ -471,7 +472,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                             ))}
                                         </TabsList>
                                          <Button onClick={() => handleDownload(Object.values(cfopGroupsForStatus).flat(), `Validacao_${status}`)} size="sm" variant="outline">
-                                            <Download className="mr-2 h-4 w-4" /> Baixar Aba
+                                            <Download className="mr-2 h-4 w-4" /> Baixar Aba ({Object.values(cfopGroupsForStatus).flat().length})
                                         </Button>
                                     </div>
                                     {cfopsForStatus.map(cfop => {
