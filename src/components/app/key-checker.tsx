@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -134,8 +135,8 @@ const correctionConfigLabels: Record<keyof SpedCorrectionConfig, string> = {
     fixTruncation: "Limitar Campos de Texto a 235 Caracteres",
     fixUnits: "Padronizar Unidades de Medida para 'un'",
     remove0190: "Remover Registos 0190 Desnecessários",
-    removeUnusedProducts: "Remover Produtos (0200) Órfãos de Docs. Removidos",
-    removeUnusedParticipants: "Remover Participantes (0150) Órfãos de Docs. Removidos"
+    removeUnusedProducts: "Remover Produtos (0200) Não Utilizados",
+    removeUnusedParticipants: "Remover Participantes (0150) Não Utilizados"
 };
 
 
@@ -368,8 +369,8 @@ const processSpedFileInBrowser = (
         modifiedLines.push(currentLine);
     }
     
-    // --- Orphan Removals ---
-    intermediateLines = modifiedLines; // Use the result of the first pass
+    // --- Orphan Removals (Second Pass) ---
+    intermediateLines = modifiedLines;
 
     if (config.removeUnusedProducts) {
         _log("Iniciando remoção de produtos (0200) não utilizados.");
@@ -387,7 +388,7 @@ const processSpedFileInBrowser = (
             const parts = line.split('|');
             if (parts.length > 2 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
                 modifications.removed0200.push({ lineNumber: i + 1, line });
-                linesModifiedCount++;
+                if (!modifications.removed0200.find(log => log.line === line)) linesModifiedCount++;
                 continue; // Skip this line
             }
             filteredLines.push(line);
@@ -412,7 +413,7 @@ const processSpedFileInBrowser = (
             const parts = line.split('|');
             if (parts.length > 2 && parts[1] === '0150' && !usedParticipantCodes.has(parts[2])) {
                 modifications.removed0150.push({ lineNumber: i + 1, line });
-                linesModifiedCount++;
+                if (!modifications.removed0150.find(log => log.line === line)) linesModifiedCount++;
                 continue; // Skip this line
             }
             filteredLines.push(line);
@@ -433,11 +434,11 @@ const processSpedFileInBrowser = (
         modifiedLines.forEach(line => {
             if (!line) return;
             const parts = line.split('|');
-            const regType = parts[1];
-            if (regType) {
-                recordCounts[regType] = (recordCounts[regType] || 0) + 1;
+            const codeType = parts[1];
+            if (codeType) {
+                recordCounts[codeType] = (recordCounts[codeType] || 0) + 1;
 
-                const blockChar = regType.charAt(0);
+                const blockChar = codeType.charAt(0);
                 blockLineCounts[blockChar] = (blockLineCounts[blockChar] || 0) + 1;
             }
         });
@@ -446,28 +447,28 @@ const processSpedFileInBrowser = (
             let line = modifiedLines[i];
             if (!line) continue;
             const parts = line.split('|');
-            const regType = parts[1];
+            const codeType = parts[1];
             
-            if (regType === '0990') {
+            if (codeType === '0990') {
                  const expectedCount = blockLineCounts['0'] || 0;
                  if (parts.length > 2 && parseInt(parts[2], 10) !== expectedCount) {
                     const originalLine = line;
                     parts[2] = String(expectedCount);
                     modifiedLines[i] = parts.join('|');
                     modifications.blockCount.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
-                    linesModifiedCount++;
+                    if (!modifications.blockCount.find(log => log.original === originalLine)) linesModifiedCount++;
                  }
-            } else if (regType && regType.endsWith('990') && regType !== '0990') {
-                const blockChar = regType.charAt(0);
+            } else if (codeType && codeType.endsWith('990') && codeType !== '0990') {
+                const blockChar = codeType.charAt(0);
                 const expectedCount = blockLineCounts[blockChar] || 0;
                 if (parts.length > 2 && parseInt(parts[2], 10) !== expectedCount) {
                     const originalLine = line;
                     parts[2] = String(expectedCount);
                     modifiedLines[i] = parts.join('|');
                     modifications.blockCount.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
-                    linesModifiedCount++;
+                    if (!modifications.blockCount.find(log => log.original === originalLine)) linesModifiedCount++;
                 }
-            } else if (regType === '9900' && parts.length > 3) {
+            } else if (codeType === '9900' && parts.length > 3) {
                 const countedReg = parts[2];
                 const expectedCount = recordCounts[countedReg] || 0;
                 if (parseInt(parts[3], 10) !== expectedCount) {
@@ -475,23 +476,23 @@ const processSpedFileInBrowser = (
                     parts[3] = String(expectedCount);
                     modifiedLines[i] = parts.join('|');
                     modifications.count9900.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
-                    linesModifiedCount++;
+                    if (!modifications.count9900.find(log => log.original === originalLine)) linesModifiedCount++;
                 }
-            } else if (regType === '9999') {
+            } else if (codeType === '9999') {
                 const expectedTotal = modifiedLines.length;
                 if (parts.length > 2 && parseInt(parts[2], 10) !== expectedTotal) {
                     const originalLine = line;
                     parts[2] = String(expectedTotal);
                     modifiedLines[i] = parts.join('|');
                     modifications.totalLineCount.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
-                    linesModifiedCount++;
+                    if (!modifications.totalLineCount.find(log => log.original === originalLine)) linesModifiedCount++;
                 }
             }
         }
          _log(`Recontagem de linhas e registos concluída.`);
     }
 
-    _log(`Processamento concluído. Total de linhas lidas: ${lines.length}. Total de linhas com modificações/remoções: ${linesModifiedCount}.`);
+    _log(`Processamento concluído. Total de linhas lidas: ${lines.length}. Total de linhas com modificações: ${linesModifiedCount}.`);
 
     return {
         fileName: `corrigido_sped.txt`,
@@ -567,9 +568,9 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             if (reg === 'C100' && parts.length > 9 && parts[9]?.length === 44) {
                 key = parts[9];
                 docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12], vlDesc: parts[14] };
-            } else if (reg === 'D100' && parts.length > 17 && parts[10]?.length === 44) {
+            } else if (reg === 'D100' && parts.length > 10 && parts[10]?.length === 44) {
                 key = parts[10];
-                docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
+                docData = { key, reg, indOper: parts[2], codPart: parts[4], serie: parts[7], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
             }
 
             if (key && docData) {
@@ -1182,3 +1183,5 @@ export function KeyChecker({
         </div>
     );
 }
+
+    
