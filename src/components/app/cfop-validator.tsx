@@ -1,21 +1,25 @@
-
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, X, HelpCircle, Save, RotateCw, ListFilter, SlidersHorizontal, Copy } from "lucide-react";
+import { Check, X, HelpCircle, Save, RotateCw, ListFilter, Copy } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import type { AllClassifications, CfopClassification } from './imobilizado-analysis';
-import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Label } from '../ui/label';
-import { ScrollArea } from '../ui/scroll-area';
-import { Checkbox } from '../ui/checkbox';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cfopDescriptions } from '@/lib/cfop';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 
 
 interface CfopValidatorProps {
@@ -28,7 +32,6 @@ interface CfopValidatorProps {
 type ValidationStatus = 'unvalidated' | 'correct' | 'incorrect' | 'verify';
 
 type TabFilters = {
-    xmlCfops: Set<string>;
     xmlCsts: Set<string>;
     xmlPicms: Set<string>;
     xmlCfopDescriptions: Set<string>;
@@ -189,7 +192,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     ]), [items, cfopValidations]);
 
     const filterItems = (items: any[], status: 'all' | ValidationStatus, siengeCfop: string) => {
-        const currentFilters = tabFilters[siengeCfop] || { xmlCfops: new Set(), xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() };
+        const currentFilters = tabFilters[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() };
         const statusFiltered = status === 'all'
             ? items
             : items.filter(item => {
@@ -199,11 +202,10 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             });
         
         return statusFiltered.filter(item => {
-            const cfopMatch = currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(String(item.CFOP));
             const cstMatch = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(String(item['CST do ICMS']));
             const picmsMatch = currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(String(item.pICMS || '0'));
             const descMatch = currentFilters.xmlCfopDescriptions.size === 0 || currentFilters.xmlCfopDescriptions.has(String(item['Descricao CFOP']));
-            return cfopMatch && cstMatch && picmsMatch && descMatch;
+            return cstMatch && picmsMatch && descMatch;
         });
     };
 
@@ -212,22 +214,19 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     }
     
     const FilterPopover = ({ siengeCfop, items }: { siengeCfop: string; items: any[] }) => {
-        const filters = tabFilters[siengeCfop] || { xmlCfops: new Set(), xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() };
-        const isFilterActive = filters.xmlCfops.size > 0 || filters.xmlCsts.size > 0 || filters.xmlPicms.size > 0 || filters.xmlCfopDescriptions.size > 0;
+        const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() };
+        const isFilterActive = filters.xmlCsts.size > 0 || filters.xmlPicms.size > 0 || filters.xmlCfopDescriptions.size > 0;
 
         const availableOptions = useMemo(() => {
-            const xmlCfops = new Set<string>();
             const xmlCsts = new Set<string>();
             const xmlPicms = new Set<string>();
             const xmlCfopDescriptions = new Set<string>();
             items.forEach(item => {
-                if (item.CFOP) xmlCfops.add(String(item.CFOP));
                 if (item['CST do ICMS']) xmlCsts.add(String(item['CST do ICMS']));
                 if (item.pICMS !== undefined) xmlPicms.add(String(item.pICMS));
                 if (item['Descricao CFOP']) xmlCfopDescriptions.add(String(item['Descricao CFOP']));
             });
             return {
-                xmlCfops: Array.from(xmlCfops).sort(),
                 xmlCsts: Array.from(xmlCsts).sort(),
                 xmlPicms: Array.from(xmlPicms).sort((a,b) => parseFloat(a) - parseFloat(b)),
                 xmlCfopDescriptions: Array.from(xmlCfopDescriptions).sort(),
@@ -236,7 +235,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
 
         const handleFilterChange = (type: keyof TabFilters, value: string, checked: boolean) => {
             setTabFilters(prev => {
-                const newFilters: TabFilters = { ...(prev[siengeCfop] || { xmlCfops: new Set(), xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() }) };
+                const newFilters: TabFilters = { ...(prev[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() }) };
                 
                 const newSet = new Set(newFilters[type]);
                 if (checked) {
@@ -251,9 +250,22 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         const clearFilters = () => {
              setTabFilters(prev => ({
                 ...prev,
-                [siengeCfop]: { xmlCfops: new Set(), xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() }
+                [siengeCfop]: { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() }
             }));
         };
+        
+        const FilterCheckboxList = ({ options, filterSet, filterKey }: { options: string[], filterSet: Set<string>, filterKey: keyof TabFilters }) => (
+            <ScrollArea className="h-64">
+                <div className="grid grid-cols-2 gap-2 mt-2 p-1">
+                    {options.map(opt => (
+                        <div key={`${filterKey}-${opt}`} className="flex items-center space-x-2">
+                            <Checkbox id={`${filterKey}-${opt}`} checked={filterSet.has(opt)} onCheckedChange={checked => handleFilterChange(filterKey, opt, !!checked)} />
+                            <Label htmlFor={`${filterKey}-${opt}`}>{filterKey === 'xmlPicms' ? `${parseFloat(opt).toFixed(2)}%` : opt}</Label>
+                        </div>
+                    ))}
+                </div>
+            </ScrollArea>
+        );
 
         return (
             <Popover>
@@ -264,7 +276,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 </PopoverTrigger>
                 <PopoverContent className="w-96">
                     <div className="grid gap-4">
-                         <div className="space-y-2">
+                        <div className="space-y-2">
                              <div className='flex justify-between items-center'>
                                 <h4 className="font-medium leading-none">Filtros da Aba</h4>
                                 <Button variant="ghost" size="sm" onClick={clearFilters} disabled={!isFilterActive}>Limpar</Button>
@@ -273,54 +285,22 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                 Refine os itens visíveis nesta aba.
                             </p>
                         </div>
-                        <ScrollArea className="h-64">
-                            <div className="grid gap-4 p-1">
-                                <div>
-                                    <Label className="font-semibold">CFOP do XML</Label>
-                                    <div className="grid grid-cols-3 gap-2 mt-2">
-                                        {availableOptions.xmlCfops.map(opt => (
-                                            <div key={`cfop-${opt}`} className="flex items-center space-x-2">
-                                                <Checkbox id={`cfop-${opt}`} checked={filters.xmlCfops.has(opt)} onCheckedChange={checked => handleFilterChange('xmlCfops', opt, !!checked)} />
-                                                <Label htmlFor={`cfop-${opt}`}>{opt}</Label>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div>
-                                    <Label className="font-semibold">Descrição CFOP (XML)</Label>
-                                    <div className="flex flex-col gap-2 mt-2">
-                                        {availableOptions.xmlCfopDescriptions.map(opt => (
-                                            <div key={`desc-${opt}`} className="flex items-center space-x-2">
-                                                <Checkbox id={`desc-${opt}`} checked={filters.xmlCfopDescriptions.has(opt)} onCheckedChange={checked => handleFilterChange('xmlCfopDescriptions', opt, !!checked)} />
-                                                <Label htmlFor={`desc-${opt}`}>{opt.substring(0,25)}...</Label>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div>
-                                     <Label className="font-semibold">CST do ICMS (XML)</Label>
-                                     <div className="grid grid-cols-3 gap-2 mt-2">
-                                        {availableOptions.xmlCsts.map(opt => (
-                                            <div key={`cst-${opt}`} className="flex items-center space-x-2">
-                                                <Checkbox id={`cst-${opt}`} checked={filters.xmlCsts.has(opt)} onCheckedChange={checked => handleFilterChange('xmlCsts', opt, !!checked)} />
-                                                <Label htmlFor={`cst-${opt}`}>{opt}</Label>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                 <div>
-                                     <Label className="font-semibold">Alíquota ICMS (XML)</Label>
-                                     <div className="grid grid-cols-3 gap-2 mt-2">
-                                        {availableOptions.xmlPicms.map(opt => (
-                                            <div key={`picms-${opt}`} className="flex items-center space-x-2">
-                                                <Checkbox id={`picms-${opt}`} checked={filters.xmlPicms.has(opt)} onCheckedChange={checked => handleFilterChange('xmlPicms', opt, !!checked)} />
-                                                <Label htmlFor={`picms-${opt}`}>{parseFloat(opt).toFixed(2)}%</Label>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        </ScrollArea>
+                         <Tabs defaultValue="cfop_desc" className="w-full">
+                            <TabsList className="grid w-full grid-cols-3">
+                                <TabsTrigger value="cfop_desc">Descrição</TabsTrigger>
+                                <TabsTrigger value="cst">CST</TabsTrigger>
+                                <TabsTrigger value="picms">Alíquota</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="cfop_desc" className='mt-4'>
+                                <FilterCheckboxList options={availableOptions.xmlCfopDescriptions} filterSet={filters.xmlCfopDescriptions} filterKey="xmlCfopDescriptions" />
+                            </TabsContent>
+                            <TabsContent value="cst" className='mt-4'>
+                                 <FilterCheckboxList options={availableOptions.xmlCsts} filterSet={filters.xmlCsts} filterKey="xmlCsts" />
+                            </TabsContent>
+                            <TabsContent value="picms" className='mt-4'>
+                                 <FilterCheckboxList options={availableOptions.xmlPicms} filterSet={filters.xmlPicms} filterKey="xmlPicms" />
+                            </TabsContent>
+                        </Tabs>
                     </div>
                 </PopoverContent>
             </Popover>
@@ -353,7 +333,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     
                     const activeFilters = tabFilters[cfop];
                     const filterSummary = [
-                        activeFilters?.xmlCfops.size > 0 && `CFOP: ${Array.from(activeFilters.xmlCfops).join(',')}`,
                         activeFilters?.xmlCfopDescriptions.size > 0 && `Desc: ${Array.from(activeFilters.xmlCfopDescriptions).join(',')}`,
                         activeFilters?.xmlCsts.size > 0 && `CST: ${Array.from(activeFilters.xmlCsts).join(',')}`,
                         activeFilters?.xmlPicms.size > 0 && `pICMS: ${Array.from(activeFilters.xmlPicms).join(',')}%`
