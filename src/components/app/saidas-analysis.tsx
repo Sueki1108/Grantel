@@ -1,10 +1,11 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { FileWarning, TrendingUp, XCircle, Trash2, Ban, FolderClosed, CheckCircle, Save, AlertTriangle, RotateCcw, Settings2, ListFilter } from 'lucide-react';
+import { FileWarning, TrendingUp, XCircle, Trash2, Ban, FolderClosed, CheckCircle, Save, AlertTriangle, RotateCcw, ListFilter } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format, parseISO } from 'date-fns';
 import {
@@ -21,6 +22,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import { Checkbox } from '../ui/checkbox';
 import { Label } from '../ui/label';
 import { SaidaItem, SaidaStatus } from '@/lib/types';
+import { getColumnsWithCustomRender } from './columns-helper';
 
 
 interface SaidasAnalysisProps {
@@ -318,6 +320,18 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
         }
     ];
 
+    const icmsColumns: ColumnDef<any>[] = getColumnsWithCustomRender(
+        icmsSummaryByCfop,
+        ['cfop', 'description', 'base', 'valor'],
+        (row, id) => {
+            const value = row.original[id as keyof typeof row.original];
+            if (id === 'base' || id === 'valor') {
+                return <div className="text-right">{Number(value).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</div>
+            }
+            return <span>{value}</span>
+        }
+    );
+
     return (
         <Card>
             <CardHeader>
@@ -327,7 +341,7 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                         <div>
                             <CardTitle className="font-headline text-2xl">Análise de Sequência de Notas de Saída</CardTitle>
                             <CardDescription>
-                                Verifique a sequência numérica das notas fiscais de saída, analise os totais de ICMS e filtre por CFOP.
+                                Verifique a sequência numérica, analise os totais de ICMS e filtre por CFOP.
                                 {lastPeriodNumber > 0 && ` A última nota do período anterior foi a ${lastPeriodNumber}.`}
                             </CardDescription>
                         </div>
@@ -341,75 +355,40 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                 </div>
             </CardHeader>
             <CardContent>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <Card className="bg-muted/50">
-                        <CardHeader className='pb-2'>
-                            <CardTitle className='text-lg'>Configuração do Período</CardTitle>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                    <Card className="lg:col-span-2">
+                        <CardHeader>
+                            <CardTitle>Configurações e Ações</CardTitle>
                         </CardHeader>
-                        <CardContent className="grid grid-cols-2 gap-4">
-                            <div>
-                                <Label htmlFor="last-note-input" className="whitespace-nowrap text-sm font-medium">Última NF do Período Anterior:</Label>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <input
-                                        id="last-note-input"
-                                        type="number"
-                                        value={lastNumberInput}
-                                        onChange={(e) => setLastNumberInput(e.target.value)}
-                                        className="w-32 h-9 rounded-md border px-3"
-                                        placeholder="Ex: 11498"
-                                    />
-                                    <Button onClick={handleSaveLastNumber} size="sm"><Save className="mr-2 h-4 w-4"/> Guardar</Button>
+                        <CardContent>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                                <div>
+                                    <Label htmlFor="last-note-input" className="text-sm font-medium">Última NF do Período Anterior:</Label>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <input id="last-note-input" type="number" value={lastNumberInput} onChange={(e) => setLastNumberInput(e.target.value)} className="w-full h-9 rounded-md border px-3" placeholder="Ex: 11498" />
+                                        <Button onClick={handleSaveLastNumber} size="sm"><Save className="mr-2 h-4 w-4"/> Guardar</Button>
+                                    </div>
                                 </div>
-                            </div>
-                             <div>
-                                 <Label className="text-sm font-medium">Marcar Intervalo Inutilizado:</Label>
-                                 <div className="flex items-center gap-2 mt-1">
-                                    <input
-                                        id="range-start-input"
-                                        type="number"
-                                        value={rangeStart}
-                                        onChange={(e) => setRangeStart(e.target.value)}
-                                        className="w-28 h-9 rounded-md border px-3"
-                                        placeholder="Início"
-                                    />
-                                    <input
-                                        id="range-end-input"
-                                        type="number"
-                                        value={rangeEnd}
-                                        onChange={(e) => setRangeEnd(e.target.value)}
-                                        className="w-28 h-9 rounded-md border px-3"
-                                        placeholder="Fim"
-                                    />
-                                    <Button onClick={handleMarkRangeAsUnused} size="sm" variant="secondary"><Ban className="mr-2 h-4 w-4"/> Marcar</Button>
+                                <div>
+                                     <Label className="text-sm font-medium">Marcar Intervalo Inutilizado:</Label>
+                                     <div className="flex items-center gap-2 mt-1">
+                                        <input id="range-start-input" type="number" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} className="w-full h-9 rounded-md border px-3" placeholder="Início"/>
+                                        <input id="range-end-input" type="number" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} className="w-full h-9 rounded-md border px-3" placeholder="Fim" />
+                                        <Button onClick={handleMarkRangeAsUnused} size="sm" variant="secondary" className="px-3"><Ban className="mr-2 h-4 w-4"/> Marcar</Button>
+                                    </div>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
-                    <Card className="bg-muted/50">
-                          <CardHeader className='pb-2'>
-                            <CardTitle className='text-lg'>Resumo de ICMS por CFOP</CardTitle>
+                    <Card>
+                        <CardHeader>
+                             <CardTitle>Resumo de ICMS por CFOP</CardTitle>
+                             <CardDescription>Soma de notas emitidas com ICMS destacado.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             {icmsSummaryByCfop.length > 0 ? (
-                                <ScrollArea className="h-32">
-                                     <table className="min-w-full divide-y divide-gray-200">
-                                        <thead className="bg-gray-50 dark:bg-gray-800/50 sticky top-0">
-                                            <tr>
-                                                <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground uppercase">CFOP</th>
-                                                <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground uppercase">Base de Cálculo</th>
-                                                <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground uppercase">Valor do ICMS</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-transparent divide-y divide-gray-200 dark:divide-gray-700">
-                                            {icmsSummaryByCfop.map(({ cfop, base, valor }) => (
-                                                <tr key={cfop}>
-                                                    <td className="px-2 py-2 whitespace-nowrap text-sm font-medium">{cfop}</td>
-                                                    <td className="px-2 py-2 whitespace-nowrap text-sm text-right">{base.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                                    <td className="px-2 py-2 whitespace-nowrap text-sm text-right">{valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                <ScrollArea className="h-[120px]">
+                                    <DataTable columns={icmsColumns} data={icmsSummaryByCfop} />
                                 </ScrollArea>
                             ) : (<p className="text-sm text-muted-foreground text-center pt-8">Nenhuma nota com ICMS destacado para resumir.</p>)}
                         </CardContent>
