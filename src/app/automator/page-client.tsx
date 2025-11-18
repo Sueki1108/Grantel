@@ -16,7 +16,7 @@ import Link from "next/link";
 import * as XLSX from 'xlsx';
 import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
-import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
+import { processDataFrames, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdvancedAnalyses } from "@/components/app/advanced-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
@@ -618,19 +618,34 @@ export function AutomatorClientPage() {
 
         setProcessing(true);
         try {
-            const newReconciliationResults = runReconciliation(
-                processedData.siengeSheetData, 
-                processedData.sheets['Itens Válidos'] || [],
-                processedData.sheets['Notas Válidas'] || [], 
-                processedData.sheets['CTEs Válidos'] || []
-            );
-
             setProcessedData(prev => ({
                 ...prev!,
-                reconciliationResults: newReconciliationResults,
+                reconciliationResults: null, // Clear old results
             }));
+
+            // Simulate async processing
+            await new Promise(resolve => setTimeout(resolve, 50));
             
-            toast({ title: 'Conciliação Concluída', description: `${newReconciliationResults.reconciled.length} itens foram conciliados.` });
+            setProcessedData(prev => {
+                if (!prev) return null;
+                const newReconciliationResults = processDataFrames(
+                    {
+                        'Itens do Sienge': prev.siengeSheetData || [],
+                        'Itens Válidos': prev.sheets['Itens Válidos'] || [],
+                        'Notas Válidas': prev.sheets['Notas Válidas'] || [],
+                        'CTEs Válidos': prev.sheets['CTEs Válidos'] || [],
+                    },
+                    new Set(),
+                    () => {} // No-op logger for this specific run
+                ).reconciliationResults;
+                 
+                return {
+                    ...prev,
+                    reconciliationResults: newReconciliationResults,
+                };
+            });
+            
+            toast({ title: 'Conciliação Concluída', description: 'Os resultados estão prontos para visualização.' });
 
         } catch (err: any) {
             toast({ variant: 'destructive', title: 'Erro na Conciliação', description: err.message });
@@ -732,97 +747,99 @@ export function AutomatorClientPage() {
                             </TabsTrigger>
                         </TabsList>
                         
-                        <div className="mt-6">
-                            {activeMainTab === 'history' && <HistoryAnalysis onRestoreSession={handleRestoreSession} />}
-                            {activeMainTab === 'nf-stock' && (
-                                <div className="space-y-8">
-                                     <Card className="shadow-lg">
-                                        <CardHeader>
-                                            <div className="flex items-center gap-3">
-                                                <UploadCloud className="h-8 w-8 text-primary" />
-                                                <div>
-                                                    <CardTitle className="font-headline text-2xl">Carregar Arquivos</CardTitle>
-                                                    <CardDescription>Carregue os XMLs e/ou as planilhas para iniciar a validação.</CardDescription>
-                                                </div>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent className="space-y-8">
+                        <TabsContent value="history" className="mt-6">
+                            <HistoryAnalysis onRestoreSession={handleRestoreSession} />
+                        </TabsContent>
+                        <TabsContent value="nf-stock" className="mt-6">
+                            <div className="space-y-8">
+                                <Card className="shadow-lg">
+                                    <CardHeader>
+                                        <div className="flex items-center gap-3">
+                                            <UploadCloud className="h-8 w-8 text-primary" />
                                             <div>
-                                                <h3 className="text-lg font-medium mb-4 flex items-center gap-2"><FileUp className="h-5 w-5" />Carregar por XML (Recomendado)</h3>
-                                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                                    <FileUploadForm formId="xml-nfe-entrada" files={{ 'xml-nfe-entrada': xmlFiles.nfeEntrada.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfeEntrada')} onClearFile={() => handleClearFile('xml-nfe-entrada', 'nfeEntrada')} xmlFileCount={xmlFiles.nfeEntrada.length} displayName="XMLs NF-e Entrada" />
-                                                    <FileUploadForm formId="xml-cte" files={{ 'xml-cte': xmlFiles.cte.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'cte')} onClearFile={() => handleClearFile('xml-cte', 'cte')} xmlFileCount={xmlFiles.cte.length} displayName="XMLs CT-e" />
-                                                    <FileUploadForm formId="xml-saida" files={{ 'xml-saida': xmlFiles.nfeSaida.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfeSaida')} onClearFile={() => handleClearFile('xml-saida', 'nfeSaida')} xmlFileCount={xmlFiles.nfeSaida.length} displayName="XMLs NF-e Saída" />
-                                                    <FileUploadForm formId="xml-nfse" files={{ 'xml-nfse': xmlFiles.nfse.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfse')} onClearFile={() => handleClearFile('xml-nfse', 'nfse')} xmlFileCount={xmlFiles.nfse.length} displayName="XMLs NFS-e" />
-                                                </div>
+                                                <CardTitle className="font-headline text-2xl">Carregar Arquivos</CardTitle>
+                                                <CardDescription>Carregue os XMLs e/ou as planilhas para iniciar a validação.</CardDescription>
                                             </div>
-                                            <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">E/Ou</span></div></div>
-                                            <div>
-                                                <h3 className="text-lg font-medium mb-4 flex items-center gap-2"><Sheet className="h-5 w-5"/>Carregar Planilhas de Manifesto</h3>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                    <FileUploadForm requiredFiles={requiredFiles} files={fileStatus} onFileChange={handleFileChange} onClearFile={handleClearFile} />
-                                                </div>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="space-y-8">
+                                        <div>
+                                            <h3 className="text-lg font-medium mb-4 flex items-center gap-2"><FileUp className="h-5 w-5" />Carregar por XML (Recomendado)</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                                <FileUploadForm formId="xml-nfe-entrada" files={{ 'xml-nfe-entrada': xmlFiles.nfeEntrada.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfeEntrada')} onClearFile={() => handleClearFile('xml-nfe-entrada', 'nfeEntrada')} xmlFileCount={xmlFiles.nfeEntrada.length} displayName="XMLs NF-e Entrada" />
+                                                <FileUploadForm formId="xml-cte" files={{ 'xml-cte': xmlFiles.cte.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'cte')} onClearFile={() => handleClearFile('xml-cte', 'cte')} xmlFileCount={xmlFiles.cte.length} displayName="XMLs CT-e" />
+                                                <FileUploadForm formId="xml-saida" files={{ 'xml-saida': xmlFiles.nfeSaida.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfeSaida')} onClearFile={() => handleClearFile('xml-saida', 'nfeSaida')} xmlFileCount={xmlFiles.nfeSaida.length} displayName="XMLs NF-e Saída" />
+                                                <FileUploadForm formId="xml-nfse" files={{ 'xml-nfse': xmlFiles.nfse.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfse')} onClearFile={() => handleClearFile('xml-nfse', 'nfse')} xmlFileCount={xmlFiles.nfse.length} displayName="XMLs NFS-e" />
                                             </div>
-                                        </CardContent>
-                                    </Card>
-                                    <Card className="shadow-lg">
-                                        <CardHeader><div className="flex items-center gap-3"><Cpu className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Processar Arquivos</CardTitle><CardDescription>Inicie a validação dos dados carregados. Será solicitado que selecione o período.</CardDescription></div></div></CardHeader>
-                                        <CardContent className="space-y-4">
-                                            <div className="flex flex-col sm:flex-row gap-2 pt-4">
-                                                <Button onClick={startPeriodSelection} disabled={isProcessButtonDisabled} className="w-full">{isPreProcessing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Analisando...</> : (processing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : "Validar Dados")}</Button>
-                                                {isClearButtonVisible && <Button onClick={handleClearAllData} variant="destructive" className="w-full sm:w-auto"><Trash2 className="mr-2 h-4 w-4" /> Limpar Tudo</Button>}
+                                        </div>
+                                        <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">E/Ou</span></div></div>
+                                        <div>
+                                            <h3 className="text-lg font-medium mb-4 flex items-center gap-2"><Sheet className="h-5 w-5"/>Carregar Planilhas de Manifesto</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                <FileUploadForm requiredFiles={requiredFiles} files={fileStatus} onFileChange={handleFileChange} onClearFile={handleClearFile} />
                                             </div>
-                                        </CardContent>
-                                    </Card>
-                                    {error && <Alert variant="destructive" className="mt-4"><div className="flex justify-between items-start"><div className="flex"><AlertCircle className="h-4 w-4" /><div className="ml-3"><AlertTitle>Erro</AlertTitle><AlertDescription>{error}</AlertDescription></div></div><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(error)}><Copy className="h-4 w-4" /></Button></div></Alert>}
-                                    {(logs.length > 0) && <Card className="shadow-lg"><CardHeader><div className="flex items-center gap-3"><Terminal className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Análise de Processamento</CardTitle><CardDescription>Logs detalhados da execução.</CardDescription></div></div></CardHeader><CardContent><LogDisplay logs={logs} /></CardContent></Card>}
-                                    {processedData?.sheets && Object.keys(processedData.sheets).length > 0 && <Card className="shadow-lg"><CardHeader><div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><CheckCircle className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Resultados da Validação</CardTitle><CardDescription>Visualize os dados processados. Os dados necessários para as próximas etapas estão prontos.</CardDescription></div></div><div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto"><Button onClick={handleDownloadExcel} className="w-full">Baixar Planilha (.xlsx)</Button></div></div></CardHeader><CardContent><ResultsDisplay results={processedData.sheets} /></CardContent></Card>}
-                                </div>
-                            )}
-                            
-                            {activeMainTab === 'reconciliation' && (
-                                !reconciliationTabDisabled ? 
-                                <ReconciliationAnalysis 
-                                    processedData={processedData} 
-                                    siengeFile={siengeFile} 
-                                    onSiengeFileChange={handleSiengeFileChange}
-                                    onClearSiengeFile={() => setSiengeFile(null)}
-                                    onRunReconciliation={handleRunReconciliation}
-                                    isReconciliationRunning={processing}
-                                    allClassifications={allClassifications}
-                                    onPersistClassifications={handlePersistClassifications}
-                                    competence={competence}
-                                /> 
-                                : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a conciliação.</p></CardContent></Card>
-                            )}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                <Card className="shadow-lg">
+                                    <CardHeader><div className="flex items-center gap-3"><Cpu className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Processar Arquivos</CardTitle><CardDescription>Inicie a validação dos dados carregados. Será solicitado que selecione o período.</CardDescription></div></div></CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <div className="flex flex-col sm:flex-row gap-2 pt-4">
+                                            <Button onClick={startPeriodSelection} disabled={isProcessButtonDisabled} className="w-full">{isPreProcessing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Analisando...</> : (processing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : "Validar Dados")}</Button>
+                                            {isClearButtonVisible && <Button onClick={handleClearAllData} variant="destructive" className="w-full sm:w-auto"><Trash2 className="mr-2 h-4 w-4" /> Limpar Tudo</Button>}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                {error && <Alert variant="destructive" className="mt-4"><div className="flex justify-between items-start"><div className="flex"><AlertCircle className="h-4 w-4" /><div className="ml-3"><AlertTitle>Erro</AlertTitle><AlertDescription>{error}</AlertDescription></div></div><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(error)}><Copy className="h-4 w-4" /></Button></div></Alert>}
+                                {(logs.length > 0) && <Card className="shadow-lg"><CardHeader><div className="flex items-center gap-3"><Terminal className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Análise de Processamento</CardTitle><CardDescription>Logs detalhados da execução.</CardDescription></div></div></CardHeader><CardContent><LogDisplay logs={logs} /></CardContent></Card>}
+                                {processedData?.sheets && Object.keys(processedData.sheets).length > 0 && <Card className="shadow-lg"><CardHeader><div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><CheckCircle className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Resultados da Validação</CardTitle><CardDescription>Visualize os dados processados. Os dados necessários para as próximas etapas estão prontos.</CardDescription></div></div><div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto"><Button onClick={handleDownloadExcel} className="w-full">Baixar Planilha (.xlsx)</Button></div></div></CardHeader><CardContent><ResultsDisplay results={processedData.sheets} /></CardContent></Card>}
+                            </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="reconciliation">
+                            { !reconciliationTabDisabled ? 
+                            <ReconciliationAnalysis 
+                                processedData={processedData} 
+                                siengeFile={siengeFile} 
+                                onSiengeFileChange={handleSiengeFileChange}
+                                onClearSiengeFile={() => setSiengeFile(null)}
+                                onRunReconciliation={handleRunReconciliation}
+                                isReconciliationRunning={processing}
+                                allClassifications={allClassifications}
+                                onPersistClassifications={handlePersistClassifications}
+                                competence={competence}
+                            /> 
+                            : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a conciliação.</p></CardContent></Card>
+                        }
+                        </TabsContent>
 
-                             {activeMainTab === 'saidas-nfe' && (
-                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
-                            )}
-                            
-                            {activeMainTab === 'nfse' && (
-                                !nfseTabDisabled ? <NfseAnalysis nfseFiles={xmlFiles.nfse} disregardedNotes={disregardedNfseNotes} onDisregardedNotesChange={setDisregardedNfseNotes} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FilePieChart className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando ficheiros</h3><p>Carregue os XMLs de NFS-e na primeira aba para habilitar esta análise.</p></CardContent></Card>
-                            )}
-                            
-                            {activeMainTab === 'imobilizado' && (
-                                !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} siengeData={processedData?.siengeSheetData} onPersistData={handlePersistClassifications} allPersistedData={allClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card>
-                            )}
+                        <TabsContent value="saidas-nfe">
+                            { !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card> }
+                        </TabsContent>
+                        
+                        <TabsContent value="nfse">
+                            { !nfseTabDisabled ? <NfseAnalysis nfseFiles={xmlFiles.nfse} disregardedNotes={disregardedNfseNotes} onDisregardedNotesChange={setDisregardedNfseNotes} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FilePieChart className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando ficheiros</h3><p>Carregue os XMLs de NFS-e na primeira aba para habilitar esta análise.</p></CardContent></Card> }
+                        </TabsContent>
+                        
+                        <TabsContent value="imobilizado">
+                            { !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} siengeData={processedData?.siengeSheetData} onPersistData={handlePersistClassifications} allPersistedData={allClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card> }
+                        </TabsContent>
 
-                             {activeMainTab === 'difal' && <DifalAnalysis reconciledItems={processedData?.reconciliationResults?.reconciled} />}
-                            
-                            {activeMainTab === 'analyses' && (
-                                !analysisTabDisabled && processedData ? <AdvancedAnalyses processedData={processedData} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
-                            )}
-                         
-                             {activeMainTab === 'pending' && (
-                                <PendingIssuesReport 
-                                    processedData={processedData}
-                                    allPersistedClassifications={allClassifications}
-                                    onForceUpdate={handlePersistClassifications}
-                                />
-                            )}
-
-                        </div>
+                        <TabsContent value="difal">
+                            <DifalAnalysis reconciledItems={processedData?.reconciliationResults?.reconciled} />
+                        </TabsContent>
+                        
+                        <TabsContent value="analyses">
+                             { !analysisTabDisabled && processedData ? <AdvancedAnalyses processedData={processedData} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card> }
+                        </TabsContent>
+                     
+                        <TabsContent value="pending">
+                            <PendingIssuesReport 
+                                processedData={processedData}
+                                allPersistedClassifications={allClassifications}
+                                onForceUpdate={handlePersistClassifications}
+                            />
+                        </TabsContent>
                     </Tabs>
                 </div>
             </main>
