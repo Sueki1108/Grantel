@@ -149,7 +149,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     };
 
     const columns = useMemo(() => {
-        const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'Sienge_CFOP', 'CST do ICMS', 'Alíq. ICMS (%)', 'Valor Total'];
+        const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'CST do ICMS', 'Alíq. ICMS (%)', 'Valor Total'];
         
         return getColumnsWithCustomRender(
             items,
@@ -189,7 +189,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
                 }
 
-                if (id === 'CFOP' || id === 'Sienge_CFOP') {
+                if (id === 'CFOP') {
                     return (
                         <div className="flex items-center gap-1">
                             <span>{value}</span>
@@ -405,7 +405,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                         <div className="flex gap-1">
                              <Button size="sm" className={cn('bg-secondary', bulkActionState.classification === 'correct' && "bg-green-600 hover:bg-green-700 text-white")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'correct'}))}><Check className="mr-2 h-4 w-4" /> Correto</Button>
                             <Button size="sm" variant={bulkActionState.classification === 'incorrect' ? "destructive" : "secondary"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'incorrect'}))}><X className="mr-2 h-4 w-4" /> Incorreto</Button>
-                            <Button size="sm" variant={bulkActionState.classification === 'verify' ? 'secondary' : 'secondary'} className={cn(bulkActionState.classification === 'verify' && 'bg-yellow-500 hover:bg-yellow-600 text-white') } onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
+                            <Button size="sm" variant="secondary" onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
                             <Button size="sm" variant="outline" onClick={() => setBulkActionState(prev => ({...prev, classification: 'unvalidated'}))}><RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
                             <Button size="sm" variant={bulkActionState.isDifal ? 'default' : 'outline'} onClick={() => setBulkActionState(prev => ({...prev, isDifal: prev.isDifal === null ? true : !prev.isDifal}))}><Ticket className="mr-2 h-4 w-4" /> DIFAL</Button>
                         </div>

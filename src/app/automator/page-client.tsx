@@ -782,7 +782,7 @@ export function AutomatorClientPage() {
                             </div>
                         </TabsContent>
                         
-                        <TabsContent value="reconciliation">
+                        <TabsContent value="reconciliation" className="mt-6">
                             { !reconciliationTabDisabled ? 
                             <ReconciliationAnalysis 
                                 processedData={processedData} 
@@ -799,27 +799,27 @@ export function AutomatorClientPage() {
                         }
                         </TabsContent>
 
-                        <TabsContent value="saidas-nfe">
+                        <TabsContent value="saidas-nfe" className="mt-6">
                             { !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card> }
                         </TabsContent>
                         
-                        <TabsContent value="nfse">
+                        <TabsContent value="nfse" className="mt-6">
                             { !nfseTabDisabled ? <NfseAnalysis nfseFiles={xmlFiles.nfse} disregardedNotes={disregardedNfseNotes} onDisregardedNotesChange={setDisregardedNfseNotes} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FilePieChart className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando ficheiros</h3><p>Carregue os XMLs de NFS-e na primeira aba para habilitar esta análise.</p></CardContent></Card> }
                         </TabsContent>
                         
-                        <TabsContent value="imobilizado">
+                        <TabsContent value="imobilizado" className="mt-6">
                             { !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} siengeData={processedData?.siengeSheetData} onPersistData={handlePersistClassifications} allPersistedData={allClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card> }
                         </TabsContent>
 
-                        <TabsContent value="difal">
-                            <DifalAnalysis reconciledItems={processedData?.reconciliationResults?.reconciled} />
+                        <TabsContent value="difal" className="mt-6">
+                            <DifalAnalysis />
                         </TabsContent>
                         
-                        <TabsContent value="analyses">
+                        <TabsContent value="analyses" className="mt-6">
                              { !analysisTabDisabled && processedData ? <AdvancedAnalyses processedData={processedData} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card> }
                         </TabsContent>
                      
-                        <TabsContent value="pending">
+                        <TabsContent value="pending" className="mt-6">
                             <PendingIssuesReport 
                                 processedData={processedData}
                                 allPersistedClassifications={allClassifications}
