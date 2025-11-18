@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -7,7 +8,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { KeyRound, FileText, Loader2, Download, FileWarning, UploadCloud, Terminal, Search, Trash2, Copy, ShieldCheck, HelpCircle, X, FileUp, Upload, Settings } from "lucide-react";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
-import { LogDisplay } from "@/components/app/log-display";
 import { formatCnpj, cleanAndToStr, parseSpedDate } from "@/lib/utils";
 import type { SpedKeyObject, SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
 import {
@@ -25,6 +25,7 @@ import { ScrollArea } from "../ui/scroll-area";
 import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
+import { LogDisplay } from "./log-display";
 
 
 // Types
@@ -271,7 +272,58 @@ const processSpedFileInBrowser = (
          _log(`Remoção por divergência concluída. ${totalRemoved} linhas removidas devido a ${Object.keys(modifications.divergenceRemoval).length} chaves com divergência.`);
         intermediateLines = filteredLines;
     }
+
+    if (config.removeUnusedProducts) {
+        _log("Iniciando remoção de produtos (0200) não utilizados.");
+        const usedProductCodes = new Set<string>();
+        const itemRecordTypes = new Set(['C170', 'C197', 'H010', 'K200', '1391', '1400']);
+        intermediateLines.forEach(line => {
+            const parts = line.split('|');
+            if (parts.length > 2 && itemRecordTypes.has(parts[1]) && parts[2]) {
+                usedProductCodes.add(parts[2]);
+            }
+        });
+
+        const filteredLines: string[] = [];
+        for (let i = 0; i < intermediateLines.length; i++) {
+            const line = intermediateLines[i];
+            const parts = line.split('|');
+            if (parts.length > 2 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
+                modifications.removed0200.push({ lineNumber: i + 1, line });
+                linesModifiedCount++;
+                continue; // Skip this line
+            }
+            filteredLines.push(line);
+        }
+        _log(`Remoção de produtos não utilizados concluída. ${modifications.removed0200.length} registos 0200 removidos.`);
+        intermediateLines = filteredLines;
+    }
     
+     if (config.removeUnusedParticipants) {
+        _log("Iniciando remoção de participantes (0150) não utilizados.");
+        const usedParticipantCodes = new Set<string>();
+        intermediateLines.forEach(line => {
+            const parts = line.split('|');
+            if (parts.length > 4 && (parts[1] === 'C100' || parts[1] === 'D100') && parts[4]) {
+                usedParticipantCodes.add(parts[4]);
+            }
+        });
+
+        const filteredLines: string[] = [];
+        for (let i = 0; i < intermediateLines.length; i++) {
+            const line = intermediateLines[i];
+            const parts = line.split('|');
+            if (parts.length > 2 && parts[1] === '0150' && !usedParticipantCodes.has(parts[2])) {
+                modifications.removed0150.push({ lineNumber: i + 1, line });
+                linesModifiedCount++;
+                continue; // Skip this line
+            }
+            filteredLines.push(line);
+        }
+        _log(`Remoção de participantes não utilizados concluída. ${modifications.removed0150.length} registos 0150 removidos.`);
+        intermediateLines = filteredLines;
+    }
+
     let modifiedLines: string[] = [];
     const TRUNCATION_CODES = new Set(['0450', '0460', 'C110']);
     const MAX_CHARS_TRUNCATION = 235;
@@ -314,9 +366,10 @@ const processSpedFileInBrowser = (
         if (config.fixCteSeries && codeType === 'D100' && parts.length > 10 && cteKeyToSeriesMap.size > 0) {
             const cteKey = cleanAndToStr(parts[10]);
             const correctSeries = cteKeyToSeriesMap.get(cteKey);
+            const currentSeries = parts[7];
             if (correctSeries) {
                 const formattedSeries = correctSeries.padStart(3, '0');
-                if (parts[7] !== formattedSeries) {
+                if (currentSeries !== formattedSeries) {
                     parts[7] = formattedSeries;
                     currentLine = parts.join('|');
                     modifications.cteSeriesCorrection.push({ lineNumber: i + 1, original: originalLine, corrected: currentLine });
@@ -369,63 +422,6 @@ const processSpedFileInBrowser = (
         modifiedLines.push(currentLine);
     }
     
-    intermediateLines = modifiedLines;
-
-    if (config.removeUnusedProducts) {
-        _log("Iniciando remoção de produtos (0200) não utilizados.");
-        const usedProductCodes = new Set<string>();
-        intermediateLines.forEach(line => {
-            const parts = line.split('|');
-            if (parts.length > 2 && (parts[1] === 'C170' || parts[1] === 'C175' || parts[1] === 'H010' || parts[1] === 'K200')) {
-                const codItem = parts[2];
-                if (codItem) {
-                    usedProductCodes.add(codItem);
-                }
-            }
-        });
-
-        const filteredLines: string[] = [];
-        for (let i = 0; i < intermediateLines.length; i++) {
-            const line = intermediateLines[i];
-            const parts = line.split('|');
-            if (parts.length > 2 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
-                modifications.removed0200.push({ lineNumber: i + 1, line });
-                linesModifiedCount++;
-                continue; // Skip this line
-            }
-            filteredLines.push(line);
-        }
-        _log(`Remoção de produtos não utilizados concluída. ${modifications.removed0200.length} registos 0200 removidos.`);
-        intermediateLines = filteredLines;
-    }
-    
-     if (config.removeUnusedParticipants) {
-        _log("Iniciando remoção de participantes (0150) não utilizados.");
-        const usedParticipantCodes = new Set<string>();
-        intermediateLines.forEach(line => {
-            const parts = line.split('|');
-            if (parts.length > 4 && (parts[1] === 'C100' || parts[1] === 'D100') && parts[4]) {
-                usedParticipantCodes.add(parts[4]);
-            }
-        });
-
-        const filteredLines: string[] = [];
-        for (let i = 0; i < intermediateLines.length; i++) {
-            const line = intermediateLines[i];
-            const parts = line.split('|');
-            if (parts.length > 2 && parts[1] === '0150' && !usedParticipantCodes.has(parts[2])) {
-                modifications.removed0150.push({ lineNumber: i + 1, line });
-                linesModifiedCount++;
-                continue; // Skip this line
-            }
-            filteredLines.push(line);
-        }
-        _log(`Remoção de participantes não utilizados concluída. ${modifications.removed0150.length} registos 0150 removidos.`);
-        intermediateLines = filteredLines;
-    }
-
-    modifiedLines = intermediateLines;
-
     if (config.fixCounters) {
         _log("Iniciando a recontagem de linhas dos blocos e registos.");
         
