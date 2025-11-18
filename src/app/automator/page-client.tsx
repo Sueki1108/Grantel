@@ -646,15 +646,6 @@ export function AutomatorClientPage() {
             return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections, spedDuplicates };
         });
     }, []);
-
-    const difalItems = useMemo(() => {
-        if (!competence || !processedData?.reconciliationResults?.reconciled) return [];
-        const cfopValidations = allClassifications[competence]?.cfopValidations?.classifications || {};
-        return processedData.reconciliationResults.reconciled.filter(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item.CFOP}`;
-            return cfopValidations[uniqueKey]?.isDifal === true;
-        });
-    }, [processedData?.reconciliationResults, allClassifications, competence]);
     
 
     // =================================================================
@@ -822,7 +813,7 @@ export function AutomatorClientPage() {
                         </TabsContent>
 
                         <TabsContent value="difal" className="mt-6">
-                           <DifalAnalysis difalItems={difalItems} />
+                           <DifalAnalysis />
                         </TabsContent>
                         
                         <TabsContent value="analyses" className="mt-6">
