@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -580,7 +581,7 @@ export function AutomatorClientPage() {
             toast({ variant: 'destructive', title: 'Ficheiro Sienge em falta', description: 'Por favor, carregue a planilha "Itens do Sienge".' });
             return;
         }
-        if (!processedData || !processedData.sheets) {
+        if (!processedData || !processedData.sheets['Itens Válidos']) {
             toast({ variant: 'destructive', title: 'Dados XML em falta', description: 'Por favor, execute a "Validação de Documentos" primeiro.' });
             return;
         }
@@ -595,13 +596,10 @@ export function AutomatorClientPage() {
             const worksheet = workbook.Sheets[sheetName];
             const siengeSheetData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
             
-            const allXmlItems = [
-                ...(processedData.sheets['Itens Válidos'] || []),
-                ...(processedData.sheets['Itens Válidos Saídas'] || []),
-                ...(processedData.sheets['CTEs Válidos'] || [])
-            ];
-
-            const newReconciliationResults = runReconciliation(siengeSheetData, allXmlItems);
+            const newReconciliationResults = runReconciliation(
+                siengeSheetData, 
+                processedData.sheets['Itens Válidos'] || []
+            );
 
             setProcessedData(prev => ({
                 ...prev!,
@@ -640,7 +638,7 @@ export function AutomatorClientPage() {
     const isClearButtonVisible = Object.keys(files).length > 0 || xmlFiles.nfeEntrada.length > 0 || xmlFiles.cte.length > 0 || xmlFiles.nfeSaida.length > 0 || xmlFiles.nfse.length > 0 || !!processedData || logs.length > 0 || error !== null;
 
     const saidasNfeTabDisabled = !processedData?.sheets['Saídas'] || processedData.sheets['Saídas'].length === 0;
-    const reconciliationTabDisabled = !processedData?.sheets['Itens Válidos'] && !processedData?.sheets['Itens Válidos Saídas'];
+    const reconciliationTabDisabled = !processedData?.sheets['Itens Válidos'];
     const nfseTabDisabled = xmlFiles.nfse.length === 0 && (!processedData || !processedData.fileNames?.nfse || processedData.fileNames.nfse.length === 0);
     const analysisTabDisabled = !processedData?.sheets['Chaves Válidas'] || processedData.sheets['Chaves Válidas'].length === 0;
     const imobilizadoTabDisabled = !processedData?.sheets['Imobilizados'] || processedData.sheets['Imobilizados'].length === 0;
