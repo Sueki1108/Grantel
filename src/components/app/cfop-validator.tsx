@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -34,7 +35,7 @@ interface CfopValidatorProps {
 
 type ValidationStatus = 'all' | 'unvalidated' | 'correct' | 'incorrect' | 'verify';
 
-type TabFilters = {
+export type TabFilters = {
     xmlCsts: Set<string>;
     xmlPicms: Set<string>;
     xmlCfopDescriptions: Set<string>;
@@ -44,6 +45,140 @@ type BulkActionState = {
     classification: 'correct' | 'incorrect' | 'verify' | 'unvalidated' | null;
     isDifal: boolean | null;
 };
+
+// ===============================================================
+// Filter Dialog Component (Moved outside)
+// ===============================================================
+
+interface FilterDialogProps {
+    siengeCfop: string;
+    items: any[];
+    tabFilters: Record<string, TabFilters>;
+    setTabFilters: React.Dispatch<React.SetStateAction<Record<string, TabFilters>>>;
+}
+
+const FilterDialog: React.FC<FilterDialogProps> = ({ siengeCfop, items, tabFilters, setTabFilters }) => {
+    const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+
+    const availableOptions = useMemo(() => {
+        const xmlCsts = new Set<string>();
+        const xmlPicms = new Set<string>();
+        const xmlCfopDescriptions = new Set<string>();
+        items.forEach(item => {
+            if (item['CST do ICMS']) xmlCsts.add(String(item['CST do ICMS']));
+            if (item['Alíq. ICMS (%)'] !== undefined) xmlPicms.add(String(item['Alíq. ICMS (%)']));
+            const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+            if (fullDescription) xmlCfopDescriptions.add(fullDescription);
+        });
+        return {
+            xmlCsts: Array.from(xmlCsts).sort(),
+            xmlPicms: Array.from(xmlPicms).sort((a,b) => parseFloat(a) - parseFloat(b)),
+            xmlCfopDescriptions: Array.from(xmlCfopDescriptions).sort(),
+        };
+    }, [items]);
+    
+    useEffect(() => {
+        if (!tabFilters[siengeCfop]) {
+            setTabFilters(prev => ({
+                ...prev,
+                [siengeCfop]: {
+                    xmlCsts: new Set(availableOptions.xmlCsts),
+                    xmlPicms: new Set(availableOptions.xmlPicms),
+                    xmlCfopDescriptions: new Set(availableOptions.xmlCfopDescriptions),
+                }
+            }));
+        }
+    }, [siengeCfop, availableOptions, tabFilters, setTabFilters]);
+    
+    const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() };
+    const isFilterActive = (availableOptions.xmlCsts.length > 0 && filters.xmlCsts.size < availableOptions.xmlCsts.length) ||
+                           (availableOptions.xmlPicms.length > 0 && filters.xmlPicms.size < availableOptions.xmlPicms.length) ||
+                           (availableOptions.xmlCfopDescriptions.length > 0 && filters.xmlCfopDescriptions.size < availableOptions.xmlCfopDescriptions.length);
+
+    const handleFilterChange = (type: keyof TabFilters, value: string, checked: boolean) => {
+        setTabFilters(prev => {
+            const currentCfopFilters = prev[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() };
+            const newSet = new Set(currentCfopFilters[type]);
+            
+            if (checked) {
+                newSet.add(value);
+            } else {
+                newSet.delete(value);
+            }
+            return { 
+                ...prev, 
+                [siengeCfop]: { ...currentCfopFilters, [type]: newSet } 
+            };
+        });
+    };
+    
+    const clearFilters = () => {
+         setTabFilters(prev => ({
+            ...prev,
+            [siengeCfop]: {
+                xmlCsts: new Set(availableOptions.xmlCsts),
+                xmlPicms: new Set(availableOptions.xmlPicms),
+                xmlCfopDescriptions: new Set(availableOptions.xmlCfopDescriptions),
+            }
+        }));
+    };
+    
+    const FilterCheckboxList = ({ options, filterSet, filterKey }: { options: string[], filterSet: Set<string>, filterKey: keyof TabFilters }) => (
+        <ScrollArea className="h-64">
+            <div className="flex flex-col gap-2 mt-2 p-1">
+                {options.map(opt => (
+                    <div key={`${filterKey}-${opt}`} className="flex items-center space-x-2">
+                        <Checkbox id={`${filterKey}-${opt}`} checked={filterSet.has(opt)} onCheckedChange={checked => handleFilterChange(filterKey, opt, !!checked)} />
+                        <Label htmlFor={`${filterKey}-${opt}`} className="text-sm font-normal">{filterKey === 'xmlPicms' ? `${parseFloat(opt).toFixed(2)}%` : opt}</Label>
+                    </div>
+                ))}
+            </div>
+        </ScrollArea>
+    );
+
+    return (
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+                <Button variant={isFilterActive ? "secondary" : "outline"} size="sm" className="ml-4">
+                    <ListFilter className="mr-2 h-4 w-4" /> Filtros
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-xl">
+                 <DialogHeader>
+                    <DialogTitle>Filtros Avançados para CFOP {siengeCfop}</DialogTitle>
+                    <DialogDescription>Desmarque os itens que deseja ocultar da visualização.</DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end">
+                     <Button variant="ghost" size="sm" onClick={clearFilters}>Marcar Todos</Button>
+                </div>
+                 <Tabs defaultValue="cfop_desc" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3">
+                        <TabsTrigger value="cfop_desc">Descrição CFOP</TabsTrigger>
+                        <TabsTrigger value="cst">CST ICMS</TabsTrigger>
+                        <TabsTrigger value="picms">Alíquota ICMS</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="cfop_desc" className='mt-4'>
+                         <FilterCheckboxList options={availableOptions.xmlCfopDescriptions} filterSet={filters.xmlCfopDescriptions || new Set()} filterKey="xmlCfopDescriptions" />
+                    </TabsContent>
+                    <TabsContent value="cst" className='mt-4'>
+                         <FilterCheckboxList options={availableOptions.xmlCsts} filterSet={filters.xmlCsts || new Set()} filterKey="xmlCsts" />
+                    </TabsContent>
+                    <TabsContent value="picms" className='mt-4'>
+                         <FilterCheckboxList options={availableOptions.xmlPicms} filterSet={filters.xmlPicms || new Set()} filterKey="xmlPicms" />
+                    </TabsContent>
+                </Tabs>
+                 <DialogFooter>
+                     <Button onClick={() => setIsDialogOpen(false)}>Aplicar e Fechar</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+};
+
+
+// ===============================================================
+// Main Component
+// ===============================================================
 
 
 export function CfopValidator({ items, competence, onPersistData, allPersistedData }: CfopValidatorProps) {
@@ -270,121 +405,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         return <p className="text-center text-muted-foreground p-8">Nenhum item conciliado para validar o CFOP.</p>;
     }
     
-    const FilterDialog = ({ siengeCfop, items: dialogItems }: { siengeCfop: string; items: any[] }) => {
-        const [isDialogOpen, setIsDialogOpen] = React.useState(false);
-
-        const availableOptions = useMemo(() => {
-            const xmlCsts = new Set<string>();
-            const xmlPicms = new Set<string>();
-            const xmlCfopDescriptions = new Set<string>();
-            dialogItems.forEach(item => {
-                if (item['CST do ICMS']) xmlCsts.add(String(item['CST do ICMS']));
-                if (item.pICMS !== undefined) xmlPicms.add(String(item.pICMS));
-                const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-                if (fullDescription) xmlCfopDescriptions.add(fullDescription);
-            });
-            return {
-                xmlCsts: Array.from(xmlCsts).sort(),
-                xmlPicms: Array.from(xmlPicms).sort((a,b) => parseFloat(a) - parseFloat(b)),
-                xmlCfopDescriptions: Array.from(xmlCfopDescriptions).sort(),
-            };
-        }, [dialogItems]);
-        
-        useEffect(() => {
-            if (!tabFilters[siengeCfop]) {
-                setTabFilters(prev => ({
-                    ...prev,
-                    [siengeCfop]: {
-                        xmlCsts: new Set(availableOptions.xmlCsts),
-                        xmlPicms: new Set(availableOptions.xmlPicms),
-                        xmlCfopDescriptions: new Set(availableOptions.xmlCfopDescriptions),
-                    }
-                }));
-            }
-        }, [siengeCfop, availableOptions, tabFilters]);
-        
-        const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(availableOptions.xmlCsts), xmlPicms: new Set(availableOptions.xmlPicms), xmlCfopDescriptions: new Set(availableOptions.xmlCfopDescriptions) };
-        const isFilterActive = filters.xmlCsts.size < availableOptions.xmlCsts.length ||
-                               filters.xmlPicms.size < availableOptions.xmlPicms.length ||
-                               filters.xmlCfopDescriptions.size < availableOptions.xmlCfopDescriptions.length;
-
-        const handleFilterChange = (type: keyof TabFilters, value: string, checked: boolean) => {
-            setTabFilters(prev => {
-                const newFilters: TabFilters = { ...(prev[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() }) };
-                
-                const newSet = new Set(newFilters[type]);
-                if (checked) {
-                    newSet.add(value);
-                } else {
-                    newSet.delete(value);
-                }
-                return { ...prev, [siengeCfop]: { ...newFilters, [type]: newSet } };
-            });
-        };
-        
-        const clearFilters = () => {
-             setTabFilters(prev => ({
-                ...prev,
-                [siengeCfop]: {
-                    xmlCsts: new Set(availableOptions.xmlCsts),
-                    xmlPicms: new Set(availableOptions.xmlPicms),
-                    xmlCfopDescriptions: new Set(availableOptions.xmlCfopDescriptions),
-                }
-            }));
-        };
-        
-        const FilterCheckboxList = ({ options, filterSet, filterKey }: { options: string[], filterSet: Set<string>, filterKey: keyof TabFilters }) => (
-            <ScrollArea className="h-64">
-                <div className="flex flex-col gap-2 mt-2 p-1">
-                    {options.map(opt => (
-                        <div key={`${filterKey}-${opt}`} className="flex items-center space-x-2">
-                            <Checkbox id={`${filterKey}-${opt}`} checked={filterSet.has(opt)} onCheckedChange={checked => handleFilterChange(filterKey, opt, !!checked)} />
-                            <Label htmlFor={`${filterKey}-${opt}`} className="text-sm font-normal">{filterKey === 'xmlPicms' ? `${parseFloat(opt).toFixed(2)}%` : opt}</Label>
-                        </div>
-                    ))}
-                </div>
-            </ScrollArea>
-        );
-
-        return (
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                    <Button variant={isFilterActive ? "secondary" : "outline"} size="sm" className="ml-4">
-                        <ListFilter className="mr-2 h-4 w-4" /> Filtros
-                    </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-xl">
-                     <DialogHeader>
-                        <DialogTitle>Filtros Avançados</DialogTitle>
-                        <DialogDescription>Desmarque os itens que deseja ocultar da visualização.</DialogDescription>
-                    </DialogHeader>
-                    <div className="flex justify-end">
-                         <Button variant="ghost" size="sm" onClick={clearFilters}>Marcar Todos</Button>
-                    </div>
-                     <Tabs defaultValue="cfop_desc" className="w-full">
-                        <TabsList className="grid w-full grid-cols-3">
-                            <TabsTrigger value="cfop_desc">Descrição CFOP</TabsTrigger>
-                            <TabsTrigger value="cst">CST ICMS</TabsTrigger>
-                            <TabsTrigger value="picms">Alíquota ICMS</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="cfop_desc" className='mt-4'>
-                             <FilterCheckboxList options={availableOptions.xmlCfopDescriptions} filterSet={filters.xmlCfopDescriptions} filterKey="xmlCfopDescriptions" />
-                        </TabsContent>
-                        <TabsContent value="cst" className='mt-4'>
-                             <FilterCheckboxList options={availableOptions.xmlCsts} filterSet={filters.xmlCsts} filterKey="xmlCsts" />
-                        </TabsContent>
-                        <TabsContent value="picms" className='mt-4'>
-                             <FilterCheckboxList options={availableOptions.xmlPicms} filterSet={filters.xmlPicms} filterKey="xmlPicms" />
-                        </TabsContent>
-                    </Tabs>
-                     <DialogFooter>
-                         <Button onClick={() => setIsDialogOpen(false)}>Aplicar e Fechar</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-        )
-    };
-
     const statusTabs: { status: ValidationStatus; label: string }[] = [
         { status: 'all', label: 'Todos' },
         { status: 'unvalidated', label: 'Não Validado' },
@@ -442,18 +462,18 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                     <div className='flex justify-between items-center mb-2'>
                                         <TabsList className="h-auto flex-wrap justify-start">
                                             {allCfopsForStatus.map(cfop => {
-                                                const itemsForCfop = itemsByStatus[status]?.[cfop] || [];
-                                                const count = itemsForCfop.filter(item => {
-                                                    const currentFilters = tabFilters[cfop];
-                                                    if (!currentFilters) return true;
+                                                const currentFilters = tabFilters[cfop];
+                                                const initialCount = itemsByStatus[status]?.[cfop]?.length || 0;
+                                                const filteredCount = !currentFilters ? initialCount : itemsByStatus[status]?.[cfop]?.filter(item => {
                                                     const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
                                                     return (
                                                         currentFilters.xmlCsts.has(String(item['CST do ICMS'] || '')) &&
                                                         currentFilters.xmlPicms.has(String(item['Alíq. ICMS (%)'] || '0')) &&
                                                         currentFilters.xmlCfopDescriptions.has(fullDescription)
                                                     );
-                                                }).length;
-                                                return <TabsTrigger key={`${status}-${cfop}`} value={cfop} disabled={count === 0}>{cfop} ({count})</TabsTrigger>
+                                                }).length || 0;
+
+                                                return <TabsTrigger key={`${status}-${cfop}`} value={cfop} disabled={filteredCount === 0}>{cfop} ({filteredCount})</TabsTrigger>
                                             })}
                                         </TabsList>
                                          <Button onClick={() => handleDownload(Object.values(cfopGroupsForStatus).flat(), `Validacao_${status}`)} size="sm" variant="outline" disabled={Object.values(cfopGroupsForStatus).flat().length === 0}>
@@ -461,8 +481,8 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                         </Button>
                                     </div>
                                     {allCfopsForStatus.map(cfop => {
+                                        const currentFilters = tabFilters[cfop];
                                         const currentCfopData = itemsByStatus[status]?.[cfop]?.filter(item => {
-                                             const currentFilters = tabFilters[cfop];
                                             if (!currentFilters) return true;
                                             const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
                                             return (
@@ -478,7 +498,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                                     <div className='text-lg font-bold'>
                                                         {cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}
                                                     </div>
-                                                    <FilterDialog siengeCfop={cfop} items={itemsByStatus[status]?.[cfop] || []} />
+                                                    <FilterDialog siengeCfop={cfop} items={itemsByStatus[status]?.[cfop] || []} tabFilters={tabFilters} setTabFilters={setTabFilters} />
                                                 </div>
                                                 <DataTable columns={columns} data={currentCfopData} rowSelection={rowSelection} setRowSelection={setRowSelection} />
                                             </TabsContent>
@@ -495,3 +515,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
+
+
+    
