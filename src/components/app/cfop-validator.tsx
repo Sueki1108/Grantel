@@ -44,7 +44,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     const [hasChanges, setHasChanges] = useState(false);
     const [activeStatusTab, setActiveStatusTab] = useState<ValidationStatus>('unvalidated');
     const [activeCfopTabs, setActiveCfopTabs] = useState<Record<string, string>>({});
-
     const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
 
     useEffect(() => {
@@ -100,7 +99,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     };
 
     const columns = useMemo(() => {
-        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Valor Unitário', 'Valor Total', 'pICMS'];
+        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Valor Total', 'pICMS'];
         
         return getColumnsWithCustomRender(
             items,
@@ -136,7 +135,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     return <div className='text-center'>{typeof value === 'number' ? `${value.toFixed(2)}%` : 'N/A'}</div>;
                 }
 
-                if (['Valor Total', 'Valor Unitário'].includes(id) && typeof value === 'number') {
+                if (['Valor Total'].includes(id) && typeof value === 'number') {
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
                 }
                 
@@ -148,13 +147,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     const summarizedDesc = value.length > 30 ? `${value.substring(0, 30)}...` : value;
                     const display = renderCellWithTooltip(summarizedDesc, value);
                     return renderCellWithCopy(display, value, 'Descrição');
-                }
-                
-                if (id === 'Descricao CFOP' && typeof value === 'string') {
-                    const summarizedDesc = value.length > 15 ? `${value.substring(0, 15)}...` : value;
-                    const fullDescription = cfopDescriptions[parseInt(row.original.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-                    const display = renderCellWithTooltip(summarizedDesc, fullDescription);
-                    return renderCellWithCopy(display, fullDescription, 'Descrição CFOP');
                 }
                 
                 return <div>{String(value ?? '')}</div>;
@@ -182,7 +174,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         ]);
     }, [items, cfopValidations, toast]);
 
-    const getFilteredItems = (status: ValidationStatus, siengeCfop: string | null = null) => {
+    const getFilteredItems = (status: ValidationStatus, siengeCfop: string | null): any[] => {
         const statusFiltered = status === 'all'
             ? items
             : items.filter(item => {
@@ -193,7 +185,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     
         const cfopFiltered = siengeCfop ? statusFiltered.filter(item => item.Sienge_CFOP === siengeCfop) : statusFiltered;
     
-        const currentFilters = tabFilters[siengeCfop || 'all_cfops'];
+        const currentFilters = tabFilters[siengeCfop || ''];
         if (!currentFilters) {
             return cfopFiltered;
         }
@@ -310,23 +302,16 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                             <TabsTrigger value="picms">Alíquota ICMS</TabsTrigger>
                         </TabsList>
                         <TabsContent value="cfop_desc" className='mt-4'>
-                             <div className="flex flex-col gap-2 mt-2 p-1">
-                                <FilterCheckboxList options={availableOptions.xmlCfopDescriptions} filterSet={filters.xmlCfopDescriptions} filterKey="xmlCfopDescriptions" />
-                            </div>
+                             <FilterCheckboxList options={availableOptions.xmlCfopDescriptions} filterSet={filters.xmlCfopDescriptions} filterKey="xmlCfopDescriptions" />
                         </TabsContent>
                         <TabsContent value="cst" className='mt-4'>
-                             <div className="flex flex-col gap-2 mt-2 p-1">
-                                 <FilterCheckboxList options={availableOptions.xmlCsts} filterSet={filters.xmlCsts} filterKey="xmlCsts" />
-                             </div>
+                             <FilterCheckboxList options={availableOptions.xmlCsts} filterSet={filters.xmlCsts} filterKey="xmlCsts" />
                         </TabsContent>
                         <TabsContent value="picms" className='mt-4'>
-                             <div className="flex flex-col gap-2 mt-2 p-1">
-                                <FilterCheckboxList options={availableOptions.xmlPicms} filterSet={filters.xmlPicms} filterKey="xmlPicms" />
-                            </div>
+                             <FilterCheckboxList options={availableOptions.xmlPicms} filterSet={filters.xmlPicms} filterKey="xmlPicms" />
                         </TabsContent>
                     </Tabs>
                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Fechar</Button>
                         <Button onClick={() => setIsDialogOpen(false)}>Aplicar e Fechar</Button>
                     </DialogFooter>
                 </DialogContent>
@@ -351,19 +336,19 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             <Tabs value={activeStatusTab} onValueChange={(val) => setActiveStatusTab(val as ValidationStatus)} className="w-full">
                 <TabsList className="grid w-full grid-cols-5">
                      {statusTabs.map(({status, label}) => {
-                         const count = getFilteredItems(status).length;
+                         const count = getFilteredItems(status, null).length;
                          return <TabsTrigger key={status} value={status} disabled={count === 0}>{label} ({count})</TabsTrigger>
                      })}
                 </TabsList>
                 {statusTabs.map(({ status }) => {
-                     const itemsForStatus = getFilteredItems(status);
+                     const itemsForStatus = getFilteredItems(status, null);
                      const groupedByCfop = itemsForStatus.reduce((acc, item) => {
                         const cfop = item.Sienge_CFOP || 'N/A';
                         if (!acc[cfop]) acc[cfop] = [];
                         acc[cfop].push(item);
                         return acc;
                     }, {} as Record<string, any[]>);
-                    const cfopsForStatus = Object.keys(groupedByCfop);
+                    const cfopsForStatus = Object.keys(groupedByCfop).sort((a,b) => parseInt(a,10) - parseInt(b,10));
 
                      useEffect(() => {
                         if (status === activeStatusTab && cfopsForStatus.length > 0 && !activeCfopTabs[status]) {
@@ -383,7 +368,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                         <TabsList className="h-auto flex-wrap justify-start">
                                             {cfopsForStatus.map(cfop => (
                                                 <TabsTrigger key={`${status}-${cfop}`} value={cfop}>
-                                                    {cfop} ({groupedByCfop[cfop].length})
+                                                    CFOP {cfop} ({groupedByCfop[cfop].length})
                                                 </TabsTrigger>
                                             ))}
                                         </TabsList>
@@ -410,4 +395,3 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
-
