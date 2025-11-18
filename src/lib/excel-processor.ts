@@ -94,10 +94,18 @@ const addChaveUnica = (df: DataFrame): DataFrame => {
             const numeroLimpo = cleanAndToStr(row[numeroKey]);
             let parceiroCnpjLimpo = '';
             
-            if (emitenteCnpjKey && row[emitenteCnpjKey]) {
+            // For Saídas, the partner is the 'destinatário'
+            if (findKey(['destinatário']) && row[findKey(['destinatário'])!]) {
+                const destCnpjKey = findKey(['cpf/cnpj do destinatário']);
+                if (destCnpjKey && row[destCnpjKey]) {
+                     parceiroCnpjLimpo = cleanAndToStr(row[destCnpjKey]);
+                }
+            }
+            // For Entradas, it's the 'fornecedor'
+            else if (emitenteCnpjKey && row[emitenteCnpjKey]) {
                 parceiroCnpjLimpo = cleanAndToStr(row[emitenteCnpjKey]);
             }
-
+            
             const chaveUnica = `${numeroLimpo}-${parceiroCnpjLimpo}`;
             return { "Chave Unica": chaveUnica, ...row };
         }
@@ -400,6 +408,23 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[]):
             throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge.");
         }
 
+        const headerMap = new Map<string, any>();
+        [
+            ...(processedData.sheets['Notas Válidas'] || []),
+            ...(processedData.sheets['Saídas'] || []),
+            ...(processedData.sheets['CTEs Válidos'] || []),
+        ].forEach(nota => {
+            headerMap.set(nota['Chave Unica'], nota);
+        });
+
+        const enrichedXmlItems = allXmlItems.map(item => {
+            const header = headerMap.get(item['Chave Unica']);
+            if (header) {
+                return { ...item, 'CPF/CNPJ do Emitente': header['CPF/CNPJ do Fornecedor'] || header['CPF/CNPJ do Emitente'] };
+            }
+            return item;
+        });
+
         const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
             const cleanNumero = cleanAndToStr(numero);
             const cleanCnpj = cleanAndToStr(cnpj);
@@ -418,7 +443,7 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[]):
 
 
         let reconciled: any[] = [];
-        let remainingXmlItems = [...allXmlItems];
+        let remainingXmlItems = [...enrichedXmlItems];
         let remainingSiengeItems = [...filteredSiengeData];
 
         const reconciliationPass = (
