@@ -192,7 +192,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     return (
                         <div className="flex items-center gap-1">
                             <span>{value}</span>
-                            {isDifal && <Ticket className="h-4 w-4 text-purple-600 shrink-0" />}
                         </div>
                     );
                 }
