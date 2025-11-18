@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -193,7 +192,8 @@ export function DataTable<TData, TValue>({
                     <TableCell 
                       key={cell.id} 
                       onClick={(e) => {
-                        const isInteractive = (e.target as HTMLElement).closest('button, a, input, [role="button"], [role="menuitem"]');
+                        const target = e.target as HTMLElement;
+                        const isInteractive = target.closest('button, a, input, [role="button"], [role="checkbox"]');
                         if (isInteractive) {
                           e.stopPropagation();
                         }

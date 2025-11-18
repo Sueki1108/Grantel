@@ -7,11 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import type { ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns } from "@/components/app/columns-helper";
+import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { SiengeTaxCheck } from './sienge-tax-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { CfopValidator } from './cfop-validator';
@@ -62,18 +62,26 @@ export function ReconciliationAnalysis({
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
-    const { reconciliationResults, siengeDataForTaxCheck } = useMemo(() => {
+    const { reconciliationResults, siengeDataForTaxCheck, difalItems } = useMemo(() => {
         const results = processedData?.reconciliationResults;
-        
-        if (!results) {
-            return { reconciliationResults: null, siengeDataForTaxCheck: processedData?.siengeSheetData || null };
-        }
+        const sData = processedData?.siengeSheetData;
+        const competenceKey = competence || 'default';
+        const cfopValidations = allClassifications[competenceKey]?.cfopValidations?.classifications || {};
 
+        let difalItems: any[] = [];
+        if (results?.reconciled) {
+             difalItems = results.reconciled.filter(item => {
+                const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+                return cfopValidations[uniqueKey]?.isDifal === true;
+            });
+        }
+        
         return {
             reconciliationResults: results,
-            siengeDataForTaxCheck: processedData?.siengeSheetData || null,
+            siengeDataForTaxCheck: sData || null,
+            difalItems
         };
-    }, [processedData]);
+    }, [processedData, competence, allClassifications]);
 
     const handleDownload = (data: any[], title: string) => {
         if (!data || data.length === 0) {
@@ -113,10 +121,11 @@ export function ReconciliationAnalysis({
                 </div>
                 
                 <Tabs defaultValue="reconciliation">
-                    <TabsList className="grid w-full grid-cols-3">
+                    <TabsList className="grid w-full grid-cols-4">
                         <TabsTrigger value="reconciliation" disabled={!reconciliationResults}>Conciliação de Itens</TabsTrigger>
                         <TabsTrigger value="tax_check" disabled={!siengeDataForTaxCheck}>Conferência de Impostos</TabsTrigger>
                         <TabsTrigger value="cfop_validation" disabled={!reconciliationResults}><BarChart className='h-4 w-4 mr-2'/>Validação CFOP</TabsTrigger>
+                        <TabsTrigger value="difal" disabled={!reconciliationResults}><Ticket className='h-4 w-4 mr-2'/>DIFAL ({difalItems.length})</TabsTrigger>
                     </TabsList>
                     <TabsContent value="reconciliation" className="mt-4">
                          {!processedData?.sheets['Itens Válidos'] && (
@@ -171,6 +180,19 @@ export function ReconciliationAnalysis({
                             onPersistData={onPersistClassifications}
                             competence={competence}
                         />
+                    </TabsContent>
+
+                    <TabsContent value="difal" className="mt-4">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Itens Marcados para DIFAL</CardTitle>
+                                <CardDescription>Esta lista contém todos os itens que foram marcados com a opção "DIFAL" na aba de Validação CFOP.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                 <Button onClick={() => handleDownload(difalItems, 'Itens_DIFAL')} size="sm" className="mb-4" disabled={difalItems.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar Lista DIFAL</Button>
+                                 <DataTable columns={getColumns(difalItems)} data={difalItems} />
+                            </CardContent>
+                        </Card>
                     </TabsContent>
                 </Tabs>
             </CardContent>
