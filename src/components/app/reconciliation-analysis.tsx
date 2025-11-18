@@ -242,7 +242,9 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
             (row: Row<any>, id: string) => {
                 const value = row.original[id];
                  if (id === 'Descricao CFOP') {
-                    return <span className="truncate max-w-[200px]" title={String(value || '')}>{String(value || '')}</span>
+                    const fullText = String(value || '');
+                    const truncatedText = fullText.length > 20 ? `${fullText.substring(0, 20)}...` : fullText;
+                    return <span title={fullText}>{truncatedText}</span>;
                 }
                  if (id === 'Valor Unitário' || id === 'Valor Total') {
                      return <div className="text-right">{Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
