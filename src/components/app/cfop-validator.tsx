@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cfopDescriptions } from '@/lib/cfop';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -116,7 +116,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
 
     const columns = useMemo(() => getColumnsWithCustomRender(
         items,
-        ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Descricao CFOP', 'Valor Unitário', 'Valor Total', 'pICMS'],
+        ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Descricao CFOP', 'pICMS', 'Valor Unitário', 'Valor Total'],
         (row, id) => {
             const value = row.original[id as keyof typeof row.original];
 
@@ -134,7 +134,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     <Tooltip><TooltipTrigger asChild><span>{displayValue}</span></TooltipTrigger><TooltipContent><p>{fullValue}</p></TooltipContent></Tooltip>
                 </TooltipProvider>
             );
-
+            
             if (id === 'Fornecedor') {
                 const name = String(value || 'N/A');
                 if (name === 'N/A') return <div>N/A</div>;
@@ -162,7 +162,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             }
             
             if (id === 'Descricao CFOP' && typeof value === 'string') {
-                const summarizedDesc = value.length > 15 ? `${value.substring(0, 15)}...` : value;
+                 const summarizedDesc = value.length > 15 ? `${value.substring(0, 15)}...` : value;
                 const fullDescription = cfopDescriptions[parseInt(row.original.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
                  return renderCellWithTooltip(summarizedDesc, fullDescription);
             }
@@ -213,7 +213,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         return <p className="text-center text-muted-foreground p-8">Nenhum item conciliado para validar o CFOP.</p>;
     }
     
-    const FilterPopover = ({ siengeCfop, items }: { siengeCfop: string; items: any[] }) => {
+    const FilterDialog = ({ siengeCfop, items }: { siengeCfop: string; items: any[] }) => {
         const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() };
         const isFilterActive = filters.xmlCsts.size > 0 || filters.xmlPicms.size > 0 || filters.xmlCfopDescriptions.size > 0;
 
@@ -268,42 +268,41 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         );
 
         return (
-            <Popover>
-                <PopoverTrigger asChild>
+            <Dialog>
+                <DialogTrigger asChild>
                     <Button variant={isFilterActive ? "secondary" : "outline"} size="sm" className="ml-4">
                         <ListFilter className="mr-2 h-4 w-4" /> Filtros
                     </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-96">
-                    <div className="grid gap-4">
-                        <div className="space-y-2">
-                             <div className='flex justify-between items-center'>
-                                <h4 className="font-medium leading-none">Filtros da Aba</h4>
-                                <Button variant="ghost" size="sm" onClick={clearFilters} disabled={!isFilterActive}>Limpar</Button>
-                            </div>
-                            <p className="text-sm text-muted-foreground">
-                                Refine os itens visíveis nesta aba.
-                            </p>
-                        </div>
-                         <Tabs defaultValue="cfop_desc" className="w-full">
-                            <TabsList className="grid w-full grid-cols-3">
-                                <TabsTrigger value="cfop_desc">Descrição</TabsTrigger>
-                                <TabsTrigger value="cst">CST</TabsTrigger>
-                                <TabsTrigger value="picms">Alíquota</TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="cfop_desc" className='mt-4'>
-                                <FilterCheckboxList options={availableOptions.xmlCfopDescriptions} filterSet={filters.xmlCfopDescriptions} filterKey="xmlCfopDescriptions" />
-                            </TabsContent>
-                            <TabsContent value="cst" className='mt-4'>
-                                 <FilterCheckboxList options={availableOptions.xmlCsts} filterSet={filters.xmlCsts} filterKey="xmlCsts" />
-                            </TabsContent>
-                            <TabsContent value="picms" className='mt-4'>
-                                 <FilterCheckboxList options={availableOptions.xmlPicms} filterSet={filters.xmlPicms} filterKey="xmlPicms" />
-                            </TabsContent>
-                        </Tabs>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-2xl">
+                     <DialogHeader>
+                        <DialogTitle>Filtros Avançados</DialogTitle>
+                        <DialogDescription>Refine a visualização dos itens na tabela aplicando um ou mais filtros.</DialogDescription>
+                    </DialogHeader>
+                    <div className="flex justify-end">
+                         <Button variant="ghost" size="sm" onClick={clearFilters} disabled={!isFilterActive}>Limpar Todos os Filtros</Button>
                     </div>
-                </PopoverContent>
-            </Popover>
+                     <Tabs defaultValue="cfop_desc" className="w-full">
+                        <TabsList className="grid w-full grid-cols-3">
+                            <TabsTrigger value="cfop_desc">Descrição CFOP</TabsTrigger>
+                            <TabsTrigger value="cst">CST ICMS</TabsTrigger>
+                            <TabsTrigger value="picms">Alíquota ICMS</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="cfop_desc" className='mt-4'>
+                            <FilterCheckboxList options={availableOptions.xmlCfopDescriptions} filterSet={filters.xmlCfopDescriptions} filterKey="xmlCfopDescriptions" />
+                        </TabsContent>
+                        <TabsContent value="cst" className='mt-4'>
+                             <FilterCheckboxList options={availableOptions.xmlCsts} filterSet={filters.xmlCsts} filterKey="xmlCsts" />
+                        </TabsContent>
+                        <TabsContent value="picms" className='mt-4'>
+                             <FilterCheckboxList options={availableOptions.xmlPicms} filterSet={filters.xmlPicms} filterKey="xmlPicms" />
+                        </TabsContent>
+                    </Tabs>
+                     <DialogFooter>
+                        <Button onClick={() => { /* O Dialog fechará automaticamente */ }}>Fechar</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         )
     };
 
@@ -356,7 +355,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                     </TabsList>
                                     <div className='flex items-center gap-2'>
                                         {filterSummary && <Badge variant="secondary" className='hidden md:block'>{filterSummary}</Badge>}
-                                        <FilterPopover siengeCfop={cfop} items={cfopItems} />
+                                        <FilterDialog siengeCfop={cfop} items={cfopItems} />
                                     </div>
                                 </div>
                                 <div className='text-sm text-muted-foreground italic my-2 px-1'>
