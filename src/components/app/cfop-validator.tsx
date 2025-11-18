@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cfopDescriptions } from '@/lib/cfop';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -115,7 +115,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     };
 
     const columns = useMemo(() => {
-        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Valor Unitário', 'pICMS', 'Valor Total'];
+        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Valor Unitário', 'Valor Total', 'pICMS'];
         
         return getColumnsWithCustomRender(
             items,
@@ -188,7 +188,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 }
             },
         ]);
-    }, [items, cfopValidations]);
+    }, [items, cfopValidations, toast]);
 
     const filterItems = (items: any[], status: 'all' | ValidationStatus, siengeCfop: string) => {
         const currentFilters = tabFilters[siengeCfop];
@@ -217,7 +217,8 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     }
     
     const FilterDialog = ({ siengeCfop, items }: { siengeCfop: string; items: any[] }) => {
-        
+        const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+
         const availableOptions = useMemo(() => {
             const xmlCsts = new Set<string>();
             const xmlPicms = new Set<string>();
@@ -293,7 +294,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         );
 
         return (
-            <Dialog>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
                     <Button variant={isFilterActive ? "secondary" : "outline"} size="sm" className="ml-4">
                         <ListFilter className="mr-2 h-4 w-4" /> Filtros
@@ -314,22 +315,24 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                             <TabsTrigger value="picms">Alíquota ICMS</TabsTrigger>
                         </TabsList>
                         <TabsContent value="cfop_desc" className='mt-4'>
-                            <FilterCheckboxList options={availableOptions.xmlCfopDescriptions} filterSet={filters.xmlCfopDescriptions} filterKey="xmlCfopDescriptions" />
+                            <div className="flex flex-col gap-2 mt-2 p-1">
+                                <FilterCheckboxList options={availableOptions.xmlCfopDescriptions} filterSet={filters.xmlCfopDescriptions} filterKey="xmlCfopDescriptions" />
+                            </div>
                         </TabsContent>
                         <TabsContent value="cst" className='mt-4'>
-                             <FilterCheckboxList options={availableOptions.xmlCsts} filterSet={filters.xmlCsts} filterKey="xmlCsts" />
+                            <div className="flex flex-col gap-2 mt-2 p-1">
+                                 <FilterCheckboxList options={availableOptions.xmlCsts} filterSet={filters.xmlCsts} filterKey="xmlCsts" />
+                             </div>
                         </TabsContent>
                         <TabsContent value="picms" className='mt-4'>
-                             <FilterCheckboxList options={availableOptions.xmlPicms} filterSet={filters.xmlPicms} filterKey="xmlPicms" />
+                            <div className="flex flex-col gap-2 mt-2 p-1">
+                                <FilterCheckboxList options={availableOptions.xmlPicms} filterSet={filters.xmlPicms} filterKey="xmlPicms" />
+                            </div>
                         </TabsContent>
                     </Tabs>
                      <DialogFooter>
-                        <Dialog.Close asChild>
-                             <Button variant="outline">Fechar</Button>
-                        </Dialog.Close>
-                        <Dialog.Close asChild>
-                            <Button>Aplicar e Fechar</Button>
-                        </Dialog.Close>
+                        <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Fechar</Button>
+                        <Button onClick={() => setIsDialogOpen(false)}>Aplicar e Fechar</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
