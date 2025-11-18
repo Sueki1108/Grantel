@@ -105,7 +105,7 @@ export function DataTable<TData, TValue>({
             }
             className="max-w-sm"
             />
-            {onSelectionChange && (
+            {isControllingSelection && (
               <div className="text-sm text-muted-foreground">
                   {table.getFilteredSelectedRowModel().rows.length} de{" "}
                   {table.getFilteredRowModel().rows.length} linha(s) selecionadas.
@@ -152,9 +152,9 @@ export function DataTable<TData, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() ? "selected" : undefined}
-                  className={onSelectionChange ? "cursor-pointer" : ""}
+                  className={isControllingSelection ? "cursor-pointer" : ""}
                   onClick={() => {
-                      if (onSelectionChange) {
+                      if (isControllingSelection) {
                           row.toggleSelected();
                       }
                   }}

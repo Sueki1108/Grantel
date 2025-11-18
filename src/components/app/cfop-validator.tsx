@@ -1,11 +1,11 @@
 
 "use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, X, HelpCircle, Save, RotateCw, ListFilter, Copy, Download } from "lucide-react";
+import { Check, X, HelpCircle, Save, RotateCw, ListFilter, Copy, Download, MoreVertical, Ticket, Factory, Wrench, HardHat } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import type { AllClassifications, CfopClassification } from './imobilizado-analysis';
 import {
@@ -21,6 +21,9 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import * as XLSX from 'xlsx';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu';
+import { Card } from '../ui/card';
+import type { RowSelectionState } from '@tanstack/react-table';
 
 
 interface CfopValidatorProps {
@@ -46,7 +49,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     const [activeStatusTab, setActiveStatusTab] = useState<ValidationStatus>('unvalidated');
     const [activeCfopTabs, setActiveCfopTabs] = useState<Record<string, string>>({});
     const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
-    const [rowSelection, setRowSelection] = useState({});
+    const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
     useEffect(() => {
         if (competence && allPersistedData[competence]?.cfopValidations?.classifications) {
@@ -69,6 +72,46 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         });
         setHasChanges(true);
     };
+    
+    const handleDifalChange = (uniqueKey: string) => {
+        setCfopValidations(prev => {
+            const current = prev[uniqueKey] || { classification: 'unvalidated', isDifal: false };
+            return {
+                ...prev,
+                [uniqueKey]: {
+                    ...current,
+                    isDifal: !current.isDifal,
+                }
+            };
+        });
+        setHasChanges(true);
+    };
+
+    const handleBulkAction = (action: 'correct' | 'incorrect' | 'verify' | 'unvalidated' | 'toggleDifal') => {
+        const selectedItemKeys = Object.keys(rowSelection).map(index => filteredItems[activeStatusTab][activeCfopTabs[activeStatusTab]][parseInt(index)].__itemKey);
+        
+        const newValidations = { ...cfopValidations };
+        let changed = false;
+
+        selectedItemKeys.forEach(itemKey => {
+             const uniqueKey = itemKey.replace('cfop-pending-', '');
+             if (action === 'toggleDifal') {
+                 const current = newValidations[uniqueKey] || { classification: 'unvalidated', isDifal: false };
+                 newValidations[uniqueKey] = { ...current, isDifal: !current.isDifal };
+             } else {
+                 const current = newValidations[uniqueKey] || { isDifal: false };
+                 newValidations[uniqueKey] = { ...current, classification: action as any };
+             }
+             changed = true;
+        });
+
+        if (changed) {
+            setCfopValidations(newValidations);
+            setHasChanges(true);
+            setRowSelection({}); // Clear selection after action
+        }
+    };
+
 
     const handleSaveChanges = () => {
         if (!competence) {
@@ -109,6 +152,9 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             columnsToShow,
             (row, id) => {
                 const value = row.original[id as keyof typeof row.original];
+                const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
+                const isDifal = cfopValidations[uniqueKey]?.isDifal;
+
 
                 const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
                     <div className="group flex items-center justify-between gap-1" onClick={(e) => e.stopPropagation()}>
@@ -142,7 +188,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 }
                 
                 if (id === 'Número da Nota') {
-                    return renderCellWithCopy(String(value ?? ''), String(value ?? ''), 'Número da Nota');
+                     return <div className="flex items-center gap-1.5">{isDifal && <Ticket className="h-4 w-4 text-purple-600" />} {String(value ?? '')}</div>
                 }
 
                 if (id === 'Descrição' && typeof value === 'string') {
@@ -150,53 +196,37 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     const display = renderCellWithTooltip(summarizedDesc, value);
                     return renderCellWithCopy(display, value, 'Descrição');
                 }
-                 if (id === 'Descricao CFOP') {
-                    const fullDescription = cfopDescriptions[parseInt(row.original.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-                    const display = renderCellWithTooltip(String(value ?? ''), fullDescription);
-                    return renderCellWithCopy(display, String(value ?? ''), 'Descrição');
-                }
                 
                 return <div>{String(value ?? '')}</div>;
             }
         ).concat([
-             {
-                id: 'select',
-                header: ({ table }) => (
-                    <Checkbox
-                        checked={
-                        table.getIsAllPageRowsSelected() ||
-                        (table.getIsSomePageRowsSelected() && "indeterminate")
-                        }
-                        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-                        aria-label="Selecionar todas"
-                    />
-                ),
-                cell: ({ row }) => (
-                    <Checkbox
-                        checked={row.getIsSelected()}
-                        onCheckedChange={(value) => row.toggleSelected(!!value)}
-                        aria-label="Selecionar linha"
-                    />
-                ),
-                enableSorting: false,
-                enableHiding: false,
-            },
             {
-                id: 'validation',
-                header: 'Validação',
+                id: 'actions',
+                header: 'Ações',
                 cell: ({ row }) => {
                     const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
                     const validation = cfopValidations[uniqueKey]?.classification || 'unvalidated';
+                    const isDifal = cfopValidations[uniqueKey]?.isDifal;
 
                     return (
-                         <div className="flex gap-1 justify-center" onClick={(e) => e.stopPropagation()}>
-                            <TooltipProvider>
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant={validation === 'correct' ? 'default' : 'ghost'} className="h-8 w-8" onClick={() => handleValidationChange(uniqueKey, 'correct')}><Check className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Correto</p></TooltipContent></Tooltip>
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant={validation === 'incorrect' ? 'destructive' : 'ghost'} className="h-8 w-8" onClick={() => handleValidationChange(uniqueKey, 'incorrect')}><X className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Incorreto</p></TooltipContent></Tooltip>
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant={validation === 'verify' ? 'secondary' : 'ghost'} className="h-8 w-8" onClick={() => handleValidationChange(uniqueKey, 'verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificação</p></TooltipContent></Tooltip>
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant={validation === 'unvalidated' ? 'outline' : 'ghost'} className="h-8 w-8" onClick={() => handleValidationChange(uniqueKey, 'unvalidated')}><RotateCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Limpar Validação</p></TooltipContent></Tooltip>
-                            </TooltipProvider>
-                         </div>
+                        <div className="flex justify-center" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleValidationChange(uniqueKey, 'correct')}><Check className="mr-2 h-4 w-4 text-green-600" /> Correto</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleValidationChange(uniqueKey, 'incorrect')}><X className="mr-2 h-4 w-4 text-red-600" /> Incorreto</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleValidationChange(uniqueKey, 'verify')}><HelpCircle className="mr-2 h-4 w-4 text-yellow-600" /> A Verificar</DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => handleDifalChange(uniqueKey)}>
+                                        <Ticket className={`mr-2 h-4 w-4 ${isDifal ? 'text-purple-600' : ''}`} /> {isDifal ? 'Desmarcar DIFAL' : 'Marcar como DIFAL'}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => handleValidationChange(uniqueKey, 'unvalidated')}><RotateCw className="mr-2 h-4 w-4" />Limpar Validação</DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
                     );
                 }
             },
@@ -216,18 +246,21 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         const byStatus: Record<ValidationStatus, any[]> = {
             all: [], unvalidated: [], correct: [], incorrect: [], verify: []
         };
-
+    
         items.forEach(item => {
             const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const classification = cfopValidations[uniqueKey]?.classification || 'unvalidated';
-            byStatus[classification].push(item);
-            byStatus.all.push(item);
-        });
+            
+            const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
 
+            byStatus[classification].push(itemWithKey);
+            byStatus.all.push(itemWithKey);
+        });
+    
         const result: Record<ValidationStatus, Record<string, any[]>> = {
             all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}
         };
-
+    
         for (const status of Object.keys(result) as ValidationStatus[]) {
             const statusItems = byStatus[status] || [];
             result[status] = statusItems.reduce((acc, item) => {
@@ -241,7 +274,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                         currentFilters.xmlPicms.has(String(item.pICMS || '0')) &&
                         currentFilters.xmlCfopDescriptions.has(cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada");
                 }
-
+    
                 if (matchesFilters) {
                     if (!acc[cfop]) acc[cfop] = [];
                     acc[cfop].push(item);
@@ -249,10 +282,12 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 return acc;
             }, {} as Record<string, any[]>);
         }
-
+    
         return result;
     }, [items, cfopValidations, tabFilters]);
-
+    
+    const numSelected = Object.keys(rowSelection).length;
+    const activeTableData = filteredItemsByStatusAndCfop[activeStatusTab]?.[activeCfopTabs[activeStatusTab]] || [];
 
     if (!items || items.length === 0) {
         return <p className="text-center text-muted-foreground p-8">Nenhum item conciliado para validar o CFOP.</p>;
@@ -382,7 +417,22 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     ];
     
     return (
-        <div>
+        <div className='relative'>
+            {numSelected > 0 && (
+                <div className="absolute top-0 right-0 z-20">
+                    <Card className="flex items-center gap-4 p-2 shadow-lg animate-in fade-in-0 slide-in-from-top-5">
+                        <span className="text-sm font-medium pl-2">{numSelected} selecionado(s)</span>
+                        <div className="h-6 border-l" />
+                        <span className="text-sm font-medium">Ações em massa:</span>
+                        <div className="flex gap-1">
+                            <Button size="sm" onClick={() => handleBulkAction('correct')}><Check className="mr-2 h-4 w-4" /> Correto</Button>
+                            <Button size="sm" variant="destructive" onClick={() => handleBulkAction('incorrect')}><X className="mr-2 h-4 w-4" /> Incorreto</Button>
+                            <Button size="sm" variant="secondary" onClick={() => handleBulkAction('verify')}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
+                            <Button size="sm" variant="secondary" onClick={() => handleBulkAction('toggleDifal')}><Ticket className="mr-2 h-4 w-4" /> DIFAL</Button>
+                        </div>
+                    </Card>
+                </div>
+            )}
             <div className="flex justify-end gap-2 mb-4">
                 <Button onClick={handleSaveChanges} disabled={!hasChanges}><Save className="mr-2 h-4 w-4" /> Guardar Validações</Button>
             </div>
