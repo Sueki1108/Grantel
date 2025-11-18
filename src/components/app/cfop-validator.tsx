@@ -23,6 +23,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import * as XLSX from 'xlsx';
 import { Card } from '../ui/card';
 import type { RowSelectionState } from '@tanstack/react-table';
+import { cn } from '@/lib/utils';
 
 
 interface CfopValidatorProps {
@@ -40,6 +41,12 @@ type TabFilters = {
     xmlCfopDescriptions: Set<string>;
 };
 
+type BulkActionState = {
+    classification: 'correct' | 'incorrect' | 'verify' | 'unvalidated' | null;
+    isDifal: boolean | null;
+};
+
+
 export function CfopValidator({ items, competence, onPersistData, allPersistedData }: CfopValidatorProps) {
     const { toast } = useToast();
     
@@ -49,6 +56,8 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     const [activeCfopTabs, setActiveCfopTabs] = useState<Record<string, string>>({});
     const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+    const [bulkActionState, setBulkActionState] = useState<BulkActionState>({ classification: null, isDifal: null });
+
 
     useEffect(() => {
         if (competence && allPersistedData[competence]?.cfopValidations?.classifications) {
@@ -86,30 +95,51 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         setHasChanges(true);
     };
 
-    const handleBulkAction = (action: 'correct' | 'incorrect' | 'verify' | 'unvalidated' | 'toggleDifal') => {
+    const handleApplyBulkActions = () => {
         const activeTableData = filteredItemsByStatusAndCfop[activeStatusTab]?.[activeCfopTabs[activeStatusTab]] || [];
         const selectedItemKeys = Object.keys(rowSelection).map(index => activeTableData[parseInt(index)].__itemKey);
+
+        if (selectedItemKeys.length === 0) return;
         
+        let changedCount = 0;
         const newValidations = { ...cfopValidations };
-        let changed = false;
 
         selectedItemKeys.forEach(itemKey => {
-             const uniqueKey = itemKey.replace('cfop-pending-', '');
-             if (action === 'toggleDifal') {
-                 const current = newValidations[uniqueKey] || { classification: 'unvalidated', isDifal: false };
-                 newValidations[uniqueKey] = { ...current, isDifal: !current.isDifal };
-             } else {
-                 const current = newValidations[uniqueKey] || { isDifal: false };
-                 newValidations[uniqueKey] = { ...current, classification: action as any };
-             }
-             changed = true;
+            const uniqueKey = itemKey.replace('cfop-pending-', '');
+            const current = newValidations[uniqueKey] || { classification: 'unvalidated', isDifal: false };
+            let itemChanged = false;
+
+            if (bulkActionState.classification) {
+                if (current.classification !== bulkActionState.classification) {
+                    current.classification = bulkActionState.classification;
+                    itemChanged = true;
+                }
+            }
+            if (bulkActionState.isDifal !== null) {
+                if (current.isDifal !== bulkActionState.isDifal) {
+                    current.isDifal = bulkActionState.isDifal;
+                    itemChanged = true;
+                }
+            }
+            
+            if (itemChanged) {
+                newValidations[uniqueKey] = current;
+                changedCount++;
+            }
         });
 
-        if (changed) {
+        if (changedCount > 0) {
             setCfopValidations(newValidations);
             setHasChanges(true);
-            setRowSelection({}); // Clear selection after action
         }
+        
+        // Reset for next bulk action
+        setBulkActionState({ classification: null, isDifal: null });
+        setRowSelection({});
+        toast({
+            title: "Ações em Massa Aplicadas",
+            description: `${changedCount} itens foram atualizados.`
+        });
     };
 
 
@@ -152,6 +182,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             columnsToShow,
             (row, id) => {
                 const value = row.original[id as keyof typeof row.original];
+                const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
                 
                 const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
                     <div className="group flex items-center justify-between gap-1">
@@ -174,6 +205,16 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     const summarizedName = name.length > 25 ? `${name.substring(0, 25)}...` : name;
                     const display = renderCellWithTooltip(summarizedName, name);
                     return renderCellWithCopy(display, name, 'Fornecedor');
+                }
+                
+                if (id === 'CFOP') {
+                    const isDifal = cfopValidations[uniqueKey]?.isDifal;
+                     return (
+                        <div className='flex items-center gap-1'>
+                            {value}
+                            {isDifal && <Ticket className="h-4 w-4 text-purple-600" />}
+                        </div>
+                    );
                 }
 
                 if (id === 'pICMS') {
@@ -206,7 +247,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                 <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange(uniqueKey, 'correct')}><Check className="h-4 w-4 text-green-600" /></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
                                 <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange(uniqueKey, 'incorrect')}><X className="h-4 w-4 text-red-600" /></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
                                 <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange(uniqueKey, 'verify')}><HelpCircle className="h-4 w-4 text-yellow-600" /></Button></TooltipTrigger><TooltipContent><p>A Verificar</p></TooltipContent></Tooltip>
-                                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDifalChange(uniqueKey)}><Ticket className={`h-4 w-4 ${isDifal ? 'text-purple-600' : ''}`} /></Button></TooltipTrigger><TooltipContent><p>{isDifal ? 'Desmarcar DIFAL' : 'Marcar como DIFAL'}</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDifalChange(uniqueKey)}><Ticket className={cn("h-4 w-4", isDifal && 'text-purple-600')} /></Button></TooltipTrigger><TooltipContent><p>{isDifal ? 'Desmarcar DIFAL' : 'Marcar como DIFAL'}</p></TooltipContent></Tooltip>
                                 <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange(uniqueKey, 'unvalidated')}><RotateCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Limpar Validação</p></TooltipContent></Tooltip>
                             </TooltipProvider>
                         </div>
@@ -401,19 +442,21 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     
     return (
         <div className='relative'>
-            {numSelected > 0 && (
+             {numSelected > 0 && (
                 <div className="sticky top-4 right-0 z-20 flex justify-end">
-                    <Card className="flex items-center gap-4 p-2 shadow-lg animate-in fade-in-0 slide-in-from-top-5">
+                    <Card className="flex items-center gap-2 p-2 shadow-lg animate-in fade-in-0 slide-in-from-top-5">
                         <span className="text-sm font-medium pl-2">{numSelected} selecionado(s)</span>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setRowSelection({})}><MinusCircle className="h-4 w-4"/></Button>
                         <div className="h-6 border-l" />
-                        <span className="text-sm font-medium">Ações em massa:</span>
+                        
                         <div className="flex gap-1">
-                            <Button size="sm" onClick={() => handleBulkAction('correct')}><Check className="mr-2 h-4 w-4" /> Correto</Button>
-                            <Button size="sm" variant="destructive" onClick={() => handleBulkAction('incorrect')}><X className="mr-2 h-4 w-4" /> Incorreto</Button>
-                            <Button size="sm" variant="secondary" onClick={() => handleBulkAction('verify')}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
-                            <Button size="sm" variant="secondary" onClick={() => handleBulkAction('toggleDifal')}><Ticket className="mr-2 h-4 w-4" /> DIFAL</Button>
+                             <Button size="sm" variant={bulkActionState.classification === 'correct' ? "default" : "secondary"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'correct'}))}><Check className="mr-2 h-4 w-4" /> Correto</Button>
+                             <Button size="sm" variant={bulkActionState.classification === 'incorrect' ? "destructive" : "secondary"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'incorrect'}))}><X className="mr-2 h-4 w-4" /> Incorreto</Button>
+                             <Button size="sm" variant={bulkActionState.classification === 'verify' ? "secondary" : "outline"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
+                             <Button size="sm" variant={bulkActionState.classification === 'unvalidated' ? "destructive" : "outline"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'unvalidated'}))}><RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
+                             <Button size="sm" variant={bulkActionState.isDifal ? "default" : "outline"} onClick={() => setBulkActionState(prev => ({...prev, isDifal: !prev.isDifal}))}><Ticket className="mr-2 h-4 w-4" /> DIFAL</Button>
                         </div>
+                         <Button onClick={handleApplyBulkActions}>Aplicar</Button>
                     </Card>
                 </div>
             )}
