@@ -53,7 +53,6 @@ export function DataTable<TData, TValue>({
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = React.useState('')
   
-  // Use internal state only if external state is not provided
   const [internalRowSelection, setInternalRowSelection] = React.useState<RowSelectionState>({});
   
   const isControllingSelection = externalRowSelection !== undefined && externalSetRowSelection !== undefined;
@@ -61,35 +60,35 @@ export function DataTable<TData, TValue>({
   const rowSelection = isControllingSelection ? externalRowSelection : internalRowSelection;
   const setRowSelection = isControllingSelection ? externalSetRowSelection : setInternalRowSelection;
 
-  const tableColumns = React.useMemo<ColumnDef<TData, TValue>[]>(() => [
-    {
-        id: 'select',
-        header: ({ table }) => (
-            <Checkbox
-                checked={table.getIsAllPageRowsSelected()}
-                onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-                aria-label="Selecionar todas as linhas"
-                onClick={e => e.stopPropagation()}
-            />
-        ),
-        cell: ({ row }) => {
-            if (!row.getIsSelected()) {
-                return null;
-            }
-            return (
+  const tableColumns = React.useMemo<ColumnDef<TData, TValue>[]>(() => {
+    if (!isControllingSelection) return columns;
+    return [
+        {
+            id: 'select',
+            header: ({ table }) => (
                 <Checkbox
-                    checked={row.getIsSelected()}
-                    onCheckedChange={(value) => row.toggleSelected(!!value)}
-                    aria-label="Selecionar linha"
+                    checked={table.getIsAllPageRowsSelected()}
+                    onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                    aria-label="Selecionar todas as linhas"
                     onClick={e => e.stopPropagation()}
                 />
-            )
+            ),
+            cell: ({ row }) => {
+                return (
+                    <Checkbox
+                        checked={row.getIsSelected()}
+                        onCheckedChange={(value) => row.toggleSelected(!!value)}
+                        aria-label="Selecionar linha"
+                        onClick={e => e.stopPropagation()}
+                    />
+                )
+            },
+            enableSorting: false,
+            enableHiding: false,
         },
-        enableSorting: false,
-        enableHiding: false,
-    },
-    ...columns
-  ], [columns]);
+        ...columns
+      ]
+  }, [columns, isControllingSelection]);
 
 
   const table = useReactTable({
@@ -103,7 +102,7 @@ export function DataTable<TData, TValue>({
     onGlobalFilterChange: setGlobalFilter,
     getFilteredRowModel: getFilteredRowModel(),
     onRowSelectionChange: setRowSelection,
-    enableRowSelection: true, 
+    enableRowSelection: isControllingSelection, 
     state: {
       sorting,
       columnFilters,
@@ -119,10 +118,10 @@ export function DataTable<TData, TValue>({
   }, [table, tableRef]);
   
   React.useEffect(() => {
-    if (onSelectionChange) {
+    if (onSelectionChange && isControllingSelection) {
       onSelectionChange(Object.keys(rowSelection).length);
     }
-  }, [rowSelection, onSelectionChange]);
+  }, [rowSelection, onSelectionChange, isControllingSelection]);
 
 
   return (
@@ -207,7 +206,7 @@ export function DataTable<TData, TValue>({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
+                <TableCell colSpan={table.getAllColumns().length} className="h-24 text-center">
                   Nenhum resultado.
                 </TableCell>
               </TableRow>

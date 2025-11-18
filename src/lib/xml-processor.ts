@@ -133,6 +133,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     if (isSaida) {
         notaFiscal['Destinatário'] = destNome;
         notaFiscal['CPF/CNPJ do Destinatário'] = destCNPJ;
+        notaFiscal['destUF'] = destUF; // Make sure destUF is available on 'saida' too
         notaFiscal['Base ICMS'] = parseFloat(vBC) || 0;
         notaFiscal['Valor ICMS'] = parseFloat(vICMS) || 0;
     } else { // entrada
