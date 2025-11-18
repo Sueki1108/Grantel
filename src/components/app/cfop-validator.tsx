@@ -206,8 +206,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             const cstMatch = currentFilters.xmlCsts.has(String(item['CST do ICMS']));
             const picmsMatch = currentFilters.xmlPicms.has(String(item.pICMS || '0'));
             const fullDesc = cfopDescriptions[parseInt(item['CFOP'], 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-            const shortDesc = fullDesc.substring(0, 15);
-            const descMatch = currentFilters.xmlCfopDescriptions.has(shortDesc);
+            const descMatch = currentFilters.xmlCfopDescriptions.has(fullDesc);
             return cstMatch && picmsMatch && descMatch;
         });
     };
@@ -227,8 +226,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 if (item['CST do ICMS']) xmlCsts.add(String(item['CST do ICMS']));
                 if (item.pICMS !== undefined) xmlPicms.add(String(item.pICMS));
                 const fullDescription = cfopDescriptions[parseInt(item['CFOP'], 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-                const shortDescription = fullDescription.substring(0, 15);
-                if (shortDescription) xmlCfopDescriptions.add(shortDescription);
+                if (fullDescription) xmlCfopDescriptions.add(fullDescription);
             });
             return {
                 xmlCsts: Array.from(xmlCsts).sort(),
@@ -286,7 +284,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     {options.map(opt => (
                         <div key={`${filterKey}-${opt}`} className="flex items-center space-x-2">
                             <Checkbox id={`${filterKey}-${opt}`} checked={filterSet.has(opt)} onCheckedChange={checked => handleFilterChange(filterKey, opt, !!checked)} />
-                            <Label htmlFor={`${filterKey}-${opt}`}>{filterKey === 'xmlPicms' ? `${parseFloat(opt).toFixed(2)}%` : opt}</Label>
+                            <Label htmlFor={`${filterKey}-${opt}`} className="text-sm font-normal">{filterKey === 'xmlPicms' ? `${parseFloat(opt).toFixed(2)}%` : opt}</Label>
                         </div>
                     ))}
                 </div>
