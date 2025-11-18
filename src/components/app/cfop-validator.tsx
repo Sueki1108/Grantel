@@ -23,7 +23,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import * as XLSX from 'xlsx';
 import { Card } from '../ui/card';
 import type { RowSelectionState } from '@tanstack/react-table';
-import { cn } from '@/lib/utils';
 
 
 interface CfopValidatorProps {
@@ -140,35 +139,54 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         XLSX.writeFile(workbook, `CFOP_Validacao_${title}.xlsx`);
     };
 
+    const copyToClipboard = (text: string | number, type: string) => {
+        const textToCopy = String(text);
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: textToCopy });
+        }).catch(() => {
+            toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
+        });
+    };
+
+    const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
+        <div className="group flex items-center justify-between gap-1">
+            <span className="truncate">{displayValue}</span>
+            <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => copyToClipboard(copyValue, typeName)}>
+                <Copy className="h-3 w-3" />
+            </Button>
+        </div>
+    );
+
     const columns = useMemo(() => {
         const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'CST do ICMS', 'pICMS', 'Valor Total'];
         
-        const copyToClipboard = (text: string | number, type: string) => {
-            const textToCopy = String(text);
-            navigator.clipboard.writeText(textToCopy).then(() => {
-                toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: textToCopy });
-            }).catch(() => {
-                toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
-            });
-        };
-
         return getColumnsWithCustomRender(
             items,
             columnsToShow,
             (row, id) => {
                 const value = row.original[id as keyof typeof row.original];
                 
+                if (id === 'Número da Nota') {
+                    return renderCellWithCopy(value, value, 'Número da Nota');
+                }
+                if (id === 'Fornecedor') {
+                    return renderCellWithCopy(value, value, 'Fornecedor');
+                }
+                 if (id === 'Descrição') {
+                    const summarizedDesc = typeof value === 'string' && value.length > 30 ? `${value.substring(0, 30)}...` : value;
+                    return renderCellWithCopy(
+                        <TooltipProvider><Tooltip><TooltipTrigger asChild><span>{summarizedDesc}</span></TooltipTrigger><TooltipContent><p>{value}</p></TooltipContent></Tooltip></TooltipProvider>,
+                        value,
+                        'Descrição'
+                    );
+                }
+
                 if (id === 'pICMS') {
                     return <div className='text-center'>{typeof value === 'number' ? `${value.toFixed(2)}%` : 'N/A'}</div>;
                 }
 
                 if (['Valor Total'].includes(id) && typeof value === 'number') {
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
-                }
-
-                if (id === 'Descrição' && typeof value === 'string') {
-                    const summarizedDesc = value.length > 30 ? `${value.substring(0, 30)}...` : value;
-                    return <TooltipProvider><Tooltip><TooltipTrigger asChild><span>{summarizedDesc}</span></TooltipTrigger><TooltipContent><p>{value}</p></TooltipContent></Tooltip></TooltipProvider>;
                 }
 
                 if (id === 'CFOP') {
@@ -221,8 +239,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         ]);
     }, [items, cfopValidations, toast, updateAndPersistValidations]);
     
-    
-    // This is the core logic fix. It now correctly groups items by status and then by CFOP.
     const itemsByStatus = useMemo(() => {
         const result: Record<string, Record<string, any[]>> = {
             all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}
@@ -246,6 +262,31 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         });
         return result;
     }, [items, cfopValidations]);
+
+    const filteredItemsByStatusAndCfop = useMemo(() => {
+        const result: Record<string, Record<string, any[]>> = {
+            all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}
+        };
+    
+        for (const status in itemsByStatus) {
+            result[status] = {};
+            for (const cfop in itemsByStatus[status]) {
+                const allItemsForCfop = itemsByStatus[status][cfop];
+                result[status][cfop] = allItemsForCfop.filter(item => {
+                    const currentFilters = tabFilters[cfop];
+                    if (!currentFilters) return true;
+                    const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+                    return (
+                        currentFilters.xmlCsts.has(String(item['CST do ICMS'] || '')) &&
+                        currentFilters.xmlPicms.has(String(item.pICMS || '0')) &&
+                        currentFilters.xmlCfopDescriptions.has(fullDescription)
+                    );
+                });
+            }
+        }
+        return result;
+    }, [itemsByStatus, tabFilters]);
+
 
     const numSelected = Object.keys(rowSelection).length;
     
@@ -379,7 +420,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     return (
         <div className='relative'>
              {numSelected > 0 && (
-                <div className="sticky top-4 right-0 z-20 flex justify-end">
+                <div className="sticky top-4 z-20 flex justify-end">
                     <Card className="flex items-center gap-2 p-2 shadow-lg animate-in fade-in-0 slide-in-from-top-5">
                         <span className="text-sm font-medium pl-2">{numSelected} selecionado(s)</span>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setRowSelection({})}><X className="h-4 w-4"/></Button>
@@ -425,26 +466,16 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                     <div className='flex justify-between items-center mb-2'>
                                         <TabsList className="h-auto flex-wrap justify-start">
                                             {allCfopsForStatus.map(cfop => {
-                                                const count = cfopGroupsForStatus[cfop]?.length || 0;
+                                                const count = filteredItemsByStatusAndCfop[status]?.[cfop]?.length || 0;
                                                 return <TabsTrigger key={`${status}-${cfop}`} value={cfop} disabled={count === 0}>{cfop} ({count})</TabsTrigger>
                                             })}
                                         </TabsList>
-                                         <Button onClick={() => handleDownload(Object.values(cfopGroupsForStatus).flat(), `Validacao_${status}`)} size="sm" variant="outline" disabled={Object.values(cfopGroupsForStatus).flat().length === 0}>
-                                            <Download className="mr-2 h-4 w-4" /> Baixar Aba ({Object.values(cfopGroupsForStatus).flat().length})
+                                         <Button onClick={() => handleDownload(Object.values(filteredItemsByStatusAndCfop[status] || {}).flat(), `Validacao_${status}`)} size="sm" variant="outline" disabled={Object.values(filteredItemsByStatusAndCfop[status] || {}).flat().length === 0}>
+                                            <Download className="mr-2 h-4 w-4" /> Baixar Aba ({Object.values(filteredItemsByStatusAndCfop[status] || {}).flat().length})
                                         </Button>
                                     </div>
                                     {allCfopsForStatus.map(cfop => {
-                                        const allItemsForCfop = cfopGroupsForStatus[cfop] || [];
-                                        const currentCfopData = allItemsForCfop.filter(item => {
-                                            const currentFilters = tabFilters[cfop];
-                                            if (!currentFilters) return true;
-                                            const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-                                            return (
-                                                currentFilters.xmlCsts.has(String(item['CST do ICMS'] || '')) &&
-                                                currentFilters.xmlPicms.has(String(item.pICMS || '0')) &&
-                                                currentFilters.xmlCfopDescriptions.has(fullDescription)
-                                            );
-                                        });
+                                        const currentCfopData = filteredItemsByStatusAndCfop[status]?.[cfop] || [];
 
                                         return (
                                             <TabsContent key={`${status}-${cfop}`} value={cfop} className="mt-4">
@@ -452,7 +483,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                                     <div className='text-lg font-bold'>
                                                         {cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}
                                                     </div>
-                                                    <FilterDialog siengeCfop={cfop} items={allItemsForCfop} />
+                                                    <FilterDialog siengeCfop={cfop} items={itemsByStatus[status]?.[cfop] || []} />
                                                 </div>
                                                 <DataTable columns={columns} data={currentCfopData} rowSelection={rowSelection} setRowSelection={setRowSelection} />
                                             </TabsContent>
@@ -469,3 +500,4 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
+
