@@ -62,7 +62,7 @@ export function ReconciliationAnalysis({
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
-    const { reconciliationResults, siengeDataForTaxCheck, difalItems } = useMemo(() => {
+    const { reconciliationResults, siengeDataForTaxCheck, difalItems, difalItemsByCfop, difalColumns } = useMemo(() => {
         const results = processedData?.reconciliationResults;
         const sData = processedData?.siengeSheetData;
         const competenceKey = competence || 'default';
@@ -71,15 +71,31 @@ export function ReconciliationAnalysis({
         let difalItems: any[] = [];
         if (results?.reconciled) {
              difalItems = results.reconciled.filter(item => {
-                const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+                const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
                 return cfopValidations[uniqueKey]?.isDifal === true;
             });
         }
         
+        const difalItemsByCfop = difalItems.reduce((acc, item) => {
+            const cfop = item.Sienge_CFOP || 'N/A';
+            if (!acc[cfop]) {
+                acc[cfop] = [];
+            }
+            acc[cfop].push(item);
+            return acc;
+        }, {} as Record<string, any[]>);
+
+        const difalColumns = getColumnsWithCustomRender(
+            difalItems,
+            ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'Sienge_CFOP', 'pICMS', 'Descricao CFOP', 'Valor Unitário', 'Valor Total']
+        );
+        
         return {
             reconciliationResults: results,
             siengeDataForTaxCheck: sData || null,
-            difalItems
+            difalItems,
+            difalItemsByCfop,
+            difalColumns
         };
     }, [processedData, competence, allClassifications]);
 
@@ -125,7 +141,7 @@ export function ReconciliationAnalysis({
                         <TabsTrigger value="reconciliation" disabled={!reconciliationResults}>Conciliação de Itens</TabsTrigger>
                         <TabsTrigger value="tax_check" disabled={!siengeDataForTaxCheck}>Conferência de Impostos</TabsTrigger>
                         <TabsTrigger value="cfop_validation" disabled={!reconciliationResults}><BarChart className='h-4 w-4 mr-2'/>Validação CFOP</TabsTrigger>
-                        <TabsTrigger value="difal" disabled={!reconciliationResults}><Ticket className='h-4 w-4 mr-2'/>DIFAL ({difalItems.length})</TabsTrigger>
+                        <TabsTrigger value="difal" disabled={difalItems.length === 0}><Ticket className='h-4 w-4 mr-2'/>DIFAL ({difalItems.length})</TabsTrigger>
                     </TabsList>
                     <TabsContent value="reconciliation" className="mt-4">
                          {!processedData?.sheets['Itens Válidos'] && (
@@ -186,11 +202,26 @@ export function ReconciliationAnalysis({
                         <Card>
                             <CardHeader>
                                 <CardTitle>Itens Marcados para DIFAL</CardTitle>
-                                <CardDescription>Esta lista contém todos os itens que foram marcados com a opção "DIFAL" na aba de Validação CFOP.</CardDescription>
+                                <CardDescription>Esta lista contém todos os itens que foram marcados com a opção "DIFAL" na aba de Validação CFOP, agrupados por CFOP.</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                 <Button onClick={() => handleDownload(difalItems, 'Itens_DIFAL')} size="sm" className="mb-4" disabled={difalItems.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar Lista DIFAL</Button>
-                                 <DataTable columns={getColumns(difalItems)} data={difalItems} />
+                                {difalItems.length > 0 ? (
+                                    <Tabs defaultValue={Object.keys(difalItemsByCfop)[0] || ''} className="w-full">
+                                        <TabsList>
+                                            {Object.keys(difalItemsByCfop).map(cfop => (
+                                                <TabsTrigger key={cfop} value={cfop}>CFOP {cfop} ({difalItemsByCfop[cfop].length})</TabsTrigger>
+                                            ))}
+                                        </TabsList>
+                                        {Object.entries(difalItemsByCfop).map(([cfop, items]) => (
+                                            <TabsContent key={cfop} value={cfop} className='mt-4'>
+                                                 <Button onClick={() => handleDownload(items, `DIFAL_CFOP_${cfop}`)} size="sm" className="mb-4" disabled={items.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar Aba</Button>
+                                                <DataTable columns={difalColumns} data={items} />
+                                            </TabsContent>
+                                        ))}
+                                    </Tabs>
+                                ) : (
+                                    <p className="text-muted-foreground text-center p-4">Nenhum item marcado como DIFAL.</p>
+                                )}
                             </CardContent>
                         </Card>
                     </TabsContent>
