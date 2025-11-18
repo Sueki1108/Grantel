@@ -94,14 +94,12 @@ const addChaveUnica = (df: DataFrame): DataFrame => {
             const numeroLimpo = cleanAndToStr(row[numeroKey]);
             let parceiroCnpjLimpo = '';
             
-            // For Saídas, the partner is the 'destinatário'
             if (findKey(['destinatário']) && row[findKey(['destinatário'])!]) {
                 const destCnpjKey = findKey(['cpf/cnpj do destinatário']);
                 if (destCnpjKey && row[destCnpjKey]) {
                      parceiroCnpjLimpo = cleanAndToStr(row[destCnpjKey]);
                 }
             }
-            // For Entradas, it's the 'fornecedor'
             else if (emitenteCnpjKey && row[emitenteCnpjKey]) {
                 parceiroCnpjLimpo = cleanAndToStr(row[emitenteCnpjKey]);
             }
@@ -323,23 +321,11 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
             return { ...row, 'Descricao CFOP': 'N/A' };
         }
     
-        const cfopCode = row['CFOP'] ? parseInt(cleanAndToStr(row['CFOP']), 10) : 0;
+        const newRow = { ...row }; // Create a shallow copy to preserve all original properties
+        const cfopCode = newRow['CFOP'] ? parseInt(cleanAndToStr(newRow['CFOP']), 10) : 0;
         const fullDescription = cfopDescriptions[cfopCode] || 'Descrição não encontrada';
-        
-        const newRow: { [key: string]: any } = {};
-        let cfopAdded = false;
-        
-        for (const key in row) {
-            newRow[key] = row[key];
-            if (key === 'CFOP' && !cfopAdded) {
-                newRow['Descricao CFOP'] = fullDescription;
-                cfopAdded = true;
-            }
-        }
-        if (!cfopAdded) {
-            newRow['Descricao CFOP'] = fullDescription;
-        }
-
+    
+        newRow['Descricao CFOP'] = fullDescription;
         return newRow;
     };
     
@@ -353,10 +339,15 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     displayOrder.forEach(name => {
         let sheetData = finalResult[name];
         if (sheetData && sheetData.length > 0) {
-            if (["Itens Válidos", "Itens Válidos Saídas", "Imobilizados", "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes", "Remessas e Retornos", "Saídas", "Notas Válidas"].includes(name)) {
-                 sheetData = sheetData.map(row => addCfopDescriptionToRow(row));
+            // A reconciliação adiciona a chave de comparação, então precisamos preservar essa coluna
+            if (name.includes('Apenas no')) {
+                finalSheetSet[name] = sheetData.map(addCfopDescriptionToRow);
+            } else if (["Itens Válidos", "Itens Válidos Saídas", "Imobilizados", "Devoluções de Compra (Fornecedor)", "Devoluções de Clientes", "Remessas e Retornos", "Saídas", "Notas Válidas"].includes(name)) {
+                 sheetData = sheetData.map(addCfopDescriptionToRow);
+                 finalSheetSet[name] = sheetData;
+            } else {
+                 finalSheetSet[name] = sheetData;
             }
-            finalSheetSet[name] = sheetData;
         }
     });
     log("Processamento concluído. Resultados estão prontos para as próximas etapas.");
@@ -369,10 +360,16 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 }
 
 
-export function runReconciliation(siengeData: any[] | null, allXmlItems: any[]): ReconciliationResults {
+export function runReconciliation(siengeData: any[] | null, xmlItems: any[], xmlSaidasItems: any[], xmlCteItems: any[]): ReconciliationResults {
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [] };
-    if (!siengeData || !allXmlItems) {
-        return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: allXmlItems || [] };
+    if (!siengeData) {
+        return emptyResult;
+    }
+    
+    const allXmlItems = [...xmlItems, ...xmlSaidasItems, ...xmlCteItems];
+
+    if (!allXmlItems || allXmlItems.length === 0) {
+         return { ...emptyResult, onlyInSienge: siengeData };
     }
 
     try {
@@ -407,24 +404,7 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[]):
         if (!h.cnpj || !h.numero || !h.valorTotal) {
             throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge.");
         }
-
-        const headerMap = new Map<string, any>();
-        [
-            ...(processedData.sheets['Notas Válidas'] || []),
-            ...(processedData.sheets['Saídas'] || []),
-            ...(processedData.sheets['CTEs Válidos'] || []),
-        ].forEach(nota => {
-            headerMap.set(nota['Chave Unica'], nota);
-        });
-
-        const enrichedXmlItems = allXmlItems.map(item => {
-            const header = headerMap.get(item['Chave Unica']);
-            if (header) {
-                return { ...item, 'CPF/CNPJ do Emitente': header['CPF/CNPJ do Fornecedor'] || header['CPF/CNPJ do Emitente'] };
-            }
-            return item;
-        });
-
+        
         const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
             const cleanNumero = cleanAndToStr(numero);
             const cleanCnpj = cleanAndToStr(cnpj);
@@ -441,9 +421,8 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[]):
             );
         };
 
-
         let reconciled: any[] = [];
-        let remainingXmlItems = [...enrichedXmlItems];
+        let remainingXmlItems = [...allXmlItems];
         let remainingSiengeItems = [...filteredSiengeData];
 
         const reconciliationPass = (
@@ -495,7 +474,7 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[]):
 
         for (const pass of passDefinitions) {
             const siengeKeyGen = pass.getSienge;
-            if (siengeKeyGen && siengeKeyGen({ [h.numero!]: '', [h.cnpj!]: '' })) { // Dummy check to see if required headers exist
+            if (siengeKeyGen) {
                 const result = reconciliationPass(remainingSiengeItems, remainingXmlItems, siengeKeyGen, pass.getXml, pass.name);
                 reconciled.push(...result.matched);
                 remainingSiengeItems = result.remainingSienge;
@@ -504,18 +483,20 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[]):
         }
         
         const finalOnlyInSienge = remainingSiengeItems.map(item => ({
-            'Chave de Comparação': getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]) || 'Inválida',
+            'Chave de Comparação': getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]),
             ...item
         }));
         
         const finalOnlyInXml = remainingXmlItems.map(item => ({
-            'Chave de Comparação': getXmlKey(item, 'Valor Total') || 'Inválida',
+             'Chave de Comparação': getXmlKey(item, 'Valor Total'),
             ...item
         }));
 
         return { reconciled, onlyInSienge: finalOnlyInSienge, onlyInXml: finalOnlyInXml };
     } catch (err: any) {
         console.error("Reconciliation Error:", err);
-        return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: allXmlItems || [] };
+        return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: allXmlItems };
     }
 }
+
+    
