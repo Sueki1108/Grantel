@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -272,54 +271,6 @@ const processSpedFileInBrowser = (
         intermediateLines = filteredLines;
     }
     
-    const usedParticipantCodes = new Set<string>();
-    const usedProductCodes = new Set<string>();
-
-    if (config.removeUnusedProducts || config.removeUnusedParticipants) {
-        intermediateLines.forEach(line => {
-            const parts = line.split('|');
-            if (parts.length > 1) {
-                const regType = parts[1];
-                if ((regType === 'C100' || regType === 'D100') && parts.length > 4 && parts[4]) usedParticipantCodes.add(parts[4]);
-                if (regType === 'C170' && parts.length > 2 && parts[2]) usedProductCodes.add(parts[2]);
-            }
-        });
-    }
-
-    if (config.removeUnusedProducts) {
-        _log(`Iniciando remoção de produtos (0200) não utilizados. ${usedProductCodes.size} produtos estão em uso.`);
-        const filteredLines: string[] = [];
-        for (let i = 0; i < intermediateLines.length; i++) {
-            const line = intermediateLines[i];
-            const parts = line.split('|');
-            if (parts.length > 2 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
-                modifications.removed0200.push({ lineNumber: i + 1, line });
-                if(!modifications.removed0200.find(log => log.line === line)) linesModifiedCount++;
-                continue; 
-            }
-            filteredLines.push(line);
-        }
-        _log(`Remoção de produtos não utilizados concluída. ${modifications.removed0200.length} registos 0200 removidos.`);
-        intermediateLines = filteredLines;
-    }
-    
-     if (config.removeUnusedParticipants) {
-        _log(`Iniciando remoção de participantes (0150) não utilizados. ${usedParticipantCodes.size} participantes estão em uso.`);
-        const filteredLines: string[] = [];
-        for (let i = 0; i < intermediateLines.length; i++) {
-            const line = intermediateLines[i];
-            const parts = line.split('|');
-            if (parts.length > 2 && parts[1] === '0150' && !usedParticipantCodes.has(parts[2])) {
-                modifications.removed0150.push({ lineNumber: i + 1, line });
-                if(!modifications.removed0150.find(log => log.line === line)) linesModifiedCount++;
-                continue;
-            }
-            filteredLines.push(line);
-        }
-        _log(`Remoção de participantes não utilizados concluída. ${modifications.removed0150.length} registos 0150 removidos.`);
-        intermediateLines = filteredLines;
-    }
-
     let modifiedLines: string[] = [];
     const TRUNCATION_CODES = new Set(['0450', '0460', 'C110']);
     const MAX_CHARS_TRUNCATION = 235;
@@ -417,6 +368,62 @@ const processSpedFileInBrowser = (
         modifiedLines.push(currentLine);
     }
     
+    // --- Orphan Removals ---
+    intermediateLines = modifiedLines; // Use the result of the first pass
+
+    if (config.removeUnusedProducts) {
+        _log("Iniciando remoção de produtos (0200) não utilizados.");
+        const usedProductCodes = new Set<string>();
+        intermediateLines.forEach(line => {
+            const parts = line.split('|');
+            if (parts.length > 2 && parts[1] === 'C170' && parts[2]) {
+                usedProductCodes.add(parts[2]);
+            }
+        });
+
+        const filteredLines: string[] = [];
+        for (let i = 0; i < intermediateLines.length; i++) {
+            const line = intermediateLines[i];
+            const parts = line.split('|');
+            if (parts.length > 2 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
+                modifications.removed0200.push({ lineNumber: i + 1, line });
+                linesModifiedCount++;
+                continue; // Skip this line
+            }
+            filteredLines.push(line);
+        }
+        _log(`Remoção de produtos não utilizados concluída. ${modifications.removed0200.length} registos 0200 removidos.`);
+        intermediateLines = filteredLines;
+    }
+    
+     if (config.removeUnusedParticipants) {
+        _log("Iniciando remoção de participantes (0150) não utilizados.");
+        const usedParticipantCodes = new Set<string>();
+        intermediateLines.forEach(line => {
+            const parts = line.split('|');
+            if (parts.length > 4 && (parts[1] === 'C100' || parts[1] === 'D100') && parts[4]) {
+                usedParticipantCodes.add(parts[4]);
+            }
+        });
+
+        const filteredLines: string[] = [];
+        for (let i = 0; i < intermediateLines.length; i++) {
+            const line = intermediateLines[i];
+            const parts = line.split('|');
+            if (parts.length > 2 && parts[1] === '0150' && !usedParticipantCodes.has(parts[2])) {
+                modifications.removed0150.push({ lineNumber: i + 1, line });
+                linesModifiedCount++;
+                continue; // Skip this line
+            }
+            filteredLines.push(line);
+        }
+        _log(`Remoção de participantes não utilizados concluída. ${modifications.removed0150.length} registos 0150 removidos.`);
+        intermediateLines = filteredLines;
+    }
+
+    modifiedLines = intermediateLines;
+
+    // --- Final Counter Recalculation ---
     if (config.fixCounters) {
         _log("Iniciando a recontagem de linhas dos blocos e registos.");
         
@@ -484,7 +491,7 @@ const processSpedFileInBrowser = (
          _log(`Recontagem de linhas e registos concluída.`);
     }
 
-    _log(`Processamento concluído. Total de linhas lidas: ${lines.length}. Total de linhas com modificações: ${linesModifiedCount}.`);
+    _log(`Processamento concluído. Total de linhas lidas: ${lines.length}. Total de linhas com modificações/remoções: ${linesModifiedCount}.`);
 
     return {
         fileName: `corrigido_sped.txt`,
@@ -560,7 +567,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             if (reg === 'C100' && parts.length > 9 && parts[9]?.length === 44) {
                 key = parts[9];
                 docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12], vlDesc: parts[14] };
-            } else if (regType === 'D100' && parts.length > 10) {
+            } else if (reg === 'D100' && parts.length > 17 && parts[10]?.length === 44) {
                 key = parts[10];
                 docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
             }
@@ -1115,7 +1122,10 @@ export function KeyChecker({
                                                 </div>
                                             </Tabs>
                                         </TabsContent>
-                                        
+
+                                        <TabsContent value="full_log" className="mt-4 flex-grow overflow-hidden">
+                                            
+                                        </TabsContent>
                                     </Tabs>
                                 ) : null}
                                 </div>
