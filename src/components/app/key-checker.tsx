@@ -142,7 +142,7 @@ export type SpedCorrectionConfig = {
 };
 
 const correctionConfigLabels: Record<keyof SpedCorrectionConfig, string> = {
-    removeDivergent: "Remover Registos com Divergência de IE/UF",
+    removeDivergent: "Remover Registos com Divergência de IE/UF (Condicional)",
     fixCounters: "Recalcular Contadores de Linhas e Blocos",
     fixIE: "Corrigir Inscrição Estadual (IE) de Participantes (NF-e)",
     fixCteSeries: "Corrigir Série de CT-e",
@@ -287,20 +287,20 @@ const processSpedFileInBrowser = (
         intermediateLines = filteredLines;
     }
     
-    const usedCodesAfterDivergenceRemoval = new Set<string>();
+    const usedParticipantCodes = new Set<string>();
+    const usedProductCodes = new Set<string>();
+
     if (config.removeUnusedProducts || config.removeUnusedParticipants) {
         intermediateLines.forEach(line => {
             const parts = line.split('|');
             if (parts.length > 1) {
                 const regType = parts[1];
-                if (regType === 'C100' && parts[4]) usedCodesAfterDivergenceRemoval.add(parts[4]); // Participant
-                if (regType === 'D100' && parts[4]) usedCodesAfterDivergenceRemoval.add(parts[4]); // Participant
-                if (regType === 'D500' && parts[4]) usedCodesAfterDivergenceRemoval.add(parts[4]); // Participant
-                if (regType === 'C170' && parts[2]) usedCodesAfterDivergenceRemoval.add(parts[2]); // Product
+                if (regType === 'C100' && parts[4]) usedParticipantCodes.add(parts[4]);
+                if (regType === 'D100' && parts[4]) usedParticipantCodes.add(parts[4]);
+                if (regType === 'C170' && parts[2]) usedProductCodes.add(parts[2]);
             }
         });
     }
-
 
     if (config.removeUnusedProducts) {
         _log("Iniciando remoção de produtos (0200) não utilizados.");
@@ -308,10 +308,10 @@ const processSpedFileInBrowser = (
         for (let i = 0; i < intermediateLines.length; i++) {
             const line = intermediateLines[i];
             const parts = line.split('|');
-            if (parts.length > 2 && parts[1] === '0200' && !usedCodesAfterDivergenceRemoval.has(parts[2])) {
+            if (parts.length > 2 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
                 modifications.removed0200.push({ lineNumber: i + 1, line });
-                linesModifiedCount++;
-                continue; // Skip this line
+                if(!modifications.removed0200.find(log => log.line === line)) linesModifiedCount++;
+                continue; 
             }
             filteredLines.push(line);
         }
@@ -325,10 +325,10 @@ const processSpedFileInBrowser = (
         for (let i = 0; i < intermediateLines.length; i++) {
             const line = intermediateLines[i];
             const parts = line.split('|');
-            if (parts.length > 2 && parts[1] === '0150' && !usedCodesAfterDivergenceRemoval.has(parts[2])) {
+            if (parts.length > 2 && parts[1] === '0150' && !usedParticipantCodes.has(parts[2])) {
                 modifications.removed0150.push({ lineNumber: i + 1, line });
-                linesModifiedCount++;
-                continue; // Skip this line
+                if(!modifications.removed0150.find(log => log.line === line)) linesModifiedCount++;
+                continue;
             }
             filteredLines.push(line);
         }
@@ -746,13 +746,13 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     logFn(`- ${consolidatedDivergences.length} chaves com alguma divergência encontradas.`);
     
     const keyCheckResults: KeyCheckResult = { 
-        keysNotFoundInTxt, keysInTxtNotInSheet, duplicateKeysInSheet, validKeys,
+        keysNotFoundInTxt, keysInTxtNotInSheet, duplicateKeysInSheet: [], validKeys,
         dateDivergences, valueDivergences, ufDivergences, ieDivergences, consolidatedDivergences,
         missingSeriesDivergences: [],
     };
 
     return { keyCheckResults, spedInfo: currentSpedInfo, spedDuplicates };
-}
+};
 
 // Main Component
 interface KeyCheckerProps {
@@ -1188,10 +1188,7 @@ export function KeyChecker({
                                                 </div>
                                             </Tabs>
                                         </TabsContent>
-
-                                        <TabsContent value="full_log" className="mt-4 flex-grow overflow-hidden">
-                                            
-                                        </TabsContent>
+                                        
                                     </Tabs>
                                 ) : null}
                                 </div>
@@ -1248,3 +1245,4 @@ export function KeyChecker({
         </div>
     );
 }
+
