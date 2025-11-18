@@ -361,28 +361,13 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 }
 
 
-export function runReconciliation(siengeData: any[] | null, allXmlItems: any[], allNoteHeaders: any[]): ReconciliationResults {
+export function runReconciliation(siengeData: any[] | null, allXmlItems: any[]): ReconciliationResults {
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [] };
     if (!siengeData || !allXmlItems) {
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: allXmlItems || [] };
     }
 
     try {
-        const headerMap = new Map<string, any>();
-        allNoteHeaders.forEach(header => {
-            if (header["Chave Unica"]) {
-                headerMap.set(header["Chave Unica"], header);
-            }
-        });
-        
-        const enrichedXmlItems = allXmlItems.map(item => {
-            const header = headerMap.get(item["Chave Unica"]);
-            return {
-                ...item,
-                'CPF/CNPJ do Emitente': header ? (header['CPF/CNPJ do Fornecedor'] || header['emitCNPJ']) : item['CPF/CNPJ do Emitente']
-            };
-        });
-
         const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
             if (!data || data.length === 0 || !data[0]) return undefined;
             const headers = Object.keys(data[0]);
@@ -433,7 +418,7 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[], 
 
 
         let reconciled: any[] = [];
-        let remainingXmlItems = [...enrichedXmlItems];
+        let remainingXmlItems = [...allXmlItems];
         let remainingSiengeItems = [...filteredSiengeData];
 
         const reconciliationPass = (
