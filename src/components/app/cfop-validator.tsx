@@ -23,6 +23,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import * as XLSX from 'xlsx';
 import { Card } from '../ui/card';
 import type { RowSelectionState } from '@tanstack/react-table';
+import { cn } from '@/lib/utils';
 
 
 interface CfopValidatorProps {
@@ -205,12 +206,15 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 header: 'Ações',
                 cell: ({ row }) => {
                     const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
-                    const isDifal = cfopValidations[uniqueKey]?.isDifal;
-                     const handleValidationChange = (classification: 'correct' | 'incorrect' | 'verify' | 'unvalidated') => {
+                    const validation = cfopValidations[uniqueKey];
+                    const classification = validation?.classification || 'unvalidated';
+                    const isDifal = validation?.isDifal;
+
+                     const handleValidationChange = (newClassification: 'correct' | 'incorrect' | 'verify' | 'unvalidated') => {
                         const newValidations = { ...cfopValidations };
                         newValidations[uniqueKey] = {
                             ...(newValidations[uniqueKey] || { isDifal: false }),
-                            classification,
+                            classification: newClassification,
                         };
                         updateAndPersistValidations(newValidations);
                     };
@@ -226,9 +230,9 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     return (
                         <div className="flex justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                              <TooltipProvider>
-                                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange('correct')}><Check className="h-4 w-4 text-green-600" /></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
-                                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange('incorrect')}><X className="h-4 w-4 text-red-600" /></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
-                                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange('verify')}><HelpCircle className="h-4 w-4 text-yellow-600" /></Button></TooltipTrigger><TooltipContent><p>A Verificar</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button variant={classification === 'correct' ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'correct' && "bg-green-600 hover:bg-green-700")} onClick={() => handleValidationChange('correct')}><Check className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button variant={classification === 'incorrect' ? 'destructive' : 'ghost'} size="icon" className="h-7 w-7" onClick={() => handleValidationChange('incorrect')}><X className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button variant={classification === 'verify' ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'verify' && "bg-yellow-500 hover:bg-yellow-600")} onClick={() => handleValidationChange('verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>A Verificar</p></TooltipContent></Tooltip>
                                 <Tooltip><TooltipTrigger asChild><Button variant={isDifal ? 'default' : 'ghost'} size="icon" className="h-7 w-7" onClick={() => handleDifalChange()}><Ticket className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>{isDifal ? 'Desmarcar DIFAL' : 'Marcar como DIFAL'}</p></TooltipContent></Tooltip>
                                 <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange('unvalidated')}><RotateCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Limpar Validação</p></TooltipContent></Tooltip>
                             </TooltipProvider>
@@ -237,10 +241,10 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 }
             },
         ]);
-    }, [items, cfopValidations, toast, updateAndPersistValidations]);
+    }, [items, cfopValidations, toast]);
     
     const itemsByStatus = useMemo(() => {
-        const result: Record<string, Record<string, any[]>> = {
+        const result: Record<ValidationStatus, Record<string, any[]>> = {
             all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}
         };
     
@@ -251,42 +255,15 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             
             const cfop = item.Sienge_CFOP || 'N/A';
 
-            // Add to 'all' status
             if (!result.all[cfop]) result.all[cfop] = [];
             result.all[cfop].push(itemWithKey);
 
-            // Add to specific status
             if (!result[classification]) result[classification] = {};
             if (!result[classification][cfop]) result[classification][cfop] = [];
             result[classification][cfop].push(itemWithKey);
         });
         return result;
     }, [items, cfopValidations]);
-
-    const filteredItemsByStatusAndCfop = useMemo(() => {
-        const result: Record<string, Record<string, any[]>> = {
-            all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}
-        };
-    
-        for (const status in itemsByStatus) {
-            result[status] = {};
-            for (const cfop in itemsByStatus[status]) {
-                const allItemsForCfop = itemsByStatus[status][cfop];
-                result[status][cfop] = allItemsForCfop.filter(item => {
-                    const currentFilters = tabFilters[cfop];
-                    if (!currentFilters) return true;
-                    const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-                    return (
-                        currentFilters.xmlCsts.has(String(item['CST do ICMS'] || '')) &&
-                        currentFilters.xmlPicms.has(String(item.pICMS || '0')) &&
-                        currentFilters.xmlCfopDescriptions.has(fullDescription)
-                    );
-                });
-            }
-        }
-        return result;
-    }, [itemsByStatus, tabFilters]);
-
 
     const numSelected = Object.keys(rowSelection).length;
     
@@ -427,9 +404,9 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                         <div className="h-6 border-l" />
                         
                         <div className="flex gap-1">
-                             <Button size="sm" variant={bulkActionState.classification === 'correct' ? "default" : "secondary"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'correct'}))}><Check className="mr-2 h-4 w-4" /> Correto</Button>
+                             <Button size="sm" className={cn(bulkActionState.classification === 'correct' ? 'bg-green-600 hover:bg-green-700' : 'bg-secondary')} onClick={() => setBulkActionState(prev => ({...prev, classification: 'correct'}))}><Check className="mr-2 h-4 w-4" /> Correto</Button>
                              <Button size="sm" variant={bulkActionState.classification === 'incorrect' ? "destructive" : "secondary"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'incorrect'}))}><X className="mr-2 h-4 w-4" /> Incorreto</Button>
-                             <Button size="sm" variant={bulkActionState.classification === 'verify' ? "secondary" : "outline"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
+                             <Button size="sm" className={cn(bulkActionState.classification === 'verify' ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-secondary')} onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
                              <Button size="sm" variant={bulkActionState.classification === 'unvalidated' ? "destructive" : "outline"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'unvalidated'}))}><RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
                              <Button size="sm" variant={bulkActionState.isDifal ? 'default' : 'outline'} onClick={() => setBulkActionState(prev => ({...prev, isDifal: prev.isDifal === null ? true : !prev.isDifal}))}><Ticket className="mr-2 h-4 w-4" /> DIFAL</Button>
                         </div>
@@ -466,16 +443,35 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                     <div className='flex justify-between items-center mb-2'>
                                         <TabsList className="h-auto flex-wrap justify-start">
                                             {allCfopsForStatus.map(cfop => {
-                                                const count = filteredItemsByStatusAndCfop[status]?.[cfop]?.length || 0;
+                                                const itemsForCfop = itemsByStatus[status]?.[cfop] || [];
+                                                const count = itemsForCfop.filter(item => {
+                                                    const currentFilters = tabFilters[cfop];
+                                                    if (!currentFilters) return true;
+                                                    const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+                                                    return (
+                                                        currentFilters.xmlCsts.has(String(item['CST do ICMS'] || '')) &&
+                                                        currentFilters.xmlPicms.has(String(item.pICMS || '0')) &&
+                                                        currentFilters.xmlCfopDescriptions.has(fullDescription)
+                                                    );
+                                                }).length;
                                                 return <TabsTrigger key={`${status}-${cfop}`} value={cfop} disabled={count === 0}>{cfop} ({count})</TabsTrigger>
                                             })}
                                         </TabsList>
-                                         <Button onClick={() => handleDownload(Object.values(filteredItemsByStatusAndCfop[status] || {}).flat(), `Validacao_${status}`)} size="sm" variant="outline" disabled={Object.values(filteredItemsByStatusAndCfop[status] || {}).flat().length === 0}>
-                                            <Download className="mr-2 h-4 w-4" /> Baixar Aba ({Object.values(filteredItemsByStatusAndCfop[status] || {}).flat().length})
+                                         <Button onClick={() => handleDownload(Object.values(cfopGroupsForStatus).flat(), `Validacao_${status}`)} size="sm" variant="outline" disabled={Object.values(cfopGroupsForStatus).flat().length === 0}>
+                                            <Download className="mr-2 h-4 w-4" /> Baixar Aba ({Object.values(cfopGroupsForStatus).flat().length})
                                         </Button>
                                     </div>
                                     {allCfopsForStatus.map(cfop => {
-                                        const currentCfopData = filteredItemsByStatusAndCfop[status]?.[cfop] || [];
+                                        const currentCfopData = itemsByStatus[status]?.[cfop]?.filter(item => {
+                                             const currentFilters = tabFilters[cfop];
+                                            if (!currentFilters) return true;
+                                            const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+                                            return (
+                                                currentFilters.xmlCsts.has(String(item['CST do ICMS'] || '')) &&
+                                                currentFilters.xmlPicms.has(String(item.pICMS || '0')) &&
+                                                currentFilters.xmlCfopDescriptions.has(fullDescription)
+                                            );
+                                        }) || [];
 
                                         return (
                                             <TabsContent key={`${status}-${cfop}`} value={cfop} className="mt-4">
