@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -305,11 +306,11 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                             >
                                 <div className='flex justify-between items-center mb-2'>
                                      <TabsList className="h-auto flex-wrap justify-start">
-                                        <TabsTrigger value="all">Todos ({statusCounts.all})</TabsTrigger>
-                                        <TabsTrigger value="unvalidated">Não Validado ({statusCounts.unvalidated})</TabsTrigger>
-                                        <TabsTrigger value="correct">Correto ({statusCounts.correct})</TabsTrigger>
-                                        <TabsTrigger value="incorrect">Incorreto ({statusCounts.incorrect})</TabsTrigger>
-                                        <TabsTrigger value="verify">Verificar ({statusCounts.verify})</TabsTrigger>
+                                        {statusCounts.all > 0 && <TabsTrigger value="all">Todos ({statusCounts.all})</TabsTrigger>}
+                                        {statusCounts.unvalidated > 0 && <TabsTrigger value="unvalidated">Não Validado ({statusCounts.unvalidated})</TabsTrigger>}
+                                        {statusCounts.correct > 0 && <TabsTrigger value="correct">Correto ({statusCounts.correct})</TabsTrigger>}
+                                        {statusCounts.incorrect > 0 && <TabsTrigger value="incorrect">Incorreto ({statusCounts.incorrect})</TabsTrigger>}
+                                        {statusCounts.verify > 0 && <TabsTrigger value="verify">Verificar ({statusCounts.verify})</TabsTrigger>}
                                     </TabsList>
                                     <div className='flex items-center gap-2'>
                                         {filterSummary && <Badge variant="secondary" className='hidden md:block'>{filterSummary}</Badge>}
