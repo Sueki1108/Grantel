@@ -348,7 +348,12 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 }
 
 
-export function runReconciliation(siengeData: any[] | null, xmlItems: any[]): ReconciliationResults {
+export function runReconciliation(
+    siengeData: any[] | null, 
+    xmlItems: any[],
+    nfeEntradas: any[],
+    cteData: any[]
+): ReconciliationResults {
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [] };
     if (!siengeData || siengeData.length === 0) {
         return { ...emptyResult, onlyInXml: xmlItems || [] };
@@ -369,11 +374,24 @@ export function runReconciliation(siengeData: any[] | null, xmlItems: any[]): Re
         if (!espHeader) {
             throw new Error("Não foi possível encontrar a coluna 'Esp' na planilha Sienge para filtragem.");
         }
+        
+        const nfeHeaderMap = new Map();
+        [...(nfeEntradas || []), ...(cteData || [])].forEach(n => nfeHeaderMap.set(n['Chave Unica'], n));
+
+        const enrichedXmlItems = xmlItems.map(item => {
+            const header = nfeHeaderMap.get(item['Chave Unica']);
+            return {
+                ...item,
+                Fornecedor: header?.Fornecedor || 'N/A',
+                destUF: header?.destUF || '',
+            };
+        });
 
         const filteredSiengeData = siengeData.filter(row => {
             const espValue = row[espHeader] ? String(row[espHeader]).trim().toUpperCase() : '';
-            return espValue === 'NFE' || espValue === 'NFSR';
+            return espValue === 'NFE' || espValue === 'NFSR' || espValue === 'CTE';
         });
+
 
         const h = {
             cnpj: findHeader(filteredSiengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
@@ -408,7 +426,7 @@ export function runReconciliation(siengeData: any[] | null, xmlItems: any[]): Re
         };
 
         let reconciled: any[] = [];
-        let remainingXmlItems = [...xmlItems];
+        let remainingXmlItems = [...enrichedXmlItems];
         let remainingSiengeItems = [...filteredSiengeData];
 
         const reconciliationPass = (
