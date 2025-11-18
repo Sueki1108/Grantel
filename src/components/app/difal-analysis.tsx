@@ -10,13 +10,14 @@ import { Loader2, Download, Cpu, TicketPercent, Copy, Hash, Sigma, Coins, Clipbo
 import { format, parseISO } from 'date-fns';
 import { DataTable } from '@/components/app/data-table';
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogClose } from '../ui/dialog';
 import { processUploadedXmls } from '@/lib/xml-processor';
 import JSZip from 'jszip';
 import { FileUploadForm } from './file-upload-form';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Label } from '../ui/label';
 import { cn } from '@/lib/utils';
+import { Calendar } from '@/components/ui/calendar';
 
 
 // ===============================================================
@@ -258,14 +259,16 @@ export function DifalAnalysis() {
                         </div>
                     )}
                     
-                    {processedItems.length > 0 && (
-                        <DataTable 
-                            columns={columns}
-                            data={processedItems}
-                        />
-                    )}
+                    <div className="flex-grow overflow-hidden">
+                        {processedItems.length > 0 && (
+                             <DataTable 
+                                columns={columns}
+                                data={processedItems}
+                            />
+                        )}
+                    </div>
 
-                    <DialogFooter>
+                    <DialogFooter className="mt-4">
                          <Button onClick={handleDownloadExcel} disabled={processedItems.length === 0} variant="outline">
                             <Download className="mr-2 h-4 w-4" /> Baixar Excel
                         </Button>
