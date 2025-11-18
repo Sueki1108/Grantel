@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Loader2, Download, Cpu, TicketPercent, Copy, Hash, Sigma, Coins, ClipboardCopy, X, UploadCloud } from 'lucide-react';
+import { Loader2, Download, Cpu, TicketPercent, Copy, Hash, Sigma, Coins, ClipboardCopy, X, UploadCloud, Calendar as CalendarIcon } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { DataTable } from '@/components/app/data-table';
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
@@ -14,6 +14,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { processUploadedXmls } from '@/lib/xml-processor';
 import JSZip from 'jszip';
 import { FileUploadForm } from './file-upload-form';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Calendar } from '../ui/calendar';
+import { Label } from '../ui/label';
+import { cn } from '@/lib/utils';
 
 
 // ===============================================================
@@ -37,6 +41,7 @@ export function DifalAnalysis() {
     const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
     const [difalXmlFiles, setDifalXmlFiles] = useState<File[]>([]);
     const [processedItems, setProcessedItems] = useState<DifalDataItem[]>([]);
+    const [dueDate, setDueDate] = useState<Date | undefined>(new Date());
     
     const { toast } = useToast();
 
@@ -78,6 +83,11 @@ export function DifalAnalysis() {
             toast({ variant: "destructive", title: "Nenhum XML carregado", description: "Carregue os ficheiros XML para processar." });
             return;
         }
+        if (!dueDate) {
+            toast({ variant: "destructive", title: "Data de Vencimento em falta", description: "Por favor, selecione uma data de vencimento." });
+            return;
+        }
+
         setIsLoading(true);
         
         try {
@@ -175,7 +185,7 @@ export function DifalAnalysis() {
                         <div>
                             <CardTitle className="font-headline text-2xl">Ferramenta de Extração de Dados DIFAL</CardTitle>
                             <CardDescription>
-                                Carregue os XMLs, processe e visualize os dados para análise de DIFAL.
+                                Carregue os XMLs, defina a data e processe para visualizar os dados para análise de DIFAL.
                             </CardDescription>
                         </div>
                     </div>
@@ -196,9 +206,35 @@ export function DifalAnalysis() {
                      <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Etapa Final</span></div></div>
                      <div>
                         <h3 className="text-lg font-bold mb-2">Etapa 2: Processar e Visualizar</h3>
-                         <p className='text-sm text-muted-foreground mb-4'>Clique para analisar os XMLs e ver os resultados.</p>
-                        <div className='flex flex-col sm:flex-row gap-4'>
-                            <Button onClick={processDifalItems} disabled={isLoading || difalXmlFiles.length === 0} className="w-full">
+                         <p className='text-sm text-muted-foreground mb-4'>Defina a data de vencimento e clique para analisar os XMLs e ver os resultados.</p>
+                        <div className='flex flex-col sm:flex-row gap-4 items-end'>
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="due-date">Data de Vencimento</Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            id="due-date"
+                                            variant={"outline"}
+                                            className={cn(
+                                                "w-[280px] justify-start text-left font-normal",
+                                                !dueDate && "text-muted-foreground"
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {dueDate ? format(dueDate, "PPP") : <span>Selecione uma data</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                        <Calendar
+                                            mode="single"
+                                            selected={dueDate}
+                                            onSelect={setDueDate}
+                                            initialFocus
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <Button onClick={processDifalItems} disabled={isLoading || difalXmlFiles.length === 0} className="w-full sm:w-auto flex-grow">
                                 {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : <><Cpu className="mr-2 h-4 w-4" /> Processar e Ver Resultados</>}
                             </Button>
                         </div>
