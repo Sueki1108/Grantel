@@ -15,7 +15,6 @@ import { processUploadedXmls } from '@/lib/xml-processor';
 import JSZip from 'jszip';
 import { FileUploadForm } from './file-upload-form';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Calendar } from '../ui/calendar';
 import { Label } from '../ui/label';
 import { cn } from '@/lib/utils';
 
@@ -260,12 +259,10 @@ export function DifalAnalysis() {
                     )}
                     
                     {processedItems.length > 0 && (
-                         <div className="flex-grow overflow-hidden">
-                            <DataTable 
-                                columns={columns}
-                                data={processedItems}
-                            />
-                        </div>
+                        <DataTable 
+                            columns={columns}
+                            data={processedItems}
+                        />
                     )}
 
                     <DialogFooter>
