@@ -42,7 +42,6 @@ export function DifalAnalysis() {
     const [isLoading, setIsLoading] = useState(false);
     const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
     const [dueDate, setDueDate] = useState<Date | undefined>(new Date());
-    const [paymentDate, setPaymentDate] = useState<Date | undefined>(new Date());
     const [difalXmlFiles, setDifalXmlFiles] = useState<File[]>([]);
     const [processedItems, setProcessedItems] = useState<DifalDataItem[]>([]);
     
@@ -93,7 +92,7 @@ export function DifalAnalysis() {
             const allItems = [...nfe, ...saidas];
             
             const difalData: DifalDataItem[] = allItems
-                .filter(item => item.entrega_UF && item.entrega_UF !== item.destUF) // Lógica simplificada de DIFAL
+                .filter(item => item.entrega_UF && item.destUF && item.entrega_UF !== item.destUF)
                 .map(item => ({
                     'Chave de Acesso': item['Chave de acesso'],
                     'Número da Nota': item['Número'],
@@ -142,8 +141,8 @@ export function DifalAnalysis() {
     };
 
     const handleGenerateScript = () => {
-        if (processedItems.length === 0 || !dueDate || !paymentDate) {
-            toast({ variant: 'destructive', title: 'Dados incompletos', description: 'Certifique-se de que processou os itens e que as datas estão preenchidas.' });
+        if (processedItems.length === 0 || !dueDate) {
+            toast({ variant: 'destructive', title: 'Dados incompletos', description: 'Certifique-se de que processou os itens e que a data de vencimento está preenchida.' });
             return;
         }
     
@@ -157,7 +156,6 @@ export function DifalAnalysis() {
         const scriptContent = generateGnreScript(
             scriptData,
             format(dueDate, 'ddMMyyyy'),
-            format(paymentDate, 'ddMMyyyy'),
             GNRE_DEFAULT_CONFIGS
         );
         
@@ -215,7 +213,7 @@ export function DifalAnalysis() {
                         <div>
                             <CardTitle className="font-headline text-2xl">Ferramenta de Geração de Guia DIFAL</CardTitle>
                             <CardDescription>
-                                Carregue os XMLs, defina as datas e processe para gerar o script de automação para as guias GNRE.
+                                Carregue os XMLs, defina a data e processe para gerar o script de automação para as guias GNRE.
                             </CardDescription>
                         </div>
                     </div>
@@ -233,7 +231,7 @@ export function DifalAnalysis() {
                         />
                     </div>
                     <div>
-                        <h3 className="text-lg font-bold mb-4">Etapa 2: Definir Datas</h3>
+                        <h3 className="text-lg font-bold mb-4">Etapa 2: Definir Data</h3>
                          <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
                             <div>
                                 <Label htmlFor='due-date'>Data de Vencimento da Guia</Label>
@@ -248,21 +246,6 @@ export function DifalAnalysis() {
                                         <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={dueDate} onSelect={setDueDate} initialFocus /></PopoverContent>
                                     </Popover>
                                      <Button size="icon" variant="ghost" onClick={() => copyToClipboard(dueDate ? format(dueDate, 'dd/MM/yyyy') : '')} disabled={!dueDate}><ClipboardCopy className="h-6 w-6" /></Button>
-                                </div>
-                            </div>
-                             <div>
-                                <Label htmlFor='payment-date'>Data de Pagamento da Guia</Label>
-                                <div className="flex items-center gap-2">
-                                     <Popover>
-                                        <PopoverTrigger asChild>
-                                            <Button id="payment-date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !paymentDate && "text-muted-foreground")}>
-                                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {paymentDate ? format(paymentDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : <span>Selecione uma data</span>}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={paymentDate} onSelect={setPaymentDate} initialFocus /></PopoverContent>
-                                    </Popover>
-                                     <Button size="icon" variant="ghost" onClick={() => copyToClipboard(paymentDate ? format(paymentDate, 'dd/MM/yyyy') : '')} disabled={!paymentDate}><ClipboardCopy className="h-6 w-6" /></Button>
                                 </div>
                             </div>
                         </div>

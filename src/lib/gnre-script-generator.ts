@@ -45,7 +45,6 @@ export const GNRE_DEFAULT_CONFIGS: GnreConfig = {
 export function generateGnreScript(
     gnreData: GnreDataItem[],
     vencimentoAlvo: string,
-    dataPagamentoAlvo: string,
     gnreConfigs: GnreConfig
 ): string {
 
@@ -85,7 +84,7 @@ ${gnreItemsString}
     const configVars = `
 # VARIÁVEIS DINÂMICAS (Datas inseridas na aplicação)
 VENCIMENTO_ALVO = "${vencimentoAlvo}"
-DATA_PAGAMENTO_ALVO = "${dataPagamentoAlvo}"
+DATA_PAGAMENTO_ALVO = "${vencimentoAlvo}" # Usar a data de vencimento como data de pagamento
 
 # VARIÁVEIS FIXAS (Informações do Emitente/Destinatário)
 URL_SITE = "${gnreConfigs.URL_SITE}"
