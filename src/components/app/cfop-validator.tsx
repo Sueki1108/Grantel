@@ -152,14 +152,11 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             columnsToShow,
             (row, id) => {
                 const value = row.original[id as keyof typeof row.original];
-                const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
-                const isDifal = cfopValidations[uniqueKey]?.isDifal;
-
-
+                
                 const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
                     <div className="group flex items-center justify-between gap-1">
                         <span className="truncate">{displayValue}</span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => {e.stopPropagation(); copyToClipboard(copyValue, typeName)}}>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => {copyToClipboard(copyValue, typeName)}}>
                             <Copy className="h-3 w-3" />
                         </Button>
                     </div>
@@ -185,10 +182,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
 
                 if (['Valor Total'].includes(id) && typeof value === 'number') {
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
-                }
-                
-                 if (id === 'CFOP') {
-                     return <div className="flex items-center gap-1.5">{isDifal && <Ticket className="h-4 w-4 text-purple-600" />} {String(value ?? '')}</div>
                 }
 
                 if (id === 'Descrição' && typeof value === 'string') {
@@ -412,6 +405,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 <div className="sticky top-4 right-0 z-20 flex justify-end">
                     <Card className="flex items-center gap-4 p-2 shadow-lg animate-in fade-in-0 slide-in-from-top-5">
                         <span className="text-sm font-medium pl-2">{numSelected} selecionado(s)</span>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setRowSelection({})}><MinusCircle className="h-4 w-4"/></Button>
                         <div className="h-6 border-l" />
                         <span className="text-sm font-medium">Ações em massa:</span>
                         <div className="flex gap-1">
@@ -420,7 +414,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                             <Button size="sm" variant="secondary" onClick={() => handleBulkAction('verify')}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
                             <Button size="sm" variant="secondary" onClick={() => handleBulkAction('toggleDifal')}><Ticket className="mr-2 h-4 w-4" /> DIFAL</Button>
                         </div>
-                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setRowSelection({})}><MinusCircle className="h-4 w-4"/></Button>
                     </Card>
                 </div>
             )}
@@ -490,3 +483,4 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
+
