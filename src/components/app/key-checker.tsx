@@ -2,15 +2,14 @@
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
-import { format } from 'date-fns';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { KeyRound, FileText, Loader2, Download, FileWarning, UploadCloud, Search, Trash2, ShieldCheck, HelpCircle, X, FileUp, Upload, Settings } from "lucide-react";
+import { KeyRound, FileText, Loader2, Download, FileWarning, UploadCloud, Terminal, Search, Trash2, Copy, ShieldCheck, HelpCircle, X, FileUp, Upload, Settings } from "lucide-react";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
 import { formatCnpj, cleanAndToStr, parseSpedDate } from "@/lib/utils";
-import type { SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
+import type { SpedKeyObject, SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
 import {
     Dialog,
     DialogContent,
@@ -26,7 +25,6 @@ import { ScrollArea } from "../ui/scroll-area";
 import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
-import type { SpedDuplicate } from "@/lib/types";
 
 
 // Types
@@ -39,10 +37,7 @@ export type KeyInfo = {
     // Campos adicionais para verificação
     destIE?: string;
     destUF?: string;
-    destCNPJ?: string;
-    recebCNPJ?: string;
-    recebUF?: string;
-    recebIE?: string;
+destCNPJ?: string;
     tomadorCNPJ?: string;
     emitCNPJ?: string;
     emitName?: string;
@@ -82,26 +77,16 @@ export type IEUFDivergence = {
     'IE no XML'?: string;
 };
 
-export type MissingSeriesDivergence = {
-    'Tipo de Registo': string;
-    'Linha no Ficheiro': number;
-    'Número do Documento'?: string;
-    'CNPJ do Participante'?: string;
-    'Nome do Participante'?: string;
-    'Valor do Documento'?: number;
-    'Chave de Acesso'?: string;
-};
-
 export type KeyCheckResult = {
     keysNotFoundInTxt: KeyInfo[];
     keysInTxtNotInSheet: KeyInfo[];
     duplicateKeysInSheet: string[];
+    duplicateKeysInTxt: string[];
     validKeys: KeyInfo[];
     dateDivergences: DateValueDivergence[];
     valueDivergences: DateValueDivergence[];
     ufDivergences: IEUFDivergence[];
     ieDivergences: IEUFDivergence[];
-    missingSeriesDivergences: MissingSeriesDivergence[];
     consolidatedDivergences: ConsolidatedDivergence[];
 };
 
@@ -493,7 +478,7 @@ const processSpedFileInBrowser = (
                     modifiedLines[i] = parts.join('|');
                     modifications.totalLineCount.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
                     linesModifiedCount++;
-                 }
+                }
             }
         }
          _log(`Recontagem de linhas e registos concluída.`);
@@ -513,19 +498,35 @@ const processSpedFileInBrowser = (
 
 const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: string[], logFn: (message: string) => void): Promise<{
     keyCheckResults?: KeyCheckResult;
-    spedDuplicates?: SpedDuplicate[];
     spedInfo?: SpedInfo | null;
     error?: string;
 }> => {
-    logFn("Iniciando verificação de chaves e duplicidade SPED no navegador.");
+    logFn("Iniciando verificação de chaves SPED no navegador.");
 
     if (!chavesValidas || chavesValidas.length === 0) {
         throw new Error("Dados de 'Chaves Válidas' não encontrados. Execute a Validação NF-Stock primeiro.");
     }
     
-    // Etapa 1: Extrair Participantes (0150)
-    logFn("Etapa 1: Extraindo participantes do SPED.");
+    logFn(`${chavesValidas.length} 'Chaves Válidas' carregadas.`);
+    const chavesValidasMap = new Map<string, any>(chavesValidas.map(item => [cleanAndToStr(item['Chave de acesso']), item]));
+    logFn(`${chavesValidasMap.size} chaves únicas da planilha mapeadas.`);
+
+    const findDuplicates = (arr: any[], keyAccessor: (item: any) => string): string[] => {
+        const seen = new Set<string>();
+        const duplicates = new Set<string>();
+        arr.forEach(item => {
+            const key = keyAccessor(item);
+            if (seen.has(key)) duplicates.add(key); else seen.add(key);
+        });
+        return Array.from(duplicates);
+    };
+    const duplicateKeysInSheet = findDuplicates(chavesValidas, item => item['Chave de acesso']);
+
+    logFn("Processando arquivo SPED para extrair chaves, datas, valores e participantes...");
+    
+    const spedDocData = new Map<string, any>();
     const participantData = new Map<string, any>();
+    const allTxtKeysForDuplicateCheck: string[] = [];
     let currentSpedInfo: SpedInfo | null = null;
     
     const parseSpedInfo = (spedLine: string): SpedInfo | null => {    
@@ -547,122 +548,37 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             const reg = parts[1];
 
             if (reg === '0000' && !currentSpedInfo) currentSpedInfo = parseSpedInfo(line);
-            
+
             if (reg === '0150') {
                 const codPart = parts[2];
-                if (codPart) {
-                    participantData.set(codPart, { 
-                        nome: parts[3] || 'N/A', 
-                        cnpj: parts[5] || parts[6] || 'N/A', // CNPJ ou CPF
-                    });
-                }
-            }
-        }
-    }
-    logFn(`${participantData.size} participantes (0150) encontrados e mapeados.`);
-
-    // Etapa 2: Análise de Duplicidade Interna
-    logFn("Etapa 2: Verificando duplicidade interna no SPED.");
-    const duplicateCheckMap = new Map<string, {line: number, record: string}[]>();
-
-     for (const content of spedFileContents) {
-        const lines = content.split(/\r?\n/);
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            const lineNumber = i + 1;
-            const parts = line.split('|');
-            if (parts.length < 2) continue;
-            const reg = parts[1];
-            
-            let compositeKey: string | undefined;
-
-            if (reg === 'C100' && parts.length > 13) { compositeKey = `${parts[4]}-${parts[9]}-${parts[11]}-${parts[13]}`; } 
-            else if (reg === 'C500' && parts.length > 13) { compositeKey = `${parts[4]}-${parts[10]}-${parts[11]}-${parts[13]}`; } 
-            else if (reg === 'D100' && parts.length > 14) { compositeKey = `${parts[6]}-${parts[10]}-${parts[12]}-${parts[14]}`; } 
-            else if (reg === 'D500' && parts.length > 12) { compositeKey = `${parts[4]}-${parts[9]}-${parts[10]}-${parts[12]}`; }
-
-            if (compositeKey) {
-                if (!duplicateCheckMap.has(compositeKey)) duplicateCheckMap.set(compositeKey, []);
-                duplicateCheckMap.get(compositeKey)!.push({ line: lineNumber, record: line });
-            }
-        }
-    }
-
-    const spedDuplicates: SpedDuplicate[] = Array.from(duplicateCheckMap.values())
-        .filter(records => records.length > 1)
-        .map(records => { // Alterado de flatMap para map
-            const firstRecordInfo = records[0]; // Processar apenas o primeiro registo do grupo de duplicados
-            const parts = firstRecordInfo.record.split('|');
-            const reg = parts[1];
-            let participant: any = null;
-            const docInfo: Partial<SpedDuplicate> = {};
-
-            try {
-                let dateField = '';
-                let codPart = '';
-                 if (reg === 'C100' && parts.length > 13) { codPart = parts[4]; docInfo['Número do Documento'] = parts[9] || 'N/A'; docInfo['Série'] = parts[7] || 'N/A'; dateField = parts[11]; docInfo['Valor Total'] = parseFloat(String(parts[13] || '0').replace(',', '.')); }
-                else if (reg === 'C500' && parts.length > 13) { codPart = parts[4]; docInfo['Número do Documento'] = parts[10] || 'N/A'; docInfo['Série'] = parts[6] || 'N/A'; dateField = parts[11]; docInfo['Valor Total'] = parseFloat(String(parts[13] || '0').replace(',', '.')); }
-                else if (reg === 'D100' && parts.length > 14) { codPart = parts[6]; docInfo['Número do Documento'] = parts[10] || 'N/A'; docInfo['Série'] = parts[7] || 'N/A'; dateField = parts[12]; docInfo['Valor Total'] = parseFloat(String(parts[14] || '0').replace(',', '.')); }
-                else if (reg === 'D500' && parts.length > 12) { codPart = parts[4]; docInfo['Número do Documento'] = parts[9] || 'N/A'; docInfo['Série'] = parts[6] || 'N/A'; dateField = parts[10]; docInfo['Valor Total'] = parseFloat(String(parts[12] || '0').replace(',', '.')); }
-                
-                participant = participantData.get(codPart);
-                const parsedDate = parseSpedDate(dateField);
-                docInfo['Data Emissão'] = !isNaN(parsedDate.getTime()) ? format(parsedDate, 'dd/MM/yyyy') : 'Data Inválida';
-
-            } catch (e) {
-                console.error("Error parsing duplicate record", e);
+                if (codPart) participantData.set(codPart, { nome: parts[3], cnpj: parts[5], ie: parts[7], uf: parts[9] });
+                continue;
             }
 
-            return {
-                'Tipo de Registo': reg || 'N/A',
-                'Número do Documento': docInfo['Número do Documento'] || 'N/A',
-                'Série': docInfo['Série'] || 'N/A',
-                'CNPJ/CPF': participant?.cnpj || 'Não encontrado no 0150',
-                'Fornecedor': participant?.nome || 'Não encontrado no 0150',
-                'Data Emissão': docInfo['Data Emissão'] || 'N/A',
-                'Valor Total': docInfo['Valor Total'] || 0,
-                'Linhas': records.map(r => r.line).join('; ')
-            };
-        }).filter(Boolean);
-    logFn(`Encontrados ${spedDuplicates.length} registos duplicados no SPED.`);
-
-    // Etapa 3: Verificação de Chaves (XML vs. SPED)
-    logFn("Etapa 3: Comparando chaves válidas (XML/planilha) com chaves do SPED.");
-    
-    const spedDocData = new Map<string, any>();
-    for (const content of spedFileContents) {
-        const lines = content.split(/\r?\n/);
-        for (const line of lines) {
-            const parts = line.split('|');
-            if (parts.length < 2) continue;
-            const reg = parts[1];
             let key: string | undefined, docData: any;
 
-            if (reg === 'C100' && parts.length > 12) {
+            if (reg === 'C100' && parts.length > 9 && parts[9]?.length === 44) {
                 key = parts[9];
-                docData = { key, reg, codPart: parts[4], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12] };
-            } else if (reg === 'D100' && parts.length > 16) {
+                docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12], vlDesc: parts[14] };
+            } else if (regType === 'D100' && parts.length > 10) {
                 key = parts[10];
-                docData = { key, reg, codPart: parts[4], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
+                docData = { key, reg, indOper: parts[2], codPart: parts[4], dtDoc: parts[8], dtES: parts[9], vlDoc: parts[16] };
             }
 
-            if (key && docData) spedDocData.set(key, docData);
+            if (key && docData) {
+                spedDocData.set(key, docData);
+                allTxtKeysForDuplicateCheck.push(key);
+            }
         }
     }
-    
-    logFn(`${spedDocData.size} chaves de 44 dígitos (NF-e/CT-e) encontradas no SPED para verificação.`);
-    const chavesValidasMap = new Map<string, any>(chavesValidas.map(item => [cleanAndToStr(item['Chave de acesso']), item]));
-    const findDuplicates = (arr: any[], keyAccessor: (item: any) => string): string[] => {
-        const seen = new Set<string>();
-        const duplicates = new Set<string>();
-        arr.forEach(item => {
-            const key = keyAccessor(item);
-            if (seen.has(key)) duplicates.add(key); else seen.add(key);
-        });
-        return Array.from(duplicates);
-    };
-    const duplicateKeysInSheet = findDuplicates(chavesValidas, item => item['Chave de acesso']);
 
+    if(currentSpedInfo) logFn(`Informações do SPED: CNPJ ${currentSpedInfo.cnpj}, Empresa ${currentSpedInfo.companyName}, Competência ${currentSpedInfo.competence}.`);
+    logFn(`${spedDocData.size} documentos (NFe/CTe) únicos encontrados no SPED.`);
+    logFn(`${participantData.size} participantes (0150) encontrados.`);
+
+    const duplicateKeysInTxt = findDuplicates(allTxtKeysForDuplicateCheck, key => key);
+
+    logFn("Comparando chaves...");
     const keysNotFoundInTxt = [...chavesValidasMap.values()]
         .filter(item => !spedDocData.has(item['Chave de acesso']))
         .map(item => ({ ...item, key: item['Chave de acesso'], type: item['Tipo'] || 'N/A' }));
@@ -674,8 +590,10 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
              const isCte = spedDoc.reg === 'D100';
              const spedDate = parseSpedDate(spedDoc.dtDoc);
              return {
-                key: spedDoc.key, type: isCte ? 'CTE' : 'NFE',
-                Fornecedor: participant ? participant.nome : 'Não encontrado no 0150', Emissão: isNaN(spedDate.getTime()) ? 'Data Inválida' : spedDate,
+                key: spedDoc.key,
+                type: isCte ? 'CTE' : 'NFE',
+                Fornecedor: participant ? participant.nome : 'N/A',
+                Emissão: isNaN(spedDate.getTime()) ? spedDoc.dtDoc : spedDate,
                 Total: parseFloat(String(spedDoc.vlDoc || '0').replace(',', '.')),
             };
         });
@@ -684,51 +602,59 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
         .filter(item => spedDocData.has(item['Chave de acesso']))
         .map(item => ({ ...item, key: item['Chave de acesso'], type: item['Tipo'] || 'N/A' }));
     
-    logFn("Etapa 4: Verificando divergências de data, valor e cadastro (IE/UF).");
+    logFn("Verificando divergências de data, valor e cadastro (IE/UF).");
     
     const consolidatedDivergencesMap = new Map<string, ConsolidatedDivergence>();
 
     validKeys.forEach(nota => {
         if (!nota || !nota.key) return;
+
         const spedDoc = spedDocData.get(nota.key);
         if (!spedDoc) return;
         
         const docType = nota.type === 'CTE' ? 'CTE' : 'NFE';
         const divergenceMessages: string[] = [];
-        const xmlDateStr = nota.Emissão as string;
-        
-        const spedDateDtDoc = parseSpedDate(spedDoc.dtDoc);
-        const spedDateDtEs = parseSpedDate(spedDoc.dtES);
 
-        const spedDateStr = !isNaN(spedDateDtDoc.getTime()) ? format(spedDateDtDoc, 'yyyy-MM-dd') : '';
+        const xmlDateStr = nota.Emissão as string;
+        const spedDateStr = spedDoc.dtDoc ? `${spedDoc.dtDoc.substring(4, 8)}-${spedDoc.dtDoc.substring(2, 4)}-${spedDoc.dtDoc.substring(0, 2)}` : '';
 
         const baseDivergence: ConsolidatedDivergence = {
             'Tipo': docType, 'Chave de Acesso': nota.key,
-            'Data Emissão XML': xmlDateStr && !isNaN(new Date(xmlDateStr).getTime()) ? format(new Date(xmlDateStr), 'dd/MM/yyyy') : 'Data Inválida',
-            'Data Emissão SPED': !isNaN(spedDateDtDoc.getTime()) ? format(spedDateDtDoc, 'dd/MM/yyyy') : 'Data Inválida',
-            'Data Entrada/Saída SPED': !isNaN(spedDateDtEs.getTime()) ? format(spedDateDtEs, 'dd/MM/yyyy') : 'Data Inválida',
-            'Valor XML': 0, 'Valor SPED': 0, 'UF no XML': 'N/A', 'IE no XML': 'N/A', 'Resumo das Divergências': '',
+            'Data Emissão XML': xmlDateStr ? `${xmlDateStr.substring(8,10)}/${xmlDateStr.substring(5,7)}/${xmlDateStr.substring(0,4)}` : 'Inválida',
+            'Data Emissão SPED': spedDoc.dtDoc ? `${spedDoc.dtDoc.substring(0, 2)}/${spedDoc.dtDoc.substring(2, 4)}/${spedDoc.dtDoc.substring(4, 8)}` : 'Inválida',
+            'Data Entrada/Saída SPED': spedDoc.dtES ? `${spedDoc.dtES.substring(0, 2)}/${spedDoc.dtES.substring(2, 4)}/${spedDoc.dtES.substring(4, 8)}` : 'Inválida',
+            'Valor XML': 0, 'Valor SPED': 0,
+            'UF no XML': 'N/A', 'IE no XML': 'N/A', 'Resumo das Divergências': '',
         };
         
-        if (xmlDateStr && spedDateStr && xmlDateStr.substring(0,10) !== spedDateStr) divergenceMessages.push("Data");
+        if (xmlDateStr && spedDateStr && xmlDateStr !== spedDateStr) divergenceMessages.push("Data");
 
         const xmlValue = nota.Total || (nota.type === 'CTE' ? nota['Valor da Prestação'] : 0) || 0;
         let spedValue = parseFloat(String(spedDoc.vlDoc || '0').replace(',', '.'));
         
-        baseDivergence['Valor XML'] = xmlValue; baseDivergence['Valor SPED'] = spedValue;
+        baseDivergence['Valor XML'] = xmlValue;
+        baseDivergence['Valor SPED'] = spedValue;
         if (Math.abs(xmlValue - spedValue) > 0.01) divergenceMessages.push("Valor");
         
-        let hasIeUfDivergence = false;
         if (docType === 'NFE' && cleanAndToStr(nota.destCNPJ) === GRANTEL_CNPJ) {
-             const xmlIE = cleanAndToStr(nota.destIE); const xmlUF = nota.destUF?.trim().toUpperCase();
-             baseDivergence['IE no XML'] = xmlIE || 'Em branco'; baseDivergence['UF no XML'] = xmlUF || 'Em branco';
-            if (xmlUF !== GRANTEL_UF || xmlIE !== GRANTEL_IE) hasIeUfDivergence = true;
-        } else if (docType === 'CTE' && (cleanAndToStr(nota.recebCNPJ) === GRANTEL_CNPJ || cleanAndToStr(nota.tomadorCNPJ) === GRANTEL_CNPJ)) {
-             const xmlIE = cleanAndToStr(nota.recebIE); const xmlUF = nota.recebUF?.trim().toUpperCase();
-             baseDivergence['IE no XML'] = xmlIE || 'Em branco'; baseDivergence['UF no XML'] = xmlUF || 'Em branco';
-             if (xmlUF !== GRANTEL_UF || xmlIE !== GRANTEL_IE) hasIeUfDivergence = true;
+             const xmlIE = cleanAndToStr(nota.destIE);
+             const xmlUF = nota.destUF?.trim().toUpperCase();
+             baseDivergence['IE no XML'] = xmlIE || 'Em branco';
+             baseDivergence['UF no XML'] = xmlUF || 'Em branco';
+            if (xmlUF !== GRANTEL_UF) divergenceMessages.push("UF");
+            if (xmlIE !== GRANTEL_IE) divergenceMessages.push("IE");
+        } else if (docType === 'CTE' && cleanAndToStr(nota.tomadorCNPJ) === GRANTEL_CNPJ) {
+             const participant = spedDoc.codPart ? participantData.get(spedDoc.codPart) : null;
+             if(participant) {
+                 const spedIE = cleanAndToStr(participant.ie);
+                 const spedUF = participant.uf?.trim().toUpperCase();
+                 baseDivergence['IE no XML'] = spedIE || 'Em branco';
+                 baseDivergence['UF no XML'] = spedUF || 'Em branco';
+                if (spedUF !== GRANTEL_UF) divergenceMessages.push("UF");
+                if (spedIE !== GRANTEL_IE) divergenceMessages.push("IE");
+             }
         }
-        if (hasIeUfDivergence) divergenceMessages.push("IE ou UF");
+
 
         if (divergenceMessages.length > 0) {
             baseDivergence['Resumo das Divergências'] = divergenceMessages.join(', ');
@@ -737,31 +663,34 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     });
 
     const consolidatedDivergences = Array.from(consolidatedDivergencesMap.values());
+    
     const dateDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('Data')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'Data Emissão XML': d['Data Emissão XML'], 'Data Emissão SPED': d['Data Emissão SPED'], 'Data Entrada/Saída SPED': d['Data Entrada/Saída SPED'] }));
     const valueDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('Valor')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'Valor XML': d['Valor XML'], 'Valor SPED': d['Valor SPED'] }));
     const ufDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('UF')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'CNPJ do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitCNPJ || '', 'Nome do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitName || '', 'UF no XML': d['UF no XML'] }));
     const ieDivergences = consolidatedDivergences.filter(d => d['Resumo das Divergências'].includes('IE')).map(d => ({ 'Tipo': d.Tipo, 'Chave de Acesso': d['Chave de Acesso'], 'CNPJ do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitCNPJ || '', 'Nome do Emissor': chavesValidasMap.get(d['Chave de Acesso'])?.emitName || '', 'IE no XML': d['IE no XML'] }));
 
-    logFn(`- ${consolidatedDivergences.length} chaves com alguma divergência encontradas.`);
+    logFn(`- ${ufDivergences.length} divergências de UF encontradas.`);
+    logFn(`- ${ieDivergences.length} divergências de IE encontradas.`);
+    logFn(`- ${dateDivergences.length} divergências de data encontradas.`);
+    logFn(`- ${valueDivergences.length} divergências de valor encontradas.`);
+    logFn(`- Total de ${consolidatedDivergences.length} chaves com alguma divergência.`);
     
     const keyCheckResults: KeyCheckResult = { 
-        keysNotFoundInTxt, keysInTxtNotInSheet, duplicateKeysInSheet: [], validKeys,
+        keysNotFoundInTxt, keysInTxtNotInSheet, duplicateKeysInSheet, duplicateKeysInTxt, validKeys,
         dateDivergences, valueDivergences, ufDivergences, ieDivergences, consolidatedDivergences,
-        missingSeriesDivergences: [],
     };
 
-    return { keyCheckResults, spedInfo: currentSpedInfo, spedDuplicates };
-};
+    return { keyCheckResults, spedInfo: currentSpedInfo };
+}
 
 // Main Component
 interface KeyCheckerProps {
     chavesValidas: any[];
     spedFiles: File[];
     onFilesChange: (files: File[]) => void;
-    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null, spedDuplicates: SpedDuplicate[] | null) => void;
+    onSpedProcessed: (spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => void;
     initialSpedInfo: SpedInfo | null;
     initialKeyCheckResults: KeyCheckResult | null;
-    initialSpedDuplicates: SpedDuplicate[] | null;
     nfeEntradaData: any[];
     cteData: any[];
 }
@@ -772,8 +701,7 @@ export function KeyChecker({
     onFilesChange, 
     onSpedProcessed, 
     initialSpedInfo, 
-    initialKeyCheckResults,
-    initialSpedDuplicates,
+    initialKeyCheckResults, 
     nfeEntradaData,
     cteData
 }: KeyCheckerProps) {
@@ -845,7 +773,7 @@ export function KeyChecker({
             try {
                 const fileContents = await Promise.all(spedFiles.map(file => readFileAsTextWithEncoding(file)));
                 
-                const { keyCheckResults, spedInfo, spedDuplicates, error } = await checkSpedKeysInBrowser(chavesValidas, fileContents, () => {});
+                const { keyCheckResults, spedInfo, error } = await checkSpedKeysInBrowser(chavesValidas, fileContents, () => {});
                 
                 if (error) throw new Error(error);
                 if (!keyCheckResults) throw new Error("Não foi possível extrair as chaves do arquivo SPED.");
@@ -853,7 +781,7 @@ export function KeyChecker({
                 setResults(keyCheckResults);
                 setSpedInfo(spedInfo);
                 
-                onSpedProcessed(spedInfo, keyCheckResults, null, spedDuplicates || null); 
+                onSpedProcessed(spedInfo, keyCheckResults, null); 
                 
                 toast({ title: "Verificação concluída", description: "As chaves foram comparadas com sucesso. Prossiga para as abas de análise." });
 
@@ -891,7 +819,7 @@ export function KeyChecker({
                 const result = processSpedFileInBrowser(fileContent, nfeEntradaData, cteData, divergentKeys, correctionConfig);
                 
                 setCorrectionResult(result);
-                onSpedProcessed(spedInfo, results, result, initialSpedDuplicates);
+                onSpedProcessed(spedInfo, results, result);
                 
                 toast({ title: "Correção Concluída", description: "O arquivo SPED foi analisado e está pronto para ser baixado." });
             } catch (err: any) {
@@ -916,7 +844,7 @@ export function KeyChecker({
         setSpedInfo(null);
         setCorrectionResult(null);
         onFilesChange([]);
-        onSpedProcessed(null, null, null, null);
+        onSpedProcessed(null, null, null);
 
         const spedInput = document.getElementById('sped-upload') as HTMLInputElement;
         if (spedInput) spedInput.value = "";
@@ -1244,5 +1172,3 @@ export function KeyChecker({
         </div>
     );
 }
-
-    
