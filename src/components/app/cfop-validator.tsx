@@ -5,7 +5,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, X, HelpCircle, Save, RotateCw, ListFilter, Copy, Download, MoreVertical, Ticket, Factory, Wrench, HardHat } from "lucide-react";
+import { Check, X, HelpCircle, Save, RotateCw, ListFilter, Copy, Download, MoreVertical, Ticket, Factory, Wrench, HardHat, EyeOff, Settings } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import type { AllClassifications, CfopClassification } from './imobilizado-analysis';
 import {
@@ -430,6 +430,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                             <Button size="sm" variant="secondary" onClick={() => handleBulkAction('verify')}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
                             <Button size="sm" variant="secondary" onClick={() => handleBulkAction('toggleDifal')}><Ticket className="mr-2 h-4 w-4" /> DIFAL</Button>
                         </div>
+                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setRowSelection({})}><X className="h-4 w-4"/></Button>
                     </Card>
                 </div>
             )}

@@ -163,8 +163,9 @@ export function DataTable<TData, TValue>({
                     <TableCell 
                       key={cell.id} 
                       onClick={(e) => {
-                        // Prevent row click from toggling selection if clicking on a cell with interactive content
-                        if (['actions', 'select', 'validation'].includes(cell.column.id)) {
+                        // Allow row click to toggle selection unless clicking on an interactive element within a cell
+                        const isInteractive = (e.target as HTMLElement).closest('button, a, input, [role="button"], [role="menuitem"]');
+                        if (isInteractive) {
                           e.stopPropagation();
                         }
                       }}
