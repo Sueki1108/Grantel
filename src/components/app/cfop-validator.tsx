@@ -5,7 +5,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, X, HelpCircle, Save, RotateCw, ListFilter, Copy } from "lucide-react";
+import { Check, X, HelpCircle, Save, RotateCw, ListFilter, Copy, Download } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import type { AllClassifications, CfopClassification } from './imobilizado-analysis';
 import {
@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
+import * as XLSX from 'xlsx';
 
 
 interface CfopValidatorProps {
@@ -45,6 +46,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     const [activeStatusTab, setActiveStatusTab] = useState<ValidationStatus>('unvalidated');
     const [activeCfopTabs, setActiveCfopTabs] = useState<Record<string, string>>({});
     const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
+    const [rowSelection, setRowSelection] = useState({});
 
     useEffect(() => {
         if (competence && allPersistedData[competence]?.cfopValidations?.classifications) {
@@ -88,18 +90,19 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         toast({title: 'Validações de CFOP guardadas!'});
     };
     
-    
-    const copyToClipboard = (text: string | number, type: string) => {
-        const textToCopy = String(text);
-        navigator.clipboard.writeText(textToCopy).then(() => {
-            toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: textToCopy });
-        }).catch(() => {
-            toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
-        });
+    const handleDownload = (data: any[], title: string) => {
+        if (!data || data.length === 0) {
+            toast({ title: 'Nenhum dado para exportar', variant: 'destructive' });
+            return;
+        }
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, title.substring(0, 31));
+        XLSX.writeFile(workbook, `CFOP_Validacao_${title}.xlsx`);
     };
 
     const columns = useMemo(() => {
-        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Valor Total', 'pICMS'];
+        const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'Valor Total', 'pICMS'];
         
         return getColumnsWithCustomRender(
             items,
@@ -156,6 +159,28 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 return <div>{String(value ?? '')}</div>;
             }
         ).concat([
+             {
+                id: 'select',
+                header: ({ table }) => (
+                    <Checkbox
+                        checked={
+                        table.getIsAllPageRowsSelected() ||
+                        (table.getIsSomePageRowsSelected() && "indeterminate")
+                        }
+                        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                        aria-label="Selecionar todas"
+                    />
+                ),
+                cell: ({ row }) => (
+                    <Checkbox
+                        checked={row.getIsSelected()}
+                        onCheckedChange={(value) => row.toggleSelected(!!value)}
+                        aria-label="Selecionar linha"
+                    />
+                ),
+                enableSorting: false,
+                enableHiding: false,
+            },
             {
                 id: 'validation',
                 header: 'Validação',
@@ -177,20 +202,27 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             },
         ]);
     }, [items, cfopValidations, toast]);
+    
+    const copyToClipboard = (text: string | number, type: string) => {
+        const textToCopy = String(text);
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: textToCopy });
+        }).catch(() => {
+            toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
+        });
+    };
 
     const filteredItemsByStatusAndCfop = useMemo(() => {
-        const byStatus = items.reduce((acc, item) => {
+        const byStatus: Record<ValidationStatus, any[]> = {
+            all: [], unvalidated: [], correct: [], incorrect: [], verify: []
+        };
+
+        items.forEach(item => {
             const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const classification = cfopValidations[uniqueKey]?.classification || 'unvalidated';
-            
-            if (!acc[classification]) acc[classification] = [];
-            acc[classification].push(item);
-            
-            if (!acc['all']) acc['all'] = [];
-            acc['all'].push(item);
-            
-            return acc;
-        }, {} as Record<ValidationStatus, any[]>);
+            byStatus[classification].push(item);
+            byStatus.all.push(item);
+        });
 
         const result: Record<ValidationStatus, Record<string, any[]>> = {
             all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}
@@ -207,7 +239,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     matchesFilters = 
                         currentFilters.xmlCsts.has(String(item['CST do ICMS'] || '')) &&
                         currentFilters.xmlPicms.has(String(item.pICMS || '0')) &&
-                        currentFilters.xmlCfopDescriptions.has(item['Descricao CFOP']);
+                        currentFilters.xmlCfopDescriptions.has(cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada");
                 }
 
                 if (matchesFilters) {
@@ -236,7 +268,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             dialogItems.forEach(item => {
                 if (item['CST do ICMS']) xmlCsts.add(String(item['CST do ICMS']));
                 if (item.pICMS !== undefined) xmlPicms.add(String(item.pICMS));
-                const fullDescription = item['Descricao CFOP'] || "Descrição não encontrada";
+                const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
                 if (fullDescription) xmlCfopDescriptions.add(fullDescription);
             });
             return {
@@ -388,6 +420,9 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                                 </TabsTrigger>
                                             ))}
                                         </TabsList>
+                                         <Button onClick={() => handleDownload(Object.values(cfopGroupsForStatus).flat(), `Validacao_${status}`)} size="sm" variant="outline">
+                                            <Download className="mr-2 h-4 w-4" /> Baixar Aba
+                                        </Button>
                                     </div>
                                     {cfopsForStatus.map(cfop => {
                                         const currentCfopData = cfopGroupsForStatus[cfop] || [];
@@ -399,7 +434,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                                     </div>
                                                     <FilterDialog siengeCfop={cfop} items={currentCfopData} />
                                                 </div>
-                                                <DataTable columns={columns} data={currentCfopData} />
+                                                <DataTable columns={columns} data={currentCfopData} rowSelection={rowSelection} setRowSelection={setRowSelection} onSelectionChange={() => {}}/>
                                             </TabsContent>
                                         )
                                     })}
