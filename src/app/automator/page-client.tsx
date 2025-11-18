@@ -35,7 +35,6 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ReconciliationAnalysis } from "@/components/app/reconciliation-analysis";
 import type { SpedDuplicate } from "@/lib/types";
-import { CfopValidator } from "@/components/app/cfop-validator";
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -790,6 +789,9 @@ export function AutomatorClientPage() {
                                     onClearSiengeFile={() => setSiengeFile(null)}
                                     onRunReconciliation={handleRunReconciliation}
                                     isReconciliationRunning={processing}
+                                    allClassifications={allClassifications}
+                                    onPersistClassifications={handlePersistClassifications}
+                                    competence={competence}
                                 /> 
                                 : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a conciliação.</p></CardContent></Card>
                             )}
@@ -819,14 +821,6 @@ export function AutomatorClientPage() {
                                     onForceUpdate={handlePersistClassifications}
                                 />
                             )}
-                             <TabsContent value="cfop_validation" className="mt-4">
-                                <CfopValidator 
-                                    items={processedData?.reconciliationResults?.reconciled || []}
-                                    allPersistedData={allClassifications}
-                                    onPersistData={handlePersistClassifications}
-                                    competence={competence}
-                                />
-                            </TabsContent>
 
                         </div>
                     </Tabs>

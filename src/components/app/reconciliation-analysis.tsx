@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useMemo } from 'react';
@@ -8,13 +7,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import type { ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
 import { getColumns } from "@/components/app/columns-helper";
 import { SiengeTaxCheck } from './sienge-tax-check';
 import { ColumnDef } from '@tanstack/react-table';
+import { CfopValidator } from './cfop-validator';
+import { AllClassifications } from './imobilizado-analysis';
 
 
 interface ReconciliationAnalysisProps {
@@ -24,6 +25,9 @@ interface ReconciliationAnalysisProps {
     onClearSiengeFile: () => void;
     onRunReconciliation: () => void;
     isReconciliationRunning: boolean;
+    allClassifications: AllClassifications;
+    onPersistClassifications: (allData: AllClassifications) => void;
+    competence: string | null;
 }
 
 const getColumnsForDivergentTabs = (data: any[]): ColumnDef<any>[] => {
@@ -51,7 +55,10 @@ export function ReconciliationAnalysis({
     onSiengeFileChange, 
     onClearSiengeFile,
     onRunReconciliation,
-    isReconciliationRunning
+    isReconciliationRunning,
+    allClassifications,
+    onPersistClassifications,
+    competence
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
@@ -106,9 +113,10 @@ export function ReconciliationAnalysis({
                 </div>
                 
                 <Tabs defaultValue="reconciliation">
-                    <TabsList className="grid w-full grid-cols-2">
+                    <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="reconciliation" disabled={!reconciliationResults}>Conciliação de Itens</TabsTrigger>
                         <TabsTrigger value="tax_check" disabled={!siengeDataForTaxCheck}>Conferência de Impostos</TabsTrigger>
+                        <TabsTrigger value="cfop_validation" disabled={!reconciliationResults}><BarChart className='h-4 w-4 mr-2'/>Validação CFOP</TabsTrigger>
                     </TabsList>
                     <TabsContent value="reconciliation" className="mt-4">
                          {!processedData?.sheets['Itens Válidos'] && (
@@ -154,6 +162,15 @@ export function ReconciliationAnalysis({
                     
                     <TabsContent value="tax_check" className="mt-4">
                         <SiengeTaxCheck siengeData={siengeDataForTaxCheck} />
+                    </TabsContent>
+                    
+                    <TabsContent value="cfop_validation" className="mt-4">
+                        <CfopValidator 
+                            items={reconciliationResults?.reconciled || []}
+                            allPersistedData={allClassifications}
+                            onPersistData={onPersistClassifications}
+                            competence={competence}
+                        />
                     </TabsContent>
                 </Tabs>
             </CardContent>
