@@ -5,7 +5,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, X, HelpCircle, Save, RotateCw, ListFilter, SlidersHorizontal } from "lucide-react";
+import { Check, X, HelpCircle, Save, RotateCw, ListFilter, SlidersHorizontal, Copy } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import type { AllClassifications, CfopClassification } from './imobilizado-analysis';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Label } from '../ui/label';
 import { ScrollArea } from '../ui/scroll-area';
 import { Checkbox } from '../ui/checkbox';
+import { cfopDescriptions } from '@/lib/cfop';
 
 
 interface CfopValidatorProps {
@@ -30,6 +31,7 @@ type TabFilters = {
     xmlCfops: Set<string>;
     xmlCsts: Set<string>;
     xmlPicms: Set<string>;
+    xmlCfopDescriptions: Set<string>;
 };
 
 export function CfopValidator({ items, competence, onPersistData, allPersistedData }: CfopValidatorProps) {
@@ -52,14 +54,12 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
 
 
     const handleValidationChange = (uniqueKey: string, classification: ValidationStatus) => {
-        setCfopValidations(prev => {
-            const newValidations = { ...prev };
-            newValidations[uniqueKey] = {
-                ...newValidations[uniqueKey],
-                classification,
-            };
-            return newValidations;
-        });
+        const newValidations = { ...cfopValidations };
+        newValidations[uniqueKey] = {
+            ...(newValidations[uniqueKey] || { isDifal: false }),
+            classification,
+        };
+        setCfopValidations(newValidations);
         setHasChanges(true);
     };
 
@@ -99,21 +99,63 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             setActiveCfopTab(firstCfop);
         }
     }, [groupedBySiengeCfop, activeCfopTab]);
+    
+    const copyToClipboard = (text: string | number, type: string) => {
+        const textToCopy = String(text);
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: textToCopy });
+        }).catch(() => {
+            toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
+        });
+    };
 
     const columns = useMemo(() => getColumnsWithCustomRender(
         items,
-        ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'CST do ICMS', 'pICMS', 'Valor Unitário', 'Valor Total'],
+        ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'Descricao CFOP', 'CST do ICMS', 'pICMS', 'Valor Unitário', 'Valor Total'],
         (row, id) => {
             const value = row.original[id];
+
+            // Render com ícone de cópia
+            const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
+                <div className="group flex items-center justify-between gap-1" onClick={(e) => e.stopPropagation()}>
+                    <span className="truncate">{displayValue}</span>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => copyToClipboard(copyValue, typeName)}>
+                        <Copy className="h-3 w-3" />
+                    </Button>
+                </div>
+            );
+            
+            // Render com tooltip
+            const renderCellWithTooltip = (displayValue: string, fullValue: string) => (
+                <TooltipProvider>
+                    <Tooltip><TooltipTrigger asChild><span>{displayValue}</span></TooltipTrigger><TooltipContent><p>{fullValue}</p></TooltipContent></Tooltip>
+                </TooltipProvider>
+            );
+
             if (['Valor Total', 'Valor Unitário'].includes(id) && typeof value === 'number') {
                 return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
             }
-             if (id === 'CFOP') {
-                return <Badge variant="outline">{value}</Badge>;
-            }
-             if (id === 'pICMS') {
+            
+            if (id === 'pICMS') {
                 return <div className='text-center'>{typeof value === 'number' ? `${value.toFixed(2)}%` : 'N/A'}</div>;
             }
+
+            if (id === 'Número da Nota') {
+                return renderCellWithCopy(String(value ?? ''), String(value ?? ''), 'Número da Nota');
+            }
+
+            if (id === 'Fornecedor' && typeof value === 'string') {
+                const summarizedName = value.length > 25 ? `${value.substring(0, 25)}...` : value;
+                const display = renderCellWithTooltip(summarizedName, value);
+                return renderCellWithCopy(display, value, 'Fornecedor');
+            }
+
+            if (id === 'Descrição' && typeof value === 'string') {
+                const summarizedDesc = value.length > 30 ? `${value.substring(0, 30)}...` : value;
+                const display = renderCellWithTooltip(summarizedDesc, value);
+                return renderCellWithCopy(display, value, 'Descrição');
+            }
+            
             return <div>{String(value ?? '')}</div>;
         }
     ).concat([
@@ -139,7 +181,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     ]), [items, cfopValidations]);
 
     const filterItems = (items: any[], status: 'all' | ValidationStatus, siengeCfop: string) => {
-        const currentFilters = tabFilters[siengeCfop] || { xmlCfops: new Set(), xmlCsts: new Set(), xmlPicms: new Set() };
+        const currentFilters = tabFilters[siengeCfop] || { xmlCfops: new Set(), xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() };
         const statusFiltered = status === 'all'
             ? items
             : items.filter(item => {
@@ -152,7 +194,8 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             const cfopMatch = currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(String(item.CFOP));
             const cstMatch = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(String(item['CST do ICMS']));
             const picmsMatch = currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(String(item.pICMS || '0'));
-            return cfopMatch && cstMatch && picmsMatch;
+            const descMatch = currentFilters.xmlCfopDescriptions.size === 0 || currentFilters.xmlCfopDescriptions.has(String(item['Descricao CFOP']));
+            return cfopMatch && cstMatch && picmsMatch && descMatch;
         });
     };
 
@@ -161,32 +204,32 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     }
     
     const FilterPopover = ({ siengeCfop, items }: { siengeCfop: string; items: any[] }) => {
-        const filters = tabFilters[siengeCfop] || { xmlCfops: new Set(), xmlCsts: new Set(), xmlPicms: new Set() };
-        const isFilterActive = filters.xmlCfops.size > 0 || filters.xmlCsts.size > 0 || filters.xmlPicms.size > 0;
+        const filters = tabFilters[siengeCfop] || { xmlCfops: new Set(), xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() };
+        const isFilterActive = filters.xmlCfops.size > 0 || filters.xmlCsts.size > 0 || filters.xmlPicms.size > 0 || filters.xmlCfopDescriptions.size > 0;
 
         const availableOptions = useMemo(() => {
             const xmlCfops = new Set<string>();
             const xmlCsts = new Set<string>();
             const xmlPicms = new Set<string>();
+            const xmlCfopDescriptions = new Set<string>();
             items.forEach(item => {
                 if (item.CFOP) xmlCfops.add(String(item.CFOP));
                 if (item['CST do ICMS']) xmlCsts.add(String(item['CST do ICMS']));
                 if (item.pICMS !== undefined) xmlPicms.add(String(item.pICMS));
+                if (item['Descricao CFOP']) xmlCfopDescriptions.add(String(item['Descricao CFOP']));
             });
             return {
                 xmlCfops: Array.from(xmlCfops).sort(),
                 xmlCsts: Array.from(xmlCsts).sort(),
                 xmlPicms: Array.from(xmlPicms).sort((a,b) => parseFloat(a) - parseFloat(b)),
+                xmlCfopDescriptions: Array.from(xmlCfopDescriptions).sort(),
             };
         }, [items]);
 
         const handleFilterChange = (type: keyof TabFilters, value: string, checked: boolean) => {
             setTabFilters(prev => {
-                const newFilters = { ...prev[siengeCfop] } as TabFilters;
-                if (!newFilters.xmlCfops) newFilters.xmlCfops = new Set();
-                if (!newFilters.xmlCsts) newFilters.xmlCsts = new Set();
-                if (!newFilters.xmlPicms) newFilters.xmlPicms = new Set();
-
+                const newFilters: TabFilters = { ...(prev[siengeCfop] || { xmlCfops: new Set(), xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() }) };
+                
                 const newSet = new Set(newFilters[type]);
                 if (checked) {
                     newSet.add(value);
@@ -200,7 +243,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         const clearFilters = () => {
              setTabFilters(prev => ({
                 ...prev,
-                [siengeCfop]: { xmlCfops: new Set(), xmlCsts: new Set(), xmlPicms: new Set() }
+                [siengeCfop]: { xmlCfops: new Set(), xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() }
             }));
         };
 
@@ -231,6 +274,17 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                             <div key={`cfop-${opt}`} className="flex items-center space-x-2">
                                                 <Checkbox id={`cfop-${opt}`} checked={filters.xmlCfops.has(opt)} onCheckedChange={checked => handleFilterChange('xmlCfops', opt, !!checked)} />
                                                 <Label htmlFor={`cfop-${opt}`}>{opt}</Label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <Label className="font-semibold">Descrição CFOP (XML)</Label>
+                                    <div className="flex flex-col gap-2 mt-2">
+                                        {availableOptions.xmlCfopDescriptions.map(opt => (
+                                            <div key={`desc-${opt}`} className="flex items-center space-x-2">
+                                                <Checkbox id={`desc-${opt}`} checked={filters.xmlCfopDescriptions.has(opt)} onCheckedChange={checked => handleFilterChange('xmlCfopDescriptions', opt, !!checked)} />
+                                                <Label htmlFor={`desc-${opt}`}>{opt}</Label>
                                             </div>
                                         ))}
                                     </div>
@@ -292,6 +346,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     const activeFilters = tabFilters[cfop];
                     const filterSummary = [
                         activeFilters?.xmlCfops.size > 0 && `CFOP: ${Array.from(activeFilters.xmlCfops).join(',')}`,
+                        activeFilters?.xmlCfopDescriptions.size > 0 && `Desc: ${Array.from(activeFilters.xmlCfopDescriptions).join(',')}`,
                         activeFilters?.xmlCsts.size > 0 && `CST: ${Array.from(activeFilters.xmlCsts).join(',')}`,
                         activeFilters?.xmlPicms.size > 0 && `pICMS: ${Array.from(activeFilters.xmlPicms).join(',')}%`
                     ].filter(Boolean).join('; ');
@@ -316,6 +371,9 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                         {filterSummary && <Badge variant="secondary" className='hidden md:block'>{filterSummary}</Badge>}
                                         <FilterPopover siengeCfop={cfop} items={cfopItems} />
                                     </div>
+                                </div>
+                                <div className='text-sm text-muted-foreground italic my-2 px-1'>
+                                    Descrição do CFOP da Aba: {cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}
                                 </div>
                                 <TabsContent value="all" className="mt-4">
                                     <DataTable columns={columns} data={filterItems(cfopItems, 'all', cfop)} />
