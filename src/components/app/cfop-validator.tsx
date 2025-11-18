@@ -47,17 +47,15 @@ type BulkActionState = {
 };
 
 // ===============================================================
-// Filter Dialog Component (Moved outside)
+// Filter Dialog Component
 // ===============================================================
 
-interface FilterDialogProps {
+const FilterDialog: React.FC<{
     siengeCfop: string;
     items: any[];
     tabFilters: Record<string, TabFilters>;
     setTabFilters: React.Dispatch<React.SetStateAction<Record<string, TabFilters>>>;
-}
-
-const FilterDialog: React.FC<FilterDialogProps> = ({ siengeCfop, items, tabFilters, setTabFilters }) => {
+}> = ({ siengeCfop, items, tabFilters, setTabFilters }) => {
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
 
     const availableOptions = useMemo(() => {
@@ -446,10 +444,10 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     const allCfopsForStatus = Object.keys(cfopGroupsForStatus).sort((a,b) => parseInt(a,10) - parseInt(b,10));
 
                      useEffect(() => {
-                        if (status === activeStatusTab && allCfopsForStatus.length > 0 && !activeCfopTabs[status]) {
+                        if (status === activeStatusTab && allCfopsForStatus.length > 0 && !allCfopsForStatus.includes(activeCfopTabs[status])) {
                             setActiveCfopTabs(prev => ({...prev, [status]: allCfopsForStatus[0]}));
                         }
-                    }, [status, activeStatusTab, allCfopsForStatus]);
+                    }, [status, activeStatusTab, allCfopsForStatus, activeCfopTabs]);
 
                     return (
                         <TabsContent key={status} value={status} className="mt-4">
@@ -463,15 +461,19 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                         <TabsList className="h-auto flex-wrap justify-start">
                                             {allCfopsForStatus.map(cfop => {
                                                 const currentFilters = tabFilters[cfop];
-                                                const initialCount = itemsByStatus[status]?.[cfop]?.length || 0;
-                                                const filteredCount = !currentFilters ? initialCount : itemsByStatus[status]?.[cfop]?.filter(item => {
+                                                const allItemsForCfop = itemsByStatus[status]?.[cfop] || [];
+
+                                                const filteredCount = !currentFilters ? allItemsForCfop.length : allItemsForCfop.filter(item => {
                                                     const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-                                                    return (
-                                                        currentFilters.xmlCsts.has(String(item['CST do ICMS'] || '')) &&
-                                                        currentFilters.xmlPicms.has(String(item['Alíq. ICMS (%)'] || '0')) &&
-                                                        currentFilters.xmlCfopDescriptions.has(fullDescription)
-                                                    );
-                                                }).length || 0;
+                                                    
+                                                    const cstFilter = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(String(item['CST do ICMS'] || ''));
+                                                    const picmsFilter = currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(String(item['Alíq. ICMS (%)'] || '0'));
+                                                    const descFilter = currentFilters.xmlCfopDescriptions.size === 0 || currentFilters.xmlCfopDescriptions.has(fullDescription);
+                                                    
+                                                    return cstFilter && picmsFilter && descFilter;
+                                                }).length;
+                                                
+                                                if (filteredCount === 0 && allItemsForCfop.length > 0) return null;
 
                                                 return <TabsTrigger key={`${status}-${cfop}`} value={cfop} disabled={filteredCount === 0}>{cfop} ({filteredCount})</TabsTrigger>
                                             })}
@@ -484,12 +486,16 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                         const currentFilters = tabFilters[cfop];
                                         const currentCfopData = itemsByStatus[status]?.[cfop]?.filter(item => {
                                             if (!currentFilters) return true;
+                                            
                                             const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-                                            return (
-                                                currentFilters.xmlCsts.has(String(item['CST do ICMS'] || '')) &&
-                                                currentFilters.xmlPicms.has(String(item['Alíq. ICMS (%)'] || '0')) &&
-                                                currentFilters.xmlCfopDescriptions.has(fullDescription)
-                                            );
+                                            const cstValue = String(item['CST do ICMS'] || '');
+                                            const picmsValue = String(item['Alíq. ICMS (%)'] || '0');
+
+                                            const cstFilter = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(cstValue);
+                                            const picmsFilter = currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(picmsValue);
+                                            const descFilter = currentFilters.xmlCfopDescriptions.size === 0 || currentFilters.xmlCfopDescriptions.has(fullDescription);
+                                            
+                                            return cstFilter && picmsFilter && descFilter;
                                         }) || [];
 
                                         return (
@@ -515,6 +521,3 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
-
-
-    
