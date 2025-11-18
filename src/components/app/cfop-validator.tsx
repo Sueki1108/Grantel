@@ -115,7 +115,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         items,
         ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'pICMS', 'Descricao CFOP', 'CST do ICMS', 'Valor Unitário', 'Valor Total'],
         (row, id) => {
-            const value = row.original[id];
+            const value = row.original[id as keyof typeof row.original];
 
             const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
                 <div className="group flex items-center justify-between gap-1" onClick={(e) => e.stopPropagation()}>
@@ -133,12 +133,13 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             );
 
             if (id === 'Fornecedor') {
-                 const name = String(value || '');
-                if (!name) return <div>N/A</div>;
+                const name = String(value || 'N/A');
+                if (name === 'N/A') return <div>N/A</div>;
                 const summarizedName = name.length > 25 ? `${name.substring(0, 25)}...` : name;
                 const display = renderCellWithTooltip(summarizedName, name);
                 return renderCellWithCopy(display, name, 'Fornecedor');
             }
+
              if (id === 'pICMS') {
                 return <div className='text-center'>{typeof value === 'number' ? `${value.toFixed(2)}%` : 'N/A'}</div>;
             }

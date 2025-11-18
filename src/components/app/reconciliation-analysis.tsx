@@ -23,8 +23,6 @@ interface ReconciliationAnalysisProps {
     siengeFile: File | null;
     onSiengeFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
-    onRunReconciliation: () => void;
-    isReconciliationRunning: boolean;
 }
 
 const getColumnsForDivergentTabs = (data: any[]): ColumnDef<any>[] => {
@@ -51,8 +49,6 @@ export function ReconciliationAnalysis({
     siengeFile, 
     onSiengeFileChange, 
     onClearSiengeFile,
-    onRunReconciliation,
-    isReconciliationRunning,
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     const reconciliationResults = processedData?.reconciliationResults;
@@ -76,12 +72,12 @@ export function ReconciliationAnalysis({
                     <GitCompareArrows className="h-8 w-8 text-primary" />
                     <div>
                         <CardTitle className="font-headline text-2xl">XML VS Sienge</CardTitle>
-                        <CardDescription>Carregue a planilha do Sienge e clique no botão para cruzar informações com os XMLs.</CardDescription>
+                        <CardDescription>Carregue a planilha do Sienge para cruzar informações com os XMLs processados na aba de validação.</CardDescription>
                     </div>
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
-                 <div className='grid grid-cols-1 md:grid-cols-2 gap-6 items-end'>
+                 <div className='grid grid-cols-1'>
                     <FileUploadForm
                         displayName="Itens do Sienge"
                         formId="sienge-for-reconciliation"
@@ -89,16 +85,13 @@ export function ReconciliationAnalysis({
                         onFileChange={onSiengeFileChange}
                         onClearFile={onClearSiengeFile}
                     />
-                    <Button onClick={onRunReconciliation} disabled={isReconciliationRunning || !siengeFile}>
-                        {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Executar Conciliação</>}
-                    </Button>
                 </div>
                 
                 <Tabs defaultValue="reconciliation">
                     <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="reconciliation">Conciliação de Itens</TabsTrigger>
-                        <TabsTrigger value="cfop_validation">Validação de CFOP</TabsTrigger>
-                        <TabsTrigger value="tax_check">Conferência de Impostos</TabsTrigger>
+                        <TabsTrigger value="reconciliation" disabled={!reconciliationResults}>Conciliação de Itens</TabsTrigger>
+                        <TabsTrigger value="cfop_validation" disabled={!reconciliationResults}>Validação de CFOP</TabsTrigger>
+                        <TabsTrigger value="tax_check" disabled={!processedData?.siengeSheetData}>Conferência de Impostos</TabsTrigger>
                     </TabsList>
                     <TabsContent value="reconciliation" className="mt-4">
                          {!processedData?.sheets['Itens Válidos'] && (
@@ -137,16 +130,16 @@ export function ReconciliationAnalysis({
                         ) : (
                             <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
                                 <FileSearch className="h-12 w-12 text-primary" />
-                                <p className="mt-4 text-center">Carregue a planilha "Itens do Sienge" e clique em "Executar Conciliação".</p>
+                                <p className="mt-4 text-center">Carregue a planilha "Itens do Sienge" e execute a validação na primeira aba para ver os resultados da conciliação.</p>
                             </div>
                         )}
                     </TabsContent>
                     <TabsContent value="cfop_validation" className="mt-4">
                         <p className='text-sm text-muted-foreground mb-4'>A tabela abaixo mostra **apenas** os itens que foram conciliados com sucesso. Utilize-a para validar se o CFOP do XML corresponde ao CFOP utilizado no Sienge.</p>
-                        <CfopValidator 
+                         <CfopValidator 
                             items={reconciliationResults?.reconciled || []} 
                             allPersistedData={processedData?.imobilizadoClassifications || {}}
-                            onPersistData={() => {}}
+                            onPersistData={() => {}} // A persistência é gerida a nível superior
                             competence={processedData?.competence || null}
                         />
                     </TabsContent>
