@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "../ui/checkbox"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -60,10 +61,40 @@ export function DataTable<TData, TValue>({
   const rowSelection = isControllingSelection ? externalRowSelection : internalRowSelection;
   const setRowSelection = isControllingSelection ? externalSetRowSelection : setInternalRowSelection;
 
+  const tableColumns = React.useMemo<ColumnDef<TData, TValue>[]>(() => [
+    {
+        id: 'select',
+        header: ({ table }) => (
+            <Checkbox
+                checked={table.getIsAllPageRowsSelected()}
+                onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                aria-label="Selecionar todas as linhas"
+                onClick={e => e.stopPropagation()}
+            />
+        ),
+        cell: ({ row }) => {
+            if (!row.getIsSelected()) {
+                return null;
+            }
+            return (
+                <Checkbox
+                    checked={row.getIsSelected()}
+                    onCheckedChange={(value) => row.toggleSelected(!!value)}
+                    aria-label="Selecionar linha"
+                    onClick={e => e.stopPropagation()}
+                />
+            )
+        },
+        enableSorting: false,
+        enableHiding: false,
+    },
+    ...columns
+  ], [columns]);
+
 
   const table = useReactTable({
     data,
-    columns,
+    columns: tableColumns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
@@ -163,7 +194,6 @@ export function DataTable<TData, TValue>({
                     <TableCell 
                       key={cell.id} 
                       onClick={(e) => {
-                        // Allow row click to toggle selection unless clicking on an interactive element within a cell
                         const isInteractive = (e.target as HTMLElement).closest('button, a, input, [role="button"], [role="menuitem"]');
                         if (isInteractive) {
                           e.stopPropagation();
