@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -149,8 +150,8 @@ const correctionConfigLabels: Record<keyof SpedCorrectionConfig, string> = {
     fixTruncation: "Limitar Campos de Texto a 235 Caracteres",
     fixUnits: "Padronizar Unidades de Medida para 'un'",
     remove0190: "Remover Registos 0190 Desnecessários",
-    removeUnusedProducts: "Remover Produtos (0200) Não Utilizados em Itens (C170)",
-    removeUnusedParticipants: "Remover Participantes (0150) Não Utilizados (C100/D100/D500)"
+    removeUnusedProducts: "Remover Produtos (0200) Órfãos de Docs. Removidos",
+    removeUnusedParticipants: "Remover Participantes (0150) Órfãos de Docs. Removidos"
 };
 
 
@@ -285,22 +286,29 @@ const processSpedFileInBrowser = (
          _log(`Remoção por divergência concluída. ${totalRemoved} linhas removidas devido a ${Object.keys(modifications.divergenceRemoval).length} chaves com divergência.`);
         intermediateLines = filteredLines;
     }
+    
+    const usedCodesAfterDivergenceRemoval = new Set<string>();
+    if (config.removeUnusedProducts || config.removeUnusedParticipants) {
+        intermediateLines.forEach(line => {
+            const parts = line.split('|');
+            if (parts.length > 1) {
+                const regType = parts[1];
+                if (regType === 'C100' && parts[4]) usedCodesAfterDivergenceRemoval.add(parts[4]); // Participant
+                if (regType === 'D100' && parts[4]) usedCodesAfterDivergenceRemoval.add(parts[4]); // Participant
+                if (regType === 'D500' && parts[4]) usedCodesAfterDivergenceRemoval.add(parts[4]); // Participant
+                if (regType === 'C170' && parts[2]) usedCodesAfterDivergenceRemoval.add(parts[2]); // Product
+            }
+        });
+    }
+
 
     if (config.removeUnusedProducts) {
         _log("Iniciando remoção de produtos (0200) não utilizados.");
-        const usedProductCodes = new Set<string>();
-        intermediateLines.forEach(line => {
-            const parts = line.split('|');
-            if (parts.length > 3 && parts[1] === 'C170' && parts[2]) {
-                usedProductCodes.add(parts[2]);
-            }
-        });
-
         const filteredLines: string[] = [];
         for (let i = 0; i < intermediateLines.length; i++) {
             const line = intermediateLines[i];
             const parts = line.split('|');
-            if (parts.length > 2 && parts[1] === '0200' && !usedProductCodes.has(parts[2])) {
+            if (parts.length > 2 && parts[1] === '0200' && !usedCodesAfterDivergenceRemoval.has(parts[2])) {
                 modifications.removed0200.push({ lineNumber: i + 1, line });
                 linesModifiedCount++;
                 continue; // Skip this line
@@ -313,19 +321,11 @@ const processSpedFileInBrowser = (
     
      if (config.removeUnusedParticipants) {
         _log("Iniciando remoção de participantes (0150) não utilizados.");
-        const usedParticipantCodes = new Set<string>();
-        intermediateLines.forEach(line => {
-            const parts = line.split('|');
-            if (parts.length > 4 && (parts[1] === 'C100' || parts[1] === 'D100' || parts[1] === 'D500') && parts[4]) {
-                usedParticipantCodes.add(parts[4]);
-            }
-        });
-
         const filteredLines: string[] = [];
         for (let i = 0; i < intermediateLines.length; i++) {
             const line = intermediateLines[i];
             const parts = line.split('|');
-            if (parts.length > 2 && parts[1] === '0150' && !usedParticipantCodes.has(parts[2])) {
+            if (parts.length > 2 && parts[1] === '0150' && !usedCodesAfterDivergenceRemoval.has(parts[2])) {
                 modifications.removed0150.push({ lineNumber: i + 1, line });
                 linesModifiedCount++;
                 continue; // Skip this line
@@ -376,12 +376,12 @@ const processSpedFileInBrowser = (
         }
 
         if (config.fixCteSeries && codeType === 'D100' && parts.length > 10 && cteKeyToSeriesMap.size > 0) {
-            const cteKey = cleanAndToStr(parts[9]); // Chave do CTe é no campo 10 (índice 9)
+            const cteKey = cleanAndToStr(parts[10]);
             const correctSeries = cteKeyToSeriesMap.get(cteKey);
             if (correctSeries) {
                 const formattedSeries = correctSeries.padStart(3, '0');
-                if (parts[6] !== formattedSeries) { // Série é no campo 7 (índice 6)
-                    parts[6] = formattedSeries;
+                if (parts[7] !== formattedSeries) {
+                    parts[7] = formattedSeries;
                     currentLine = parts.join('|');
                     modifications.cteSeriesCorrection.push({ lineNumber: i + 1, original: originalLine, corrected: currentLine });
                     lineWasModified = true;
