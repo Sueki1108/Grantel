@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useMemo } from 'react';
@@ -50,6 +51,7 @@ export function ReconciliationAnalysis({
         XLSX.writeFile(workbook, fileName);
     };
 
+    // Função para garantir que 'Chave de Comparação' seja a primeira coluna
     const getColumnsForDivergentTabs = (data: any[]) => {
         if (!data || data.length === 0) return [];
 
@@ -152,3 +154,4 @@ export function ReconciliationAnalysis({
          </Card>
     );
 }
+    
