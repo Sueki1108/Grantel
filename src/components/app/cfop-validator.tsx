@@ -20,12 +20,15 @@ interface CfopValidatorProps {
     allPersistedData: AllClassifications;
 }
 
+type ValidationStatus = 'unvalidated' | 'correct' | 'incorrect' | 'verify';
+
 export function CfopValidator({ items, competence, onPersistData, allPersistedData }: CfopValidatorProps) {
     const { toast } = useToast();
     
     const [cfopValidations, setCfopValidations] = useState<Record<string, CfopClassification>>({});
     const [hasChanges, setHasChanges] = useState(false);
     const [activeCfopTab, setActiveCfopTab] = useState('');
+    const [activeStatusTabs, setActiveStatusTabs] = useState<Record<string, string>>({});
 
     useEffect(() => {
         if (competence && allPersistedData[competence]?.cfopValidations?.classifications) {
@@ -37,7 +40,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     }, [competence, allPersistedData]);
 
 
-    const handleValidationChange = (uniqueKey: string, classification: 'correct' | 'incorrect' | 'verify' | 'unvalidated') => {
+    const handleValidationChange = (uniqueKey: string, classification: ValidationStatus) => {
         setCfopValidations(prev => ({
             ...prev,
             [uniqueKey]: {
@@ -96,26 +99,25 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
 
     useEffect(() => {
         const firstCfop = Object.keys(groupedBySiengeCfop)[0];
-        if (firstCfop) {
+        if (firstCfop && !activeCfopTab) {
             setActiveCfopTab(firstCfop);
         }
-    }, [groupedBySiengeCfop]);
+    }, [groupedBySiengeCfop, activeCfopTab]);
 
 
     const columns = useMemo(() => getColumnsWithCustomRender(
         items,
-        ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Descricao CFOP', 'Valor Total'],
+        ['Fornecedor', 'Número da Nota', 'Descrição', 'Sienge_CFOP', 'Descricao CFOP', 'Valor Total'],
         (row, id) => {
             const value = row.original[id];
             if (id === 'Valor Total' && typeof value === 'number') {
                 return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
             }
-            if (id === 'CFOP') {
-                const isDifal = cfopValidations[row.original.uniqueProductKey]?.isDifal;
-                return <Badge variant={isDifal ? 'destructive' : 'secondary'}>{value}{isDifal ? ' (DIFAL)' : ''}</Badge>;
-            }
              if (id === 'Sienge_CFOP') {
                 return <Badge variant="outline">{value}</Badge>;
+            }
+            if (id === 'Descrição') {
+                return <div>{row.original['Descrição']}</div>
             }
             return <div>{String(value ?? '')}</div>;
         }
@@ -139,16 +141,16 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 );
             }
         },
-        {
-            id: 'status',
-            header: 'Status',
-            cell: ({ row }) => {
-                 const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
-                const validation = cfopValidations[uniqueKey]?.classification;
-                 return <Badge variant={getVariant(validation)}>{getIcon(validation)} <span className='ml-2'>{validation || 'Não validado'}</span></Badge>
-            }
-        }
     ]), [items, cfopValidations]);
+
+    const filterItemsByStatus = (items: any[], status: 'all' | ValidationStatus) => {
+        if (status === 'all') return items;
+        return items.filter(item => {
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const classification = cfopValidations[uniqueKey]?.classification || 'unvalidated';
+            return classification === status;
+        });
+    };
 
     if (!items || items.length === 0) {
         return <p className="text-center text-muted-foreground p-8">Nenhum item conciliado para validar o CFOP.</p>;
@@ -168,13 +170,49 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                         </TabsTrigger>
                     ))}
                 </TabsList>
-                {Object.entries(groupedBySiengeCfop).map(([cfop, cfopItems]) => (
-                     <TabsContent key={cfop} value={cfop} className="mt-4">
-                         <DataTable columns={columns} data={cfopItems} />
-                    </TabsContent>
-                ))}
+                {Object.entries(groupedBySiengeCfop).map(([cfop, cfopItems]) => {
+                    const statusCounts = {
+                        all: cfopItems.length,
+                        unvalidated: filterItemsByStatus(cfopItems, 'unvalidated').length,
+                        correct: filterItemsByStatus(cfopItems, 'correct').length,
+                        incorrect: filterItemsByStatus(cfopItems, 'incorrect').length,
+                        verify: filterItemsByStatus(cfopItems, 'verify').length,
+                    };
+
+                    return (
+                        <TabsContent key={cfop} value={cfop} className="mt-4">
+                             <Tabs 
+                                value={activeStatusTabs[cfop] || 'all'} 
+                                onValueChange={(val) => setActiveStatusTabs(prev => ({...prev, [cfop]: val}))} 
+                                className="w-full"
+                            >
+                                <TabsList className="h-auto flex-wrap justify-start">
+                                    <TabsTrigger value="all">Todos ({statusCounts.all})</TabsTrigger>
+                                    <TabsTrigger value="unvalidated">Não Validado ({statusCounts.unvalidated})</TabsTrigger>
+                                    <TabsTrigger value="correct">Correto ({statusCounts.correct})</TabsTrigger>
+                                    <TabsTrigger value="incorrect">Incorreto ({statusCounts.incorrect})</TabsTrigger>
+                                    <TabsTrigger value="verify">Verificar ({statusCounts.verify})</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="all" className="mt-4">
+                                    <DataTable columns={columns} data={filterItemsByStatus(cfopItems, 'all')} />
+                                </TabsContent>
+                                <TabsContent value="unvalidated" className="mt-4">
+                                     <DataTable columns={columns} data={filterItemsByStatus(cfopItems, 'unvalidated')} />
+                                </TabsContent>
+                                <TabsContent value="correct" className="mt-4">
+                                     <DataTable columns={columns} data={filterItemsByStatus(cfopItems, 'correct')} />
+                                </TabsContent>
+                                <TabsContent value="incorrect" className="mt-4">
+                                     <DataTable columns={columns} data={filterItemsByStatus(cfopItems, 'incorrect')} />
+                                </TabsContent>
+                                <TabsContent value="verify" className="mt-4">
+                                     <DataTable columns={columns} data={filterItemsByStatus(cfopItems, 'verify')} />
+                                </TabsContent>
+                            </Tabs>
+                        </TabsContent>
+                    );
+                })}
             </Tabs>
         </div>
     );
 }
-
