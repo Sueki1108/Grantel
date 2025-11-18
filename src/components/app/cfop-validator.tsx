@@ -19,7 +19,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
 
 
 interface CfopValidatorProps {
@@ -114,83 +113,87 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         });
     };
 
-    const columns = useMemo(() => getColumnsWithCustomRender(
-        items,
-        ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'pICMS', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'],
-        (row, id) => {
-            const value = row.original[id as keyof typeof row.original];
+    const columns = useMemo(() => {
+        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Valor Unitário', 'Valor Total', 'pICMS'];
+        
+        return getColumnsWithCustomRender(
+            items,
+            columnsToShow,
+            (row, id) => {
+                const value = row.original[id as keyof typeof row.original];
 
-            const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
-                <div className="group flex items-center justify-between gap-1" onClick={(e) => e.stopPropagation()}>
-                    <span className="truncate">{displayValue}</span>
-                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => copyToClipboard(copyValue, typeName)}>
-                        <Copy className="h-3 w-3" />
-                    </Button>
-                </div>
-            );
-            
-            const renderCellWithTooltip = (displayValue: string, fullValue: string) => (
-                <TooltipProvider>
-                    <Tooltip><TooltipTrigger asChild><span>{displayValue}</span></TooltipTrigger><TooltipContent><p>{fullValue}</p></TooltipContent></Tooltip>
-                </TooltipProvider>
-            );
-            
-             if (id === 'Fornecedor') {
-                const name = String(value || 'N/A');
-                if (name === 'N/A') return <div>N/A</div>;
-                const summarizedName = name.length > 25 ? `${name.substring(0, 25)}...` : name;
-                const display = renderCellWithTooltip(summarizedName, name);
-                return renderCellWithCopy(display, name, 'Fornecedor');
-            }
-
-
-             if (id === 'pICMS') {
-                return <div className='text-center'>{typeof value === 'number' ? `${value.toFixed(2)}%` : 'N/A'}</div>;
-            }
-
-            if (['Valor Total', 'Valor Unitário'].includes(id) && typeof value === 'number') {
-                return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
-            }
-            
-            if (id === 'Número da Nota') {
-                return renderCellWithCopy(String(value ?? ''), String(value ?? ''), 'Número da Nota');
-            }
-
-            if (id === 'Descrição' && typeof value === 'string') {
-                const summarizedDesc = value.length > 30 ? `${value.substring(0, 30)}...` : value;
-                const display = renderCellWithTooltip(summarizedDesc, value);
-                return renderCellWithCopy(display, value, 'Descrição');
-            }
-            
-            if (id === 'Descricao CFOP' && typeof value === 'string') {
-                 const summarizedDesc = value.length > 15 ? `${value.substring(0, 15)}...` : value;
-                const fullDescription = cfopDescriptions[parseInt(row.original.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-                 return renderCellWithTooltip(summarizedDesc, fullDescription);
-            }
-            
-            return <div>{String(value ?? '')}</div>;
-        }
-    ).concat([
-        {
-            id: 'validation',
-            header: 'Validação',
-            cell: ({ row }) => {
-                const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
-                const validation = cfopValidations[uniqueKey]?.classification || 'unvalidated';
-
-                return (
-                     <div className="flex gap-1 justify-center" onClick={(e) => e.stopPropagation()}>
-                        <TooltipProvider>
-                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant={validation === 'correct' ? 'default' : 'ghost'} className="h-8 w-8" onClick={() => handleValidationChange(uniqueKey, 'correct')}><Check className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Correto</p></TooltipContent></Tooltip>
-                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant={validation === 'incorrect' ? 'destructive' : 'ghost'} className="h-8 w-8" onClick={() => handleValidationChange(uniqueKey, 'incorrect')}><X className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Incorreto</p></TooltipContent></Tooltip>
-                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant={validation === 'verify' ? 'secondary' : 'ghost'} className="h-8 w-8" onClick={() => handleValidationChange(uniqueKey, 'verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificação</p></TooltipContent></Tooltip>
-                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant={validation === 'unvalidated' ? 'outline' : 'ghost'} className="h-8 w-8" onClick={() => handleValidationChange(uniqueKey, 'unvalidated')}><RotateCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Limpar Validação</p></TooltipContent></Tooltip>
-                        </TooltipProvider>
-                     </div>
+                const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
+                    <div className="group flex items-center justify-between gap-1" onClick={(e) => e.stopPropagation()}>
+                        <span className="truncate">{displayValue}</span>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => copyToClipboard(copyValue, typeName)}>
+                            <Copy className="h-3 w-3" />
+                        </Button>
+                    </div>
                 );
+                
+                const renderCellWithTooltip = (displayValue: string, fullValue: string) => (
+                    <TooltipProvider>
+                        <Tooltip><TooltipTrigger asChild><span>{displayValue}</span></TooltipTrigger><TooltipContent><p>{fullValue}</p></TooltipContent></Tooltip>
+                    </TooltipProvider>
+                );
+                
+                 if (id === 'Fornecedor') {
+                    const name = String(value || 'N/A');
+                    if (name === 'N/A') return <div>N/A</div>;
+                    const summarizedName = name.length > 25 ? `${name.substring(0, 25)}...` : name;
+                    const display = renderCellWithTooltip(summarizedName, name);
+                    return renderCellWithCopy(display, name, 'Fornecedor');
+                }
+
+
+                 if (id === 'pICMS') {
+                    return <div className='text-center'>{typeof value === 'number' ? `${value.toFixed(2)}%` : 'N/A'}</div>;
+                }
+
+                if (['Valor Total', 'Valor Unitário'].includes(id) && typeof value === 'number') {
+                    return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
+                }
+                
+                if (id === 'Número da Nota') {
+                    return renderCellWithCopy(String(value ?? ''), String(value ?? ''), 'Número da Nota');
+                }
+
+                if (id === 'Descrição' && typeof value === 'string') {
+                    const summarizedDesc = value.length > 30 ? `${value.substring(0, 30)}...` : value;
+                    const display = renderCellWithTooltip(summarizedDesc, value);
+                    return renderCellWithCopy(display, value, 'Descrição');
+                }
+                
+                if (id === 'Descricao CFOP' && typeof value === 'string') {
+                     const summarizedDesc = value.length > 15 ? `${value.substring(0, 15)}...` : value;
+                    const fullDescription = cfopDescriptions[parseInt(row.original.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+                     return renderCellWithTooltip(summarizedDesc, fullDescription);
+                }
+                
+                return <div>{String(value ?? '')}</div>;
             }
-        },
-    ]), [items, cfopValidations]);
+        ).concat([
+            {
+                id: 'validation',
+                header: 'Validação',
+                cell: ({ row }) => {
+                    const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
+                    const validation = cfopValidations[uniqueKey]?.classification || 'unvalidated';
+
+                    return (
+                         <div className="flex gap-1 justify-center" onClick={(e) => e.stopPropagation()}>
+                            <TooltipProvider>
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant={validation === 'correct' ? 'default' : 'ghost'} className="h-8 w-8" onClick={() => handleValidationChange(uniqueKey, 'correct')}><Check className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Correto</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant={validation === 'incorrect' ? 'destructive' : 'ghost'} className="h-8 w-8" onClick={() => handleValidationChange(uniqueKey, 'incorrect')}><X className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Incorreto</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant={validation === 'verify' ? 'secondary' : 'ghost'} className="h-8 w-8" onClick={() => handleValidationChange(uniqueKey, 'verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificação</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant={validation === 'unvalidated' ? 'outline' : 'ghost'} className="h-8 w-8" onClick={() => handleValidationChange(uniqueKey, 'unvalidated')}><RotateCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Limpar Validação</p></TooltipContent></Tooltip>
+                            </TooltipProvider>
+                         </div>
+                    );
+                }
+            },
+        ]);
+    }, [items, cfopValidations]);
 
     const filterItems = (items: any[], status: 'all' | ValidationStatus, siengeCfop: string) => {
         const currentFilters = tabFilters[siengeCfop];
@@ -202,7 +205,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 return classification === status;
             });
 
-        if (!currentFilters) return statusFiltered; // If no filters are set for this tab, return all status-filtered items
+        if (!currentFilters) return statusFiltered;
         
         return statusFiltered.filter(item => {
             const cstMatch = currentFilters.xmlCsts.has(String(item['CST do ICMS']));
@@ -234,7 +237,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             };
         }, [items]);
         
-        // Initialize filters for the current CFOP tab if they don't exist
         useEffect(() => {
             if (!tabFilters[siengeCfop]) {
                 setTabFilters(prev => ({
@@ -354,14 +356,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                         verify: filterItems(cfopItems, 'verify', cfop).length,
                     };
                     
-                    const activeFilters = tabFilters[cfop];
-                    const filterSummary = activeFilters ? [
-                        activeFilters.xmlCfopDescriptions.size > 0 && `Desc: ${Array.from(activeFilters.xmlCfopDescriptions).join(',')}`,
-                        activeFilters.xmlCsts.size > 0 && `CST: ${Array.from(activeFilters.xmlCsts).join(',')}`,
-                        activeFilters.xmlPicms.size > 0 && `pICMS: ${Array.from(activeFilters.xmlPicms).join(',')}%`
-                    ].filter(Boolean).join('; ') : '';
-
-
                     return (
                         <TabsContent key={cfop} value={cfop} className="mt-4">
                              <Tabs 
@@ -378,7 +372,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                         {statusCounts.verify > 0 && <TabsTrigger value="verify">Verificar ({statusCounts.verify})</TabsTrigger>}
                                     </TabsList>
                                     <div className='flex items-center gap-2'>
-                                        {filterSummary && <Badge variant="secondary" className='hidden md:block'>{filterSummary}</Badge>}
                                         <FilterDialog siengeCfop={cfop} items={cfopItems} />
                                     </div>
                                 </div>
