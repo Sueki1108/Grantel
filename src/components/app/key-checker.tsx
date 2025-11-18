@@ -512,15 +512,6 @@ const processSpedFileInBrowser = (
     };
 };
 
-const findDuplicates = (arr: string[]): string[] => {
-    const seen = new Set<string>();
-    const duplicates = new Set<string>();
-    arr.forEach(item => {
-        if (seen.has(item)) duplicates.add(item); else seen.add(item);
-    });
-    return Array.from(duplicates);
-};
-
 const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: string[], logFn: (message: string) => void): Promise<{
     keyCheckResults?: KeyCheckResult;
     spedDuplicates?: SpedDuplicate[];
@@ -662,6 +653,16 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     
     logFn(`${spedDocData.size} chaves de 44 dígitos (NF-e/CT-e) encontradas no SPED para verificação.`);
     const chavesValidasMap = new Map<string, any>(chavesValidas.map(item => [cleanAndToStr(item['Chave de acesso']), item]));
+    const findDuplicates = (arr: any[], keyAccessor: (item: any) => string): string[] => {
+        const seen = new Set<string>();
+        const duplicates = new Set<string>();
+        arr.forEach(item => {
+            const key = keyAccessor(item);
+            if (seen.has(key)) duplicates.add(key); else seen.add(key);
+        });
+        return Array.from(duplicates);
+    };
+    const duplicateKeysInSheet = findDuplicates(chavesValidas, item => item['Chave de acesso']);
 
     const keysNotFoundInTxt = [...chavesValidasMap.values()]
         .filter(item => !spedDocData.has(item['Chave de acesso']))
@@ -745,7 +746,7 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
     logFn(`- ${consolidatedDivergences.length} chaves com alguma divergência encontradas.`);
     
     const keyCheckResults: KeyCheckResult = { 
-        keysNotFoundInTxt, keysInTxtNotInSheet, duplicateKeysInSheet: findDuplicates(chavesValidas.map(item => item['Chave de acesso'])), validKeys,
+        keysNotFoundInTxt, keysInTxtNotInSheet, duplicateKeysInSheet, validKeys,
         dateDivergences, valueDivergences, ufDivergences, ieDivergences, consolidatedDivergences,
         missingSeriesDivergences: [],
     };
