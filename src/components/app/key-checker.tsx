@@ -142,7 +142,7 @@ export type SpedCorrectionConfig = {
 };
 
 const correctionConfigLabels: Record<keyof SpedCorrectionConfig, string> = {
-    removeDivergent: "Remover Registos com Divergência de IE/UF (Condicional)",
+    removeDivergent: "Remover Registos com Divergência de IE/UF",
     fixCounters: "Recalcular Contadores de Linhas e Blocos",
     fixIE: "Corrigir Inscrição Estadual (IE) de Participantes (NF-e)",
     fixCteSeries: "Corrigir Série de CT-e",
@@ -295,14 +295,14 @@ const processSpedFileInBrowser = (
             const parts = line.split('|');
             if (parts.length > 1) {
                 const regType = parts[1];
-                if ((regType === 'C100' || regType === 'D100') && parts[4]) usedParticipantCodes.add(parts[4]);
-                if (regType === 'C170' && parts[2]) usedProductCodes.add(parts[2]);
+                if ((regType === 'C100' || regType === 'D100') && parts.length > 4 && parts[4]) usedParticipantCodes.add(parts[4]);
+                if (regType === 'C170' && parts.length > 2 && parts[2]) usedProductCodes.add(parts[2]);
             }
         });
     }
 
     if (config.removeUnusedProducts) {
-        _log("Iniciando remoção de produtos (0200) não utilizados.");
+        _log(`Iniciando remoção de produtos (0200) não utilizados. ${usedProductCodes.size} produtos estão em uso.`);
         const filteredLines: string[] = [];
         for (let i = 0; i < intermediateLines.length; i++) {
             const line = intermediateLines[i];
@@ -319,7 +319,7 @@ const processSpedFileInBrowser = (
     }
     
      if (config.removeUnusedParticipants) {
-        _log("Iniciando remoção de participantes (0150) não utilizados.");
+        _log(`Iniciando remoção de participantes (0150) não utilizados. ${usedParticipantCodes.size} participantes estão em uso.`);
         const filteredLines: string[] = [];
         for (let i = 0; i < intermediateLines.length; i++) {
             const line = intermediateLines[i];
