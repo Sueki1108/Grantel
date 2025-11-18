@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useCallback, type ChangeEvent, useEffect } from "react";
@@ -38,7 +37,7 @@ export type KeyInfo = {
     // Campos adicionais para verificação
     destIE?: string;
     destUF?: string;
-    destCNPJ?: string;
+destCNPJ?: string;
     tomadorCNPJ?: string;
     emitCNPJ?: string;
     emitName?: string;
@@ -136,8 +135,8 @@ const correctionConfigLabels: Record<keyof SpedCorrectionConfig, string> = {
     fixTruncation: "Limitar Campos de Texto a 235 Caracteres",
     fixUnits: "Padronizar Unidades de Medida para 'un'",
     remove0190: "Remover Registos 0190 Desnecessários",
-    removeUnusedProducts: "Remover Produtos (0200) Associados a Documentos Removidos",
-    removeUnusedParticipants: "Remover Participantes (0150) Associados a Documentos Removidos"
+    removeUnusedProducts: "Remover Produtos (0200) Não Utilizados",
+    removeUnusedParticipants: "Remover Participantes (0150) Não Utilizados"
 };
 
 
@@ -282,9 +281,15 @@ const processSpedFileInBrowser = (
         intermediateLines.forEach(line => {
             const parts = line.split('|');
             if (parts.length > 2) {
-                if (parts[1] === 'C170' && parts[2]) { // Product in NF-e item
-                    usedProductCodes.add(parts[2]);
+                // Any child record of a C100/D100 that uses a product code.
+                if (parts[1].startsWith('C') || parts[1].startsWith('D')) {
+                    // Check for product code in typical item records (like C170)
+                    if (parts[1] === 'C170' && parts.length > 2 && parts[2]) {
+                        usedProductCodes.add(parts[2]);
+                    }
+                    // Add other product-referencing records here if needed
                 }
+    
                 if ((parts[1] === 'C100' || parts[1] === 'D100') && parts.length > 4 && parts[4]) {
                     usedParticipantCodes.add(parts[4]);
                 }
@@ -315,7 +320,7 @@ const processSpedFileInBrowser = (
 
             if (trimmedLine !== lineToKeep1 && trimmedLine !== lineToKeep2) {
                 modifications.removed0190.push({ lineNumber: i + 1, line: originalLine });
-                linesModifiedCount++;
+                if (!modifications.removed0190.find(log => log.line === originalLine)) linesModifiedCount++;
                 continue;
             }
         }
@@ -332,6 +337,7 @@ const processSpedFileInBrowser = (
 
         // Data Corrections
         let currentLine = originalLine;
+        let lineWasModified = false;
         
         if (config.fixIE && codeType === '0150' && parts.length > 7 && cnpjToIeMap.size > 0) {
             const cnpj = cleanAndToStr(parts[5]);
@@ -341,7 +347,7 @@ const processSpedFileInBrowser = (
                 parts[7] = correctIE;
                 currentLine = parts.join('|');
                 modifications.ieCorrection.push({ lineNumber: i + 1, original: originalLine, corrected: currentLine });
-                linesModifiedCount++;
+                lineWasModified = true;
             }
         }
 
@@ -354,7 +360,7 @@ const processSpedFileInBrowser = (
                     parts[7] = formattedSeries;
                     currentLine = parts.join('|');
                     modifications.cteSeriesCorrection.push({ lineNumber: i + 1, original: originalLine, corrected: currentLine });
-                    linesModifiedCount++;
+                    lineWasModified = true;
                 }
             }
         }
@@ -365,7 +371,7 @@ const processSpedFileInBrowser = (
                 parts[12] = addressComplement.replace(/\s+/g, ' ').trim();
                 currentLine = parts.join('|');
                 modifications.addressSpaces.push({ lineNumber: i + 1, original: originalLine, corrected: currentLine });
-                linesModifiedCount++;
+                lineWasModified = true;
             }
         }
 
@@ -377,7 +383,7 @@ const processSpedFileInBrowser = (
                     parts[unitFieldIndex] = 'un';
                     currentLine = parts.join('|');
                     modifications.unitStandardization.push({ lineNumber: i + 1, original: originalLine, corrected: currentLine });
-                    linesModifiedCount++;
+                    lineWasModified = true;
                 }
             }
         }
@@ -391,9 +397,13 @@ const processSpedFileInBrowser = (
                     const truncatedContent = content.substring(0, MAX_CHARS_TRUNCATION).trimEnd();
                     currentLine = currentLine.substring(0, secondLastPipeIndex + 1) + truncatedContent + currentLine.substring(lastPipeIndex);
                     modifications.truncation.push({ lineNumber: i + 1, original: originalLine, corrected: currentLine });
-                    linesModifiedCount++;
+                    lineWasModified = true;
                 }
             }
+        }
+        
+        if (lineWasModified && originalLine !== currentLine && !modifications.truncation.some(log => log.original === originalLine) && !modifications.unitStandardization.some(log => log.original === originalLine) && !modifications.addressSpaces.some(log => log.original === originalLine) && !modifications.ieCorrection.some(log => log.original === originalLine) && !modifications.cteSeriesCorrection.some(log => log.original === originalLine)) {
+                 linesModifiedCount++;
         }
 
         modifiedLines.push(currentLine);
@@ -1132,6 +1142,10 @@ export function KeyChecker({
                                                 </div>
                                             </Tabs>
                                         </TabsContent>
+
+                                        <TabsContent value="full_log" className="mt-4 flex-grow overflow-hidden">
+                                            <LogDisplay logs={correctionResult.log} />
+                                        </TabsContent>
                                     </Tabs>
                                 ) : null}
                                 </div>
@@ -1181,7 +1195,6 @@ export function KeyChecker({
                     <CardContent>
                         <KeyResultsDisplay 
                             results={results} 
-                            spedDuplicates={spedDuplicates}
                         />
                     </CardContent>
                 </Card>
@@ -1190,4 +1203,3 @@ export function KeyChecker({
     );
 }
 
-    
