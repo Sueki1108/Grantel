@@ -506,8 +506,6 @@ export function runReconciliation(siengeData: any[] | null, allXmlItems: any[], 
         return { reconciled, onlyInSienge: finalOnlyInSienge, onlyInXml: finalOnlyInXml };
     } catch (err: any) {
         console.error("Reconciliation Error:", err);
-        return { ...emptyResult, onlyInSienge: siengeData, onlyInXml: allXmlItems };
+        return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: allXmlItems || [] };
     }
 }
-
-    
