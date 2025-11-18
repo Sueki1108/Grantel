@@ -54,14 +54,12 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
 
 
     const handleValidationChange = (uniqueKey: string, classification: ValidationStatus) => {
-        setCfopValidations(prev => {
-            const newValidations = { ...prev };
-            newValidations[uniqueKey] = {
-                ...(newValidations[uniqueKey] || { isDifal: false }),
-                classification,
-            };
-            return newValidations;
-        });
+        const newValidations = { ...cfopValidations };
+        newValidations[uniqueKey] = {
+            ...(newValidations[uniqueKey] || { isDifal: false }),
+            classification,
+        };
+        setCfopValidations(newValidations);
         setHasChanges(true);
     };
 
@@ -148,6 +146,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
 
             if (id === 'Fornecedor') {
                 const name = String(value || '');
+                if (!name) return <div>N/A</div>;
                 const summarizedName = name.length > 25 ? `${name.substring(0, 25)}...` : name;
                 const display = renderCellWithTooltip(summarizedName, name);
                 return renderCellWithCopy(display, name, 'Fornecedor');

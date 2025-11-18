@@ -315,13 +315,14 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
             return { ...row };
         }
     
-        const newRow = { ...row };
+        const newRow = { ...row }; // Create a shallow copy to avoid mutating the original object.
         const cfopCode = newRow['CFOP'] ? parseInt(cleanAndToStr(newRow['CFOP']), 10) : 0;
         const fullDescription = cfopDescriptions[cfopCode] || 'Descrição não encontrada';
     
         newRow['Descricao CFOP'] = fullDescription;
         return newRow;
     };
+    
     
     const finalSheetSet: DataFrames = {};
     const displayOrder = [
@@ -349,8 +350,8 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 
 export function runReconciliation(siengeData: any[] | null, xmlItems: any[]): ReconciliationResults {
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [] };
-    if (!siengeData) {
-        return emptyResult;
+    if (!siengeData || siengeData.length === 0) {
+        return { ...emptyResult, onlyInXml: xmlItems || [] };
     }
 
     if (!xmlItems || xmlItems.length === 0) {

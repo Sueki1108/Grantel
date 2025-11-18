@@ -27,6 +27,24 @@ interface ReconciliationAnalysisProps {
     isReconciliationRunning: boolean;
 }
 
+const getColumnsForDivergentTabs = (data: any[]): ColumnDef<any>[] => {
+    if (!data || data.length === 0) return [];
+
+    const hasKeyColumn = data[0] && 'Chave de Comparação' in data[0];
+    
+    let allColumns = getColumns(data);
+
+    if (hasKeyColumn) {
+        const keyColumn = allColumns.find(col => col.id === 'Chave de Comparação');
+        const otherColumns = allColumns.filter(col => col.id !== 'Chave de Comparação');
+        if (keyColumn) {
+            return [keyColumn, ...otherColumns];
+        }
+    }
+    
+    return allColumns;
+};
+
 
 export function ReconciliationAnalysis({ 
     processedData, 
@@ -49,24 +67,6 @@ export function ReconciliationAnalysis({
         XLSX.utils.book_append_sheet(workbook, worksheet, title);
         const fileName = `Grantel - Conciliação ${title}.xlsx`;
         XLSX.writeFile(workbook, fileName);
-    };
-
-    const getColumnsForDivergentTabs = (data: any[]): ColumnDef<any>[] => {
-        if (!data || data.length === 0) return [];
-    
-        const hasKeyColumn = data[0] && 'Chave de Comparação' in data[0];
-        
-        let allColumns = getColumns(data);
-    
-        if (hasKeyColumn) {
-            const keyColumn = allColumns.find(col => col.id === 'Chave de Comparação');
-            const otherColumns = allColumns.filter(col => col.id !== 'Chave de Comparação');
-            if (keyColumn) {
-                return [keyColumn, ...otherColumns];
-            }
-        }
-        
-        return allColumns;
     };
     
     return (
