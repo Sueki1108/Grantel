@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -237,88 +236,42 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
         return item.status.charAt(0).toUpperCase() + item.status.slice(1);
     };
 
-    const columns: ColumnDef<SaidaItem>[] = [
-        { accessorKey: 'numero', header: 'Número' },
-        { 
-            accessorKey: 'status', 
-            header: 'Status',
-            cell: ({ row }) => (
-                <Badge variant={getStatusVariant(row.original.status)} className="flex items-center gap-2">
-                    {getStatusIcon(row.original)}
-                    <span className="capitalize">{getStatusText(row.original)}</span>
-                </Badge>
-            )
-        },
-        { accessorKey: 'Destinatário', header: 'Destinatário', cell: ({ row }) => row.original.data?.['Destinatário'] || '---' },
-        { 
-            accessorKey: 'Emissão', 
-            header: 'Data de Emissão',
-            cell: ({ row }) => row.original.data?.['Emissão'] ? format(parseISO(row.original.data['Emissão']), 'dd/MM/yyyy') : '---'
-        },
-        { accessorKey: 'CFOP', header: 'CFOP', cell: ({ row }) => row.original.data?.['CFOP'] || '---' },
-        { 
-            accessorKey: 'Base ICMS', 
-            header: 'Base ICMS',
-            cell: ({ row }) => typeof row.original.data?.['Base ICMS'] === 'number' ? row.original.data['Base ICMS'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'
-        },
-        { 
-            accessorKey: 'Alíq. ICMS (%)', 
-            header: 'Alíq. ICMS (%)',
-            cell: ({ row }) => typeof row.original.data?.['Alíq. ICMS (%)'] === 'number' ? `${row.original.data['Alíq. ICMS (%)'].toFixed(2)}%` : '---'
-        },
-        { 
-            accessorKey: 'Valor ICMS', 
-            header: 'Valor ICMS',
-            cell: ({ row }) => typeof row.original.data?.['Valor ICMS'] === 'number' ? row.original.data['Valor ICMS'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'
-        },
-        { 
-            accessorKey: 'Total', 
-            header: 'Valor Total',
-            cell: ({ row }) => (
-                <div className="text-right">
-                    {typeof row.original.data?.['Total'] === 'number' ? row.original.data['Total'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}
-                </div>
-            )
-        },
-        {
-            id: 'actions',
-            header: 'Ações',
-            cell: ({ row }) => (
+    const columns: ColumnDef<SaidaItem>[] = getColumnsWithCustomRender(
+        analysisResults.sequence,
+        ['numero', 'status', 'Destinatário', 'Emissão', 'CFOP', 'Base ICMS', 'Alíq. ICMS (%)', 'Valor ICMS', 'Total', 'actions'],
+        (row, id) => {
+            const item = row.original;
+            if (id === 'status') {
+                 return (
+                    <Badge variant={getStatusVariant(item.status)} className="flex items-center gap-2">
+                        {getStatusIcon(item)}
+                        <span className="capitalize">{getStatusText(item)}</span>
+                    </Badge>
+                );
+            }
+             if (id === 'Destinatário') return <span>{item.data?.['Destinatário'] || '---'}</span>;
+             if (id === 'Emissão') return <span>{item.data?.['Emissão'] ? format(parseISO(item.data['Emissão']), 'dd/MM/yyyy') : '---'}</span>;
+             if (id === 'CFOP') return <span>{item.data?.['CFOP'] || '---'}</span>
+             if (id === 'Base ICMS') return <div className="text-right">{typeof item.data?.['Base ICMS'] === 'number' ? item.data['Base ICMS'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}</div>
+             if (id === 'Alíq. ICMS (%)') return <div className="text-center">{typeof item.data?.['Alíq. ICMS (%)'] === 'number' ? `${item.data['Alíq. ICMS (%)'].toFixed(2)}%` : '---'}</div>
+             if (id === 'Valor ICMS') return <div className="text-right">{typeof item.data?.['Valor ICMS'] === 'number' ? item.data['Valor ICMS'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}</div>
+             if (id === 'Total') return <div className="text-right">{typeof item.data?.['Total'] === 'number' ? item.data['Total'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}</div>
+             if (id === 'actions') return (
                  <div className="flex items-center justify-center gap-1">
-                    {row.original.status !== 'cancelada' && (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(row.original.numero, 'cancelada')}>
-                                    <XCircle className="h-4 w-4" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent><p>Marcar Cancelada</p></TooltipContent>
-                        </Tooltip>
+                    {item.status !== 'cancelada' && (
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(item.numero, 'cancelada')}><XCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar Cancelada</p></TooltipContent></Tooltip>
                     )}
-                    {row.original.status !== 'inutilizada' && (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(row.original.numero, 'inutilizada')}>
-                                    <Ban className="h-4 w-4" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent><p>Marcar Inutilizada</p></TooltipContent>
-                        </Tooltip>
+                    {item.status !== 'inutilizada' && (
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(item.numero, 'inutilizada')}><Ban className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar Inutilizada</p></TooltipContent></Tooltip>
                     )}
-                    {row.original.status !== 'emitida' && !row.original.isGap && (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(row.original.numero, 'emitida')}>
-                                    <RotateCcw className="h-4 w-4" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent><p>Reverter para Emitida</p></TooltipContent>
-                        </Tooltip>
+                    {item.status !== 'emitida' && !item.isGap && (
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(item.numero, 'emitida')}><RotateCcw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Reverter para Emitida</p></TooltipContent></Tooltip>
                     )}
                 </div>
-            )
+            );
+            return <span>{item[id as keyof SaidaItem] as any || ''}</span>
         }
-    ];
+    );
 
     const icmsColumns: ColumnDef<any>[] = getColumnsWithCustomRender(
         icmsSummaryByCfop,
