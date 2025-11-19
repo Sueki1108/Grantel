@@ -1,9 +1,10 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from '@/components/app/data-table';
-import { getColumns } from '@/components/app/columns-helper';
+import { getColumns } from '@/lib/columns-helper';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
 interface ResultsDisplayProps {
@@ -22,13 +23,11 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
     ], [results]);
     
     useEffect(() => {
-        if (orderedSheetNames.length > 0) {
-            const firstValidSheet = orderedSheetNames.find(sheetName => results[sheetName] && results[sheetName].length > 0);
-            if (firstValidSheet) {
-                setActiveTab(firstValidSheet);
-            }
+        const firstValidSheet = orderedSheetNames.find(sheetName => results[sheetName] && results[sheetName].length > 0);
+        if (firstValidSheet && !activeTab) {
+            setActiveTab(firstValidSheet);
         }
-    }, [orderedSheetNames, results]);
+    }, [orderedSheetNames, results, activeTab]);
 
     const handleTabChange = (value: string) => {
         setActiveTab(value);
@@ -60,10 +59,7 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
                     displayName: getDisplayName(sheetName),
                     component: (
                         <TabsContent key={sheetName} value={sheetName}>
-                            <ScrollArea className="w-full whitespace-nowrap rounded-md border">
-                                <DataTable columns={columns} data={sheetData} />
-                                <ScrollBar orientation="horizontal" />
-                            </ScrollArea>
+                             <DataTable columns={columns} data={sheetData} />
                         </TabsContent>
                     )
                 };
@@ -77,13 +73,14 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
     return (
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
-                <div className='flex-grow overflow-x-auto'>
+                <ScrollArea>
                     <TabsList className="inline-flex h-auto">
                         {memoizedTabs.map(tab => (
                             tab && <TabsTrigger key={tab.sheetName} value={tab.sheetName}>{tab.displayName}</TabsTrigger>
                         ))}
                     </TabsList>
-                </div>
+                    <ScrollBar orientation="horizontal" />
+                </ScrollArea>
             </div>
             {memoizedTabs.map(tab => tab?.component)}
         </Tabs>
