@@ -350,8 +350,10 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 
 /**
  * Processa a planilha de centro de custo para criar um mapa de busca rápida.
+ * A função lê uma estrutura de relatório específica onde os centros de custo são cabeçalhos de secção
+ * e os títulos/documentos estão listados abaixo deles.
  * @param data - Os dados brutos da planilha, lidos como um array de arrays.
- * @returns Um Map onde a chave é 'CNPJ do Credor-Número do Documento' e o valor é o centro de custo.
+ * @returns Um Map onde a chave é 'Nome do Credor-Número do Documento' (normalizados) e o valor é o centro de custo.
  */
 export function processCostCenterData(data: any[][]): Map<string, string> {
     const costCenterMap = new Map<string, string>();
@@ -363,16 +365,16 @@ export function processCostCenterData(data: any[][]): Map<string, string> {
 
     // 1. Encontrar o cabeçalho principal da tabela para identificar as colunas relevantes.
     // O sistema procura por uma linha que contenha "Item" na primeira coluna para se localizar.
-    let headerRowIndex = data.findIndex(row => String(row[0]).trim().toLowerCase() === 'item');
+    let headerRowIndex = data.findIndex(row => String(row[0]).trim().toLowerCase().startsWith('item'));
 
     if (headerRowIndex === -1) {
-        // Fallback caso o formato seja ligeiramente diferente.
-        headerRowIndex = data.findIndex(row => String(row[0]).trim().toLowerCase().startsWith('item'));
+        // Fallback para o caso de ter sido exportado com outra formatação.
+        headerRowIndex = data.findIndex(row => String(row[1]).trim().toLowerCase().startsWith('credor'));
         if (headerRowIndex === -1) {
-             throw new Error("Não foi possível encontrar a linha de cabeçalho (iniciada com 'Item') na planilha de centro de custo.");
+            throw new Error("Não foi possível encontrar a linha de cabeçalho (com 'Item' ou 'Credor') na planilha de centro de custo.");
         }
     }
-
+    
     const headers: string[] = data[headerRowIndex].map(h => String(h).trim());
     const credorIndex = headers.findIndex(h => normalizeKey(h) === 'credor');
     const documentoIndex = headers.findIndex(h => normalizeKey(h) === 'documento');
@@ -397,15 +399,16 @@ export function processCostCenterData(data: any[][]): Map<string, string> {
         // 4. Identificar uma linha de dados (um título/item).
         // Considera-se uma linha de dados se ela estiver abaixo do cabeçalho e começar com um número (o 'Item').
         if (i > headerRowIndex && /^\d+$/.test(firstCell)) {
-            const credor = String(row[credorIndex]).trim();
+            const credorString = String(row[credorIndex]).trim();
             const documento = String(row[documentoIndex]).trim();
 
-            if (credor && documento) {
-                // 5. Construir a chave única.
-                // Extrai o CNPJ da string do credor (ex: "3703 - ANGELLIRA... - 0001-07" -> "07501318000107")
-                const credorCnpj = credor.split('-')[1]?.trim() || '';
-                // Combina o CNPJ limpo com o número do documento.
-                const docKey = `${cleanAndToStr(credorCnpj)}-${documento.replace(/\s/g, '')}`;
+            if (credorString && documento) {
+                // 5. Construir a chave única a partir do nome do credor e do número do documento.
+                // Extrai o nome do credor da string, removendo códigos numéricos e CNPJ/sufixos.
+                const credorName = credorString.replace(/^\d+\s*-\s*/, '').replace(/\s*-\s*[\d-]+$/, '').trim();
+                
+                // Combina o nome normalizado com o número do documento limpo.
+                const docKey = `${normalizeKey(credorName)}-${cleanAndToStr(documento)}`;
                 
                 // 6. Armazenar no mapa.
                 // Adiciona a associação no mapa. Se a chave já existir, ela não é sobreposta.
@@ -535,9 +538,12 @@ export function runReconciliation(
                         }
                         
                         let costCenter = 'N/A';
-                        if (costCenterMap && h.credor && h.documento) {
-                            const credorCnpj = String(siengeItem[h.credor]).split('-')[1]?.trim() || '';
-                            const docKey = `${cleanAndToStr(credorCnpj)}-${String(siengeItem[h.documento]).replace(/\s/g, '')}`;
+                        if (costCenterMap) {
+                            // Lógica corrigida para buscar o centro de custo usando o nome do fornecedor e o número da nota do XML.
+                            const xmlFornecedor = matchedXmlItem.Fornecedor || '';
+                            const xmlNumeroNota = matchedXmlItem['Número da Nota'] || '';
+                            const docKey = `${normalizeKey(xmlFornecedor)}-${cleanAndToStr(xmlNumeroNota)}`;
+                            
                             if (costCenterMap.has(docKey)) {
                                 costCenter = costCenterMap.get(docKey)!;
                             }
