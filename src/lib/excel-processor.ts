@@ -49,6 +49,10 @@ export interface ReconciliationResults {
     reconciled: any[];
     onlyInSienge: any[];
     onlyInXml: any[];
+    debug: {
+        costCenterKeys: any[];
+        siengeKeys: any[];
+    }
 }
 export interface ProcessedData {
     sheets: DataFrames;
@@ -355,15 +359,15 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
  * @param data - Os dados brutos da planilha, lidos como um array de arrays.
  * @returns Um Map onde a chave é 'Número do Documento-Nome do Credor' (normalizados) e o valor é o centro de custo.
  */
-export function processCostCenterData(data: any[][]): Map<string, string> {
+export function processCostCenterData(data: any[][]): { costCenterMap: Map<string, string>, debugKeys: any[] } {
     const costCenterMap = new Map<string, string>();
-    let currentCostCenter = 'N/A'; // Valor padrão caso nenhuma linha de centro de custo seja encontrada antes dos dados.
+    const debugKeys: any[] = [];
+    let currentCostCenter = 'N/A';
 
     if (!data || data.length === 0) {
         throw new Error("A planilha de centro de custo está vazia ou em formato inválido.");
     }
 
-    // 1. Encontrar o cabeçalho principal da tabela para identificar as colunas relevantes.
     let headerRowIndex = data.findIndex(row => String(row[0]).trim().toLowerCase().startsWith('item'));
     if (headerRowIndex === -1) {
         headerRowIndex = data.findIndex(row => String(row[1]).trim().toLowerCase().startsWith('credor'));
@@ -380,35 +384,32 @@ export function processCostCenterData(data: any[][]): Map<string, string> {
         throw new Error("Não foi possível encontrar as colunas 'Credor' ou 'Documento' na planilha de centro de custo.");
     }
 
-    // 2. Iterar por todas as linhas da planilha.
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
         if (!row || row.length === 0) continue;
 
         const firstCell = String(row[0]).trim();
-        // 3. Identificar uma linha de cabeçalho de centro de custo.
         if (firstCell.toLowerCase() === 'centro de custo') {
             currentCostCenter = String(row[1]).trim();
-            continue; // Pula para a próxima linha.
+            continue;
         }
 
-        // 4. Identificar uma linha de dados (um título/item).
         if (i > headerRowIndex && /^\d+$/.test(firstCell)) {
             const credorString = String(row[credorIndex]).trim();
             const documento = String(row[documentoIndex]).trim();
 
             if (credorString && documento) {
-                // 5. Construir a chave única a partir do número do documento e do nome do credor.
                 const credorName = credorString.replace(/^\d+\s*-\s*/, '').replace(/\s*-\s*[\d-]+$/, '').trim();
                 const docKey = `${cleanAndToStr(documento)}-${normalizeKey(credorName)}`;
                 
+                debugKeys.push({ 'Chave Gerada': docKey, 'Documento Original': documento, 'Credor Original': credorString, 'Centro de Custo': currentCostCenter });
                 if (!costCenterMap.has(docKey)) {
                     costCenterMap.set(docKey, currentCostCenter);
                 }
             }
         }
     }
-    return costCenterMap;
+    return { costCenterMap, debugKeys };
 }
 
 
@@ -420,7 +421,7 @@ export function runReconciliation(
     cteData: any[],
     costCenterMap?: Map<string, string> | null
 ): ReconciliationResults {
-    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [] };
+    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: [] } };
     if (!siengeData || siengeData.length === 0) {
         return { ...emptyResult, onlyInXml: xmlItems || [] };
     }
@@ -474,22 +475,22 @@ export function runReconciliation(
             icmsSt: findHeader(filteredSiengeData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
         };
         
-        if (!h.cnpj || !h.numero || !h.valorTotal) {
-            throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge.");
+        if (!h.credor || !h.documento || !h.valorTotal) {
+            throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Valor Total') na planilha Sienge.");
         }
         
-        const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
+        const getComparisonKey = (numero: any, credor: any, valor: any): string | null => {
             const cleanNumero = cleanAndToStr(numero);
-            const cleanCnpj = cleanAndToStr(cnpj);
+            const cleanCredor = normalizeKey(credor);
             const cleanValor = parseFloat(String(valor || '0').replace(',', '.')).toFixed(2);
-            if (!cleanNumero || !cleanCnpj || cleanValor === 'NaN') return null;
-            return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
+            if (!cleanNumero || !cleanCredor || cleanValor === 'NaN') return null;
+            return `${cleanNumero}-${cleanCredor}-${cleanValor}`;
         };
         
         const getXmlKey = (item: any, valueField: 'Valor Total' | 'Valor Unitário') => {
             return getComparisonKey(
                 item['Número da Nota'],
-                item['CPF/CNPJ do Emitente'],
+                item['Fornecedor'],
                 item[valueField]
             );
         };
@@ -497,6 +498,7 @@ export function runReconciliation(
         let reconciled: any[] = [];
         let remainingXmlItems = [...enrichedXmlItems];
         let remainingSiengeItems = [...filteredSiengeData];
+        const siengeDebugKeys: any[] = [];
 
         const reconciliationPass = (
             siengeItems: any[],
@@ -519,6 +521,13 @@ export function runReconciliation(
 
             siengeItems.forEach(siengeItem => {
                 const key = getSiengeKey(siengeItem);
+                
+                siengeDebugKeys.push({
+                    'Chave Gerada': `${cleanAndToStr(siengeItem[h.documento!])}-${normalizeKey(siengeItem[h.credor!])}`,
+                    'Documento Original': siengeItem[h.documento!],
+                    'Credor Original': siengeItem[h.credor!],
+                });
+
                 if (key && xmlMap.has(key)) {
                     const matchedXmlItems = xmlMap.get(key)!;
                     if (matchedXmlItems.length > 0) {
@@ -529,10 +538,7 @@ export function runReconciliation(
                         
                         let costCenter = 'N/A';
                         if (costCenterMap && h.credor && h.documento) {
-                            const credorName = String(siengeItem[h.credor]).replace(/^\d+\s*-\s*/, '').replace(/\s*-\s*[\d-]+$/, '').trim();
-                            const documento = String(siengeItem[h.documento]).trim();
-                            const docKey = `${cleanAndToStr(documento)}-${normalizeKey(credorName)}`;
-                            
+                            const docKey = `${cleanAndToStr(siengeItem[h.documento!])}-${normalizeKey(siengeItem[h.credor!])}`;
                             if (costCenterMap.has(docKey)) {
                                 costCenter = costCenterMap.get(docKey)!;
                             }
@@ -556,11 +562,11 @@ export function runReconciliation(
         };
 
         const passDefinitions = [
-            { name: 'Valor Total', getSienge: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]), getXml: (item: any) => getXmlKey(item, 'Valor Total') },
-            { name: 'Valor Total + Desconto', getSienge: (item: any) => h.desconto ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto] || '0').replace(',', '.'))) : null, getXml: (item: any) => getXmlKey(item, 'Valor Total') },
-            { name: 'Valor Total - Frete', getSienge: (item: any) => h.frete ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.frete] || '0').replace(',', '.'))) : null, getXml: (item: any) => getXmlKey(item, 'Valor Total') },
-            { name: 'Valor Total - IPI/ICMS ST', getSienge: (item: any) => (h.ipiDespesas || h.icmsSt) ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0) - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)) : null, getXml: (item: any) => getXmlKey(item, 'Valor Total') },
-            { name: 'Preço Unitário', getSienge: (item: any) => h.precoUnitario ? getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.precoUnitario]) : null, getXml: (item: any) => getXmlKey(item, 'Valor Unitário') },
+            { name: 'Valor Total', getSienge: (item: any) => getComparisonKey(item[h.numero!], item[h.credor!], item[h.valorTotal!]), getXml: (item: any) => getXmlKey(item, 'Valor Total') },
+            { name: 'Valor Total + Desconto', getSienge: (item: any) => h.desconto ? getComparisonKey(item[h.numero!], item[h.credor!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto] || '0').replace(',', '.'))) : null, getXml: (item: any) => getXmlKey(item, 'Valor Total') },
+            { name: 'Valor Total - Frete', getSienge: (item: any) => h.frete ? getComparisonKey(item[h.numero!], item[h.credor!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.frete] || '0').replace(',', '.'))) : null, getXml: (item: any) => getXmlKey(item, 'Valor Total') },
+            { name: 'Valor Total - IPI/ICMS ST', getSienge: (item: any) => (h.ipiDespesas || h.icmsSt) ? getComparisonKey(item[h.numero!], item[h.credor!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0) - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)) : null, getXml: (item: any) => getXmlKey(item, 'Valor Total') },
+            { name: 'Preço Unitário', getSienge: (item: any) => h.precoUnitario ? getComparisonKey(item[h.numero!], item[h.credor!], item[h.precoUnitario]) : null, getXml: (item: any) => getXmlKey(item, 'Valor Unitário') },
         ];
 
         for (const pass of passDefinitions) {
@@ -574,7 +580,7 @@ export function runReconciliation(
         }
         
         const finalOnlyInSienge = remainingSiengeItems.map(item => ({
-             'Chave de Comparação': getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]),
+             'Chave de Comparação': getComparisonKey(item[h.numero!], item[h.credor!], item[h.valorTotal!]),
             ...item
         }));
         
@@ -583,11 +589,12 @@ export function runReconciliation(
             ...item
         }));
 
-        return { reconciled, onlyInSienge: finalOnlyInSienge, onlyInXml: finalOnlyInXml };
+        const { costCenterMap: _, debugKeys: costCenterKeys } = costCenterMap ? processCostCenterData(siengeData) : { costCenterMap: new Map(), debugKeys: [] };
+
+        return { reconciled, onlyInSienge: finalOnlyInSienge, onlyInXml: finalOnlyInXml, debug: { costCenterKeys, siengeKeys: siengeDebugKeys } };
     } catch (err: any) {
         console.error("Reconciliation Error:", err);
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
     
-

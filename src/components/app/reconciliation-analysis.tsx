@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useMemo } from 'react';
@@ -7,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import type { ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, X, RotateCw } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, X, RotateCw, HelpCircle } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
@@ -111,6 +112,32 @@ export function ReconciliationAnalysis({
         const fileName = `Grantel - Conciliação ${title}.xlsx`;
         XLSX.writeFile(workbook, fileName);
     };
+
+    const handleDownloadDebugKeys = () => {
+        if (!reconciliationResults?.debug) {
+            toast({ variant: 'destructive', title: 'Nenhum dado de depuração', description: 'Execute a conciliação primeiro.' });
+            return;
+        }
+
+        const wb = XLSX.utils.book_new();
+        
+        if (reconciliationResults.debug.costCenterKeys.length > 0) {
+            const ws = XLSX.utils.json_to_sheet(reconciliationResults.debug.costCenterKeys);
+            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Centro_Custo");
+        }
+        if (reconciliationResults.debug.siengeKeys.length > 0) {
+            const ws = XLSX.utils.json_to_sheet(reconciliationResults.debug.siengeKeys);
+            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
+        }
+
+        if (wb.SheetNames.length === 0) {
+             toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar.' });
+            return;
+        }
+
+        XLSX.writeFile(wb, "Grantel_Debug_Chaves_Conciliacao.xlsx");
+        toast({ title: 'Ficheiro de Depuração Gerado' });
+    }
     
     return (
          <Card>
@@ -139,9 +166,14 @@ export function ReconciliationAnalysis({
                         onFileChange={onCostCenterFileChange}
                         onClearFile={onClearCostCenterFile}
                     />
-                    <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full md:w-auto">
-                        {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
-                    </Button>
+                    <div className='flex flex-col gap-2'>
+                        <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full">
+                            {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
+                        </Button>
+                        <Button onClick={handleDownloadDebugKeys} disabled={!reconciliationResults} variant="outline" size="sm" className="w-full">
+                            <Download className="mr-2 h-4 w-4"/>Baixar Chaves de Depuração
+                        </Button>
+                    </div>
                 </div>
                 
                 <Tabs defaultValue="reconciliation">
