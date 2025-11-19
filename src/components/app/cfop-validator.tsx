@@ -71,8 +71,8 @@ const FilterDialog: React.FC<{
             if (item['Alíq. ICMS (%)'] !== undefined) xmlPicms.add(String(item['Alíq. ICMS (%)']));
             
             const cfopCode = item.CFOP;
-            const shortDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions]?.split(' ').slice(0, 3).join(' ') || "N/A";
-            const combined = `${cfopCode}: ${shortDescription}`;
+            const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
+            const combined = `${cfopCode}: ${fullDescription}`;
             if (cfopCode) xmlCfops.add(combined);
         });
         return {
@@ -117,43 +117,16 @@ const FilterDialog: React.FC<{
         });
     };
     
-    const selectAllFilters = () => {
-         setTabFilters(prev => ({
-            ...prev,
-            [siengeCfop]: {
-                xmlCsts: new Set(availableOptions.xmlCsts),
-                xmlPicms: new Set(availableOptions.xmlPicms),
-                xmlCfops: new Set(availableOptions.xmlCfops),
-            }
-        }));
+    const handleSelectAllForTab = (filterKey: keyof TabFilters, type: 'all' | 'none') => {
+        setTabFilters(prev => {
+            const currentCfopFilters = prev[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set() };
+            const newSet = type === 'all' ? new Set(availableOptions[filterKey]) : new Set<string>();
+            return {
+                ...prev,
+                [siengeCfop]: { ...currentCfopFilters, [filterKey]: newSet }
+            };
+        });
     };
-
-    const deselectAllFilters = () => {
-        setTabFilters(prev => ({
-            ...prev,
-            [siengeCfop]: {
-                xmlCsts: new Set(),
-                xmlPicms: new Set(),
-                xmlCfops: new Set(),
-            }
-        }));
-    };
-    
-    const FilterCheckboxList = ({ options, filterSet, filterKey, title }: { options: string[], filterSet: Set<string>, filterKey: keyof TabFilters, title: string }) => (
-        <div className="flex flex-col gap-2 p-1">
-             <h4 className="font-medium text-center pb-2 border-b">{title}</h4>
-             <ScrollArea className="h-[600px]">
-                <div className="flex flex-col gap-2 mt-2 p-1">
-                    {options.map(opt => (
-                        <div key={`${filterKey}-${opt}`} className="flex items-center space-x-2">
-                            <Checkbox id={`${filterKey}-${opt}`} checked={filterSet.has(opt)} onCheckedChange={checked => handleFilterChange(filterKey, opt, !!checked)} />
-                            <Label htmlFor={`${filterKey}-${opt}`} className="text-sm font-normal">{filterKey === 'xmlPicms' ? `${parseFloat(opt).toFixed(2)}%` : opt}</Label>
-                        </div>
-                    ))}
-                </div>
-            </ScrollArea>
-        </div>
-    );
 
     return (
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -162,21 +135,63 @@ const FilterDialog: React.FC<{
                     <ListFilter className="mr-2 h-4 w-4" /> Filtros
                 </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-5xl">
+            <DialogContent className="max-w-4xl">
                  <DialogHeader>
                     <DialogTitle>Filtros Avançados para CFOP {siengeCfop}</DialogTitle>
                     <DialogDescription>Desmarque os itens que deseja ocultar da visualização.</DialogDescription>
                 </DialogHeader>
-                <div className="flex justify-end gap-2">
-                     <Button variant="ghost" size="sm" onClick={deselectAllFilters}>Desmarcar Todos</Button>
-                     <Button variant="ghost" size="sm" onClick={selectAllFilters}>Marcar Todos</Button>
-                </div>
-                 <div className="grid grid-cols-3 gap-4 border-t pt-4">
-                     <FilterCheckboxList title="CFOP (XML)" options={availableOptions.xmlCfops} filterSet={filters.xmlCfops || new Set()} filterKey="xmlCfops" />
-                     <FilterCheckboxList title="CST ICMS (XML)" options={availableOptions.xmlCsts} filterSet={filters.xmlCsts || new Set()} filterKey="xmlCsts" />
-                     <FilterCheckboxList title="Alíquota ICMS (XML)" options={availableOptions.xmlPicms} filterSet={filters.xmlPicms || new Set()} filterKey="xmlPicms" />
-                 </div>
-                 <DialogFooter>
+                 <Tabs defaultValue='cfop' className='w-full'>
+                    <TabsList className='grid grid-cols-3 w-full'>
+                        <TabsTrigger value='cfop'>CFOP (XML)</TabsTrigger>
+                        <TabsTrigger value='cst'>CST ICMS (XML)</TabsTrigger>
+                        <TabsTrigger value='picms'>Alíquota ICMS (XML)</TabsTrigger>
+                    </TabsList>
+                    <div className="mt-4">
+                        <TabsContent value='cfop'>
+                            <div className="flex justify-end gap-2 mb-2">
+                                <Button variant="ghost" size="sm" onClick={() => handleSelectAllForTab('xmlCfops', 'all')}>Marcar Todos</Button>
+                                <Button variant="ghost" size="sm" onClick={() => handleSelectAllForTab('xmlCfops', 'none')}>Desmarcar Todos</Button>
+                            </div>
+                            <ScrollArea className='h-96 border rounded-md p-4'>
+                                {availableOptions.xmlCfops.map(opt => (
+                                    <div key={`cfop-${opt}`} className="flex items-start space-x-2 mb-2">
+                                        <Checkbox id={`cfop-${opt}`} checked={(filters.xmlCfops || new Set()).has(opt)} onCheckedChange={checked => handleFilterChange('xmlCfops', opt, !!checked)} />
+                                        <Label htmlFor={`cfop-${opt}`} className="text-sm font-normal cursor-pointer">{opt}</Label>
+                                    </div>
+                                ))}
+                            </ScrollArea>
+                        </TabsContent>
+                         <TabsContent value='cst'>
+                             <div className="flex justify-end gap-2 mb-2">
+                                <Button variant="ghost" size="sm" onClick={() => handleSelectAllForTab('xmlCsts', 'all')}>Marcar Todos</Button>
+                                <Button variant="ghost" size="sm" onClick={() => handleSelectAllForTab('xmlCsts', 'none')}>Desmarcar Todos</Button>
+                            </div>
+                             <ScrollArea className='h-96 border rounded-md p-4'>
+                                {availableOptions.xmlCsts.map(opt => (
+                                    <div key={`cst-${opt}`} className="flex items-center space-x-2 mb-2">
+                                        <Checkbox id={`cst-${opt}`} checked={(filters.xmlCsts || new Set()).has(opt)} onCheckedChange={checked => handleFilterChange('xmlCsts', opt, !!checked)} />
+                                        <Label htmlFor={`cst-${opt}`} className="text-sm font-normal">{opt}</Label>
+                                    </div>
+                                ))}
+                            </ScrollArea>
+                        </TabsContent>
+                         <TabsContent value='picms'>
+                             <div className="flex justify-end gap-2 mb-2">
+                                <Button variant="ghost" size="sm" onClick={() => handleSelectAllForTab('xmlPicms', 'all')}>Marcar Todos</Button>
+                                <Button variant="ghost" size="sm" onClick={() => handleSelectAllForTab('xmlPicms', 'none')}>Desmarcar Todos</Button>
+                            </div>
+                            <ScrollArea className='h-96 border rounded-md p-4'>
+                                {availableOptions.xmlPicms.map(opt => (
+                                    <div key={`picms-${opt}`} className="flex items-center space-x-2 mb-2">
+                                        <Checkbox id={`picms-${opt}`} checked={(filters.xmlPicms || new Set()).has(opt)} onCheckedChange={checked => handleFilterChange('xmlPicms', opt, !!checked)} />
+                                        <Label htmlFor={`picms-${opt}`} className="text-sm font-normal">{parseFloat(opt).toFixed(2)}%</Label>
+                                    </div>
+                                ))}
+                            </ScrollArea>
+                        </TabsContent>
+                    </div>
+                </Tabs>
+                 <DialogFooter className="mt-4">
                      <Button onClick={() => setIsDialogOpen(false)}>Aplicar e Fechar</Button>
                 </DialogFooter>
             </DialogContent>
@@ -293,7 +308,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     };
 
     const columns = useMemo(() => {
-        const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'Sienge_Esp', 'CFOP', 'CST do ICMS', 'Alíq. ICMS (%)', 'Valor Total'];
+        const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'Sienge_Esp', 'CFOP', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
         
         return getColumnsWithCustomRender(
             items,
@@ -476,8 +491,8 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
 
                                                 const filteredCount = !currentFilters ? allItemsForCfop.length : allItemsForCfop.filter(item => {
                                                     const cfopCode = item.CFOP;
-                                                    const shortDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions]?.split(' ').slice(0, 3).join(' ') || "N/A";
-                                                    const combinedCfop = `${cfopCode}: ${shortDescription}`;
+                                                    const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
+                                                    const combinedCfop = `${cfopCode}: ${fullDescription}`;
 
                                                     const cstCode = String(item['CST do ICMS'] || '');
                                                     const cstDesc = getCstDescription(cstCode);
@@ -506,8 +521,8 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                             if (!currentFilters) return true;
                                             
                                             const cfopCode = item.CFOP;
-                                            const shortDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions]?.split(' ').slice(0, 3).join(' ') || "N/A";
-                                            const combinedCfop = `${cfopCode}: ${shortDescription}`;
+                                            const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
+                                            const combinedCfop = `${cfopCode}: ${fullDescription}`;
 
                                             const cstCode = String(item['CST do ICMS'] || '');
                                             const cstDesc = getCstDescription(cstCode);
