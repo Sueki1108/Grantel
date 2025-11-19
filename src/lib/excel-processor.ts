@@ -372,32 +372,41 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         if (!row || !Array.isArray(row)) return;
         
         let isHeaderRow = false;
+        // Search for "Centro de custo" in any cell of the row
         for (let i = 0; i < row.length; i++) {
             const cellValue = String(row[i] || '').trim();
             if (cellValue.toLowerCase().includes('centro de custo')) {
-                currentCostCenter = String(row[i + 1] || 'N/A').trim();
-                costCenterSet.add(currentCostCenter);
-                costCenterHeaderRows.push({
-                    'Linha Original': row.join('; '),
-                    'Centro de Custo Identificado': currentCostCenter
-                });
-                isHeaderRow = true;
-                break;
+                // Now, search for the actual cost center name in the rest of the row
+                for (let j = i + 1; j < row.length; j++) {
+                    const nextCellValue = String(row[j] || '').trim();
+                    if (nextCellValue) {
+                        currentCostCenter = nextCellValue;
+                        costCenterSet.add(currentCostCenter);
+                        costCenterHeaderRows.push({
+                            'Linha Original': row.join('; '),
+                            'Centro de Custo Identificado': currentCostCenter
+                        });
+                        isHeaderRow = true;
+                        break; // Found the name, stop searching this row
+                    }
+                }
+                if(isHeaderRow) break; // Found header and name, move to next row
             }
         }
 
+        // If it's not a header row, check if it's a data row
         if (!isHeaderRow) {
             const itemNumberCell = String(row[0] || '').trim();
-            const isDataRow = /^\d+$/.test(itemNumberCell) && row[1] && row[3];
+            const creditorCell = String(row[1] || '').trim();
+            const documentCell = String(row[3] || '').trim();
+
+            const isDataRow = /^\d+$/.test(itemNumberCell) && creditorCell && documentCell;
 
             if (isDataRow) {
-                const creditorCell = String(row[1] || '').trim();
-                const documentCell = String(row[3] || '').trim();
-
                 const creditorCodeMatch = creditorCell.match(/^(\d+)/);
                 const creditorCode = creditorCodeMatch ? creditorCodeMatch[1] : '';
 
-                if (documentCell && creditorCode) {
+                if (creditorCode) {
                     const docKey = `${cleanAndToStr(documentCell)}-${creditorCode}`;
                     
                     const debugInfo = { 
