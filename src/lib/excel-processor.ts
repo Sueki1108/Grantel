@@ -362,33 +362,46 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 export function processCostCenterData(data: any[][]): { costCenterMap: Map<string, string>; debugKeys: any[] } {
     const costCenterMap = new Map<string, string>();
     const debugKeys: any[] = [];
-    let currentCostCenter = 'N/A'; // Valor padrão
+    let currentCostCenter = 'N/A';
 
     if (!data || data.length === 0) {
         return { costCenterMap, debugKeys };
     }
 
-    let headerRowIndex = data.findIndex(row => String(row[0]).trim().toLowerCase().startsWith('item'));
-    if (headerRowIndex === -1) {
-        headerRowIndex = data.findIndex(row => String(row[1]).trim().toLowerCase().startsWith('credor'));
-        if (headerRowIndex === -1) return { costCenterMap, debugKeys };
-    }
-    
-    const headers: string[] = data[headerRowIndex].map(h => String(h || '').trim());
-    const credorIndex = headers.findIndex(h => normalizeKey(h) === 'credor');
-    const documentoIndex = headers.findIndex(h => normalizeKey(h) === 'documento');
+    let headerRowIndex = -1;
+    let headers: string[] = [];
 
-    if (credorIndex === -1 || documentoIndex === -1) {
+    // Find the header row dynamically by looking for 'Credor' and 'Documento'
+    for (let i = 0; i < Math.min(data.length, 20); i++) {
+        const row = data[i];
+        if (Array.isArray(row)) {
+            const potentialHeaders = row.map(h => String(h || '').trim());
+            const credorIndex = potentialHeaders.findIndex(h => normalizeKey(h) === 'credor');
+            const documentoIndex = potentialHeaders.findIndex(h => normalizeKey(h) === 'documento');
+
+            if (credorIndex !== -1 && documentoIndex !== -1) {
+                headerRowIndex = i;
+                headers = potentialHeaders;
+                break;
+            }
+        }
+    }
+
+    if (headerRowIndex === -1) {
         return { costCenterMap, debugKeys };
     }
+    
+    const credorIndex = headers.findIndex(h => normalizeKey(h) === 'credor');
+    const documentoIndex = headers.findIndex(h => normalizeKey(h) === 'documento');
 
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
         if (!row || row.length === 0) continue;
 
-        const firstCell = String(row[0]).trim();
-        if (firstCell.toLowerCase() === 'centro de custo') {
-            currentCostCenter = String(row[1]).trim();
+        const firstCell = String(row[0] || '').trim();
+        
+        if (firstCell.toLowerCase().startsWith('centro de custo')) {
+            currentCostCenter = String(row[1] || 'N/A').trim();
             continue;
         }
 
@@ -445,9 +458,9 @@ export function runReconciliation(
     cteData: any[],
     costCenterMap?: Map<string, string> | null
 ): ReconciliationResults {
-
     const costCenterKeys: any[] = []; 
-    const siengeKeys = generateSiengeDebugKeys(siengeData || []);
+    const siengeKeys: any[] = generateSiengeDebugKeys(siengeData || []);
+
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys, siengeKeys } };
     
     if (!siengeData || siengeData.length === 0) {
@@ -542,7 +555,7 @@ export function runReconciliation(
                         if (matchedXmlItems.length === 0) xmlMap.delete(key);
                         
                         let costCenter = 'N/A';
-                         if (costCenterMap && h.numero && h.credor) {
+                        if (costCenterMap && h.numero && h.credor) {
                             const siengeDoc = siengeItem[h.numero!];
                             const siengeCredor = siengeItem[h.credor!];
                             const docKey = `${cleanAndToStr(siengeDoc)}-${normalizeKey(siengeCredor)}`;

@@ -335,7 +335,7 @@ export function AutomatorClientPage() {
                     }
                 },
             }));
-            toast({ title: "Planilha de Centro de Custo Carregada", description: `${costCenterMap.size} mapeamentos de centro de custo foram criados.` });
+            toast({ title: "Planilha de Centro de Custo Carregada", description: `${costCenterMap.size} mapeamentos e ${debugKeys.length} chaves de depuração foram criadas.` });
         } catch (err: any) {
             toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
             setCostCenterFile(null);
