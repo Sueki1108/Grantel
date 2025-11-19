@@ -364,35 +364,40 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         return { costCenterMap, debugKeys };
     }
 
-    for (const row of data) {
-        if (!row || !Array.isArray(row)) continue;
+    data.forEach(row => {
+        if (!row || !Array.isArray(row)) return;
 
         const firstCell = String(row[0] || '').trim();
         const secondCell = String(row[1] || '').trim();
         
         if (firstCell.toLowerCase().includes('centro de custo')) {
             currentCostCenter = secondCell || 'N/A';
-            continue;
+            return; // Continue to the next line
         }
-        
-        if (row.length > 3) {
-            const credorString = String(row[1] || '').trim();
-            const documento = String(row[3] || '').trim();
+
+        // Check if it's a data row by looking for a numeric value in the first column
+        if (row.length > 3 && !isNaN(parseInt(firstCell, 10))) {
+            const credorString = String(row[1] || '').trim(); // Column B
+            const documento = String(row[3] || '').trim();    // Column D
 
             const credorCodeMatch = credorString.match(/^(\d+)/);
             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
+            
+            const docKey = `${cleanAndToStr(documento)}-${credorCode}`;
 
-            if (credorCode && documento) {
-                const docKey = `${cleanAndToStr(documento)}-${credorCode}`;
-                
-                debugKeys.push({ 'Chave Gerada (Centro de Custo)': docKey, 'Documento Original': documento, 'Credor Original': credorString, 'Centro de Custo': currentCostCenter });
+            debugKeys.push({ 
+                'Chave Gerada (Centro de Custo)': docKey, 
+                'Documento Original': documento, 
+                'Credor Original': credorString,
+                'Centro de Custo': currentCostCenter
+            });
 
-                if (!costCenterMap.has(docKey)) {
-                    costCenterMap.set(docKey, currentCostCenter);
-                }
+            if (docKey && !costCenterMap.has(docKey)) {
+                costCenterMap.set(docKey, currentCostCenter);
             }
         }
-    }
+    });
+    
     return { costCenterMap, debugKeys };
 }
 
@@ -580,3 +585,5 @@ export function runReconciliation(
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
+
+    
