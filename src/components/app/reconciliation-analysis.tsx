@@ -1,30 +1,32 @@
-
 "use client";
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import type { ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, Check, X, RotateCw } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, X, RotateCw } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
+import { getColumns } from "@/components/app/columns-helper";
 import { SiengeTaxCheck } from './sienge-tax-check';
 import { ColumnDef, Row } from '@tanstack/react-table';
 import { CfopValidator } from './cfop-validator';
-import { AllClassifications, DifalClassification, DifalStatus } from './imobilizado-analysis';
+import { AllClassifications, DifalStatus } from './imobilizado-analysis';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 
 interface ReconciliationAnalysisProps {
     processedData: ProcessedData | null;
     siengeFile: File | null;
+    costCenterFile: File | null;
     onSiengeFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
+    onClearCostCenterFile: () => void;
     onRunReconciliation: () => void;
     isReconciliationRunning: boolean;
     allClassifications: AllClassifications;
@@ -54,8 +56,11 @@ const getColumnsForDivergentTabs = (data: any[]): ColumnDef<any>[] => {
 export function ReconciliationAnalysis({ 
     processedData, 
     siengeFile, 
+    costCenterFile,
     onSiengeFileChange, 
+    onCostCenterFileChange,
     onClearSiengeFile,
+    onClearCostCenterFile,
     onRunReconciliation,
     isReconciliationRunning,
     allClassifications,
@@ -114,18 +119,25 @@ export function ReconciliationAnalysis({
                     <GitCompareArrows className="h-8 w-8 text-primary" />
                     <div>
                         <CardTitle className="font-headline text-2xl">XML VS Sienge</CardTitle>
-                        <CardDescription>Carregue a planilha do Sienge para cruzar informações com os XMLs processados na aba de validação.</CardDescription>
+                        <CardDescription>Carregue as planilhas para cruzar informações com os XMLs processados.</CardDescription>
                     </div>
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
-                 <div className='grid grid-cols-1 md:grid-cols-2 gap-6 items-end'>
+                 <div className='grid grid-cols-1 md:grid-cols-3 gap-6 items-end'>
                     <FileUploadForm
                         displayName="Itens do Sienge"
                         formId="sienge-for-reconciliation"
                         files={{ 'sienge-for-reconciliation': !!siengeFile }}
                         onFileChange={onSiengeFileChange}
                         onClearFile={onClearSiengeFile}
+                    />
+                     <FileUploadForm
+                        displayName="Centro de Custo"
+                        formId="cost-center"
+                        files={{ 'cost-center': !!costCenterFile }}
+                        onFileChange={onCostCenterFileChange}
+                        onClearFile={onClearCostCenterFile}
                     />
                     <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full md:w-auto">
                         {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
@@ -176,7 +188,7 @@ export function ReconciliationAnalysis({
                         ) : (
                             <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
                                 <FileSearch className="h-12 w-12 text-primary" />
-                                <p className="mt-4 text-center">Carregue a planilha "Itens do Sienge" e clique no botão "Conciliar XML vs Sienge" para ver os resultados.</p>
+                                <p className="mt-4 text-center">Carregue as planilhas e clique no botão "Conciliar XML vs Sienge" para ver os resultados.</p>
                             </div>
                         )}
                     </TabsContent>
@@ -238,22 +250,7 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
     }, [items, allClassifications, competence]);
 
     const difalColumns = useMemo(() => {
-         const baseCols = getColumnsWithCustomRender(
-            items,
-            ['Número da Nota', 'Fornecedor', 'Descrição', 'CFOP', 'Sienge_CFOP', 'pICMS', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'],
-            (row: Row<any>, id: string) => {
-                const value = row.original[id];
-                 if (id === 'Descricao CFOP') {
-                    const fullText = String(value || '');
-                    const truncatedText = fullText.length > 20 ? `${fullText.substring(0, 20)}...` : fullText;
-                    return <TooltipProvider><Tooltip><TooltipTrigger asChild><span>{truncatedText}</span></TooltipTrigger><TooltipContent><p>{fullText}</p></TooltipContent></Tooltip></TooltipProvider>;
-                }
-                 if (id === 'Valor Unitário' || id === 'Valor Total') {
-                     return <div className="text-right">{Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
-                 }
-                return String(value || '');
-            }
-        );
+        const baseCols = getColumns(items.length > 0 ? items : [{}]);
         
         baseCols.push({
             id: 'actions',

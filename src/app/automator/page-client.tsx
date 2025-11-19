@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -17,7 +16,7 @@ import Link from "next/link";
 import * as XLSX from 'xlsx';
 import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
-import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
+import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult, processCostCenterData } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdvancedAnalyses } from "@/components/app/advanced-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
@@ -45,6 +44,7 @@ const fileMapping: { [key: string]: string } = {
     'NFE Operação Desconhecida': 'NFE Operação Desconhecida',
     'CTE Desacordo de Serviço': 'CTE Desacordo de Serviço',
     'Itens do Sienge': 'Itens do Sienge',
+    'Centro de Custo': 'Centro de Custo',
 };
 
 const requiredFiles = [
@@ -66,6 +66,7 @@ export function AutomatorClientPage() {
     // State for files uploaded in child components
     const [spedFiles, setSpedFiles] = useState<File[]>([]);
     const [siengeFile, setSiengeFile] = useState<File | null>(null);
+    const [costCenterFile, setCostCenterFile] = useState<File | null>(null);
     const [lastSaidaNumber, setLastSaidaNumber] = useState<number>(0);
     const [disregardedNfseNotes, setDisregardedNfseNotes] = useState<Set<string>>(new Set());
     const [allClassifications, setAllClassifications] = useState<AllClassifications>({});
@@ -288,6 +289,35 @@ export function AutomatorClientPage() {
             setProcessing(false);
         }
     };
+    
+    const handleCostCenterFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        setCostCenterFile(file || null);
+
+        if (file) {
+            setProcessing(true);
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
+                const worksheet = workbook.Sheets[sheetName];
+                const costCenterData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                const costCenterMap = processCostCenterData(costCenterData);
+                
+                setProcessedData(prev => ({
+                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
+                    costCenterMap,
+                }));
+                toast({ title: "Planilha de Centro de Custo Carregada", description: `${costCenterMap.size} mapeamentos de centro de custo foram criados.` });
+            } catch (err: any) {
+                toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
+                setCostCenterFile(null);
+            } finally {
+                setProcessing(false);
+            }
+        }
+    };
 
 
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>, category: 'nfeEntrada' | 'cte' | 'nfeSaida' | 'nfse') => {
@@ -363,6 +393,7 @@ export function AutomatorClientPage() {
         setLogs([]);
         setSpedFiles([]);
         setSiengeFile(null);
+        setCostCenterFile(null);
         setProcessing(false);
         setLastSaidaNumber(0);
         setDisregardedNfseNotes(new Set());
@@ -509,7 +540,10 @@ export function AutomatorClientPage() {
     const handleSubmit = () => {
         setError(null);
         setLogs([]);
-        setProcessedData(null);
+        setProcessedData(prev => ({
+            ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
+            sheets: {}, // Clear only sheets, keep other state
+        }));
         setIsPeriodModalOpen(false);
         setProcessing(true);
         
@@ -586,18 +620,21 @@ export function AutomatorClientPage() {
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
-                setProcessedData({
+                setProcessedData(prev => ({
+                    ...prev,
                     ...resultData, 
                     competence,
-                    siengeSheetData: processedData?.siengeSheetData,
-                });
+                }));
 
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
 
             } catch (err: any) {
                 const errorMessage = err.message || "Ocorreu um erro desconhecido durante o processamento.";
                 setError(errorMessage);
-                setProcessedData(null);
+                setProcessedData(prev => ({
+                    ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
+                    sheets: {},
+                }));
                 setLogs(prev => [...prev, `[ERRO FATAL] ${errorMessage}`]);
                 toast({ variant: "destructive", title: "Erro no Processamento", description: errorMessage });
             } finally {
@@ -624,7 +661,8 @@ export function AutomatorClientPage() {
                 processedData.siengeSheetData,
                 processedData.sheets['Itens Válidos'] || [],
                 processedData.sheets['Notas Válidas'] || [],
-                processedData.sheets['CTEs Válidos'] || []
+                processedData.sheets['CTEs Válidos'] || [],
+                processedData.costCenterMap
             );
             
             setProcessedData(prev => ({
@@ -789,8 +827,11 @@ export function AutomatorClientPage() {
                             <ReconciliationAnalysis 
                                 processedData={processedData} 
                                 siengeFile={siengeFile} 
+                                costCenterFile={costCenterFile}
                                 onSiengeFileChange={handleSiengeFileChange}
+                                onCostCenterFileChange={handleCostCenterFileChange}
                                 onClearSiengeFile={() => setSiengeFile(null)}
+                                onClearCostCenterFile={() => setCostCenterFile(null)}
                                 onRunReconciliation={handleRunReconciliation}
                                 isReconciliationRunning={processing}
                                 allClassifications={allClassifications}
