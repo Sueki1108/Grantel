@@ -65,15 +65,19 @@ const FilterDialog: React.FC<{
         const xmlCfops = new Set<string>();
         items.forEach(item => {
             const cstCode = String(item['CST do ICMS'] || '');
-            const cstDesc = getCstDescription(cstCode);
-            if(cstCode) xmlCsts.add(`${cstCode}: ${cstDesc}`);
+            if(cstCode) {
+                const cstDesc = getCstDescription(cstCode);
+                xmlCsts.add(`${cstCode}: ${cstDesc}`);
+            }
 
             if (item['Alíq. ICMS (%)'] !== undefined) xmlPicms.add(String(item['Alíq. ICMS (%)']));
             
             const cfopCode = item.CFOP;
-            const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
-            const combined = `${cfopCode}: ${fullDescription}`;
-            if (cfopCode) xmlCfops.add(combined);
+            if (cfopCode) {
+                const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
+                const combined = `${cfopCode}: ${fullDescription}`;
+                xmlCfops.add(combined);
+            }
         });
         return {
             xmlCsts: Array.from(xmlCsts).sort(),
@@ -152,7 +156,7 @@ const FilterDialog: React.FC<{
                                 <Button variant="ghost" size="sm" onClick={() => handleSelectAllForTab('xmlCfops', 'all')}>Marcar Todos</Button>
                                 <Button variant="ghost" size="sm" onClick={() => handleSelectAllForTab('xmlCfops', 'none')}>Desmarcar Todos</Button>
                             </div>
-                            <ScrollArea className='h-[600px] border rounded-md p-4'>
+                            <ScrollArea className='h-96 border rounded-md p-4'>
                                 {availableOptions.xmlCfops.map(opt => (
                                     <div key={`cfop-${opt}`} className="flex items-start space-x-2 mb-2">
                                         <Checkbox id={`cfop-${opt}`} checked={(filters.xmlCfops || new Set()).has(opt)} onCheckedChange={checked => handleFilterChange('xmlCfops', opt, !!checked)} />
@@ -338,6 +342,10 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     };
 
     const columns = useMemo(() => {
+        if (!items || items.length === 0) return [];
+        const allKeys = new Set<string>();
+        items.forEach(item => Object.keys(item).forEach(key => allKeys.add(key)));
+
         const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
         
         return getColumnsWithCustomRender(
@@ -349,7 +357,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
                      <div className="flex items-center justify-between gap-1">
                         <span className="truncate">{displayValue}</span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => copyToClipboard(copyValue, typeName)}>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={(e) => { e.stopPropagation(); copyToClipboard(copyValue, typeName); }}>
                             <Copy className="h-3 w-3" />
                         </Button>
                     </div>
@@ -401,7 +409,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     return (
                         <div className="flex justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                              <TooltipProvider>
-                                <Tooltip><TooltipTrigger asChild><Button variant={classification === 'correct' ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'correct' && "bg-green-600/80 text-white hover:bg-green-600")} onClick={() => handleValidationChange([row.original], 'correct')}><Check className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button variant={classification === 'correct' ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'correct' && "bg-green-600/80 text-white hover:bg-green-700")} onClick={() => handleValidationChange([row.original], 'correct')}><Check className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
                                 <Tooltip><TooltipTrigger asChild><Button variant={classification === 'incorrect' ? 'destructive' : 'ghost'} size="icon" className={cn("h-7 w-7")} onClick={() => handleValidationChange([row.original], 'incorrect')}><X className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
                                 <Tooltip><TooltipTrigger asChild><Button variant={classification === 'verify' ? 'secondary' : 'ghost'} size="icon" className="h-7 w-7" onClick={() => handleValidationChange([row.original], 'verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>A Verificar</p></TooltipContent></Tooltip>
                                 <Tooltip><TooltipTrigger asChild><Button variant={isDifal ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", isDifal && "bg-primary hover:bg-primary/90")} onClick={() => handleDifalChange([row.original])}><Ticket className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>{isDifal ? 'Desmarcar DIFAL' : 'Marcar como DIFAL'}</p></TooltipContent></Tooltip>
@@ -573,3 +581,4 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
+
