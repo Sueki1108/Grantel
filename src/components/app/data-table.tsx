@@ -67,7 +67,7 @@ export function DataTable<TData, TValue>({
             id: 'select',
             header: ({ table }) => (
                 <Checkbox
-                    checked={table.getIsAllRowsSelected() || (table.getIsSomeRowsSelected() && "indeterminate")}
+                    checked={table.getIsAllRowsSelected()}
                     onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
                     aria-label="Selecionar todas as linhas"
                     onClick={e => e.stopPropagation()}
@@ -94,6 +94,7 @@ export function DataTable<TData, TValue>({
   const table = useReactTable({
     data,
     columns: tableColumns,
+    autoResetPageIndex: false,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
