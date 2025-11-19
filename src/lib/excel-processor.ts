@@ -354,13 +354,15 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 
 /**
  * Processa a planilha de centro de custo para criar um mapa de busca rápida e chaves de depuração.
+ * A função lê uma estrutura de relatório específica onde os centros de custo são cabeçalhos de secção
+ * e os títulos/documentos estão listados abaixo deles.
  * @param data - Os dados brutos da planilha, lidos como um array de arrays.
  * @returns Um objeto contendo o mapa de centros de custo e uma lista de chaves de depuração.
  */
 export function processCostCenterData(data: any[][]): { costCenterMap: Map<string, string>; debugKeys: any[] } {
     const costCenterMap = new Map<string, string>();
     const debugKeys: any[] = [];
-    let currentCostCenter = 'N/A';
+    let currentCostCenter = 'N/A'; // Valor padrão
 
     if (!data || data.length === 0) {
         return { costCenterMap, debugKeys };
@@ -372,7 +374,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         if (headerRowIndex === -1) return { costCenterMap, debugKeys };
     }
     
-    const headers: string[] = data[headerRowIndex].map(h => String(h).trim());
+    const headers: string[] = data[headerRowIndex].map(h => String(h || '').trim());
     const credorIndex = headers.findIndex(h => normalizeKey(h) === 'credor');
     const documentoIndex = headers.findIndex(h => normalizeKey(h) === 'documento');
 
@@ -391,8 +393,8 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         }
 
         if (i > headerRowIndex && /^\d+$/.test(firstCell)) {
-            const credorString = String(row[credorIndex]).trim();
-            const documento = String(row[documentoIndex]).trim();
+            const credorString = String(row[credorIndex] || '').trim();
+            const documento = String(row[documentoIndex] || '').trim();
 
             if (credorString && documento) {
                 const credorName = credorString.replace(/^\d+\s*-\s*/, '').replace(/\s*-\s*[\d-]+$/, '').trim();
@@ -444,7 +446,7 @@ export function runReconciliation(
     costCenterMap?: Map<string, string> | null
 ): ReconciliationResults {
 
-    const costCenterKeys: any[] = []; // This will be populated if needed, but the main logic is now outside
+    const costCenterKeys: any[] = []; 
     const siengeKeys = generateSiengeDebugKeys(siengeData || []);
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys, siengeKeys } };
     
@@ -491,7 +493,6 @@ export function runReconciliation(
             numero: findHeader(filteredSiengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
             valorTotal: findHeader(filteredSiengeData, ['valor total', 'valor', 'vlr total']),
             credor: findHeader(filteredSiengeData, ['credor', 'fornecedor', 'nome do fornecedor']),
-            documento: findHeader(filteredSiengeData, ['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
             cfop: findHeader(siengeData, ['cfop']),
             esp: findHeader(siengeData, ['esp']),
         };
@@ -541,8 +542,8 @@ export function runReconciliation(
                         if (matchedXmlItems.length === 0) xmlMap.delete(key);
                         
                         let costCenter = 'N/A';
-                         if (costCenterMap && h.documento && h.credor) {
-                            const siengeDoc = siengeItem[h.documento!];
+                         if (costCenterMap && h.numero && h.credor) {
+                            const siengeDoc = siengeItem[h.numero!];
                             const siengeCredor = siengeItem[h.credor!];
                             const docKey = `${cleanAndToStr(siengeDoc)}-${normalizeKey(siengeCredor)}`;
                             

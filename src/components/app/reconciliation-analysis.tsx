@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
 import { getColumns } from "@/components/app/columns-helper";
 import { SiengeTaxCheck } from './sienge-tax-check';
-import { ColumnDef, Row } from '@tanstack/react-table';
+import { ColumnDef } from '@tanstack/react-table';
 import { CfopValidator } from './cfop-validator';
 import { AllClassifications, DifalStatus } from './imobilizado-analysis';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -115,7 +115,7 @@ export function ReconciliationAnalysis({
 
     const handleDownloadDebugKeys = () => {
         if (!reconciliationResults?.debug || (!reconciliationResults.debug.costCenterKeys.length && !reconciliationResults.debug.siengeKeys.length)) {
-            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar', description: 'Certifique-se de que ambas as planilhas estão carregadas e a conciliação foi executada.' });
+            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar', description: 'Certifique-se de que ambas as planilhas estão carregadas.' });
             return;
         }
 
@@ -170,7 +170,7 @@ export function ReconciliationAnalysis({
                         <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full">
                             {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
                         </Button>
-                        <Button onClick={handleDownloadDebugKeys} disabled={!reconciliationResults} variant="outline" size="sm" className="w-full">
+                        <Button onClick={handleDownloadDebugKeys} disabled={!processedData?.reconciliationResults?.debug} variant="outline" size="sm" className="w-full">
                             <FileDown className="mr-2 h-4 w-4"/>Baixar Chaves de Depuração
                         </Button>
                     </div>
