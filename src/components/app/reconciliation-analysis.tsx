@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { type ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, X, RotateCw, HelpCircle, FileDown } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, X, RotateCw, HelpCircle, FileDown, Database } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
@@ -80,7 +80,7 @@ export function ReconciliationAnalysis({
     const difalItems = useMemo(() => {
         const cfopValidations = (competence && allClassifications[competence]?.cfopValidations?.classifications) || {};
         return (processedData?.reconciliationResults?.reconciled || []).filter(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             return cfopValidations[uniqueKey]?.isDifal === true;
         });
     }, [processedData?.reconciliationResults?.reconciled, competence, allClassifications]);
@@ -93,7 +93,7 @@ export function ReconciliationAnalysis({
         if (!newClassifications[competence].difalValidations) newClassifications[competence].difalValidations = { classifications: {} };
         
         itemsToUpdate.forEach(item => {
-            const itemKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const itemKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             newClassifications[competence].difalValidations!.classifications[itemKey] = { status: newStatus };
         });
 
@@ -114,9 +114,9 @@ export function ReconciliationAnalysis({
     };
 
     const handleDownloadDebugKeys = () => {
-        const { costCenterDebugKeys, siengeDebugKeys } = processedData || {};
+        const { costCenterDebugKeys, siengeDebugKeys, allCostCenters } = processedData || {};
 
-        if (!costCenterDebugKeys?.length && !siengeDebugKeys?.length) {
+        if (!costCenterDebugKeys?.length && !siengeDebugKeys?.length && !allCostCenters?.length) {
             toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar', description: 'Carregue as planilhas para gerar as chaves.' });
             return;
         }
@@ -131,6 +131,11 @@ export function ReconciliationAnalysis({
         if (siengeDebugKeys && siengeDebugKeys.length > 0) {
             const ws = XLSX.utils.json_to_sheet(siengeDebugKeys);
             XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
+        }
+        
+        if (allCostCenters && allCostCenters.length > 0) {
+            const ws = XLSX.utils.json_to_sheet(allCostCenters.map(cc => ({ "Centro de Custo": cc })));
+            XLSX.utils.book_append_sheet(wb, ws, "Centros de Custo Encontrados");
         }
 
         XLSX.writeFile(wb, "Grantel_Debug_Chaves_Conciliacao.xlsx");
@@ -170,7 +175,7 @@ export function ReconciliationAnalysis({
                         {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
                     </Button>
                     <Button onClick={handleDownloadDebugKeys} disabled={!siengeFile || !costCenterFile} variant="outline" className="w-full sm:w-auto">
-                        <FileDown className="mr-2 h-4 w-4"/>Baixar Chaves de Depuração
+                        <Database className="mr-2 h-4 w-4"/>Baixar Chaves de Depuração
                     </Button>
                 </div>
                 
@@ -266,7 +271,7 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
         const disregarded: any[] = [];
 
         items.forEach(item => {
-            const itemKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const itemKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const status = difalValidations[itemKey]?.status || 'subject-to-difal';
 
             if (status === 'disregard') {
@@ -286,7 +291,7 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
             id: 'actions',
             header: 'Ações',
             cell: ({row}) => {
-                 const itemKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
+                 const itemKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
                  const status = (competence && allClassifications[competence]?.difalValidations?.classifications[itemKey]?.status) || 'subject-to-difal';
 
                 return (

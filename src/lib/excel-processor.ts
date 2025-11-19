@@ -70,6 +70,7 @@ export interface ProcessedData {
     costCenterMap?: Map<string, string>;
     costCenterDebugKeys?: any[];
     siengeDebugKeys?: any[];
+    allCostCenters?: string[];
     fileNames?: {
         nfeEntrada: string[];
         cte: string[];
@@ -132,7 +133,7 @@ const renameChaveColumn = (df: DataFrame): DataFrame => {
 // MAIN PROCESSING FUNCTION
 // =================================================================
 
-export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap' | 'costCenterDebugKeys' | 'siengeDebugKeys'> {
+export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap' | 'costCenterDebugKeys' | 'siengeDebugKeys' | 'allCostCenters'> {
     
     log("Iniciando preparação dos dados no navegador...");
     const GRANTEL_CNPJ = "81732042000119";
@@ -355,49 +356,47 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 }
 
 
-export function processCostCenterData(data: any[][]): { costCenterMap: Map<string, string>; debugKeys: any[] } {
+export function processCostCenterData(data: any[][]): { costCenterMap: Map<string, string>; debugKeys: any[]; allCostCenters: string[] } {
     const costCenterMap = new Map<string, string>();
     const debugKeys: any[] = [];
+    const costCenterSet = new Set<string>();
     let currentCostCenter = 'N/A';
 
     if (!data || data.length === 0) {
-        return { costCenterMap, debugKeys };
+        return { costCenterMap, debugKeys, allCostCenters: [] };
     }
 
     data.forEach(row => {
         if (!row || !Array.isArray(row)) return;
 
         let costCenterFoundInRow = false;
-        // Search for "Centro de custo" in any cell of the row
+        
         for (let i = 0; i < row.length; i++) {
             const cellValue = String(row[i] || '').trim();
             if (cellValue.toLowerCase().includes('centro de custo')) {
-                // The next cell in the row is the cost center name
                 currentCostCenter = String(row[i + 1] || 'N/A').trim();
+                costCenterSet.add(currentCostCenter);
                 costCenterFoundInRow = true;
-                break; // Stop searching in this row
+                break; 
             }
         }
 
-        // If it's not a cost center header row, check if it's a data row
         if (!costCenterFoundInRow) {
-            const itemNumber = String(row[0] || '').trim();
-            const creditorString = String(row[1] || '').trim(); // Column B
-            const documentString = String(row[3] || '').trim();   // Column D
-            
-            // A data row is identified by having a number in the first column
-            // and a creditor string that contains a hyphen (e.g., "3703 - ...")
-            if (/^\d+$/.test(itemNumber) && creditorString.includes('-')) {
-                const creditorCodeMatch = creditorString.match(/^(\d+)/);
+            const itemNumberCell = String(row[0] || '').trim();
+            const creditorCell = String(row[1] || '').trim();
+            const documentCell = String(row[3] || '').trim();
+
+            if (/^\\d+$/.test(itemNumberCell) && creditorCell.includes('-')) {
+                const creditorCodeMatch = creditorCell.match(/^(\\d+)/);
                 const creditorCode = creditorCodeMatch ? creditorCodeMatch[1] : '';
 
-                if (documentString && creditorCode) {
-                    const docKey = `${cleanAndToStr(documentString)}-${creditorCode}`;
+                if (documentCell && creditorCode) {
+                    const docKey = `${cleanAndToStr(documentCell)}-${creditorCode}`;
                     
                     const debugInfo = { 
                         'Chave Gerada (Centro de Custo)': docKey, 
-                        'Documento Original': documentString, 
-                        'Credor Original': creditorString,
+                        'Documento Original': documentCell, 
+                        'Credor Original': creditorCell,
                         'Centro de Custo': currentCostCenter
                     };
                     debugKeys.push(debugInfo);
@@ -410,7 +409,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         }
     });
     
-    return { costCenterMap, debugKeys };
+    return { costCenterMap, debugKeys, allCostCenters: Array.from(costCenterSet) };
 }
 
 
@@ -433,7 +432,7 @@ export function generateSiengeDebugKeys(siengeData: any[]): any[] {
         const credorString = item[h.credor!];
         const documento = item[h.documento!];
         
-        const credorCodeMatch = String(credorString).match(/^(\d+)/);
+        const credorCodeMatch = String(credorString).match(/^(\\d+)/);
         const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
 
         const docKey = `${cleanAndToStr(documento)}-${credorCode}`;
@@ -553,7 +552,7 @@ export function runReconciliation(
                             const siengeDoc = siengeItem[h.numero!];
                             const siengeCredorString = siengeItem[h.credor!];
                             
-                            const credorCodeMatch = String(siengeCredorString).match(/^(\d+)/);
+                            const credorCodeMatch = String(siengeCredorString).match(/^(\\d+)/);
                             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
 
                             if (siengeDoc && credorCode) {
@@ -597,5 +596,3 @@ export function runReconciliation(
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
-
-    

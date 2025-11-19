@@ -277,7 +277,7 @@ export function AutomatorClientPage() {
             const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
 
             setProcessedData(prev => ({
-                ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [] }),
+                ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [] }),
                 siengeSheetData,
                 siengeDebugKeys,
             }));
@@ -296,8 +296,8 @@ export function AutomatorClientPage() {
         if (!file) {
             setProcessedData(prev => {
                 if (!prev) return null;
-                const { costCenterMap, costCenterDebugKeys, ...rest } = prev;
-                 return { ...rest, costCenterMap: undefined, costCenterDebugKeys: [] } as ProcessedData;
+                const { costCenterMap, costCenterDebugKeys, allCostCenters, ...rest } = prev;
+                 return { ...rest, costCenterMap: undefined, costCenterDebugKeys: [], allCostCenters: [] } as ProcessedData;
             });
             return;
         }
@@ -309,12 +309,13 @@ export function AutomatorClientPage() {
             if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
             const worksheet = workbook.Sheets[sheetName];
             const costCenterData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-            const { costCenterMap, debugKeys } = processCostCenterData(costCenterData);
+            const { costCenterMap, debugKeys, allCostCenters } = processCostCenterData(costCenterData);
             
             setProcessedData(prev => ({
                 ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, siengeDebugKeys: [], siengeSheetData: null }),
                 costCenterMap,
                 costCenterDebugKeys: debugKeys,
+                allCostCenters,
             }));
             toast({ title: "Planilha de Centro de Custo Carregada", description: 'Pronta para conciliação e depuração.' });
         } catch (err: any) {
@@ -545,7 +546,7 @@ export function AutomatorClientPage() {
         setError(null);
         setLogs([]);
         setProcessedData(prev => ({
-            ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null }),
+            ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [] }),
             sheets: {}, // Clear only sheets, keep other state
         }));
         setIsPeriodModalOpen(false);
@@ -636,7 +637,7 @@ export function AutomatorClientPage() {
                 const errorMessage = err.message || "Ocorreu um erro desconhecido durante o processamento.";
                 setError(errorMessage);
                 setProcessedData(prev => ({
-                    ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null }),
+                    ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [] }),
                     sheets: {},
                 }));
                 setLogs(prev => [...prev, `[ERRO FATAL] ${errorMessage}`]);
@@ -685,7 +686,7 @@ export function AutomatorClientPage() {
 
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null, spedDuplicates: SpedDuplicate[] | null) => {
         setProcessedData(prevData => {
-            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null, spedDuplicates: null, costCenterMap: null };
+            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [] };
             return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections, spedDuplicates };
         });
     }, []);
