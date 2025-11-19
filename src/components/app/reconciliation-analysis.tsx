@@ -114,7 +114,6 @@ export function ReconciliationAnalysis({
     };
 
     const handleDownloadDebugKeys = async () => {
-        const { toast } = useToast();
     
         if (!costCenterFile && !siengeFile) {
             toast({ variant: 'destructive', title: 'Nenhum ficheiro para depurar', description: 'Carregue a planilha de Sienge ou de Centro de Custo.' });
@@ -418,3 +417,5 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
         </Card>
     )
 }
+
+    
