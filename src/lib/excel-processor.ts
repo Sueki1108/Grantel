@@ -348,19 +348,25 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     };
 }
 
+/**
+ * Processa a planilha de centro de custo para criar um mapa de busca rápida.
+ * @param data - Os dados brutos da planilha, lidos como um array de arrays.
+ * @returns Um Map onde a chave é 'CNPJ do Credor-Número do Documento' e o valor é o centro de custo.
+ */
 export function processCostCenterData(data: any[][]): Map<string, string> {
     const costCenterMap = new Map<string, string>();
-    let currentCostCenter = 'N/A';
+    let currentCostCenter = 'N/A'; // Valor padrão caso nenhuma linha de centro de custo seja encontrada antes dos dados.
 
     if (!data || data.length === 0) {
         throw new Error("A planilha de centro de custo está vazia ou em formato inválido.");
     }
 
-    // Find the header row by searching for "Item" in the first column.
+    // 1. Encontrar o cabeçalho principal da tabela para identificar as colunas relevantes.
+    // O sistema procura por uma linha que contenha "Item" na primeira coluna para se localizar.
     let headerRowIndex = data.findIndex(row => String(row[0]).trim().toLowerCase() === 'item');
 
     if (headerRowIndex === -1) {
-        // Fallback for slightly different format if needed, or throw error.
+        // Fallback caso o formato seja ligeiramente diferente.
         headerRowIndex = data.findIndex(row => String(row[0]).trim().toLowerCase().startsWith('item'));
         if (headerRowIndex === -1) {
              throw new Error("Não foi possível encontrar a linha de cabeçalho (iniciada com 'Item') na planilha de centro de custo.");
@@ -375,26 +381,34 @@ export function processCostCenterData(data: any[][]): Map<string, string> {
         throw new Error("Não foi possível encontrar as colunas 'Credor' ou 'Documento' na planilha de centro de custo.");
     }
 
+    // 2. Iterar por todas as linhas da planilha.
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
         if (!row || row.length === 0) continue;
 
-        // Check if it's a cost center header line
         const firstCell = String(row[0]).trim();
+        // 3. Identificar uma linha de cabeçalho de centro de custo.
         if (firstCell.toLowerCase() === 'centro de custo') {
+            // Quando encontra, atualiza a variável 'currentCostCenter' com o valor da segunda coluna.
             currentCostCenter = String(row[1]).trim();
-            continue;
+            continue; // Pula para a próxima linha.
         }
 
-        // Check if it's a data row (starts with a number)
+        // 4. Identificar uma linha de dados (um título/item).
+        // Considera-se uma linha de dados se ela estiver abaixo do cabeçalho e começar com um número (o 'Item').
         if (i > headerRowIndex && /^\d+$/.test(firstCell)) {
             const credor = String(row[credorIndex]).trim();
             const documento = String(row[documentoIndex]).trim();
 
             if (credor && documento) {
-                // Key format: "12345678901234-NFSE/190161"
+                // 5. Construir a chave única.
+                // Extrai o CNPJ da string do credor (ex: "3703 - ANGELLIRA... - 0001-07" -> "07501318000107")
                 const credorCnpj = credor.split('-')[1]?.trim() || '';
+                // Combina o CNPJ limpo com o número do documento.
                 const docKey = `${cleanAndToStr(credorCnpj)}-${documento.replace(/\s/g, '')}`;
+                
+                // 6. Armazenar no mapa.
+                // Adiciona a associação no mapa. Se a chave já existir, ela não é sobreposta.
                 if (!costCenterMap.has(docKey)) {
                     costCenterMap.set(docKey, currentCostCenter);
                 }
