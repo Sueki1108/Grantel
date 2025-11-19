@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -257,13 +256,11 @@ export function AutomatorClientPage() {
         const file = e.target.files?.[0];
         setSiengeFile(file || null);
         
-        const emptyReconResults = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: processedData?.reconciliationResults?.debug?.costCenterKeys || [], siengeKeys: [] } };
-
         if (!file) {
             setProcessedData(prev => {
                 if (!prev) return null;
-                const { siengeSheetData, ...rest } = prev;
-                return { ...rest, siengeSheetData: null, reconciliationResults: emptyReconResults } as ProcessedData;
+                const { siengeSheetData, reconciliationResults, ...rest } = prev;
+                return { ...rest, siengeSheetData: null, reconciliationResults: null } as ProcessedData;
             });
             return;
         }
@@ -280,12 +277,12 @@ export function AutomatorClientPage() {
             const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
 
             setProcessedData(prev => ({
-                ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
+                ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null }),
                 siengeSheetData,
                 reconciliationResults: {
-                    ...(prev?.reconciliationResults ?? emptyReconResults),
+                    ...(prev?.reconciliationResults ?? { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: [] } }),
                     debug: {
-                         ...(prev?.reconciliationResults?.debug ?? { costCenterKeys: [] }),
+                        costCenterKeys: prev?.reconciliationResults?.debug?.costCenterKeys || [],
                         siengeKeys: siengeDebugKeys
                     }
                 },
@@ -303,13 +300,12 @@ export function AutomatorClientPage() {
     const handleCostCenterFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         setCostCenterFile(file || null);
-        const emptyReconResults = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: processedData?.reconciliationResults?.debug?.siengeKeys || [] } };
 
         if (!file) {
-             setProcessedData(prev => {
+            setProcessedData(prev => {
                 if (!prev) return null;
-                 const { costCenterMap, ...rest } = prev;
-                return { ...rest, costCenterMap: undefined, reconciliationResults: emptyReconResults } as ProcessedData;
+                const { costCenterMap, ...rest } = prev;
+                 return { ...rest, costCenterMap: undefined, reconciliationResults: prev.reconciliationResults ? { ...prev.reconciliationResults, debug: { ...prev.reconciliationResults.debug, costCenterKeys: [] } } : null } as ProcessedData;
             });
             return;
         }
@@ -327,10 +323,10 @@ export function AutomatorClientPage() {
             setProcessedData(prev => ({
                 ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
                 costCenterMap,
-                reconciliationResults: {
-                    ...(prev?.reconciliationResults ?? emptyReconResults),
+                 reconciliationResults: {
+                    ...(prev?.reconciliationResults ?? { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: [] } }),
                     debug: {
-                        ...(prev?.reconciliationResults?.debug ?? { siengeKeys: [] }),
+                        siengeKeys: prev?.reconciliationResults?.debug?.siengeKeys || [],
                         costCenterKeys: debugKeys,
                     }
                 },
@@ -566,7 +562,7 @@ export function AutomatorClientPage() {
         setError(null);
         setLogs([]);
         setProcessedData(prev => ({
-            ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
+            ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null }),
             sheets: {}, // Clear only sheets, keep other state
         }));
         setIsPeriodModalOpen(false);
@@ -657,7 +653,7 @@ export function AutomatorClientPage() {
                 const errorMessage = err.message || "Ocorreu um erro desconhecido durante o processamento.";
                 setError(errorMessage);
                 setProcessedData(prev => ({
-                    ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
+                    ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null }),
                     sheets: {},
                 }));
                 setLogs(prev => [...prev, `[ERRO FATAL] ${errorMessage}`]);
@@ -669,7 +665,7 @@ export function AutomatorClientPage() {
     };
 
     const handleRunReconciliation = async () => {
-        if (!processedData?.siengeSheetData) {
+        if (!siengeFile) {
             toast({ variant: 'destructive', title: 'Ficheiro Sienge em falta', description: 'Por favor, carregue a planilha "Itens do Sienge".' });
             return;
         }
@@ -677,17 +673,44 @@ export function AutomatorClientPage() {
             toast({ variant: 'destructive', title: 'Dados XML em falta', description: 'Por favor, execute a "Validação de Documentos" primeiro.' });
             return;
         }
-
+    
         setProcessing(true);
         try {
             await new Promise(resolve => setTimeout(resolve, 50));
             
+            let currentCostCenterMap = processedData.costCenterMap;
+
+            // Process Cost Center file if it exists but map is not yet generated
+            if (costCenterFile && !currentCostCenterMap) {
+                toast({ title: 'A processar Centro de Custo', description: 'A sua planilha está a ser lida antes da conciliação.' });
+                const data = await costCenterFile.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
+                const worksheet = workbook.Sheets[sheetName];
+                const costCenterRawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                const { costCenterMap, debugKeys } = processCostCenterData(costCenterRawData);
+                currentCostCenterMap = costCenterMap;
+
+                 setProcessedData(prev => ({
+                    ...prev!,
+                    costCenterMap,
+                    reconciliationResults: {
+                        ...(prev?.reconciliationResults ?? { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: [] } }),
+                        debug: {
+                            ...prev?.reconciliationResults?.debug,
+                            costCenterKeys: debugKeys,
+                        }
+                    },
+                }));
+            }
+    
             const newReconciliationResults = runReconciliation(
                 processedData.siengeSheetData,
                 processedData.sheets['Itens Válidos'] || [],
                 processedData.sheets['Notas Válidas'] || [],
                 processedData.sheets['CTEs Válidos'] || [],
-                processedData.costCenterMap
+                currentCostCenterMap
             );
             
             setProcessedData(prev => ({
@@ -696,7 +719,7 @@ export function AutomatorClientPage() {
             }));
             
             toast({ title: 'Conciliação Concluída', description: 'Os resultados estão prontos para visualização.' });
-
+    
         } catch (err: any) {
             toast({ variant: 'destructive', title: 'Erro na Conciliação', description: err.message });
         } finally {
@@ -706,7 +729,7 @@ export function AutomatorClientPage() {
 
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null, spedDuplicates: SpedDuplicate[] | null) => {
         setProcessedData(prevData => {
-            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null, spedDuplicates: null };
+            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null, spedDuplicates: null, costCenterMap: null };
             return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections, spedDuplicates };
         });
     }, []);
@@ -957,4 +980,3 @@ export function AutomatorClientPage() {
         </div>
     );
 }
-

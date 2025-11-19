@@ -367,18 +367,18 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     if (!data || data.length === 0) {
         return { costCenterMap, debugKeys };
     }
-    
+
     // 2. Iterar por todas as linhas da planilha.
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
-        if (!row || row.length < 4) continue; // Precisa ter pelo menos 4 colunas (A, B, C, D)
+        if (!row || row.length < 4) continue;
 
         const firstCell = String(row[0] || '').trim();
         
         // 3. Identificar uma linha de cabeçalho de centro de custo.
         if (firstCell.toLowerCase().startsWith('centro de custo')) {
             currentCostCenter = String(row[1] || 'N/A').trim();
-            continue; // Pula para a próxima linha.
+            continue;
         }
 
         // 4. Identificar uma linha de dados (um título/item).
@@ -440,11 +440,10 @@ export function runReconciliation(
     costCenterMap?: Map<string, string> | null
 ): ReconciliationResults {
     
-    const siengeKeys = generateSiengeDebugKeys(siengeData || []);
-    // A chave de depuração do centro de custo é gerada separadamente
-    // e esperamos que já esteja no `processedData`.
-    // Por enquanto, esta função só gera a do Sienge.
-    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys } };
+    const siengeDebugKeys = generateSiengeDebugKeys(siengeData || []);
+    // As chaves do centro de custo são geradas em `handleCostCenterFileChange` e passadas para cá
+    // Apenas geramos as chaves do Sienge aqui.
+    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: siengeDebugKeys } };
     
     if (!siengeData || siengeData.length === 0) {
         return { ...emptyResult, onlyInXml: xmlItems || [] };
@@ -581,4 +580,3 @@ export function runReconciliation(
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
-    
