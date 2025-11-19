@@ -116,7 +116,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
     };
 
     const columns = useMemo(() => {
-        const columnsToShow: (keyof ImobilizadoItemData)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'pICMS', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
+        const columnsToShow: (keyof ImobilizadoItemData)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Alíq. ICMS (%)', 'CEST', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
         const baseColumns = getColumnsWithCustomRender(
             data,
             columnsToShow,
@@ -132,7 +132,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
                  if ((id === 'Valor Total' || id === 'Valor Unitário') && typeof value === 'number') {
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
                 }
-                 if (id === 'pICMS' && typeof value === 'number') {
+                 if (id === 'Alíq. ICMS (%)' && typeof value === 'number') {
                     return <div className="text-center">{value.toFixed(2)}%</div>
                 }
                 
