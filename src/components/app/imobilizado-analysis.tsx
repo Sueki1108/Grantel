@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Save, Settings, X, EyeOff, Copy } from "lucide-react";
+import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Save, Settings, X, EyeOff, Copy, HelpCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -24,7 +24,7 @@ import { cleanAndToStr } from '@/lib/utils';
 
 
 // Tipos
-export type Classification = 'unclassified' | 'imobilizado' | 'uso-consumo' | 'utilizado-em-obra';
+export type Classification = 'unclassified' | 'imobilizado' | 'uso-consumo' | 'utilizado-em-obra' | 'verify';
 export type DifalStatus = 'pending' | 'subject-to-difal' | 'disregard';
 
 
@@ -227,6 +227,9 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
                             )}
                             {currentClassification !== 'utilizado-em-obra' && (
                                 <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'utilizado-em-obra')}><HardHat className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Utilizado em Obra</p></TooltipContent></Tooltip>
+                            )}
+                             {currentClassification !== 'verify' && (
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'verify')}><HelpCircle className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificar</p></TooltipContent></Tooltip>
                             )}
                             {currentClassification !== 'unclassified' && (
                                 <Tooltip>
@@ -482,7 +485,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
 
     const filteredItems = useMemo(() => {
         const categories: Record<Classification, ImobilizadoItemData[]> = {
-            unclassified: [], imobilizado: [], 'uso-consumo': [], 'utilizado-em-obra': [],
+            unclassified: [], imobilizado: [], 'uso-consumo': [], 'utilizado-em-obra': [], verify: []
         };
 
         imobilizadoItems.forEach(item => {
@@ -569,6 +572,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                              <Button size="sm" onClick={() => handleBulkClassification('imobilizado')}><Factory className="mr-2 h-4 w-4" /> Imobilizado</Button>
                              <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('uso-consumo')}><Wrench className="mr-2 h-4 w-4" /> Uso e Consumo</Button>
                              <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('utilizado-em-obra')}><HardHat className="mr-2 h-4 w-4" /> Utilizado em Obra</Button>
+                             <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('verify')}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
                               <Button size="sm" variant="outline" onClick={() => handleBulkClassification('unclassified')}><RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
                          </div>
                     </Card>
@@ -655,11 +659,12 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 <CardContent>
                     <TooltipProvider>
                         <Tabs value={activeTab} onValueChange={onTabChange} className="w-full">
-                            <TabsList className="grid w-full grid-cols-4">
+                            <TabsList className="grid w-full grid-cols-5">
                                 <TabsTrigger value="unclassified" className="flex gap-2"><List />Não Classificados ({filteredItems.unclassified.length})</TabsTrigger>
                                 <TabsTrigger value="imobilizado" className="flex gap-2"><Factory />Imobilizado ({filteredItems.imobilizado.length})</TabsTrigger>
                                 <TabsTrigger value="uso-consumo" className="flex gap-2"><Wrench />Uso e Consumo ({filteredItems['uso-consumo'].length})</TabsTrigger>
                                 <TabsTrigger value="utilizado-em-obra" className="flex gap-2"><HardHat />Utilizado em Obra ({filteredItems['utilizado-em-obra'].length})</TabsTrigger>
+                                <TabsTrigger value="verify" className="flex gap-2"><HelpCircle />A Verificar ({filteredItems.verify.length})</TabsTrigger>
                             </TabsList>
 
                             <TabsContent value="unclassified" className="mt-6">
@@ -677,6 +682,10 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                                 <Button onClick={() => handleDownload(filteredItems['utilizado-em-obra'], 'utilizado-em-obra')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
                                 <ClassificationTable data={filteredItems['utilizado-em-obra']} classification='utilizado-em-obra' {...{rowSelection, setRowSelection, tableRef, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange}} />
                             </TabsContent>
+                             <TabsContent value="verify" className="mt-6">
+                                <Button onClick={() => handleDownload(filteredItems.verify, 'a-verificar')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
+                                <ClassificationTable data={filteredItems.verify} classification='verify' {...{rowSelection, setRowSelection, tableRef, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange}} />
+                            </TabsContent>
                         </Tabs>
                     </TooltipProvider>
                 </CardContent>
@@ -684,3 +693,4 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         </div>
     );
 }
+
