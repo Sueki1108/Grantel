@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUploadForm } from "@/components/app/file-upload-form";
-import { processCostCenterData, generateSiengeDebugKeys, type ProcessedData } from '@/lib/excel-processor';
+import { type ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, X, RotateCw, HelpCircle, FileDown } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
@@ -376,5 +376,3 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
         </Card>
     )
 }
-
-    

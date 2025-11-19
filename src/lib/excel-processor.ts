@@ -364,25 +364,24 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         return { costCenterMap, debugKeys };
     }
 
-    for (let i = 0; i < data.length; i++) {
-        const row = data[i];
-        if (!row || row.length < 4) continue;
+    for (const row of data) {
+        if (!row || !Array.isArray(row)) continue;
 
         const firstCell = String(row[0] || '').trim();
         const secondCell = String(row[1] || '').trim();
-
-        if (firstCell.toLowerCase() === 'centro de custo') {
+        
+        if (firstCell.toLowerCase().includes('centro de custo')) {
             currentCostCenter = secondCell || 'N/A';
             continue;
         }
-
-        if (/^\\d+$/.test(firstCell)) { // Check if the first cell is a number (like 'Item' column)
+        
+        if (row.length > 3) {
             const credorString = String(row[1] || '').trim();
             const documento = String(row[3] || '').trim();
-            
-            const credorCodeMatch = credorString.match(/^(\\d+)/);
+
+            const credorCodeMatch = credorString.match(/^(\d+)/);
             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
-            
+
             if (credorCode && documento) {
                 const docKey = `${cleanAndToStr(documento)}-${credorCode}`;
                 
@@ -417,7 +416,7 @@ export function generateSiengeDebugKeys(siengeData: any[]): any[] {
         const credorString = item[h.credor!];
         const documento = item[h.documento!];
         
-        const credorCodeMatch = String(credorString).match(/^(\\d+)/);
+        const credorCodeMatch = String(credorString).match(/^(\d+)/);
         const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
 
         const docKey = `${cleanAndToStr(documento)}-${credorCode}`;
@@ -537,7 +536,7 @@ export function runReconciliation(
                             const siengeDoc = siengeItem[h.numero!];
                             const siengeCredorString = siengeItem[h.credor!];
                             
-                            const credorCodeMatch = String(siengeCredorString).match(/^(\\d+)/);
+                            const credorCodeMatch = String(siengeCredorString).match(/^(\d+)/);
                             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
 
                             if (siengeDoc && credorCode) {
@@ -581,5 +580,3 @@ export function runReconciliation(
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
-
-    
