@@ -37,10 +37,10 @@ const renderHeader = (column: any, columnId: string) => {
     const displayName = columnNameMap[columnId] || columnId;
     return (
         <div 
-            className="flex items-center text-left w-full"
+            className="flex items-center text-left w-full cursor-pointer"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
         >
-            <Button variant="ghost" className="p-0">
+            <Button variant="ghost" className="p-0 hover:bg-transparent">
                 {displayName}
                 <ArrowUpDown className="ml-2 h-4 w-4" />
             </Button>
@@ -82,15 +82,15 @@ export function getColumnsWithCustomRender<TData extends Record<string, any>>(
         return [];
     }
 
-    const availableColumns = Object.keys(data[0] as object) as (keyof TData)[];
-    // Filter columnsToShow to only include columns that actually exist in the data
-    const columnsToRender = columnsToShow.filter(key => availableColumns.includes(key));
+    // A lógica foi simplificada para sempre usar as colunas de columnsToShow,
+    // garantindo consistência entre ambientes.
+    const columnsToRender = columnsToShow;
 
     return columnsToRender.map((key) => {
         const columnId = String(key);
         return {
-            id: columnId, 
-            accessorKey: columnId, 
+            id: columnId, // Explicitly set the ID
+            accessorKey: columnId, // And the accessorKey
             header: ({ column }) => renderHeader(column, columnId),
             cell: ({ row }) => customCellRender ? customCellRender(row, columnId) : (
                 <div>{String(row.getValue(columnId) ?? '')}</div>
