@@ -445,7 +445,14 @@ export function runReconciliation(
     cteData: any[],
     costCenterMap?: Map<string, string> | null
 ): ReconciliationResults {
-    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: [] } };
+    let costCenterKeys: any[] = [];
+    // Recalculate costCenterMap if not provided, for safety
+    const finalCostCenterMap = costCenterMap ?? processCostCenterData(siengeData || []).costCenterMap;
+
+    const siengeKeys = generateSiengeDebugKeys(siengeData || []);
+    
+    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys, siengeKeys } };
+    
     if (!siengeData || siengeData.length === 0) {
         return { ...emptyResult, onlyInXml: xmlItems || [] };
     }
@@ -454,11 +461,6 @@ export function runReconciliation(
          return { ...emptyResult, onlyInSienge: siengeData };
     }
     
-    const siengeDebugKeys = generateSiengeDebugKeys(siengeData);
-    const { costCenterMap: internalCostCenterMap, debugKeys: costCenterKeys } = processCostCenterData(siengeData);
-    const finalCostCenterMap = costCenterMap || internalCostCenterMap;
-
-
     try {
         const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
             if (!data || data.length === 0 || !data[0]) return undefined;
@@ -544,12 +546,11 @@ export function runReconciliation(
                         if (matchedXmlItems.length === 0) xmlMap.delete(key);
                         
                         let costCenter = 'N/A';
-                        if (finalCostCenterMap && h.documento && h.credor) {
-                            // Chave para buscar no mapa de centro de custo, usando dados do Sienge
-                            const credorName = siengeItem[h.credor!];
-                            const documento = siengeItem[h.documento!];
-                            const docKey = `${cleanAndToStr(documento)}-${normalizeKey(credorName)}`;
-
+                         if (finalCostCenterMap && h.documento && h.credor) {
+                            const siengeDoc = siengeItem[h.documento!];
+                            const siengeCredor = siengeItem[h.credor!];
+                            const docKey = `${cleanAndToStr(siengeDoc)}-${normalizeKey(siengeCredor)}`;
+                            
                             if (finalCostCenterMap.has(docKey)) {
                                 costCenter = finalCostCenterMap.get(docKey)!;
                             }
