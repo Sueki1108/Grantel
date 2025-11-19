@@ -15,6 +15,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cfopDescriptions } from '@/lib/cfop';
+import { getCstDescription } from '@/lib/cst';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -63,7 +64,10 @@ const FilterDialog: React.FC<{
         const xmlPicms = new Set<string>();
         const xmlCfops = new Set<string>();
         items.forEach(item => {
-            if (item['CST do ICMS']) xmlCsts.add(String(item['CST do ICMS']));
+            const cstCode = String(item['CST do ICMS'] || '');
+            const cstDesc = getCstDescription(cstCode);
+            if(cstCode) xmlCsts.add(`${cstCode}: ${cstDesc}`);
+
             if (item['Alíq. ICMS (%)'] !== undefined) xmlPicms.add(String(item['Alíq. ICMS (%)']));
             
             const cfopCode = item.CFOP;
@@ -475,7 +479,12 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                                     const shortDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions]?.split(' ').slice(0, 3).join(' ') || "N/A";
                                                     const combinedCfop = `${cfopCode}: ${shortDescription}`;
 
-                                                    const cstFilter = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(String(item['CST do ICMS'] || ''));
+                                                    const cstCode = String(item['CST do ICMS'] || '');
+                                                    const cstDesc = getCstDescription(cstCode);
+                                                    const combinedCst = `${cstCode}: ${cstDesc}`;
+
+
+                                                    const cstFilter = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(combinedCst);
                                                     const picmsFilter = currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(String(item['Alíq. ICMS (%)'] || '0'));
                                                     const cfopFilter = currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(combinedCfop);
                                                     
@@ -500,11 +509,14 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                             const shortDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions]?.split(' ').slice(0, 3).join(' ') || "N/A";
                                             const combinedCfop = `${cfopCode}: ${shortDescription}`;
 
-                                            const cstValue = String(item['CST do ICMS'] || '');
+                                            const cstCode = String(item['CST do ICMS'] || '');
+                                            const cstDesc = getCstDescription(cstCode);
+                                            const combinedCst = `${cstCode}: ${cstDesc}`;
+
                                             const picmsValue = String(item['Alíq. ICMS (%)'] || '0');
 
                                             const cfopFilter = currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(combinedCfop);
-                                            const cstFilter = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(cstValue);
+                                            const cstFilter = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(combinedCst);
                                             const picmsFilter = currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(picmsValue);
                                             
                                             return cstFilter && picmsFilter && cfopFilter;
@@ -533,4 +545,3 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
-
