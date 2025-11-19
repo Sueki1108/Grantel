@@ -110,7 +110,7 @@ const FilterDialog: React.FC<{
         });
     };
     
-    const clearFilters = () => {
+    const selectAllFilters = () => {
          setTabFilters(prev => ({
             ...prev,
             [siengeCfop]: {
@@ -120,18 +120,32 @@ const FilterDialog: React.FC<{
             }
         }));
     };
+
+    const deselectAllFilters = () => {
+        setTabFilters(prev => ({
+            ...prev,
+            [siengeCfop]: {
+                xmlCsts: new Set(),
+                xmlPicms: new Set(),
+                xmlCfopDescriptions: new Set(),
+            }
+        }));
+    };
     
-    const FilterCheckboxList = ({ options, filterSet, filterKey }: { options: string[], filterSet: Set<string>, filterKey: keyof TabFilters }) => (
-        <ScrollArea className="h-64">
-            <div className="flex flex-col gap-2 mt-2 p-1">
-                {options.map(opt => (
-                    <div key={`${filterKey}-${opt}`} className="flex items-center space-x-2">
-                        <Checkbox id={`${filterKey}-${opt}`} checked={filterSet.has(opt)} onCheckedChange={checked => handleFilterChange(filterKey, opt, !!checked)} />
-                        <Label htmlFor={`${filterKey}-${opt}`} className="text-sm font-normal">{filterKey === 'xmlPicms' ? `${parseFloat(opt).toFixed(2)}%` : opt}</Label>
-                    </div>
-                ))}
-            </div>
-        </ScrollArea>
+    const FilterCheckboxList = ({ options, filterSet, filterKey, title }: { options: string[], filterSet: Set<string>, filterKey: keyof TabFilters, title: string }) => (
+        <div className="flex flex-col gap-2 p-1">
+             <h4 className="font-medium text-center pb-2 border-b">{title}</h4>
+             <ScrollArea className="h-80">
+                <div className="flex flex-col gap-2 mt-2 p-1">
+                    {options.map(opt => (
+                        <div key={`${filterKey}-${opt}`} className="flex items-center space-x-2">
+                            <Checkbox id={`${filterKey}-${opt}`} checked={filterSet.has(opt)} onCheckedChange={checked => handleFilterChange(filterKey, opt, !!checked)} />
+                            <Label htmlFor={`${filterKey}-${opt}`} className="text-sm font-normal">{filterKey === 'xmlPicms' ? `${parseFloat(opt).toFixed(2)}%` : opt}</Label>
+                        </div>
+                    ))}
+                </div>
+            </ScrollArea>
+        </div>
     );
 
     return (
@@ -141,30 +155,20 @@ const FilterDialog: React.FC<{
                     <ListFilter className="mr-2 h-4 w-4" /> Filtros
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-xl">
+            <DialogContent className="max-w-5xl">
                  <DialogHeader>
                     <DialogTitle>Filtros Avançados para CFOP {siengeCfop}</DialogTitle>
                     <DialogDescription>Desmarque os itens que deseja ocultar da visualização.</DialogDescription>
                 </DialogHeader>
-                <div className="flex justify-end">
-                     <Button variant="ghost" size="sm" onClick={clearFilters}>Marcar Todos</Button>
+                <div className="flex justify-end gap-2">
+                     <Button variant="ghost" size="sm" onClick={deselectAllFilters}>Desmarcar Todos</Button>
+                     <Button variant="ghost" size="sm" onClick={selectAllFilters}>Marcar Todos</Button>
                 </div>
-                 <Tabs defaultValue="cfop_desc" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="cfop_desc">Descrição CFOP</TabsTrigger>
-                        <TabsTrigger value="cst">CST ICMS</TabsTrigger>
-                        <TabsTrigger value="picms">Alíquota ICMS</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="cfop_desc" className='mt-4'>
-                         <FilterCheckboxList options={availableOptions.xmlCfopDescriptions} filterSet={filters.xmlCfopDescriptions || new Set()} filterKey="xmlCfopDescriptions" />
-                    </TabsContent>
-                    <TabsContent value="cst" className='mt-4'>
-                         <FilterCheckboxList options={availableOptions.xmlCsts} filterSet={filters.xmlCsts || new Set()} filterKey="xmlCsts" />
-                    </TabsContent>
-                    <TabsContent value="picms" className='mt-4'>
-                         <FilterCheckboxList options={availableOptions.xmlPicms} filterSet={filters.xmlPicms || new Set()} filterKey="xmlPicms" />
-                    </TabsContent>
-                </Tabs>
+                 <div className="grid grid-cols-3 gap-4 border-t pt-4">
+                     <FilterCheckboxList title="Descrição CFOP (XML)" options={availableOptions.xmlCfopDescriptions} filterSet={filters.xmlCfopDescriptions || new Set()} filterKey="xmlCfopDescriptions" />
+                     <FilterCheckboxList title="CST ICMS (XML)" options={availableOptions.xmlCsts} filterSet={filters.xmlCsts || new Set()} filterKey="xmlCsts" />
+                     <FilterCheckboxList title="Alíquota ICMS (XML)" options={availableOptions.xmlPicms} filterSet={filters.xmlPicms || new Set()} filterKey="xmlPicms" />
+                 </div>
                  <DialogFooter>
                      <Button onClick={() => setIsDialogOpen(false)}>Aplicar e Fechar</Button>
                 </DialogFooter>
