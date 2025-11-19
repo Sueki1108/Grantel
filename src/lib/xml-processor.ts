@@ -1,4 +1,3 @@
-
 // Types
 type LogFunction = (message: string) => void;
 
@@ -171,6 +170,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         item['Descrição'] = item.prod_xProd;
         item['NCM'] = item.prod_NCM;
         item['CFOP'] = item.prod_CFOP;
+        item['CEST'] = item.prod_CEST;
         item['Unidade'] = item.prod_uCom;
         item['Quantidade'] = parseFloat(item.prod_qCom) || 0;
         item['Valor Unitário'] = parseFloat(item.prod_vUnCom) || 0;
@@ -178,6 +178,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
 
         if (!item['CFOP']) item['CFOP'] = getTagValue(prod, 'CFOP');
         if (!item['NCM']) item['NCM'] = getTagValue(prod, 'NCM');
+        if (!item['CEST']) item['CEST'] = getTagValue(prod, 'CEST');
 
         if (imposto) {
             const icmsGroup = imposto.getElementsByTagNameNS(NFE_NAMESPACE, 'ICMS')[0];

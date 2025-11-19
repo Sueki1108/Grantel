@@ -308,7 +308,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     };
 
     const columns = useMemo(() => {
-        const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'Sienge_Esp', 'CFOP', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
+        const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
         
         return getColumnsWithCustomRender(
             items,
