@@ -84,158 +84,22 @@ interface ImobilizadoAnalysisProps {
 
 interface ClassificationTableProps {
     data: ImobilizadoItemData[];
+    columns: any[];
     classification: Classification;
     rowSelection: RowSelectionState;
     setRowSelection: React.Dispatch<React.SetStateAction<RowSelectionState>>;
     tableRef: React.MutableRefObject<ReactTable<ImobilizadoItemData> | null>;
-    sessionAccountCodes: Record<string, string>;
-    handleAccountCodeChange: (itemLineId: string, code: string) => void;
-    handleClassificationChange: (itemsToUpdate: ImobilizadoItemData[], newClassification: Classification) => void;
 }
 
 
 const ClassificationTable: React.FC<ClassificationTableProps> = ({ 
     data, 
-    classification, 
+    columns,
     rowSelection, 
     setRowSelection, 
     tableRef, 
-    sessionAccountCodes,
-    handleAccountCodeChange,
-    handleClassificationChange
 }) => {
-    const { toast } = useToast();
 
-    const copyToClipboard = (text: string | number, type: string) => {
-        const textToCopy = String(text);
-        navigator.clipboard.writeText(textToCopy).then(() => {
-            toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: textToCopy });
-        }).catch(() => {
-            toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
-        });
-    };
-
-    const columns = useMemo(() => {
-        const columnsToShow: (keyof ImobilizadoItemData)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Alíq. ICMS (%)', 'CEST', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
-        const baseColumns = getColumnsWithCustomRender(
-            data,
-            columnsToShow,
-            (row, id) => {
-                const value = row.original[id as keyof typeof row.original];
-                const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
-                    <div className="flex items-center justify-between gap-1 group">
-                        <span className="truncate">{displayValue}</span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(copyValue, typeName); }}><Copy className="h-3 w-3" /></Button>
-                    </div>
-                );
-
-                 if ((id === 'Valor Total' || id === 'Valor Unitário') && typeof value === 'number') {
-                    return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
-                }
-                 if (id === 'Alíq. ICMS (%)' && typeof value === 'number') {
-                    return <div className="text-center">{value.toFixed(2)}%</div>
-                }
-                
-                const summarizedValue = typeof value === 'string' && value.length > 35 ? `${value.substring(0, 35)}...` : value;
-
-                if (id === 'Fornecedor' || id === 'Descrição' || id === 'Número da Nota') {
-                    return renderCellWithCopy(
-                        <TooltipProvider><Tooltip><TooltipTrigger asChild><span>{summarizedValue}</span></TooltipTrigger><TooltipContent><p>{value}</p></TooltipContent></Tooltip></TooltipProvider>,
-                        value,
-                        id
-                    );
-                }
-
-                if (id === 'Descricao CFOP' && typeof value === 'string') {
-                    const fullDescription = cfopDescriptions[parseInt(row.original.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-                     return <TooltipProvider><Tooltip><TooltipTrigger asChild><span>{summarizedValue}</span></TooltipTrigger><TooltipContent><p>{fullDescription}</p></TooltipContent></Tooltip></TooltipProvider>;
-                }
-                
-                return <div className="truncate max-w-xs">{String(value ?? '')}</div>;
-            }
-        );
-        
-        baseColumns.unshift({
-            id: 'select',
-            header: ({ table }) => (
-                <Checkbox
-                    checked={table.getIsAllPageRowsSelected()}
-                    onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
-                    aria-label="Selecionar todas"
-                />
-            ),
-            cell: ({ row }) => (
-                <Checkbox
-                    checked={row.getIsSelected()}
-                    onCheckedChange={(value) => row.toggleSelected(!!value)}
-                    aria-label="Selecionar linha"
-                    onClick={(e) => e.stopPropagation()}
-                />
-            ),
-            enableSorting: false,
-            enableHiding: false,
-        });
-
-        if (classification === 'imobilizado') {
-            baseColumns.push({
-                id: 'accountCode',
-                header: 'Código do Ativo',
-                cell: ({ row }: any) => {
-                    const item = row.original as ImobilizadoItemData;
-                    return (
-                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            <Input
-                                placeholder="Ex: 1.2.3.01.0001"
-                                value={sessionAccountCodes[item.id] || ''}
-                                onChange={(e) => handleAccountCodeChange(item.id, e.target.value)}
-                                className="h-8"
-                            />
-                        </div>
-                    );
-                }
-            });
-        }
-
-        baseColumns.push({
-            id: 'actions',
-            header: 'Ações Individuais',
-            cell: ({ row }: any) => {
-                const originalItem = row.original as ImobilizadoItemData;
-                const currentClassification = classification;
-
-                return (
-                     <TooltipProvider>
-                        <div className="flex gap-1 justify-center" onClick={(e) => e.stopPropagation()}>
-                            {currentClassification !== 'imobilizado' && (
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'imobilizado')}><Factory className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Imobilizado</p></TooltipContent></Tooltip>
-                            )}
-                            {currentClassification !== 'uso-consumo' && (
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'uso-consumo')}><Wrench className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Uso e Consumo</p></TooltipContent></Tooltip>
-                            )}
-                            {currentClassification !== 'utilizado-em-obra' && (
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'utilizado-em-obra')}><HardHat className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Utilizado em Obra</p></TooltipContent></Tooltip>
-                            )}
-                             {currentClassification !== 'verify' && (
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'verify')}><HelpCircle className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificar</p></TooltipContent></Tooltip>
-                            )}
-                            {currentClassification !== 'unclassified' && (
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'unclassified')}>
-                                            <RotateCw className="h-5 w-5 text-destructive" />
-                                        </Button>
-                                    </TooltipTrigger><TooltipContent><p>Reverter para Não Classificado</p></TooltipContent>
-                                </Tooltip>
-                            )}
-                        </div>
-                    </TooltipProvider>
-                );
-            }
-        });
-
-        return baseColumns;
-    }, [data, classification, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange, toast]);
-    
     if (!data || data.length === 0) {
         return <div className="text-center text-muted-foreground p-8">Nenhum item nesta categoria.</div>;
     }
@@ -478,7 +342,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         imobilizadoItems.forEach(item => {
             let classification = sessionClassifications[item.id] || 'unclassified';
             
-            // Corrige se a classificação for inválida
             if (!categories[classification]) {
                 classification = 'unclassified';
             }
@@ -522,6 +385,139 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         setRowSelection({}); // Clear selection when changing tabs
         setActiveTab(value as Classification);
     };
+
+    const columns = useMemo(() => {
+        const copyToClipboard = (text: string | number, type: string) => {
+            const textToCopy = String(text);
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: textToCopy });
+            }).catch(() => {
+                toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
+            });
+        };
+
+        const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
+            <div className="flex items-center justify-between gap-1 group">
+                <span className="truncate">{displayValue}</span>
+                <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(copyValue, typeName); }}><Copy className="h-3 w-3" /></Button>
+            </div>
+        );
+
+        const columnsToShow: (keyof ImobilizadoItemData)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Alíq. ICMS (%)', 'CEST', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
+
+        const baseColumns = getColumnsWithCustomRender(
+            imobilizadoItems,
+            columnsToShow,
+            (row, id) => {
+                const value = row.original[id as keyof typeof row.original];
+                if ((id === 'Valor Total' || id === 'Valor Unitário') && typeof value === 'number') {
+                    return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
+                }
+                if (id === 'Alíq. ICMS (%)' && typeof value === 'number') {
+                    return <div className="text-center">{value.toFixed(2)}%</div>
+                }
+                
+                const summarizedValue = typeof value === 'string' && value.length > 35 ? `${value.substring(0, 35)}...` : value;
+    
+                if (id === 'Fornecedor' || id === 'Descrição' || id === 'Número da Nota') {
+                    return renderCellWithCopy(
+                        <TooltipProvider><Tooltip><TooltipTrigger asChild><span>{summarizedValue}</span></TooltipTrigger><TooltipContent><p>{value}</p></TooltipContent></Tooltip></TooltipProvider>,
+                        value,
+                        id
+                    );
+                }
+    
+                if (id === 'Descricao CFOP' && typeof value === 'string') {
+                    const fullDescription = cfopDescriptions[parseInt(row.original.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+                     return <TooltipProvider><Tooltip><TooltipTrigger asChild><span>{summarizedValue}</span></TooltipTrigger><TooltipContent><p>{fullDescription}</p></TooltipContent></Tooltip></TooltipProvider>;
+                }
+                
+                return <div className="truncate max-w-xs">{String(value ?? '')}</div>;
+            }
+        );
+    
+        baseColumns.unshift({
+            id: 'select',
+            header: ({ table }) => (
+                <Checkbox
+                    checked={table.getIsAllPageRowsSelected()}
+                    onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
+                    aria-label="Selecionar todas"
+                />
+            ),
+            cell: ({ row }) => (
+                <Checkbox
+                    checked={row.getIsSelected()}
+                    onCheckedChange={(value) => row.toggleSelected(!!value)}
+                    aria-label="Selecionar linha"
+                    onClick={(e) => e.stopPropagation()}
+                />
+            ),
+            enableSorting: false,
+            enableHiding: false,
+        });
+
+        const activeClassification = activeTab;
+
+        if (activeClassification === 'imobilizado') {
+            baseColumns.push({
+                id: 'accountCode',
+                header: 'Código do Ativo',
+                cell: ({ row }: any) => {
+                    const item = row.original as ImobilizadoItemData;
+                    return (
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            <Input
+                                placeholder="Ex: 1.2.3.01.0001"
+                                value={sessionAccountCodes[item.id] || ''}
+                                onChange={(e) => handleAccountCodeChange(item.id, e.target.value)}
+                                className="h-8"
+                            />
+                        </div>
+                    );
+                }
+            });
+        }
+    
+        baseColumns.push({
+            id: 'actions',
+            header: 'Ações Individuais',
+            cell: ({ row }: any) => {
+                const originalItem = row.original as ImobilizadoItemData;
+                const currentClassification = activeTab;
+    
+                return (
+                     <TooltipProvider>
+                        <div className="flex gap-1 justify-center" onClick={(e) => e.stopPropagation()}>
+                            {currentClassification !== 'imobilizado' && (
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'imobilizado')}><Factory className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Imobilizado</p></TooltipContent></Tooltip>
+                            )}
+                            {currentClassification !== 'uso-consumo' && (
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'uso-consumo')}><Wrench className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Uso e Consumo</p></TooltipContent></Tooltip>
+                            )}
+                            {currentClassification !== 'utilizado-em-obra' && (
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'utilizado-em-obra')}><HardHat className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Utilizado em Obra</p></TooltipContent></Tooltip>
+                            )}
+                             {currentClassification !== 'verify' && (
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'verify')}><HelpCircle className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificar</p></TooltipContent></Tooltip>
+                            )}
+                            {currentClassification !== 'unclassified' && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'unclassified')}>
+                                            <RotateCw className="h-5 w-5 text-destructive" />
+                                        </Button>
+                                    </TooltipTrigger><TooltipContent><p>Reverter para Não Classificado</p></TooltipContent>
+                                </Tooltip>
+                            )}
+                        </div>
+                    </TooltipProvider>
+                );
+            }
+        });
+    
+        return baseColumns;
+    }, [imobilizadoItems, activeTab, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange, toast]);
 
     if (!initialAllItems || initialAllItems.length === 0) {
         return (
@@ -653,26 +649,27 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                                 <TabsTrigger value="utilizado-em-obra" className="flex gap-2"><HardHat />Utilizado em Obra ({filteredItems['utilizado-em-obra'].length})</TabsTrigger>
                                 <TabsTrigger value="verify" className="flex gap-2"><HelpCircle />A Verificar ({filteredItems.verify.length})</TabsTrigger>
                             </TabsList>
-
+                            
                             <TabsContent value="unclassified" className="mt-6">
-                                <ClassificationTable data={filteredItems.unclassified} classification='unclassified' {...{rowSelection, setRowSelection, tableRef, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange}} />
+                                <ClassificationTable data={filteredItems.unclassified} columns={columns} {...{rowSelection, setRowSelection, tableRef}} />
                             </TabsContent>
                             <TabsContent value="imobilizado" className="mt-6">
                                 <Button onClick={() => handleDownload(filteredItems.imobilizado, 'imobilizado')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                <ClassificationTable data={filteredItems.imobilizado} classification='imobilizado' {...{rowSelection, setRowSelection, tableRef, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange}} />
+                                <ClassificationTable data={filteredItems.imobilizado} columns={columns} {...{rowSelection, setRowSelection, tableRef}} />
                             </TabsContent>
                             <TabsContent value="uso-consumo" className="mt-6">
                                 <Button onClick={() => handleDownload(filteredItems['uso-consumo'], 'uso-consumo')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                <ClassificationTable data={filteredItems['uso-consumo']} classification='uso-consumo' {...{rowSelection, setRowSelection, tableRef, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange}} />
+                                <ClassificationTable data={filteredItems['uso-consumo']} columns={columns} {...{rowSelection, setRowSelection, tableRef}} />
                             </TabsContent>
                             <TabsContent value="utilizado-em-obra" className="mt-6">
                                 <Button onClick={() => handleDownload(filteredItems['utilizado-em-obra'], 'utilizado-em-obra')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                <ClassificationTable data={filteredItems['utilizado-em-obra']} classification='utilizado-em-obra' {...{rowSelection, setRowSelection, tableRef, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange}} />
+                                <ClassificationTable data={filteredItems['utilizado-em-obra']} columns={columns} {...{rowSelection, setRowSelection, tableRef}} />
                             </TabsContent>
                              <TabsContent value="verify" className="mt-6">
                                 <Button onClick={() => handleDownload(filteredItems.verify, 'a-verificar')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
-                                <ClassificationTable data={filteredItems.verify} classification='verify' {...{rowSelection, setRowSelection, tableRef, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange}} />
+                                <ClassificationTable data={filteredItems.verify} columns={columns} {...{rowSelection, setRowSelection, tableRef}} />
                             </TabsContent>
+
                         </Tabs>
                     </TooltipProvider>
                 </CardContent>
