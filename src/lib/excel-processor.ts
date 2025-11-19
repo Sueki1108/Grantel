@@ -357,7 +357,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
  * A função lê uma estrutura de relatório específica onde os centros de custo são cabeçalhos de secção
  * e os títulos/documentos estão listados abaixo deles.
  * @param data - Os dados brutos da planilha, lidos como um array de arrays.
- * @returns Um Map onde a chave é 'Número do Documento-Nome do Credor' (normalizados) e o valor é o centro de custo.
+ * @returns Um objeto contendo o mapa de centros de custo e uma lista de chaves de depuração.
  */
 export function processCostCenterData(data: any[][]): { costCenterMap: Map<string, string>, debugKeys: any[] } {
     const costCenterMap = new Map<string, string>();
@@ -499,6 +499,8 @@ export function runReconciliation(
         let remainingXmlItems = [...enrichedXmlItems];
         let remainingSiengeItems = [...filteredSiengeData];
         const siengeDebugKeys: any[] = [];
+        const { costCenterMap, debugKeys: costCenterKeys } = processCostCenterData(siengeData);
+
 
         const reconciliationPass = (
             siengeItems: any[],
@@ -522,8 +524,9 @@ export function runReconciliation(
             siengeItems.forEach(siengeItem => {
                 const key = getSiengeKey(siengeItem);
                 
+                const siengeDocKey = `${cleanAndToStr(siengeItem[h.documento!])}-${normalizeKey(siengeItem[h.credor!])}`;
                 siengeDebugKeys.push({
-                    'Chave Gerada': `${cleanAndToStr(siengeItem[h.documento!])}-${normalizeKey(siengeItem[h.credor!])}`,
+                    'Chave Gerada': siengeDocKey,
                     'Documento Original': siengeItem[h.documento!],
                     'Credor Original': siengeItem[h.credor!],
                 });
@@ -537,8 +540,8 @@ export function runReconciliation(
                         }
                         
                         let costCenter = 'N/A';
-                        if (costCenterMap && h.credor && h.documento) {
-                            const docKey = `${cleanAndToStr(siengeItem[h.documento!])}-${normalizeKey(siengeItem[h.credor!])}`;
+                         if (costCenterMap && h.documento && h.credor) {
+                            const docKey = `${cleanAndToStr(siengeItem[h.documento])}-${normalizeKey(siengeItem[h.credor])}`;
                             if (costCenterMap.has(docKey)) {
                                 costCenter = costCenterMap.get(docKey)!;
                             }
@@ -588,8 +591,6 @@ export function runReconciliation(
             'Chave de Comparação': getXmlKey(item, 'Valor Total'),
             ...item
         }));
-
-        const { costCenterMap: _, debugKeys: costCenterKeys } = costCenterMap ? processCostCenterData(siengeData) : { costCenterMap: new Map(), debugKeys: [] };
 
         return { reconciled, onlyInSienge: finalOnlyInSienge, onlyInXml: finalOnlyInXml, debug: { costCenterKeys, siengeKeys: siengeDebugKeys } };
     } catch (err: any) {

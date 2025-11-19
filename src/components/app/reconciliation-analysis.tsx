@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import type { ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, X, RotateCw, HelpCircle } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, X, RotateCw, HelpCircle, FileDown } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
@@ -114,8 +114,8 @@ export function ReconciliationAnalysis({
     };
 
     const handleDownloadDebugKeys = () => {
-        if (!reconciliationResults?.debug) {
-            toast({ variant: 'destructive', title: 'Nenhum dado de depuração', description: 'Execute a conciliação primeiro.' });
+        if (!reconciliationResults?.debug || (!reconciliationResults.debug.costCenterKeys.length && !reconciliationResults.debug.siengeKeys.length)) {
+            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar', description: 'Certifique-se de que ambas as planilhas estão carregadas e a conciliação foi executada.' });
             return;
         }
 
@@ -171,7 +171,7 @@ export function ReconciliationAnalysis({
                             {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
                         </Button>
                         <Button onClick={handleDownloadDebugKeys} disabled={!reconciliationResults} variant="outline" size="sm" className="w-full">
-                            <Download className="mr-2 h-4 w-4"/>Baixar Chaves de Depuração
+                            <FileDown className="mr-2 h-4 w-4"/>Baixar Chaves de Depuração
                         </Button>
                     </div>
                 </div>

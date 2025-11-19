@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -303,7 +304,7 @@ export function AutomatorClientPage() {
                 if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
                 const worksheet = workbook.Sheets[sheetName];
                 const costCenterData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                const costCenterMap = processCostCenterData(costCenterData);
+                const { costCenterMap } = processCostCenterData(costCenterData);
                 
                 setProcessedData(prev => ({
                     ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
