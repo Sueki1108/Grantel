@@ -371,8 +371,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     data.forEach(row => {
         if (!row || !Array.isArray(row)) return;
         
-        let costCenterFoundInRow = false;
-        
+        let isHeaderRow = false;
         for (let i = 0; i < row.length; i++) {
             const cellValue = String(row[i] || '').trim();
             if (cellValue.toLowerCase().includes('centro de custo')) {
@@ -382,19 +381,20 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
                     'Linha Original': row.join('; '),
                     'Centro de Custo Identificado': currentCostCenter
                 });
-                costCenterFoundInRow = true;
+                isHeaderRow = true;
                 break;
             }
         }
 
-        if (!costCenterFoundInRow) {
+        if (!isHeaderRow) {
             const itemNumberCell = String(row[0] || '').trim();
-            
-            if (/^\\d+$/.test(itemNumberCell)) {
+            const isDataRow = /^\d+$/.test(itemNumberCell) && row[1] && row[3];
+
+            if (isDataRow) {
                 const creditorCell = String(row[1] || '').trim();
                 const documentCell = String(row[3] || '').trim();
 
-                const creditorCodeMatch = creditorCell.match(/^(\\d+)/);
+                const creditorCodeMatch = creditorCell.match(/^(\d+)/);
                 const creditorCode = creditorCodeMatch ? creditorCodeMatch[1] : '';
 
                 if (documentCell && creditorCode) {
@@ -439,7 +439,7 @@ export function generateSiengeDebugKeys(siengeData: any[]): any[] {
         const credorString = item[h.credor!];
         const documento = item[h.documento!];
         
-        const credorCodeMatch = String(credorString).match(/^(\\d+)/);
+        const credorCodeMatch = String(credorString).match(/^(\d+)/);
         const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
 
         const docKey = `${cleanAndToStr(documento)}-${credorCode}`;
@@ -559,7 +559,7 @@ export function runReconciliation(
                             const siengeDoc = siengeItem[h.numero!];
                             const siengeCredorString = siengeItem[h.credor!];
                             
-                            const credorCodeMatch = String(siengeCredorString).match(/^(\\d+)/);
+                            const credorCodeMatch = String(siengeCredorString).match(/^(\d+)/);
                             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
 
                             if (siengeDoc && credorCode) {

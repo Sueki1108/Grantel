@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useMemo } from 'react';
@@ -113,60 +112,31 @@ export function ReconciliationAnalysis({
         XLSX.writeFile(workbook, fileName);
     };
 
-    const handleDownloadDebugKeys = async () => {
-    
-        if (!costCenterFile && !siengeFile) {
-            toast({ variant: 'destructive', title: 'Nenhum ficheiro para depurar', description: 'Carregue a planilha de Sienge ou de Centro de Custo.' });
+    const handleDownloadDebugKeys = () => {
+        if (!processedData || (!processedData.siengeDebugKeys && !processedData.costCenterDebugKeys)) {
+            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar' });
             return;
         }
     
         const wb = XLSX.utils.book_new();
         let generated = false;
     
-        if (costCenterFile) {
-            try {
-                const data = await costCenterFile.arrayBuffer();
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                if (sheetName) {
-                    const worksheet = workbook.Sheets[sheetName];
-                    const costCenterData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                    const { debugKeys, costCenterHeaderRows } = processCostCenterData(costCenterData);
-                    
-                    if (debugKeys.length > 0) {
-                        const ws = XLSX.utils.json_to_sheet(debugKeys);
-                        XLSX.utils.book_append_sheet(wb, ws, "Chaves_Centro_Custo");
-                        generated = true;
-                    }
-                    if (costCenterHeaderRows.length > 0) {
-                        const ws = XLSX.utils.json_to_sheet(costCenterHeaderRows);
-                        XLSX.utils.book_append_sheet(wb, ws, "Centros de Custo Encontrados");
-                        generated = true;
-                    }
-                }
-            } catch (err: any) {
-                toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
-            }
+        if (processedData.costCenterDebugKeys && processedData.costCenterDebugKeys.length > 0) {
+            const ws = XLSX.utils.json_to_sheet(processedData.costCenterDebugKeys);
+            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Centro_Custo");
+            generated = true;
+        }
+
+        if (processedData.costCenterHeaderRows && processedData.costCenterHeaderRows.length > 0) {
+            const ws = XLSX.utils.json_to_sheet(processedData.costCenterHeaderRows);
+            XLSX.utils.book_append_sheet(wb, ws, "Centros de Custo Encontrados");
+            generated = true;
         }
     
-        if (siengeFile) {
-             try {
-                const data = await siengeFile.arrayBuffer();
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                 if (sheetName) {
-                    const worksheet = workbook.Sheets[sheetName];
-                    const siengeSheetData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-                    const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
-                    if (siengeDebugKeys.length > 0) {
-                        const ws = XLSX.utils.json_to_sheet(siengeDebugKeys);
-                        XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
-                        generated = true;
-                    }
-                }
-            } catch (err: any) {
-                toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
-            }
+        if (processedData.siengeDebugKeys && processedData.siengeDebugKeys.length > 0) {
+            const ws = XLSX.utils.json_to_sheet(processedData.siengeDebugKeys);
+            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
+            generated = true;
         }
     
         if (generated) {
