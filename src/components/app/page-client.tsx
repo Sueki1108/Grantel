@@ -16,7 +16,7 @@ import Link from "next/link";
 import * as XLSX from 'xlsx';
 import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
-import { processDataFrames, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
+import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult, processCostCenterData } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdvancedAnalyses } from "@/components/app/advanced-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
@@ -29,11 +29,12 @@ import type { KeyCheckResult } from "@/components/app/key-checker";
 import { cn } from "@/lib/utils";
 import { ImobilizadoAnalysis, type AllClassifications } from "@/components/app/imobilizado-analysis";
 import { HistoryAnalysis, type SessionData } from "@/components/app/history-analysis";
-import { DifalAnalysis } from "@/components/app/difal-analysis";
 import { PendingIssuesReport } from "@/components/app/pending-issues-report";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ReconciliationAnalysis } from "@/components/app/reconciliation-analysis";
+import type { SpedDuplicate } from "@/lib/types";
+import { DifalAnalysis } from "@/components/app/difal-analysis";
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -43,6 +44,7 @@ const fileMapping: { [key: string]: string } = {
     'NFE Operação Desconhecida': 'NFE Operação Desconhecida',
     'CTE Desacordo de Serviço': 'CTE Desacordo de Serviço',
     'Itens do Sienge': 'Itens do Sienge',
+    'Centro de Custo': 'Centro de Custo',
 };
 
 const requiredFiles = [
@@ -64,9 +66,10 @@ export function AutomatorClientPage() {
     // State for files uploaded in child components
     const [spedFiles, setSpedFiles] = useState<File[]>([]);
     const [siengeFile, setSiengeFile] = useState<File | null>(null);
+    const [costCenterFile, setCostCenterFile] = useState<File | null>(null);
     const [lastSaidaNumber, setLastSaidaNumber] = useState<number>(0);
     const [disregardedNfseNotes, setDisregardedNfseNotes] = useState<Set<string>>(new Set());
-    const [imobilizadoClassifications, setImobilizadoClassifications] = useState<AllClassifications>({});
+    const [allClassifications, setAllClassifications] = useState<AllClassifications>({});
     const [saidasStatus, setSaidasStatus] = useState<Record<number, 'emitida' | 'cancelada' | 'inutilizada'>>({});
 
 
@@ -93,7 +96,7 @@ export function AutomatorClientPage() {
         // Load imobilizado classifications from localStorage
         try {
             const savedImobilizado = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
-            if (savedImobilizado) setImobilizadoClassifications(JSON.parse(savedImobilizado));
+            if (savedImobilizado) setAllClassifications(JSON.parse(savedImobilizado));
         } catch (e) {
             console.error("Failed to load imobilizado classifications from localStorage", e);
         }
@@ -108,14 +111,10 @@ export function AutomatorClientPage() {
         });
     };
 
-    const handlePersistImobilizado = (allDataToSave: AllClassifications) => {
-        setImobilizadoClassifications(allDataToSave);
+    const handlePersistClassifications = (allDataToSave: AllClassifications) => {
+        setAllClassifications(allDataToSave);
         try {
             localStorage.setItem(IMOBILIZADO_STORAGE_KEY, JSON.stringify(allDataToSave));
-            toast({
-                title: "Classificações Guardadas",
-                description: "As suas classificações foram guardadas no armazenamento local do navegador."
-            });
         } catch(e) {
             console.error("Failed to save classifications to localStorage", e);
             toast({ variant: 'destructive', title: "Erro ao guardar classificações"});
@@ -256,58 +255,70 @@ export function AutomatorClientPage() {
     const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         setSiengeFile(file || null);
-    
-        if (file) {
-            try {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const data = event.target?.result;
-                        if (!data) throw new Error("Não foi possível ler o conteúdo do ficheiro.");
-    
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        const sheetName = workbook.SheetNames[0];
-                        if (!sheetName) throw new Error("A planilha não contém nenhuma aba.");
-                        
-                        const worksheet = workbook.Sheets[sheetName];
-                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-                        
-                        setProcessedData(prev => ({
-                            sheets: {}, 
-                            spedInfo: null, 
-                            keyCheckResults: null, 
-                            competence: null,
-                            reconciliationResults: null,
-                            resaleAnalysis: null,
-                            spedCorrections: null,
-                            ...prev,
-                            siengeSheetData: jsonData
-                        }));
-                        
-                        toast({ title: 'Planilha Sienge Processada', description: 'Os dados foram lidos e estão prontos para as análises avançadas.' });
-    
-                    } catch (err: any) {
-                         toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
-                         setProcessedData(prev => {
-                            if (!prev) return null;
-                            const { siengeSheetData, ...rest } = prev;
-                            return rest as ProcessedData;
-                         });
-                    }
-                };
-                reader.onerror = (error) => { throw error };
-                reader.readAsArrayBuffer(file);
-            } catch (error: any) {
-                 toast({ variant: 'destructive', title: 'Erro ao Ler Ficheiro Sienge', description: error.message });
-            }
-        } else {
-             setProcessedData(prev => {
+        
+        if (!file) {
+            setProcessedData(prev => {
                 if (!prev) return null;
-                const { siengeSheetData, ...rest } = prev;
+                const { siengeSheetData, reconciliationResults, ...rest } = prev;
                 return { ...rest, siengeSheetData: null, reconciliationResults: null } as ProcessedData;
-             });
+            });
+            return;
+        }
+        
+        setProcessing(true);
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
+
+            const worksheet = workbook.Sheets[sheetName];
+            const siengeSheetData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+
+            setProcessedData(prev => ({
+                ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
+                siengeSheetData,
+                reconciliationResults: null, // Reset reconciliation results on new file
+            }));
+            
+            toast({ title: 'Planilha Sienge Carregada', description: 'Clique em "Conciliar XML vs Sienge" para executar a análise.' });
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
+            setSiengeFile(null);
+        } finally {
+            setProcessing(false);
         }
     };
+    
+    const handleCostCenterFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        setCostCenterFile(file || null);
+
+        if (file) {
+            setProcessing(true);
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
+                const worksheet = workbook.Sheets[sheetName];
+                const costCenterData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                const costCenterMap = processCostCenterData(costCenterData);
+                
+                setProcessedData(prev => ({
+                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
+                    costCenterMap,
+                }));
+                toast({ title: "Planilha de Centro de Custo Carregada", description: `${costCenterMap.size} mapeamentos de centro de custo foram criados.` });
+            } catch (err: any) {
+                toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
+                setCostCenterFile(null);
+            } finally {
+                setProcessing(false);
+            }
+        }
+    };
+
 
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>, category: 'nfeEntrada' | 'cte' | 'nfeSaida' | 'nfse') => {
         const selectedFiles = e.target.files;
@@ -382,6 +393,7 @@ export function AutomatorClientPage() {
         setLogs([]);
         setSpedFiles([]);
         setSiengeFile(null);
+        setCostCenterFile(null);
         setProcessing(false);
         setLastSaidaNumber(0);
         setDisregardedNfseNotes(new Set());
@@ -528,7 +540,10 @@ export function AutomatorClientPage() {
     const handleSubmit = () => {
         setError(null);
         setLogs([]);
-        setProcessedData(null);
+        setProcessedData(prev => ({
+            ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
+            sheets: {}, // Clear only sheets, keep other state
+        }));
         setIsPeriodModalOpen(false);
         setProcessing(true);
         
@@ -605,19 +620,21 @@ export function AutomatorClientPage() {
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
-                setProcessedData({
+                setProcessedData(prev => ({
+                    ...prev,
                     ...resultData, 
                     competence,
-                    siengeSheetData: processedData?.siengeSheetData,
-                    reconciliationResults: null, 
-                });
+                }));
 
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
 
             } catch (err: any) {
                 const errorMessage = err.message || "Ocorreu um erro desconhecido durante o processamento.";
                 setError(errorMessage);
-                setProcessedData(null);
+                setProcessedData(prev => ({
+                    ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
+                    sheets: {},
+                }));
                 setLogs(prev => [...prev, `[ERRO FATAL] ${errorMessage}`]);
                 toast({ variant: "destructive", title: "Erro no Processamento", description: errorMessage });
             } finally {
@@ -626,13 +643,50 @@ export function AutomatorClientPage() {
         }, 50);
     };
 
-    const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null) => {
+    const handleRunReconciliation = async () => {
+        if (!processedData?.siengeSheetData) {
+            toast({ variant: 'destructive', title: 'Ficheiro Sienge em falta', description: 'Por favor, carregue a planilha "Itens do Sienge".' });
+            return;
+        }
+        if (!processedData || !processedData.sheets['Itens Válidos']) {
+            toast({ variant: 'destructive', title: 'Dados XML em falta', description: 'Por favor, execute a "Validação de Documentos" primeiro.' });
+            return;
+        }
+
+        setProcessing(true);
+        try {
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
+            const newReconciliationResults = runReconciliation(
+                processedData.siengeSheetData,
+                processedData.sheets['Itens Válidos'] || [],
+                processedData.sheets['Notas Válidas'] || [],
+                processedData.sheets['CTEs Válidos'] || [],
+                processedData.costCenterMap
+            );
+            
+            setProcessedData(prev => ({
+                ...prev!,
+                reconciliationResults: newReconciliationResults,
+            }));
+            
+            toast({ title: 'Conciliação Concluída', description: 'Os resultados estão prontos para visualização.' });
+
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Erro na Conciliação', description: err.message });
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null, spedDuplicates: SpedDuplicate[] | null) => {
         setProcessedData(prevData => {
-            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null };
-            return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections };
+            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null, spedDuplicates: null };
+            return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections, spedDuplicates };
         });
     }, []);
     
+
     // =================================================================
     // UI CONTROL AND RENDER
     // =================================================================
@@ -708,102 +762,113 @@ export function AutomatorClientPage() {
                                 {processedData?.sheets['Imobilizados'] && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                              <TabsTrigger value="difal" className="flex items-center gap-2">
-                                <TicketPercent className="h-5 w-5" /> 6. Guia DIFAL
+                                6. Guia DIFAL
                             </TabsTrigger>
                             <TabsTrigger value="analyses" disabled={analysisTabDisabled} className="flex items-center gap-2">
-                                7. Sped Fiscal
+                                7. SPED Fiscal
                                 {processedData?.keyCheckResults && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                              <TabsTrigger value="pending" className="flex items-center gap-2">
-                                <ClipboardList className="h-5 w-5" /> 8. Pendências
+                                8. Pendências
                             </TabsTrigger>
                         </TabsList>
                         
-                        <div className="mt-6">
-                            {activeMainTab === 'history' && <HistoryAnalysis onRestoreSession={handleRestoreSession} />}
-                            {activeMainTab === 'nf-stock' && (
-                                <div className="space-y-8">
-                                     <Card className="shadow-lg">
-                                        <CardHeader>
-                                            <div className="flex items-center gap-3">
-                                                <UploadCloud className="h-8 w-8 text-primary" />
-                                                <div>
-                                                    <CardTitle className="font-headline text-2xl">Carregar Arquivos</CardTitle>
-                                                    <CardDescription>Carregue os XMLs e/ou as planilhas para iniciar a validação.</CardDescription>
-                                                </div>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent className="space-y-8">
+                        <TabsContent value="history" className="mt-6">
+                            <HistoryAnalysis onRestoreSession={handleRestoreSession} />
+                        </TabsContent>
+                        <TabsContent value="nf-stock" className="mt-6">
+                            <div className="space-y-8">
+                                <Card className="shadow-lg">
+                                    <CardHeader>
+                                        <div className="flex items-center gap-3">
+                                            <UploadCloud className="h-8 w-8 text-primary" />
                                             <div>
-                                                <h3 className="text-lg font-medium mb-4 flex items-center gap-2"><FileUp className="h-5 w-5" />Carregar por XML (Recomendado)</h3>
-                                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                                    <FileUploadForm formId="xml-nfe-entrada" files={{ 'xml-nfe-entrada': xmlFiles.nfeEntrada.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfeEntrada')} onClearFile={() => handleClearFile('xml-nfe-entrada', 'nfeEntrada')} xmlFileCount={xmlFiles.nfeEntrada.length} displayName="XMLs NF-e Entrada" />
-                                                    <FileUploadForm formId="xml-cte" files={{ 'xml-cte': xmlFiles.cte.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'cte')} onClearFile={() => handleClearFile('xml-cte', 'cte')} xmlFileCount={xmlFiles.cte.length} displayName="XMLs CT-e" />
-                                                    <FileUploadForm formId="xml-saida" files={{ 'xml-saida': xmlFiles.nfeSaida.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfeSaida')} onClearFile={() => handleClearFile('xml-saida', 'nfeSaida')} xmlFileCount={xmlFiles.nfeSaida.length} displayName="XMLs NF-e Saída" />
-                                                    <FileUploadForm formId="xml-nfse" files={{ 'xml-nfse': xmlFiles.nfse.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfse')} onClearFile={() => handleClearFile('xml-nfse', 'nfse')} xmlFileCount={xmlFiles.nfse.length} displayName="XMLs NFS-e" />
-                                                </div>
+                                                <CardTitle className="font-headline text-2xl">Carregar Arquivos</CardTitle>
+                                                <CardDescription>Carregue os XMLs e/ou as planilhas para iniciar a validação.</CardDescription>
                                             </div>
-                                            <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">E/Ou</span></div></div>
-                                            <div>
-                                                <h3 className="text-lg font-medium mb-4 flex items-center gap-2"><Sheet className="h-5 w-5"/>Carregar Planilhas de Manifesto</h3>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                    <FileUploadForm requiredFiles={requiredFiles} files={fileStatus} onFileChange={handleFileChange} onClearFile={handleClearFile} />
-                                                </div>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="space-y-8">
+                                        <div>
+                                            <h3 className="text-lg font-medium mb-4 flex items-center gap-2"><FileUp className="h-5 w-5" />Carregar por XML (Recomendado)</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                                <FileUploadForm formId="xml-nfe-entrada" files={{ 'xml-nfe-entrada': xmlFiles.nfeEntrada.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfeEntrada')} onClearFile={() => handleClearFile('xml-nfe-entrada', 'nfeEntrada')} xmlFileCount={xmlFiles.nfeEntrada.length} displayName="XMLs NF-e Entrada" />
+                                                <FileUploadForm formId="xml-cte" files={{ 'xml-cte': xmlFiles.cte.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'cte')} onClearFile={() => handleClearFile('xml-cte', 'cte')} xmlFileCount={xmlFiles.cte.length} displayName="XMLs CT-e" />
+                                                <FileUploadForm formId="xml-saida" files={{ 'xml-saida': xmlFiles.nfeSaida.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfeSaida')} onClearFile={() => handleClearFile('xml-saida', 'nfeSaida')} xmlFileCount={xmlFiles.nfeSaida.length} displayName="XMLs NF-e Saída" />
+                                                <FileUploadForm formId="xml-nfse" files={{ 'xml-nfse': xmlFiles.nfse.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfse')} onClearFile={() => handleClearFile('xml-nfse', 'nfse')} xmlFileCount={xmlFiles.nfse.length} displayName="XMLs NFS-e" />
                                             </div>
-                                        </CardContent>
-                                    </Card>
-                                    <Card className="shadow-lg">
-                                        <CardHeader><div className="flex items-center gap-3"><Cpu className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Processar Arquivos</CardTitle><CardDescription>Inicie a validação dos dados carregados. Será solicitado que selecione o período.</CardDescription></div></div></CardHeader>
-                                        <CardContent className="space-y-4">
-                                            <div className="flex flex-col sm:flex-row gap-2 pt-4">
-                                                <Button onClick={startPeriodSelection} disabled={isProcessButtonDisabled} className="w-full">{isPreProcessing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Analisando...</> : (processing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : "Validar Dados")}</Button>
-                                                {isClearButtonVisible && <Button onClick={handleClearAllData} variant="destructive" className="w-full sm:w-auto"><Trash2 className="mr-2 h-4 w-4" /> Limpar Tudo</Button>}
+                                        </div>
+                                        <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">E/Ou</span></div></div>
+                                        <div>
+                                            <h3 className="text-lg font-medium mb-4 flex items-center gap-2"><Sheet className="h-5 w-5"/>Carregar Planilhas de Manifesto</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                <FileUploadForm requiredFiles={requiredFiles} files={fileStatus} onFileChange={handleFileChange} onClearFile={handleClearFile} />
                                             </div>
-                                        </CardContent>
-                                    </Card>
-                                    {error && <Alert variant="destructive" className="mt-4"><div className="flex justify-between items-start"><div className="flex"><AlertCircle className="h-4 w-4" /><div className="ml-3"><AlertTitle>Erro</AlertTitle><AlertDescription>{error}</AlertDescription></div></div><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(error)}><Copy className="h-4 w-4" /></Button></div></Alert>}
-                                    {(logs.length > 0) && <Card className="shadow-lg"><CardHeader><div className="flex items-center gap-3"><Terminal className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Análise de Processamento</CardTitle><CardDescription>Logs detalhados da execução.</CardDescription></div></div></CardHeader><CardContent><LogDisplay logs={logs} /></CardContent></Card>}
-                                    {processedData?.sheets && Object.keys(processedData.sheets).length > 0 && <Card className="shadow-lg"><CardHeader><div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><CheckCircle className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Resultados da Validação</CardTitle><CardDescription>Visualize os dados processados. Os dados necessários para as próximas etapas estão prontos.</CardDescription></div></div><div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto"><Button onClick={handleDownloadExcel} className="w-full">Baixar Planilha (.xlsx)</Button></div></div></CardHeader><CardContent><ResultsDisplay results={processedData.sheets} /></CardContent></Card>}
-                                </div>
-                            )}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                <Card className="shadow-lg">
+                                    <CardHeader><div className="flex items-center gap-3"><Cpu className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Processar Arquivos</CardTitle><CardDescription>Inicie a validação dos dados carregados. Será solicitado que selecione o período.</CardDescription></div></div></CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <div className="flex flex-col sm:flex-row gap-2 pt-4">
+                                            <Button onClick={startPeriodSelection} disabled={isProcessButtonDisabled} className="w-full">{isPreProcessing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Analisando...</> : (processing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : "Validar Dados")}</Button>
+                                            {isClearButtonVisible && <Button onClick={handleClearAllData} variant="destructive" className="w-full sm:w-auto"><Trash2 className="mr-2 h-4 w-4" /> Limpar Tudo</Button>}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                {error && <Alert variant="destructive" className="mt-4"><div className="flex justify-between items-start"><div className="flex"><AlertCircle className="h-4 w-4" /><div className="ml-3"><AlertTitle>Erro</AlertTitle><AlertDescription>{error}</AlertDescription></div></div><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(error)}><Copy className="h-4 w-4" /></Button></div></Alert>}
+                                {(logs.length > 0) && <Card className="shadow-lg"><CardHeader><div className="flex items-center gap-3"><Terminal className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Análise de Processamento</CardTitle><CardDescription>Logs detalhados da execução.</CardDescription></div></div></CardHeader><CardContent><LogDisplay logs={logs} /></CardContent></Card>}
+                                {processedData?.sheets && Object.keys(processedData.sheets).length > 0 && <Card className="shadow-lg"><CardHeader><div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><CheckCircle className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Resultados da Validação</CardTitle><CardDescription>Visualize os dados processados. Os dados necessários para as próximas etapas estão prontos.</CardDescription></div></div><div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto"><Button onClick={handleDownloadExcel} className="w-full">Baixar Planilha (.xlsx)</Button></div></div></CardHeader><CardContent><ResultsDisplay results={processedData.sheets} /></CardContent></Card>}
+                            </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="reconciliation" className="mt-6">
+                            { !reconciliationTabDisabled ? 
+                            <ReconciliationAnalysis 
+                                processedData={processedData} 
+                                siengeFile={siengeFile} 
+                                costCenterFile={costCenterFile}
+                                onSiengeFileChange={handleSiengeFileChange}
+                                onCostCenterFileChange={handleCostCenterFileChange}
+                                onClearSiengeFile={() => setSiengeFile(null)}
+                                onClearCostCenterFile={() => setCostCenterFile(null)}
+                                onRunReconciliation={handleRunReconciliation}
+                                isReconciliationRunning={processing}
+                                allClassifications={allClassifications}
+                                onPersistClassifications={handlePersistClassifications}
+                                competence={competence}
+                            /> 
+                            : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a conciliação.</p></CardContent></Card>
+                        }
+                        </TabsContent>
 
-                            {activeMainTab === 'reconciliation' && (
-                                !reconciliationTabDisabled ? 
-                                <ReconciliationAnalysis 
-                                    processedData={processedData} 
-                                    siengeFile={siengeFile} 
-                                    onSiengeFileChange={handleSiengeFileChange}
-                                    onClearSiengeFile={() => setSiengeFile(null)}
-                                /> 
-                                : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" e carregue a planilha Sienge para habilitar a conciliação.</p></CardContent></Card>
-                            )}
+                        <TabsContent value="saidas-nfe" className="mt-6">
+                            { !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card> }
+                        </TabsContent>
+                        
+                        <TabsContent value="nfse" className="mt-6">
+                            { !nfseTabDisabled ? <NfseAnalysis nfseFiles={xmlFiles.nfse} disregardedNotes={disregardedNfseNotes} onDisregardedNotesChange={setDisregardedNfseNotes} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FilePieChart className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando ficheiros</h3><p>Carregue os XMLs de NFS-e na primeira aba para habilitar esta análise.</p></CardContent></Card> }
+                        </TabsContent>
+                        
+                        <TabsContent value="imobilizado" className="mt-6">
+                            { !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} siengeData={processedData?.siengeSheetData} onPersistData={handlePersistClassifications} allPersistedData={allClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card> }
+                        </TabsContent>
 
-                             {activeMainTab === 'saidas-nfe' && (
-                                !saidasNfeTabDisabled ? <SaidasAnalysis saidasData={processedData.sheets['Saídas']} statusMap={saidasStatus} onStatusChange={setSaidasStatus} lastPeriodNumber={lastSaidaNumber} onLastPeriodNumberChange={handleLastSaidaNumberChange} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><TrendingUp className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a análise de saídas.</p></CardContent></Card>
-                            )}
-                            
-                            {activeMainTab === 'nfse' && (
-                                !nfseTabDisabled ? <NfseAnalysis nfseFiles={xmlFiles.nfse} disregardedNotes={disregardedNfseNotes} onDisregardedNotesChange={setDisregardedNfseNotes} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FilePieChart className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando ficheiros</h3><p>Carregue os XMLs de NFS-e na primeira aba para habilitar esta análise.</p></CardContent></Card>
-                            )}
-                            
-                            {activeMainTab === 'imobilizado' && (
-                                !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} siengeData={processedData?.siengeSheetData} onPersistData={handlePersistImobilizado} allPersistedData={imobilizadoClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card>
-                            )}
-
-                             {activeMainTab === 'difal' && <DifalAnalysis /> }
-                            
-                            {activeMainTab === 'analyses' && (
-                                !analysisTabDisabled && processedData ? <AdvancedAnalyses processedData={processedData} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card>
-                            )}
-                         
-                             {activeMainTab === 'pending' && (
-                                <PendingIssuesReport 
-                                    processedData={processedData}
-                                    allPersistedClassifications={imobilizadoClassifications}
-                                    onForceUpdate={handlePersistImobilizado}
-                                />
-                            )}
-                        </div>
+                        <TabsContent value="difal" className="mt-6">
+                           <DifalAnalysis />
+                        </TabsContent>
+                        
+                        <TabsContent value="analyses" className="mt-6">
+                             { !analysisTabDisabled && processedData ? <AdvancedAnalyses processedData={processedData} allXmlFiles={[...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida]} spedFiles={spedFiles} onSpedFilesChange={setSpedFiles} onSpedProcessed={handleSpedProcessed} competence={competence} onExportSession={handleExportSession} /> : <Card><CardContent className="p-8 text-center text-muted-foreground"><FileSearch className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar esta etapa.</p></CardContent></Card> }
+                        </TabsContent>
+                     
+                        <TabsContent value="pending" className="mt-6">
+                            <PendingIssuesReport 
+                                processedData={processedData}
+                                allPersistedClassifications={allClassifications}
+                                onForceUpdate={handlePersistClassifications}
+                            />
+                        </TabsContent>
                     </Tabs>
                 </div>
             </main>
