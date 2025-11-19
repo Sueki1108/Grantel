@@ -156,29 +156,18 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
             'Chave de acesso': chaveAcesso,
             'Número da Nota': nNF,
             'CPF/CNPJ do Emitente': emitCNPJ, // Always include emitter CNPJ
+            'Código': getTagValue(prod, 'cProd'),
+            'Descrição': getTagValue(prod, 'xProd'),
+            'NCM': getTagValue(prod, 'NCM') || null,
+            'CFOP': getTagValue(prod, 'CFOP'),
+            'CEST': getTagValue(prod, 'CEST') || null,
+            'Unidade': getTagValue(prod, 'uCom'),
+            'Quantidade': parseFloat(getTagValue(prod, 'qCom')) || 0,
+            'Valor Unitário': parseFloat(getTagValue(prod, 'vUnCom')) || 0,
+            'Valor Total': parseFloat(getTagValue(prod, 'vProd')) || 0,
+            'pICMS': null,
+            'CST do ICMS': null,
         };
-
-        for (const child of Array.from(prod.children)) {
-            const tagName = child.tagName;
-            const content = child.textContent;
-            if (tagName && content) {
-                item[`prod_${tagName}`] = content;
-            }
-        }
-        
-        item['Código'] = item.prod_cProd;
-        item['Descrição'] = item.prod_xProd;
-        item['NCM'] = item.prod_NCM;
-        item['CFOP'] = item.prod_CFOP;
-        item['CEST'] = item.prod_CEST;
-        item['Unidade'] = item.prod_uCom;
-        item['Quantidade'] = parseFloat(item.prod_qCom) || 0;
-        item['Valor Unitário'] = parseFloat(item.prod_vUnCom) || 0;
-        item['Valor Total'] = parseFloat(item.prod_vProd) || 0;
-
-        if (!item['CFOP']) item['CFOP'] = getTagValue(prod, 'CFOP');
-        if (!item['NCM']) item['NCM'] = getTagValue(prod, 'NCM');
-        if (!item['CEST']) item['CEST'] = getTagValue(prod, 'CEST');
 
         if (imposto) {
             const icmsGroup = imposto.getElementsByTagNameNS(NFE_NAMESPACE, 'ICMS')[0];
@@ -199,13 +188,12 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
             }
         }
         
-        item['Alíq. ICMS (%)'] = item['pICMS'] || 0;
+        item['Alíq. ICMS (%)'] = item['pICMS'] ?? 0;
 
         if (isSaida && i === 0) {
             notaFiscal['CFOP'] = item['CFOP'];
             notaFiscal['Alíq. ICMS (%)'] = item['pICMS'] || 0;
         }
-
 
         itens.push(item);
     }
@@ -323,7 +311,7 @@ const readFileAsText = (file: File): Promise<string> => {
                 try {
                     const text = decoder.decode(buffer);
                     // Check for the Unicode Replacement Character, which indicates a decoding error.
-                    if (text.includes('')) {
+                    if (text.includes('\uFFFD')) {
                         throw new Error("UTF-8 decoding resulted in replacement characters.");
                     }
                     resolve(text);

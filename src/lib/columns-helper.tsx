@@ -1,5 +1,5 @@
 
-"use client";
+"use client"
 
 import { ColumnDef } from "@tanstack/react-table"
 import { ArrowUpDown } from "lucide-react"
@@ -54,7 +54,15 @@ export function getColumns<TData extends Record<string, any>>(data: TData[]): Co
     return []
   }
 
-  const keys = Object.keys(data[0] as object) as (keyof TData)[];
+  // Build a set of all unique keys from all rows in the data
+  const allKeys = new Set<string>();
+  data.forEach(row => {
+    if (row && typeof row === 'object') {
+        Object.keys(row).forEach(key => allKeys.add(key));
+    }
+  });
+
+  const keys = Array.from(allKeys) as (keyof TData)[];
 
   return keys.map((key) => {
       const columnId = String(key);
@@ -82,15 +90,20 @@ export function getColumnsWithCustomRender<TData extends Record<string, any>>(
         return [];
     }
 
-    // A lógica foi simplificada para sempre usar as colunas de columnsToShow,
-    // garantindo consistência entre ambientes.
-    const columnsToRender = columnsToShow;
+    const allKeys = new Set<string>();
+    data.forEach(row => {
+        if (row && typeof row === 'object') {
+            Object.keys(row).forEach(key => allKeys.add(key));
+        }
+    });
+
+    const columnsToRender = columnsToShow.filter(key => allKeys.has(String(key)));
 
     return columnsToRender.map((key) => {
         const columnId = String(key);
         return {
-            id: columnId, // Explicitly set the ID
-            accessorKey: columnId, // And the accessorKey
+            id: columnId, 
+            accessorKey: columnId, 
             header: ({ column }) => renderHeader(column, columnId),
             cell: ({ row }) => customCellRender ? customCellRender(row, columnId) : (
                 <div>{String(row.getValue(columnId) ?? '')}</div>
