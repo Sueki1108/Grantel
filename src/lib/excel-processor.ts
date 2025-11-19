@@ -63,6 +63,7 @@ export interface ProcessedData {
     resaleAnalysis?: { noteKeys: Set<string>; xmls: File[] } | null;
     spedCorrections?: SpedCorrectionResult[] | null;
     spedDuplicates?: SpedDuplicate[] | null;
+    costCenterMap?: Map<string, string>;
     fileNames?: {
         nfeEntrada: string[];
         cte: string[];
@@ -125,7 +126,7 @@ const renameChaveColumn = (df: DataFrame): DataFrame => {
 // MAIN PROCESSING FUNCTION
 // =================================================================
 
-export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis'> {
+export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap'> {
     
     log("Iniciando preparação dos dados no navegador...");
     const GRANTEL_CNPJ = "81732042000119";
@@ -347,12 +348,70 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     };
 }
 
+export function processCostCenterData(data: any[][]): Map<string, string> {
+    const costCenterMap = new Map<string, string>();
+    let currentCostCenter = 'N/A';
+
+    if (!data || data.length === 0) {
+        throw new Error("A planilha de centro de custo está vazia ou em formato inválido.");
+    }
+
+    // Find the header row by searching for "Item" in the first column.
+    let headerRowIndex = data.findIndex(row => String(row[0]).trim().toLowerCase() === 'item');
+
+    if (headerRowIndex === -1) {
+        // Fallback for slightly different format if needed, or throw error.
+        headerRowIndex = data.findIndex(row => String(row[0]).trim().toLowerCase().startsWith('item'));
+        if (headerRowIndex === -1) {
+             throw new Error("Não foi possível encontrar a linha de cabeçalho (iniciada com 'Item') na planilha de centro de custo.");
+        }
+    }
+
+    const headers: string[] = data[headerRowIndex].map(h => String(h).trim());
+    const credorIndex = headers.findIndex(h => normalizeKey(h) === 'credor');
+    const documentoIndex = headers.findIndex(h => normalizeKey(h) === 'documento');
+
+    if (credorIndex === -1 || documentoIndex === -1) {
+        throw new Error("Não foi possível encontrar as colunas 'Credor' ou 'Documento' na planilha de centro de custo.");
+    }
+
+    for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        if (!row || row.length === 0) continue;
+
+        // Check if it's a cost center header line
+        const firstCell = String(row[0]).trim();
+        if (firstCell.toLowerCase() === 'centro de custo') {
+            currentCostCenter = String(row[1]).trim();
+            continue;
+        }
+
+        // Check if it's a data row (starts with a number)
+        if (i > headerRowIndex && /^\d+$/.test(firstCell)) {
+            const credor = String(row[credorIndex]).trim();
+            const documento = String(row[documentoIndex]).trim();
+
+            if (credor && documento) {
+                // Key format: "12345678901234-NFSE/190161"
+                const credorCnpj = credor.split('-')[1]?.trim() || '';
+                const docKey = `${cleanAndToStr(credorCnpj)}-${documento.replace(/\s/g, '')}`;
+                if (!costCenterMap.has(docKey)) {
+                    costCenterMap.set(docKey, currentCostCenter);
+                }
+            }
+        }
+    }
+    return costCenterMap;
+}
+
+
 
 export function runReconciliation(
     siengeData: any[] | null, 
     xmlItems: any[],
     nfeEntradas: any[],
-    cteData: any[]
+    cteData: any[],
+    costCenterMap?: Map<string, string> | null
 ): ReconciliationResults {
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [] };
     if (!siengeData || siengeData.length === 0) {
@@ -398,6 +457,8 @@ export function runReconciliation(
             numero: findHeader(filteredSiengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
             cfop: findHeader(siengeData, ['cfop']),
             esp: findHeader(siengeData, ['esp']),
+            documento: findHeader(siengeData, ['documento']),
+            credor: findHeader(siengeData, ['credor']),
             valorTotal: findHeader(filteredSiengeData, ['valor total', 'valor', 'vlr total']),
             precoUnitario: findHeader(filteredSiengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
             desconto: findHeader(filteredSiengeData, ['desconto']),
@@ -458,10 +519,21 @@ export function runReconciliation(
                         if (matchedXmlItems.length === 0) {
                             xmlMap.delete(key);
                         }
+                        
+                        let costCenter = 'N/A';
+                        if (costCenterMap && h.credor && h.documento) {
+                            const credorCnpj = String(siengeItem[h.credor]).split('-')[1]?.trim() || '';
+                            const docKey = `${cleanAndToStr(credorCnpj)}-${String(siengeItem[h.documento]).replace(/\s/g, '')}`;
+                            if (costCenterMap.has(docKey)) {
+                                costCenter = costCenterMap.get(docKey)!;
+                            }
+                        }
+
                         matchedInPass.push({ 
                             ...matchedXmlItem, 
                             Sienge_CFOP: siengeItem[h.cfop!],
                             Sienge_Esp: siengeItem[h.esp!],
+                            'Centro de Custo': costCenter,
                             'Observações': `Conciliado via ${passName}` 
                         });
                         return;
