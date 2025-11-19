@@ -367,34 +367,45 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     data.forEach(row => {
         if (!row || !Array.isArray(row)) return;
 
-        const firstCell = String(row[0] || '').trim();
-        const secondCell = String(row[1] || '').trim();
-        
-        if (firstCell.toLowerCase().includes('centro de custo')) {
-            currentCostCenter = secondCell || 'N/A';
-            return; 
+        let costCenterFoundInRow = false;
+        // Search for "Centro de custo" in any cell of the row
+        for (let i = 0; i < row.length; i++) {
+            const cellValue = String(row[i] || '').trim();
+            if (cellValue.toLowerCase().includes('centro de custo')) {
+                // The next cell in the row is the cost center name
+                currentCostCenter = String(row[i + 1] || 'N/A').trim();
+                costCenterFoundInRow = true;
+                break; // Stop searching in this row
+            }
         }
-        
-        // Verifica se a primeira célula é um número e as colunas B e D existem (para identificar uma linha de dados)
-        if (row.length > 3 && /^\d+$/.test(firstCell)) {
-            const credorString = String(row[1] || '').trim(); // Coluna B
-            const documento = String(row[3] || '').trim();    // Coluna D
 
-            const credorCodeMatch = credorString.match(/^(\d+)/);
-            const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
+        // If it's not a cost center header row, check if it's a data row
+        if (!costCenterFoundInRow) {
+            const itemNumber = String(row[0] || '').trim();
+            const creditorString = String(row[1] || '').trim(); // Column B
+            const documentString = String(row[3] || '').trim();   // Column D
             
-            const docKey = `${cleanAndToStr(documento)}-${credorCode}`;
+            // A data row is identified by having a number in the first column
+            // and a creditor string that contains a hyphen (e.g., "3703 - ...")
+            if (/^\d+$/.test(itemNumber) && creditorString.includes('-')) {
+                const creditorCodeMatch = creditorString.match(/^(\d+)/);
+                const creditorCode = creditorCodeMatch ? creditorCodeMatch[1] : '';
 
-            const debugInfo = { 
-                'Chave Gerada (Centro de Custo)': docKey, 
-                'Documento Original': documento, 
-                'Credor Original': credorString,
-                'Centro de Custo': currentCostCenter
-            };
-            debugKeys.push(debugInfo);
+                if (documentString && creditorCode) {
+                    const docKey = `${cleanAndToStr(documentString)}-${creditorCode}`;
+                    
+                    const debugInfo = { 
+                        'Chave Gerada (Centro de Custo)': docKey, 
+                        'Documento Original': documentString, 
+                        'Credor Original': creditorString,
+                        'Centro de Custo': currentCostCenter
+                    };
+                    debugKeys.push(debugInfo);
 
-            if (docKey && !costCenterMap.has(docKey)) {
-                costCenterMap.set(docKey, currentCostCenter);
+                    if (!costCenterMap.has(docKey)) {
+                        costCenterMap.set(docKey, currentCostCenter);
+                    }
+                }
             }
         }
     });
@@ -586,3 +597,5 @@ export function runReconciliation(
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
+
+    
