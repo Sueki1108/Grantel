@@ -142,7 +142,7 @@ const FilterDialog: React.FC<{
     const FilterCheckboxList = ({ options, filterSet, filterKey, title }: { options: string[], filterSet: Set<string>, filterKey: keyof TabFilters, title: string }) => (
         <div className="flex flex-col gap-2 p-1">
              <h4 className="font-medium text-center pb-2 border-b">{title}</h4>
-             <ScrollArea className="h-80">
+             <ScrollArea className="h-[600px]">
                 <div className="flex flex-col gap-2 mt-2 p-1">
                     {options.map(opt => (
                         <div key={`${filterKey}-${opt}`} className="flex items-center space-x-2">
