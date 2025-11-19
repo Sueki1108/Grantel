@@ -38,7 +38,7 @@ type ValidationStatus = 'all' | 'unvalidated' | 'correct' | 'incorrect' | 'verif
 export type TabFilters = {
     xmlCsts: Set<string>;
     xmlPicms: Set<string>;
-    xmlCfopDescriptions: Set<string>;
+    xmlCfops: Set<string>;
 };
 
 type BulkActionState = {
@@ -61,17 +61,20 @@ const FilterDialog: React.FC<{
     const availableOptions = useMemo(() => {
         const xmlCsts = new Set<string>();
         const xmlPicms = new Set<string>();
-        const xmlCfopDescriptions = new Set<string>();
+        const xmlCfops = new Set<string>();
         items.forEach(item => {
             if (item['CST do ICMS']) xmlCsts.add(String(item['CST do ICMS']));
             if (item['Alíq. ICMS (%)'] !== undefined) xmlPicms.add(String(item['Alíq. ICMS (%)']));
-            const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-            if (fullDescription) xmlCfopDescriptions.add(fullDescription);
+            
+            const cfopCode = item.CFOP;
+            const shortDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions]?.split(' ').slice(0, 3).join(' ') || "N/A";
+            const combined = `${cfopCode}: ${shortDescription}`;
+            if (cfopCode) xmlCfops.add(combined);
         });
         return {
             xmlCsts: Array.from(xmlCsts).sort(),
             xmlPicms: Array.from(xmlPicms).sort((a,b) => parseFloat(a) - parseFloat(b)),
-            xmlCfopDescriptions: Array.from(xmlCfopDescriptions).sort(),
+            xmlCfops: Array.from(xmlCfops).sort(),
         };
     }, [items]);
     
@@ -82,20 +85,20 @@ const FilterDialog: React.FC<{
                 [siengeCfop]: {
                     xmlCsts: new Set(availableOptions.xmlCsts),
                     xmlPicms: new Set(availableOptions.xmlPicms),
-                    xmlCfopDescriptions: new Set(availableOptions.xmlCfopDescriptions),
+                    xmlCfops: new Set(availableOptions.xmlCfops),
                 }
             }));
         }
     }, [siengeCfop, availableOptions, tabFilters, setTabFilters]);
     
-    const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() };
+    const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set() };
     const isFilterActive = (availableOptions.xmlCsts.length > 0 && filters.xmlCsts.size < availableOptions.xmlCsts.length) ||
                            (availableOptions.xmlPicms.length > 0 && filters.xmlPicms.size < availableOptions.xmlPicms.length) ||
-                           (availableOptions.xmlCfopDescriptions.length > 0 && filters.xmlCfopDescriptions.size < availableOptions.xmlCfopDescriptions.length);
+                           (availableOptions.xmlCfops.length > 0 && filters.xmlCfops.size < availableOptions.xmlCfops.length);
 
     const handleFilterChange = (type: keyof TabFilters, value: string, checked: boolean) => {
         setTabFilters(prev => {
-            const currentCfopFilters = prev[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfopDescriptions: new Set() };
+            const currentCfopFilters = prev[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set() };
             const newSet = new Set(currentCfopFilters[type]);
             
             if (checked) {
@@ -116,7 +119,7 @@ const FilterDialog: React.FC<{
             [siengeCfop]: {
                 xmlCsts: new Set(availableOptions.xmlCsts),
                 xmlPicms: new Set(availableOptions.xmlPicms),
-                xmlCfopDescriptions: new Set(availableOptions.xmlCfopDescriptions),
+                xmlCfops: new Set(availableOptions.xmlCfops),
             }
         }));
     };
@@ -127,7 +130,7 @@ const FilterDialog: React.FC<{
             [siengeCfop]: {
                 xmlCsts: new Set(),
                 xmlPicms: new Set(),
-                xmlCfopDescriptions: new Set(),
+                xmlCfops: new Set(),
             }
         }));
     };
@@ -165,7 +168,7 @@ const FilterDialog: React.FC<{
                      <Button variant="ghost" size="sm" onClick={selectAllFilters}>Marcar Todos</Button>
                 </div>
                  <div className="grid grid-cols-3 gap-4 border-t pt-4">
-                     <FilterCheckboxList title="Descrição CFOP (XML)" options={availableOptions.xmlCfopDescriptions} filterSet={filters.xmlCfopDescriptions || new Set()} filterKey="xmlCfopDescriptions" />
+                     <FilterCheckboxList title="CFOP (XML)" options={availableOptions.xmlCfops} filterSet={filters.xmlCfops || new Set()} filterKey="xmlCfops" />
                      <FilterCheckboxList title="CST ICMS (XML)" options={availableOptions.xmlCsts} filterSet={filters.xmlCsts || new Set()} filterKey="xmlCsts" />
                      <FilterCheckboxList title="Alíquota ICMS (XML)" options={availableOptions.xmlPicms} filterSet={filters.xmlPicms || new Set()} filterKey="xmlPicms" />
                  </div>
@@ -468,13 +471,15 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                                 const allItemsForCfop = itemsByStatus[status]?.[cfop] || [];
 
                                                 const filteredCount = !currentFilters ? allItemsForCfop.length : allItemsForCfop.filter(item => {
-                                                    const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-                                                    
+                                                    const cfopCode = item.CFOP;
+                                                    const shortDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions]?.split(' ').slice(0, 3).join(' ') || "N/A";
+                                                    const combinedCfop = `${cfopCode}: ${shortDescription}`;
+
                                                     const cstFilter = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(String(item['CST do ICMS'] || ''));
                                                     const picmsFilter = currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(String(item['Alíq. ICMS (%)'] || '0'));
-                                                    const descFilter = currentFilters.xmlCfopDescriptions.size === 0 || currentFilters.xmlCfopDescriptions.has(fullDescription);
+                                                    const cfopFilter = currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(combinedCfop);
                                                     
-                                                    return cstFilter && picmsFilter && descFilter;
+                                                    return cstFilter && picmsFilter && cfopFilter;
                                                 }).length;
                                                 
                                                 if (filteredCount === 0 && allItemsForCfop.length > 0) return null;
@@ -491,15 +496,18 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                         const currentCfopData = itemsByStatus[status]?.[cfop]?.filter(item => {
                                             if (!currentFilters) return true;
                                             
-                                            const fullDescription = cfopDescriptions[parseInt(item.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
+                                            const cfopCode = item.CFOP;
+                                            const shortDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions]?.split(' ').slice(0, 3).join(' ') || "N/A";
+                                            const combinedCfop = `${cfopCode}: ${shortDescription}`;
+
                                             const cstValue = String(item['CST do ICMS'] || '');
                                             const picmsValue = String(item['Alíq. ICMS (%)'] || '0');
 
+                                            const cfopFilter = currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(combinedCfop);
                                             const cstFilter = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(cstValue);
                                             const picmsFilter = currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(picmsValue);
-                                            const descFilter = currentFilters.xmlCfopDescriptions.size === 0 || currentFilters.xmlCfopDescriptions.has(fullDescription);
                                             
-                                            return cstFilter && picmsFilter && descFilter;
+                                            return cstFilter && picmsFilter && cfopFilter;
                                         }) || [];
 
                                         return (
@@ -525,3 +533,4 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
+
