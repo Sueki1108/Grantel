@@ -114,30 +114,30 @@ export function ReconciliationAnalysis({
     };
 
     const handleDownloadDebugKeys = () => {
-        if (!reconciliationResults?.debug || (!reconciliationResults.debug.costCenterKeys.length && !reconciliationResults.debug.siengeKeys.length)) {
-            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar', description: 'Certifique-se de que ambas as planilhas estão carregadas.' });
+        const debugData = processedData?.reconciliationResults?.debug;
+        const hasCostCenterKeys = debugData && debugData.costCenterKeys && debugData.costCenterKeys.length > 0;
+        const hasSiengeKeys = debugData && debugData.siengeKeys && debugData.siengeKeys.length > 0;
+
+        if (!hasCostCenterKeys && !hasSiengeKeys) {
+            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar', description: 'Certifique-se de que as planilhas do Sienge e do Centro de Custo estão carregadas.' });
             return;
         }
 
         const wb = XLSX.utils.book_new();
-        
-        if (reconciliationResults.debug.costCenterKeys.length > 0) {
-            const ws = XLSX.utils.json_to_sheet(reconciliationResults.debug.costCenterKeys);
+
+        if (hasCostCenterKeys) {
+            const ws = XLSX.utils.json_to_sheet(debugData.costCenterKeys);
             XLSX.utils.book_append_sheet(wb, ws, "Chaves_Centro_Custo");
         }
-        if (reconciliationResults.debug.siengeKeys.length > 0) {
-            const ws = XLSX.utils.json_to_sheet(reconciliationResults.debug.siengeKeys);
+
+        if (hasSiengeKeys) {
+            const ws = XLSX.utils.json_to_sheet(debugData.siengeKeys);
             XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
         }
 
-        if (wb.SheetNames.length === 0) {
-             toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar.' });
-            return;
-        }
-
         XLSX.writeFile(wb, "Grantel_Debug_Chaves_Conciliacao.xlsx");
-        toast({ title: 'Ficheiro de Depuração Gerado' });
-    }
+        toast({ title: 'Ficheiro de Depuração Gerado', description: 'O ficheiro contém as abas com as chaves geradas para cada planilha.' });
+    };
     
     return (
          <Card>
