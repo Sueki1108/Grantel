@@ -346,7 +346,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         const allKeys = new Set<string>();
         items.forEach(item => Object.keys(item).forEach(key => allKeys.add(key)));
 
-        const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
+        const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'Centro de Custo', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
         
         return getColumnsWithCustomRender(
             items,
