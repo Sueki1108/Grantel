@@ -68,6 +68,8 @@ export interface ProcessedData {
     spedCorrections?: SpedCorrectionResult[] | null;
     spedDuplicates?: SpedDuplicate[] | null;
     costCenterMap?: Map<string, string>;
+    costCenterDebugKeys?: any[];
+    siengeDebugKeys?: any[];
     fileNames?: {
         nfeEntrada: string[];
         cte: string[];
@@ -130,7 +132,7 @@ const renameChaveColumn = (df: DataFrame): DataFrame => {
 // MAIN PROCESSING FUNCTION
 // =================================================================
 
-export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap'> {
+export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap' | 'costCenterDebugKeys' | 'siengeDebugKeys'> {
     
     log("Iniciando preparação dos dados no navegador...");
     const GRANTEL_CNPJ = "81732042000119";
@@ -368,33 +370,59 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         return { costCenterMap, debugKeys };
     }
 
-    // Iterar por todas as linhas da planilha.
+    // 1. Encontrar o cabeçalho principal da tabela para identificar as colunas relevantes.
+    let headerRowIndex = data.findIndex(row => String(row?.[0]).trim().toLowerCase().startsWith('item'));
+
+    if (headerRowIndex === -1) {
+        // Fallback: Tenta encontrar o cabeçalho procurando pela coluna 'Credor'.
+        headerRowIndex = data.findIndex(row => String(row?.[1]).trim().toLowerCase() === 'credor');
+    }
+    
+    // Se ainda não encontrar, assume um formato fixo para o cabeçalho na linha 9.
+    if (headerRowIndex === -1 && data.length > 8) {
+       const potentialHeaders = data[8].map(h => String(h || '').trim());
+       if (normalizeKey(potentialHeaders[1]) === 'credor' && normalizeKey(potentialHeaders[2]) === 'documento') {
+           headerRowIndex = 8;
+       }
+    }
+    
+    // Se ainda assim falhar, lança um erro.
+    if (headerRowIndex === -1) {
+        throw new Error("Não foi possível encontrar a linha de cabeçalho na planilha de centro de custo.");
+    }
+    
+    const headers: string[] = data[headerRowIndex].map(h => String(h || '').trim());
+    const credorIndex = headers.findIndex(h => normalizeKey(h) === 'credor');
+    const documentoIndex = headers.findIndex(h => normalizeKey(h) === 'documento');
+
+    if (credorIndex === -1 || documentoIndex === -1) {
+        throw new Error("Não foi possível encontrar as colunas 'Credor' ou 'Documento' na planilha de centro de custo.");
+    }
+
+    // 2. Iterar por todas as linhas da planilha.
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
-        if (!row || row.length < 4) continue;
+        if (!row || row.length === 0) continue;
 
         const firstCell = String(row[0] || '').trim();
-        
-        // Identificar uma linha de cabeçalho de centro de custo.
-        if (firstCell.toLowerCase().startsWith('centro de custo')) {
+        // 3. Identificar uma linha de cabeçalho de centro de custo.
+        if (firstCell.toLowerCase() === 'centro de custo') {
             currentCostCenter = String(row[1] || 'N/A').trim();
             continue;
         }
 
-        // Identificar uma linha de dados (um título/item).
-        // A linha é considerada de dados se a primeira célula (coluna A, 'Item') for um número.
-        if (/^\d+$/.test(firstCell)) {
-            const credorString = String(row[1] || '').trim(); // Coluna B
-            const documento = String(row[3] || '').trim();     // Coluna D
+        // 4. Identificar uma linha de dados (um título/item).
+        if (i > headerRowIndex && /^\d+$/.test(firstCell)) {
+            const credorString = String(row[credorIndex] || '').trim();
+            const documento = String(row[documentoIndex] || '').trim();
 
             if (credorString && documento) {
-                // Construir a chave única a partir do nome do credor e do número do documento.
+                // 5. Construir a chave única a partir do nome do credor e do número do documento.
                 const credorName = credorString.replace(/^\d+\s*-\s*/, '').replace(/\s*-\s*[\d-]+$/, '').trim();
                 const docKey = `${cleanAndToStr(documento)}-${normalizeKey(credorName)}`;
                 
                 debugKeys.push({ 'Chave Gerada (Centro de Custo)': docKey, 'Documento Original': documento, 'Credor Original': credorString, 'Centro de Custo': currentCostCenter });
 
-                // Armazenar no mapa.
                 if (!costCenterMap.has(docKey)) {
                     costCenterMap.set(docKey, currentCostCenter);
                 }
@@ -420,13 +448,17 @@ export function generateSiengeDebugKeys(siengeData: any[]): any[] {
     if (!h.credor || !h.documento) return [];
 
     return siengeData.map(item => {
-        const credorName = item[h.credor!];
+        const credorString = item[h.credor!];
         const documento = item[h.documento!];
+        
+        // Aplica a mesma lógica de extração de nome da função do Centro de Custo
+        const credorName = String(credorString).replace(/^\d+\s*-\s*/, '').replace(/\s*-\s*[\d-]+$/, '').trim();
+        
         const docKey = `${cleanAndToStr(documento)}-${normalizeKey(credorName)}`;
         return {
             'Chave Gerada (Sienge)': docKey,
             'Documento Original': documento,
-            'Credor Original': credorName,
+            'Credor Original': credorString,
         };
     });
 }
@@ -536,9 +568,11 @@ export function runReconciliation(
                         let costCenter = 'N/A';
                          if (costCenterMap && h.numero && h.credor) {
                             const siengeDoc = siengeItem[h.numero!];
-                            const siengeCredor = siengeItem[h.credor!];
-                            // Chave para procurar no mapa de centro de custo, usando os dados do SIENGE
-                            const docKey = `${cleanAndToStr(siengeDoc)}-${normalizeKey(siengeCredor)}`;
+                            const siengeCredorString = siengeItem[h.credor!];
+                             // Usa a mesma lógica de extração do nome do credor
+                            const siengeCredorName = String(siengeCredorString).replace(/^\d+\s*-\s*/, '').replace(/\s*-\s*[\d-]+$/, '').trim();
+                            
+                            const docKey = `${cleanAndToStr(siengeDoc)}-${normalizeKey(siengeCredorName)}`;
                             
                             if (costCenterMap.has(docKey)) {
                                 costCenter = costCenterMap.get(docKey)!;
