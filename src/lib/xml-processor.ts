@@ -165,7 +165,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
             'Quantidade': parseFloat(getTagValue(prod, 'qCom')) || 0,
             'Valor Unitário': parseFloat(getTagValue(prod, 'vUnCom')) || 0,
             'Valor Total': parseFloat(getTagValue(prod, 'vProd')) || 0,
-            'pICMS': null,
+            'Alíq. ICMS (%)': null,
             'CST do ICMS': null,
         };
 
@@ -181,18 +181,16 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
                         if (tagName === 'CST' || tagName === 'CSOSN') {
                              item['CST do ICMS'] = textContent;
                         } else if (tagName === 'pICMS') {
-                             item['pICMS'] = textContent ? parseFloat(textContent) : 0;
+                             item['Alíq. ICMS (%)'] = textContent ? parseFloat(textContent) : 0;
                         }
                     }
                 }
             }
         }
-        
-        item['Alíq. ICMS (%)'] = item['pICMS'] ?? 0;
 
         if (isSaida && i === 0) {
             notaFiscal['CFOP'] = item['CFOP'];
-            notaFiscal['Alíq. ICMS (%)'] = item['pICMS'] || 0;
+            notaFiscal['Alíq. ICMS (%)'] = item['Alíq. ICMS (%)'] || 0;
         }
 
         itens.push(item);
