@@ -375,7 +375,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             return; 
         }
         
-        // Verifica se a primeira célula é um número (indicando uma linha de dados)
+        // Verifica se a primeira célula é um número e as colunas B e D existem (para identificar uma linha de dados)
         if (row.length > 3 && /^\d+$/.test(firstCell)) {
             const credorString = String(row[1] || '').trim(); // Coluna B
             const documento = String(row[3] || '').trim();    // Coluna D
@@ -385,12 +385,13 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             
             const docKey = `${cleanAndToStr(documento)}-${credorCode}`;
 
-            debugKeys.push({ 
+            const debugInfo = { 
                 'Chave Gerada (Centro de Custo)': docKey, 
                 'Documento Original': documento, 
                 'Credor Original': credorString,
                 'Centro de Custo': currentCostCenter
-            });
+            };
+            debugKeys.push(debugInfo);
 
             if (docKey && !costCenterMap.has(docKey)) {
                 costCenterMap.set(docKey, currentCostCenter);
