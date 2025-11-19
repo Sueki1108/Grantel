@@ -122,6 +122,13 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
             columnsToShow,
             (row, id) => {
                 const value = row.original[id as keyof typeof row.original];
+                const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
+                    <div className="flex items-center justify-between gap-1 group">
+                        <span className="truncate">{displayValue}</span>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(copyValue, typeName); }}><Copy className="h-3 w-3" /></Button>
+                    </div>
+                );
+
                  if ((id === 'Valor Total' || id === 'Valor Unitário') && typeof value === 'number') {
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
                 }
@@ -129,39 +136,19 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
                     return <div className="text-center">{value.toFixed(2)}%</div>
                 }
                 
-                const renderCellWithTooltip = (displayValue: string, fullValue: string) => (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <span className="truncate max-w-[120px]">{displayValue}</span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>{fullValue}</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                );
+                const summarizedValue = typeof value === 'string' && value.length > 35 ? `${value.substring(0, 35)}...` : value;
 
-                if (id === 'Fornecedor' && typeof value === 'string') {
-                     return renderCellWithTooltip(value, value);
-                }
-
-                if (id === 'Descrição' && typeof value === 'string') {
-                     return renderCellWithTooltip(value, value);
+                if (id === 'Fornecedor' || id === 'Descrição' || id === 'Número da Nota') {
+                    return renderCellWithCopy(
+                        <TooltipProvider><Tooltip><TooltipTrigger asChild><span>{summarizedValue}</span></TooltipTrigger><TooltipContent><p>{value}</p></TooltipContent></Tooltip></TooltipProvider>,
+                        value,
+                        id
+                    );
                 }
 
                 if (id === 'Descricao CFOP' && typeof value === 'string') {
                     const fullDescription = cfopDescriptions[parseInt(row.original.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
-                     return renderCellWithTooltip(value, fullDescription);
-                }
-
-                 if (id === 'Número da Nota') {
-                    return (
-                        <div className="flex items-center gap-1 group justify-center">
-                            <span>{value}</span>
-                            <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(value, 'Número da Nota'); }}><Copy className="h-3 w-3" /></Button>
-                        </div>
-                    );
+                     return <TooltipProvider><Tooltip><TooltipTrigger asChild><span>{summarizedValue}</span></TooltipTrigger><TooltipContent><p>{fullDescription}</p></TooltipContent></Tooltip></TooltipProvider>;
                 }
                 
                 return <div className="truncate max-w-xs">{String(value ?? '')}</div>;
@@ -693,4 +680,3 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         </div>
     );
 }
-
