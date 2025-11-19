@@ -354,8 +354,6 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 
 /**
  * Processa a planilha de centro de custo para criar um mapa de busca rápida e chaves de depuração.
- * A função lê uma estrutura de relatório específica onde os centros de custo são cabeçalhos de secção
- * e os títulos/documentos estão listados abaixo deles.
  * @param data - Os dados brutos da planilha, lidos como um array de arrays.
  * @returns Um objeto contendo o mapa de centros de custo e uma lista de chaves de depuração.
  */
@@ -445,12 +443,9 @@ export function runReconciliation(
     cteData: any[],
     costCenterMap?: Map<string, string> | null
 ): ReconciliationResults {
-    let costCenterKeys: any[] = [];
-    // Recalculate costCenterMap if not provided, for safety
-    const finalCostCenterMap = costCenterMap ?? processCostCenterData(siengeData || []).costCenterMap;
 
+    const costCenterKeys: any[] = []; // This will be populated if needed, but the main logic is now outside
     const siengeKeys = generateSiengeDebugKeys(siengeData || []);
-    
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys, siengeKeys } };
     
     if (!siengeData || siengeData.length === 0) {
@@ -546,13 +541,13 @@ export function runReconciliation(
                         if (matchedXmlItems.length === 0) xmlMap.delete(key);
                         
                         let costCenter = 'N/A';
-                         if (finalCostCenterMap && h.documento && h.credor) {
+                         if (costCenterMap && h.documento && h.credor) {
                             const siengeDoc = siengeItem[h.documento!];
                             const siengeCredor = siengeItem[h.credor!];
                             const docKey = `${cleanAndToStr(siengeDoc)}-${normalizeKey(siengeCredor)}`;
                             
-                            if (finalCostCenterMap.has(docKey)) {
-                                costCenter = finalCostCenterMap.get(docKey)!;
+                            if (costCenterMap.has(docKey)) {
+                                costCenter = costCenterMap.get(docKey)!;
                             }
                         }
 
@@ -590,4 +585,3 @@ export function runReconciliation(
     }
 }
     
-
