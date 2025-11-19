@@ -54,7 +54,7 @@ export function getColumns<TData extends Record<string, any>>(data: TData[]): Co
     return []
   }
 
-  // Build a set of all unique keys from all rows in the data
+  // Build a set of all unique keys from all rows in the data to ensure all columns are included.
   const allKeys = new Set<string>();
   data.forEach(row => {
     if (row && typeof row === 'object') {
@@ -96,7 +96,8 @@ export function getColumnsWithCustomRender<TData extends Record<string, any>>(
             Object.keys(row).forEach(key => allKeys.add(key));
         }
     });
-
+    
+    // Ensure that all columns intended to be shown are actually available in the data, at least in one row.
     const columnsToRender = columnsToShow.filter(key => allKeys.has(String(key)));
 
     return columnsToRender.map((key) => {
