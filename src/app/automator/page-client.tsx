@@ -17,7 +17,7 @@ import Link from "next/link";
 import * as XLSX from 'xlsx';
 import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
-import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult, processCostCenterData } from "@/lib/excel-processor";
+import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult, processCostCenterData, generateSiengeDebugKeys } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdvancedAnalyses } from "@/components/app/advanced-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
@@ -257,11 +257,13 @@ export function AutomatorClientPage() {
         const file = e.target.files?.[0];
         setSiengeFile(file || null);
         
+        const emptyReconResults = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: [] } };
+
         if (!file) {
             setProcessedData(prev => {
                 if (!prev) return null;
                 const { siengeSheetData, reconciliationResults, ...rest } = prev;
-                return { ...rest, siengeSheetData: null, reconciliationResults: null } as ProcessedData;
+                return { ...rest, siengeSheetData: null, reconciliationResults: { ...emptyReconResults, debug: { ...reconciliationResults?.debug, siengeKeys: [] }} } as ProcessedData;
             });
             return;
         }
@@ -275,11 +277,18 @@ export function AutomatorClientPage() {
 
             const worksheet = workbook.Sheets[sheetName];
             const siengeSheetData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+            const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
 
             setProcessedData(prev => ({
                 ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
                 siengeSheetData,
-                reconciliationResults: null, // Reset reconciliation results on new file
+                reconciliationResults: {
+                    ...(prev?.reconciliationResults ?? emptyReconResults),
+                    debug: {
+                         ...(prev?.reconciliationResults?.debug ?? { costCenterKeys: [] }),
+                        siengeKeys: siengeDebugKeys
+                    }
+                },
             }));
             
             toast({ title: 'Planilha Sienge Carregada', description: 'Clique em "Conciliar XML vs Sienge" para executar a análise.' });
@@ -294,29 +303,44 @@ export function AutomatorClientPage() {
     const handleCostCenterFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         setCostCenterFile(file || null);
+        const emptyReconResults = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: [] } };
 
-        if (file) {
-            setProcessing(true);
-            try {
-                const data = await file.arrayBuffer();
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
-                const worksheet = workbook.Sheets[sheetName];
-                const costCenterData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                const { costCenterMap } = processCostCenterData(costCenterData);
-                
-                setProcessedData(prev => ({
-                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
-                    costCenterMap,
-                }));
-                toast({ title: "Planilha de Centro de Custo Carregada", description: `${costCenterMap.size} mapeamentos de centro de custo foram criados.` });
-            } catch (err: any) {
-                toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
-                setCostCenterFile(null);
-            } finally {
-                setProcessing(false);
-            }
+        if (!file) {
+             setProcessedData(prev => {
+                if (!prev) return null;
+                 const { costCenterMap, reconciliationResults, ...rest } = prev;
+                return { ...rest, costCenterMap: undefined, reconciliationResults: { ...emptyReconResults, debug: { ...reconciliationResults?.debug, costCenterKeys: [] } } } as ProcessedData;
+            });
+            return;
+        }
+
+        setProcessing(true);
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
+            const worksheet = workbook.Sheets[sheetName];
+            const costCenterRawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            const { costCenterMap, debugKeys } = processCostCenterData(costCenterRawData);
+            
+            setProcessedData(prev => ({
+                ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
+                costCenterMap,
+                reconciliationResults: {
+                    ...(prev?.reconciliationResults ?? emptyReconResults),
+                    debug: {
+                        ...(prev?.reconciliationResults?.debug ?? { siengeKeys: [] }),
+                        costCenterKeys: debugKeys,
+                    }
+                },
+            }));
+            toast({ title: "Planilha de Centro de Custo Carregada", description: `${costCenterMap.size} mapeamentos de centro de custo foram criados.` });
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
+            setCostCenterFile(null);
+        } finally {
+            setProcessing(false);
         }
     };
 
