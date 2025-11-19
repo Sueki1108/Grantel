@@ -120,7 +120,7 @@ const FilterDialog: React.FC<{
     const handleSelectAllForTab = (filterKey: keyof TabFilters, type: 'all' | 'none') => {
         setTabFilters(prev => {
             const currentCfopFilters = prev[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set() };
-            const newSet = type === 'all' ? new Set(availableOptions[filterKey]) : new Set<string>();
+            const newSet = type === 'all' ? new Set(availableOptions[filterKey as keyof typeof availableOptions]) : new Set<string>();
             return {
                 ...prev,
                 [siengeCfop]: { ...currentCfopFilters, [filterKey]: newSet }
@@ -152,7 +152,7 @@ const FilterDialog: React.FC<{
                                 <Button variant="ghost" size="sm" onClick={() => handleSelectAllForTab('xmlCfops', 'all')}>Marcar Todos</Button>
                                 <Button variant="ghost" size="sm" onClick={() => handleSelectAllForTab('xmlCfops', 'none')}>Desmarcar Todos</Button>
                             </div>
-                            <ScrollArea className='h-96 border rounded-md p-4'>
+                            <ScrollArea className='h-[600px] border rounded-md p-4'>
                                 {availableOptions.xmlCfops.map(opt => (
                                     <div key={`cfop-${opt}`} className="flex items-start space-x-2 mb-2">
                                         <Checkbox id={`cfop-${opt}`} checked={(filters.xmlCfops || new Set()).has(opt)} onCheckedChange={checked => handleFilterChange('xmlCfops', opt, !!checked)} />
@@ -239,7 +239,31 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         updatedPersistedData[competence].cfopValidations.classifications = newValidations;
         
         onPersistData(updatedPersistedData);
-        toast({title: 'Validações de CFOP guardadas automaticamente.'});
+    };
+
+    const handleValidationChange = (
+        itemsToUpdate: any[],
+        newClassification: 'correct' | 'incorrect' | 'verify' | 'unvalidated'
+    ) => {
+        const newValidations = { ...cfopValidations };
+        itemsToUpdate.forEach(item => {
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            newValidations[uniqueKey] = {
+                ...(newValidations[uniqueKey] || { isDifal: false }),
+                classification: newClassification,
+            };
+        });
+        updateAndPersistValidations(newValidations);
+    };
+
+    const handleDifalChange = (itemsToUpdate: any[]) => {
+        const newValidations = { ...cfopValidations };
+        itemsToUpdate.forEach(item => {
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const current = newValidations[uniqueKey] || { classification: 'unvalidated', isDifal: false };
+            newValidations[uniqueKey] = { ...current, isDifal: !current.isDifal };
+        });
+        updateAndPersistValidations(newValidations);
     };
     
     const handleBulkAction = () => {
@@ -248,11 +272,17 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
 
         if (selectedItemKeys.length === 0) return;
         
+        const selectedItems = selectedItemKeys.map(itemKey => {
+            const uniqueKey = itemKey.replace('cfop-pending-', '');
+            return items.find(item => `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}` === uniqueKey);
+        }).filter(Boolean);
+
         let changedCount = 0;
         const newValidations = { ...cfopValidations };
 
-        selectedItemKeys.forEach(itemKey => {
-            const uniqueKey = itemKey.replace('cfop-pending-', '');
+        selectedItems.forEach(item => {
+            if (!item) return;
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const current = { ...(newValidations[uniqueKey] || { classification: 'unvalidated', isDifal: false }) };
             let itemChanged = false;
 
@@ -368,38 +398,21 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     const classification = validation?.classification || 'unvalidated';
                     const isDifal = validation?.isDifal;
 
-                     const handleValidationChange = (newClassification: 'correct' | 'incorrect' | 'verify' | 'unvalidated') => {
-                        const newValidations = { ...cfopValidations };
-                        newValidations[uniqueKey] = {
-                            ...(newValidations[uniqueKey] || { isDifal: false }),
-                            classification: newClassification,
-                        };
-                        updateAndPersistValidations(newValidations);
-                    };
-                    const handleDifalChange = () => {
-                        const current = cfopValidations[uniqueKey] || { classification: 'unvalidated', isDifal: false };
-                        const newValidations = {
-                            ...cfopValidations,
-                            [uniqueKey]: { ...current, isDifal: !current.isDifal }
-                        };
-                        updateAndPersistValidations(newValidations);
-                    };
-
                     return (
                         <div className="flex justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                              <TooltipProvider>
-                                <Tooltip><TooltipTrigger asChild><Button variant={classification === 'correct' ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'correct' && "bg-green-600/80 text-white hover:bg-green-600")} onClick={() => handleValidationChange('correct')}><Check className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
-                                <Tooltip><TooltipTrigger asChild><Button variant={classification === 'incorrect' ? 'destructive' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'incorrect' && "bg-red-600/80 text-white hover:bg-red-600")} onClick={() => handleValidationChange('incorrect')}><X className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
-                                <Tooltip><TooltipTrigger asChild><Button variant={classification === 'verify' ? 'secondary' : 'ghost'} size="icon" className="h-7 w-7" onClick={() => handleValidationChange('verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>A Verificar</p></TooltipContent></Tooltip>
-                                <Tooltip><TooltipTrigger asChild><Button variant={isDifal ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", isDifal && "bg-primary hover:bg-primary/90")} onClick={() => handleDifalChange()}><Ticket className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>{isDifal ? 'Desmarcar DIFAL' : 'Marcar como DIFAL'}</p></TooltipContent></Tooltip>
-                                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange('unvalidated')}><RotateCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Limpar Validação</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button variant={classification === 'correct' ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'correct' && "bg-green-600/80 text-white hover:bg-green-600")} onClick={() => handleValidationChange([row.original], 'correct')}><Check className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button variant={classification === 'incorrect' ? 'destructive' : 'ghost'} size="icon" className={cn("h-7 w-7")} onClick={() => handleValidationChange([row.original], 'incorrect')}><X className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button variant={classification === 'verify' ? 'secondary' : 'ghost'} size="icon" className="h-7 w-7" onClick={() => handleValidationChange([row.original], 'verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>A Verificar</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button variant={isDifal ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", isDifal && "bg-primary hover:bg-primary/90")} onClick={() => handleDifalChange([row.original])}><Ticket className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>{isDifal ? 'Desmarcar DIFAL' : 'Marcar como DIFAL'}</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange([row.original], 'unvalidated')}><RotateCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Limpar Validação</p></TooltipContent></Tooltip>
                             </TooltipProvider>
                         </div>
                     );
                 }
             },
         ]);
-    }, [items, cfopValidations, toast]);
+    }, [items, cfopValidations, toast, handleValidationChange, handleDifalChange]);
     
     const itemsByStatus = useMemo(() => {
         const result: Record<ValidationStatus, Record<string, any[]>> = {
