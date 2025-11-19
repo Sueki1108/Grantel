@@ -372,13 +372,13 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         
         if (firstCell.toLowerCase().includes('centro de custo')) {
             currentCostCenter = secondCell || 'N/A';
-            return; // Continue to the next line
+            return; 
         }
-
-        // Check if it's a data row by looking for a numeric value in the first column
-        if (row.length > 3 && !isNaN(parseInt(firstCell, 10))) {
-            const credorString = String(row[1] || '').trim(); // Column B
-            const documento = String(row[3] || '').trim();    // Column D
+        
+        // Verifica se a primeira célula é um número (indicando uma linha de dados)
+        if (row.length > 3 && /^\d+$/.test(firstCell)) {
+            const credorString = String(row[1] || '').trim(); // Coluna B
+            const documento = String(row[3] || '').trim();    // Coluna D
 
             const credorCodeMatch = credorString.match(/^(\d+)/);
             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
@@ -492,8 +492,8 @@ export function runReconciliation(
             esp: findHeader(siengeData, ['esp']),
         };
         
-        if (!h.cnpj || !h.numero || !h.valorTotal) {
-            throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge.");
+        if (!h.cnpj || !h.numero || !h.valorTotal || !h.credor) {
+            throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Credor', 'Valor Total') na planilha Sienge.");
         }
 
         const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
@@ -585,5 +585,3 @@ export function runReconciliation(
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
-
-    
