@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -60,40 +59,9 @@ export function DataTable<TData, TValue>({
   const rowSelection = isControllingSelection ? externalRowSelection : internalRowSelection;
   const setRowSelection = isControllingSelection ? externalSetRowSelection : setInternalRowSelection;
 
-  const tableColumns = React.useMemo<ColumnDef<TData, TValue>[]>(() => {
-    if (!isControllingSelection) return columns;
-    return [
-        {
-            id: 'select',
-            header: ({ table }) => (
-                <Checkbox
-                    checked={table.getIsAllRowsSelected()}
-                    onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
-                    aria-label="Selecionar todas as linhas"
-                    onClick={e => e.stopPropagation()}
-                />
-            ),
-            cell: ({ row }) => {
-                return (
-                    <Checkbox
-                        checked={row.getIsSelected()}
-                        onCheckedChange={(value) => row.toggleSelected(!!value)}
-                        aria-label="Selecionar linha"
-                        onClick={e => e.stopPropagation()}
-                    />
-                )
-            },
-            enableSorting: false,
-            enableHiding: false,
-        },
-        ...columns
-      ]
-  }, [columns, isControllingSelection]);
-
-
   const table = useReactTable({
     data,
-    columns: tableColumns,
+    columns,
     autoResetPageIndex: false,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
