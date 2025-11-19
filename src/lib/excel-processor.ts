@@ -367,53 +367,34 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     if (!data || data.length === 0) {
         return { costCenterMap, debugKeys };
     }
-
-    let headerRowIndex = -1;
-    let headers: string[] = [];
-
-    // Find the header row dynamically by looking for 'Credor' and 'Documento'
-    for (let i = 0; i < Math.min(data.length, 20); i++) {
-        const row = data[i];
-        if (Array.isArray(row)) {
-            const potentialHeaders = row.map(h => String(h || '').trim());
-            const credorIndex = potentialHeaders.findIndex(h => normalizeKey(h) === 'credor');
-            const documentoIndex = potentialHeaders.findIndex(h => normalizeKey(h) === 'documento');
-
-            if (credorIndex !== -1 && documentoIndex !== -1) {
-                headerRowIndex = i;
-                headers = potentialHeaders;
-                break;
-            }
-        }
-    }
-
-    if (headerRowIndex === -1) {
-        return { costCenterMap, debugKeys };
-    }
     
-    const credorIndex = headers.findIndex(h => normalizeKey(h) === 'credor');
-    const documentoIndex = headers.findIndex(h => normalizeKey(h) === 'documento');
-
+    // 2. Iterar por todas as linhas da planilha.
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
-        if (!row || row.length === 0) continue;
+        if (!row || row.length < 4) continue; // Precisa ter pelo menos 4 colunas (A, B, C, D)
 
         const firstCell = String(row[0] || '').trim();
         
+        // 3. Identificar uma linha de cabeçalho de centro de custo.
         if (firstCell.toLowerCase().startsWith('centro de custo')) {
             currentCostCenter = String(row[1] || 'N/A').trim();
-            continue;
+            continue; // Pula para a próxima linha.
         }
 
-        if (i > headerRowIndex && /^\d+$/.test(firstCell)) {
-            const credorString = String(row[credorIndex] || '').trim();
-            const documento = String(row[documentoIndex] || '').trim();
+        // 4. Identificar uma linha de dados (um título/item).
+        // A linha é considerada de dados se a primeira célula (coluna A, 'Item') for um número.
+        if (/^\d+$/.test(firstCell)) {
+            const credorString = String(row[1] || '').trim(); // Coluna B
+            const documento = String(row[3] || '').trim();     // Coluna D
 
             if (credorString && documento) {
+                // 5. Construir a chave única a partir do nome do credor e do número do documento.
                 const credorName = credorString.replace(/^\d+\s*-\s*/, '').replace(/\s*-\s*[\d-]+$/, '').trim();
                 const docKey = `${cleanAndToStr(documento)}-${normalizeKey(credorName)}`;
                 
                 debugKeys.push({ 'Chave Gerada (Centro de Custo)': docKey, 'Documento Original': documento, 'Credor Original': credorString, 'Centro de Custo': currentCostCenter });
+
+                // 6. Armazenar no mapa.
                 if (!costCenterMap.has(docKey)) {
                     costCenterMap.set(docKey, currentCostCenter);
                 }
@@ -458,10 +439,12 @@ export function runReconciliation(
     cteData: any[],
     costCenterMap?: Map<string, string> | null
 ): ReconciliationResults {
-    const costCenterKeys: any[] = []; 
-    const siengeKeys: any[] = generateSiengeDebugKeys(siengeData || []);
-
-    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys, siengeKeys } };
+    
+    const siengeKeys = generateSiengeDebugKeys(siengeData || []);
+    // A chave de depuração do centro de custo é gerada separadamente
+    // e esperamos que já esteja no `processedData`.
+    // Por enquanto, esta função só gera a do Sienge.
+    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys } };
     
     if (!siengeData || siengeData.length === 0) {
         return { ...emptyResult, onlyInXml: xmlItems || [] };
@@ -555,7 +538,7 @@ export function runReconciliation(
                         if (matchedXmlItems.length === 0) xmlMap.delete(key);
                         
                         let costCenter = 'N/A';
-                        if (costCenterMap && h.numero && h.credor) {
+                         if (costCenterMap && h.numero && h.credor) {
                             const siengeDoc = siengeItem[h.numero!];
                             const siengeCredor = siengeItem[h.credor!];
                             const docKey = `${cleanAndToStr(siengeDoc)}-${normalizeKey(siengeCredor)}`;
@@ -592,10 +575,10 @@ export function runReconciliation(
         );
         reconciled.push(...result.matched);
         
-        return { reconciled, onlyInSienge: result.remainingSienge, onlyInXml: result.remainingXml, debug: { costCenterKeys, siengeKeys } };
+        return { reconciled, onlyInSienge: result.remainingSienge, onlyInXml: result.remainingXml, debug: emptyResult.debug };
     } catch (err: any) {
         console.error("Reconciliation Error:", err);
-        return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems, debug: { costCenterKeys, siengeKeys } };
+        return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
     

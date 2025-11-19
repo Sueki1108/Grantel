@@ -257,13 +257,13 @@ export function AutomatorClientPage() {
         const file = e.target.files?.[0];
         setSiengeFile(file || null);
         
-        const emptyReconResults = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: [] } };
+        const emptyReconResults = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: processedData?.reconciliationResults?.debug?.costCenterKeys || [], siengeKeys: [] } };
 
         if (!file) {
             setProcessedData(prev => {
                 if (!prev) return null;
-                const { siengeSheetData, reconciliationResults, ...rest } = prev;
-                return { ...rest, siengeSheetData: null, reconciliationResults: { ...emptyReconResults, debug: { ...reconciliationResults?.debug, siengeKeys: [] }} } as ProcessedData;
+                const { siengeSheetData, ...rest } = prev;
+                return { ...rest, siengeSheetData: null, reconciliationResults: emptyReconResults } as ProcessedData;
             });
             return;
         }
@@ -291,7 +291,7 @@ export function AutomatorClientPage() {
                 },
             }));
             
-            toast({ title: 'Planilha Sienge Carregada', description: 'Clique em "Conciliar XML vs Sienge" para executar a análise.' });
+            toast({ title: 'Planilha Sienge Carregada', description: `Foram geradas ${siengeDebugKeys.length} chaves de depuração. Clique em "Conciliar" para executar a análise.` });
         } catch (err: any) {
             toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
             setSiengeFile(null);
@@ -303,13 +303,13 @@ export function AutomatorClientPage() {
     const handleCostCenterFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         setCostCenterFile(file || null);
-        const emptyReconResults = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: [] } };
+        const emptyReconResults = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: processedData?.reconciliationResults?.debug?.siengeKeys || [] } };
 
         if (!file) {
              setProcessedData(prev => {
                 if (!prev) return null;
-                 const { costCenterMap, reconciliationResults, ...rest } = prev;
-                return { ...rest, costCenterMap: undefined, reconciliationResults: { ...emptyReconResults, debug: { ...reconciliationResults?.debug, costCenterKeys: [] } } } as ProcessedData;
+                 const { costCenterMap, ...rest } = prev;
+                return { ...rest, costCenterMap: undefined, reconciliationResults: emptyReconResults } as ProcessedData;
             });
             return;
         }
@@ -957,3 +957,4 @@ export function AutomatorClientPage() {
         </div>
     );
 }
+
