@@ -1,5 +1,6 @@
 "use client"
 
+// Inspired by react-hot-toast library
 import * as React from "react"
 
 import type {
@@ -57,7 +58,7 @@ interface State {
 
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
-const addToRemoveQueue = (toastId: string, dispatch: React.Dispatch<Action>) => {
+const addToRemoveQueue = (toastId: string) => {
   if (toastTimeouts.has(toastId)) {
     return
   }
@@ -91,17 +92,15 @@ export const reducer = (state: State, action: Action): State => {
 
     case "DISMISS_TOAST": {
       const { toastId } = action
-      // This is a temporary way to get the dispatch function inside the reducer.
-      // A better approach would be to have a separate function for dismissing.
-      // However, for this fix, we will rely on a globally scoped dispatch.
-      if (globalDispatch) {
-        if (toastId) {
-          addToRemoveQueue(toastId, globalDispatch)
-        } else {
-          state.toasts.forEach((toast) => {
-            addToRemoveQueue(toast.id, globalDispatch!)
-          })
-        }
+
+      // ! Side effects ! - This could be extracted into a dismissToast() action,
+      // but I'll keep it here for simplicity
+      if (toastId) {
+        addToRemoveQueue(toastId)
+      } else {
+        state.toasts.forEach((toast) => {
+          addToRemoveQueue(toast.id)
+        })
       }
 
       return {
@@ -130,48 +129,30 @@ export const reducer = (state: State, action: Action): State => {
   }
 }
 
-interface ToastContextType {
-  state: State,
-  dispatch: React.Dispatch<Action>
-}
+const listeners: Array<(state: State) => void> = []
 
-const ToastContext = React.createContext<ToastContextType | undefined>(undefined);
+let memoryState: State = { toasts: [] }
 
-let globalDispatch: React.Dispatch<Action> | null = null;
-
-export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
-  const [state, dispatch] = React.useReducer(reducer, { toasts: [] });
-  globalDispatch = dispatch;
-
-  return (
-    <ToastContext.Provider value={{ state, dispatch }}>
-      {children}
-    </ToastContext.Provider>
-  )
+function dispatch(action: Action) {
+  memoryState = reducer(memoryState, action)
+  listeners.forEach((listener) => {
+    listener(memoryState)
+  })
 }
 
 type Toast = Omit<ToasterToast, "id">
 
 function toast({ ...props }: Toast) {
-  if (!globalDispatch) {
-    console.error("ToastProvider is not mounted.");
-    return {
-      id: '',
-      dismiss: () => {},
-      update: () => {},
-    };
-  }
-  
   const id = genId()
 
   const update = (props: ToasterToast) =>
-    globalDispatch!({
+    dispatch({
       type: "UPDATE_TOAST",
       toast: { ...props, id },
     })
-  const dismiss = () => globalDispatch!({ type: "DISMISS_TOAST", toastId: id })
+  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
 
-  globalDispatch({
+  dispatch({
     type: "ADD_TOAST",
     toast: {
       ...props,
@@ -191,15 +172,22 @@ function toast({ ...props }: Toast) {
 }
 
 function useToast() {
-  const context = React.useContext(ToastContext);
-  if (context === undefined) {
-    throw new Error("useToast must be used within a ToastProvider");
-  }
+  const [state, setState] = React.useState<State>(memoryState)
+
+  React.useEffect(() => {
+    listeners.push(setState)
+    return () => {
+      const index = listeners.indexOf(setState)
+      if (index > -1) {
+        listeners.splice(index, 1)
+      }
+    }
+  }, [state])
 
   return {
-    ...context.state,
+    ...state,
     toast,
-    dismiss: (toastId?: string) => context.dispatch({ type: "DISMISS_TOAST", toastId }),
+    dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
   }
 }
 
