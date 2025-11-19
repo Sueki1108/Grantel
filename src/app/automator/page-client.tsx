@@ -16,7 +16,7 @@ import Link from "next/link";
 import * as XLSX from 'xlsx';
 import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
-import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult, processCostCenterData, generateSiengeDebugKeys } from "@/lib/excel-processor";
+import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdvancedAnalyses } from "@/components/app/advanced-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
@@ -274,21 +274,14 @@ export function AutomatorClientPage() {
 
             const worksheet = workbook.Sheets[sheetName];
             const siengeSheetData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-            const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
 
             setProcessedData(prev => ({
                 ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null }),
                 siengeSheetData,
-                reconciliationResults: {
-                    ...(prev?.reconciliationResults ?? { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: [] } }),
-                    debug: {
-                        costCenterKeys: prev?.reconciliationResults?.debug?.costCenterKeys || [],
-                        siengeKeys: siengeDebugKeys
-                    }
-                },
+                reconciliationResults: null, // Always reset reconciliation on new file
             }));
             
-            toast({ title: 'Planilha Sienge Carregada', description: `Foram geradas ${siengeDebugKeys.length} chaves de depuração. Clique em "Conciliar" para executar a análise.` });
+            toast({ title: 'Planilha Sienge Carregada', description: 'Clique em "Conciliar" para executar a análise.' });
         } catch (err: any) {
             toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
             setSiengeFile(null);
@@ -305,39 +298,13 @@ export function AutomatorClientPage() {
             setProcessedData(prev => {
                 if (!prev) return null;
                 const { costCenterMap, ...rest } = prev;
-                 return { ...rest, costCenterMap: undefined, reconciliationResults: prev.reconciliationResults ? { ...prev.reconciliationResults, debug: { ...prev.reconciliationResults.debug, costCenterKeys: [] } } : null } as ProcessedData;
+                 return { ...rest, costCenterMap: undefined } as ProcessedData;
             });
             return;
         }
 
-        setProcessing(true);
-        try {
-            const data = await file.arrayBuffer();
-            const workbook = XLSX.read(data, { type: 'array' });
-            const sheetName = workbook.SheetNames[0];
-            if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
-            const worksheet = workbook.Sheets[sheetName];
-            const costCenterRawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-            const { costCenterMap, debugKeys } = processCostCenterData(costCenterRawData);
-            
-            setProcessedData(prev => ({
-                ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null }),
-                costCenterMap,
-                 reconciliationResults: {
-                    ...(prev?.reconciliationResults ?? { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: [] } }),
-                    debug: {
-                        siengeKeys: prev?.reconciliationResults?.debug?.siengeKeys || [],
-                        costCenterKeys: debugKeys,
-                    }
-                },
-            }));
-            toast({ title: "Planilha de Centro de Custo Carregada", description: `${costCenterMap.size} mapeamentos e ${debugKeys.length} chaves de depuração foram criadas.` });
-        } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
-            setCostCenterFile(null);
-        } finally {
-            setProcessing(false);
-        }
+        // Just store the file, processing happens on demand now
+        toast({ title: "Planilha de Centro de Custo Carregada" });
     };
 
 
@@ -678,39 +645,12 @@ export function AutomatorClientPage() {
         try {
             await new Promise(resolve => setTimeout(resolve, 50));
             
-            let currentCostCenterMap = processedData.costCenterMap;
-
-            // Process Cost Center file if it exists but map is not yet generated
-            if (costCenterFile && !currentCostCenterMap) {
-                toast({ title: 'A processar Centro de Custo', description: 'A sua planilha está a ser lida antes da conciliação.' });
-                const data = await costCenterFile.arrayBuffer();
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
-                const worksheet = workbook.Sheets[sheetName];
-                const costCenterRawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                const { costCenterMap, debugKeys } = processCostCenterData(costCenterRawData);
-                currentCostCenterMap = costCenterMap;
-
-                 setProcessedData(prev => ({
-                    ...prev!,
-                    costCenterMap,
-                    reconciliationResults: {
-                        ...(prev?.reconciliationResults ?? { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: [] } }),
-                        debug: {
-                            ...prev?.reconciliationResults?.debug,
-                            costCenterKeys: debugKeys,
-                        }
-                    },
-                }));
-            }
-    
             const newReconciliationResults = runReconciliation(
                 processedData.siengeSheetData,
                 processedData.sheets['Itens Válidos'] || [],
                 processedData.sheets['Notas Válidas'] || [],
                 processedData.sheets['CTEs Válidos'] || [],
-                currentCostCenterMap
+                processedData.costCenterMap
             );
             
             setProcessedData(prev => ({

@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUploadForm } from "@/components/app/file-upload-form";
-import type { ProcessedData } from '@/lib/excel-processor';
+import { processCostCenterData, generateSiengeDebugKeys, type ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, X, RotateCw, HelpCircle, FileDown } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
@@ -113,30 +113,51 @@ export function ReconciliationAnalysis({
         XLSX.writeFile(workbook, fileName);
     };
 
-    const handleDownloadDebugKeys = () => {
-        const debugData = processedData?.reconciliationResults?.debug;
-        const hasCostCenterKeys = debugData && debugData.costCenterKeys && debugData.costCenterKeys.length > 0;
-        const hasSiengeKeys = debugData && debugData.siengeKeys && debugData.siengeKeys.length > 0;
-
-        if (!hasCostCenterKeys && !hasSiengeKeys) {
-            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar', description: 'Certifique-se de que as planilhas do Sienge e do Centro de Custo estão carregadas.' });
+    const handleGenerateDebugKeys = async () => {
+        if (!siengeFile || !costCenterFile) {
+            toast({
+                variant: "destructive",
+                title: "Ficheiros em falta",
+                description: "Por favor, carregue as planilhas 'Itens do Sienge' e 'Centro de Custo' para gerar as chaves de depuração."
+            });
             return;
         }
 
-        const wb = XLSX.utils.book_new();
+        try {
+            const siengeDataBuffer = await siengeFile.arrayBuffer();
+            const siengeWb = XLSX.read(siengeDataBuffer, { type: 'array' });
+            const siengeSheetName = siengeWb.SheetNames[0];
+            if (!siengeSheetName) throw new Error("Planilha Sienge sem abas.");
+            const siengeSheet = XLSX.utils.sheet_to_json(siengeWb.Sheets[siengeSheetName], { range: 8, defval: null });
+            const siengeKeys = generateSiengeDebugKeys(siengeSheet);
 
-        if (hasCostCenterKeys) {
-            const ws = XLSX.utils.json_to_sheet(debugData.costCenterKeys);
-            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Centro_Custo");
+            const costCenterDataBuffer = await costCenterFile.arrayBuffer();
+            const ccWb = XLSX.read(costCenterDataBuffer, { type: 'array' });
+            const ccSheetName = ccWb.SheetNames[0];
+            if (!ccSheetName) throw new Error("Planilha de Centro de Custo sem abas.");
+            const ccSheet = XLSX.utils.sheet_to_json(ccWb.Sheets[ccSheetName], { header: 1 });
+            const { debugKeys: costCenterKeys } = processCostCenterData(ccSheet);
+            
+            if (siengeKeys.length === 0 && costCenterKeys.length === 0) {
+                toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar' });
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+            if (costCenterKeys.length > 0) {
+                const ws = XLSX.utils.json_to_sheet(costCenterKeys);
+                XLSX.utils.book_append_sheet(wb, ws, "Chaves_Centro_Custo");
+            }
+            if (siengeKeys.length > 0) {
+                const ws = XLSX.utils.json_to_sheet(siengeKeys);
+                XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
+            }
+            XLSX.writeFile(wb, "Grantel_Debug_Chaves_Conciliacao.xlsx");
+            toast({ title: 'Ficheiro de Depuração Gerado', description: 'O ficheiro contém as abas com as chaves geradas para cada planilha.' });
+
+        } catch (error: any) {
+             toast({ variant: 'destructive', title: 'Erro ao Gerar Depuração', description: error.message });
         }
-
-        if (hasSiengeKeys) {
-            const ws = XLSX.utils.json_to_sheet(debugData.siengeKeys);
-            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
-        }
-
-        XLSX.writeFile(wb, "Grantel_Debug_Chaves_Conciliacao.xlsx");
-        toast({ title: 'Ficheiro de Depuração Gerado', description: 'O ficheiro contém as abas com as chaves geradas para cada planilha.' });
     };
     
     return (
@@ -151,7 +172,7 @@ export function ReconciliationAnalysis({
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
-                 <div className='grid grid-cols-1 md:grid-cols-3 gap-6 items-end'>
+                 <div className='grid grid-cols-1 md:grid-cols-2 gap-6 items-end'>
                     <FileUploadForm
                         displayName="Itens do Sienge"
                         formId="sienge-for-reconciliation"
@@ -166,14 +187,14 @@ export function ReconciliationAnalysis({
                         onFileChange={onCostCenterFileChange}
                         onClearFile={onClearCostCenterFile}
                     />
-                    <div className='flex flex-col gap-2'>
-                        <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full">
-                            {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
-                        </Button>
-                        <Button onClick={handleDownloadDebugKeys} disabled={!processedData?.reconciliationResults?.debug} variant="outline" size="sm" className="w-full">
-                            <FileDown className="mr-2 h-4 w-4"/>Baixar Chaves de Depuração
-                        </Button>
-                    </div>
+                </div>
+                <div className='flex flex-col sm:flex-row gap-2 pt-4'>
+                    <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full">
+                        {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
+                    </Button>
+                    <Button onClick={handleGenerateDebugKeys} disabled={!siengeFile || !costCenterFile} variant="outline" className="w-full sm:w-auto">
+                        <FileDown className="mr-2 h-4 w-4"/>Gerar Chaves de Depuração
+                    </Button>
                 </div>
                 
                 <Tabs defaultValue="reconciliation">

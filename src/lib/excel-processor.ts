@@ -368,33 +368,33 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         return { costCenterMap, debugKeys };
     }
 
-    // 2. Iterar por todas as linhas da planilha.
+    // Iterar por todas as linhas da planilha.
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
         if (!row || row.length < 4) continue;
 
         const firstCell = String(row[0] || '').trim();
         
-        // 3. Identificar uma linha de cabeçalho de centro de custo.
+        // Identificar uma linha de cabeçalho de centro de custo.
         if (firstCell.toLowerCase().startsWith('centro de custo')) {
             currentCostCenter = String(row[1] || 'N/A').trim();
             continue;
         }
 
-        // 4. Identificar uma linha de dados (um título/item).
+        // Identificar uma linha de dados (um título/item).
         // A linha é considerada de dados se a primeira célula (coluna A, 'Item') for um número.
         if (/^\d+$/.test(firstCell)) {
             const credorString = String(row[1] || '').trim(); // Coluna B
             const documento = String(row[3] || '').trim();     // Coluna D
 
             if (credorString && documento) {
-                // 5. Construir a chave única a partir do nome do credor e do número do documento.
+                // Construir a chave única a partir do nome do credor e do número do documento.
                 const credorName = credorString.replace(/^\d+\s*-\s*/, '').replace(/\s*-\s*[\d-]+$/, '').trim();
                 const docKey = `${cleanAndToStr(documento)}-${normalizeKey(credorName)}`;
                 
                 debugKeys.push({ 'Chave Gerada (Centro de Custo)': docKey, 'Documento Original': documento, 'Credor Original': credorString, 'Centro de Custo': currentCostCenter });
 
-                // 6. Armazenar no mapa.
+                // Armazenar no mapa.
                 if (!costCenterMap.has(docKey)) {
                     costCenterMap.set(docKey, currentCostCenter);
                 }
@@ -440,10 +440,7 @@ export function runReconciliation(
     costCenterMap?: Map<string, string> | null
 ): ReconciliationResults {
     
-    const siengeDebugKeys = generateSiengeDebugKeys(siengeData || []);
-    // As chaves do centro de custo são geradas em `handleCostCenterFileChange` e passadas para cá
-    // Apenas geramos as chaves do Sienge aqui.
-    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: siengeDebugKeys } };
+    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: [] } };
     
     if (!siengeData || siengeData.length === 0) {
         return { ...emptyResult, onlyInXml: xmlItems || [] };
@@ -540,6 +537,7 @@ export function runReconciliation(
                          if (costCenterMap && h.numero && h.credor) {
                             const siengeDoc = siengeItem[h.numero!];
                             const siengeCredor = siengeItem[h.credor!];
+                            // Chave para procurar no mapa de centro de custo, usando os dados do SIENGE
                             const docKey = `${cleanAndToStr(siengeDoc)}-${normalizeKey(siengeCredor)}`;
                             
                             if (costCenterMap.has(docKey)) {
