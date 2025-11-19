@@ -71,6 +71,7 @@ export interface ProcessedData {
     costCenterDebugKeys?: any[];
     siengeDebugKeys?: any[];
     allCostCenters?: string[];
+    costCenterHeaderRows?: any[];
     fileNames?: {
         nfeEntrada: string[];
         cte: string[];
@@ -133,7 +134,7 @@ const renameChaveColumn = (df: DataFrame): DataFrame => {
 // MAIN PROCESSING FUNCTION
 // =================================================================
 
-export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap' | 'costCenterDebugKeys' | 'siengeDebugKeys' | 'allCostCenters'> {
+export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap' | 'costCenterDebugKeys' | 'siengeDebugKeys' | 'allCostCenters' | 'costCenterHeaderRows'> {
     
     log("Iniciando preparação dos dados no navegador...");
     const GRANTEL_CNPJ = "81732042000119";
@@ -356,19 +357,20 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
 }
 
 
-export function processCostCenterData(data: any[][]): { costCenterMap: Map<string, string>; debugKeys: any[]; allCostCenters: string[] } {
+export function processCostCenterData(data: any[][]): { costCenterMap: Map<string, string>; debugKeys: any[]; allCostCenters: string[]; costCenterHeaderRows: any[] } {
     const costCenterMap = new Map<string, string>();
     const debugKeys: any[] = [];
     const costCenterSet = new Set<string>();
+    const costCenterHeaderRows: any[] = [];
     let currentCostCenter = 'N/A';
 
     if (!data || data.length === 0) {
-        return { costCenterMap, debugKeys, allCostCenters: [] };
+        return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
 
     data.forEach(row => {
         if (!row || !Array.isArray(row)) return;
-
+        
         let costCenterFoundInRow = false;
         
         for (let i = 0; i < row.length; i++) {
@@ -376,17 +378,22 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             if (cellValue.toLowerCase().includes('centro de custo')) {
                 currentCostCenter = String(row[i + 1] || 'N/A').trim();
                 costCenterSet.add(currentCostCenter);
+                costCenterHeaderRows.push({
+                    'Linha Original': row.join('; '),
+                    'Centro de Custo Identificado': currentCostCenter
+                });
                 costCenterFoundInRow = true;
-                break; 
+                break;
             }
         }
 
         if (!costCenterFoundInRow) {
             const itemNumberCell = String(row[0] || '').trim();
-            const creditorCell = String(row[1] || '').trim();
-            const documentCell = String(row[3] || '').trim();
+            
+            if (/^\\d+$/.test(itemNumberCell)) {
+                const creditorCell = String(row[1] || '').trim();
+                const documentCell = String(row[3] || '').trim();
 
-            if (/^\\d+$/.test(itemNumberCell) && creditorCell.includes('-')) {
                 const creditorCodeMatch = creditorCell.match(/^(\\d+)/);
                 const creditorCode = creditorCodeMatch ? creditorCodeMatch[1] : '';
 
@@ -409,7 +416,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         }
     });
     
-    return { costCenterMap, debugKeys, allCostCenters: Array.from(costCenterSet) };
+    return { costCenterMap, debugKeys, allCostCenters: Array.from(costCenterSet), costCenterHeaderRows };
 }
 
 

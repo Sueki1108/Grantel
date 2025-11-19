@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUploadForm } from "@/components/app/file-upload-form";
-import { type ProcessedData } from '@/lib/excel-processor';
+import { type ProcessedData, processCostCenterData, generateSiengeDebugKeys } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, X, RotateCw, HelpCircle, FileDown, Database } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
@@ -113,34 +113,71 @@ export function ReconciliationAnalysis({
         XLSX.writeFile(workbook, fileName);
     };
 
-    const handleDownloadDebugKeys = () => {
-        const { costCenterDebugKeys, siengeDebugKeys, allCostCenters } = processedData || {};
-
-        if (!costCenterDebugKeys?.length && !siengeDebugKeys?.length && !allCostCenters?.length) {
-            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar', description: 'Carregue as planilhas para gerar as chaves.' });
+    const handleDownloadDebugKeys = async () => {
+        const { toast } = useToast();
+    
+        if (!costCenterFile && !siengeFile) {
+            toast({ variant: 'destructive', title: 'Nenhum ficheiro para depurar', description: 'Carregue a planilha de Sienge ou de Centro de Custo.' });
             return;
         }
-
+    
         const wb = XLSX.utils.book_new();
-        
-        if (costCenterDebugKeys && costCenterDebugKeys.length > 0) {
-            const ws = XLSX.utils.json_to_sheet(costCenterDebugKeys);
-            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Centro_Custo");
+        let generated = false;
+    
+        if (costCenterFile) {
+            try {
+                const data = await costCenterFile.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                if (sheetName) {
+                    const worksheet = workbook.Sheets[sheetName];
+                    const costCenterData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    const { debugKeys, costCenterHeaderRows } = processCostCenterData(costCenterData);
+                    
+                    if (debugKeys.length > 0) {
+                        const ws = XLSX.utils.json_to_sheet(debugKeys);
+                        XLSX.utils.book_append_sheet(wb, ws, "Chaves_Centro_Custo");
+                        generated = true;
+                    }
+                    if (costCenterHeaderRows.length > 0) {
+                        const ws = XLSX.utils.json_to_sheet(costCenterHeaderRows);
+                        XLSX.utils.book_append_sheet(wb, ws, "Centros de Custo Encontrados");
+                        generated = true;
+                    }
+                }
+            } catch (err: any) {
+                toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
+            }
         }
-        
-        if (siengeDebugKeys && siengeDebugKeys.length > 0) {
-            const ws = XLSX.utils.json_to_sheet(siengeDebugKeys);
-            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
+    
+        if (siengeFile) {
+             try {
+                const data = await siengeFile.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                 if (sheetName) {
+                    const worksheet = workbook.Sheets[sheetName];
+                    const siengeSheetData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+                    const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
+                    if (siengeDebugKeys.length > 0) {
+                        const ws = XLSX.utils.json_to_sheet(siengeDebugKeys);
+                        XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
+                        generated = true;
+                    }
+                }
+            } catch (err: any) {
+                toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
+            }
         }
-        
-        if (allCostCenters && allCostCenters.length > 0) {
-            const ws = XLSX.utils.json_to_sheet(allCostCenters.map(cc => ({ "Centro de Custo": cc })));
-            XLSX.utils.book_append_sheet(wb, ws, "Centros de Custo Encontrados");
+    
+        if (generated) {
+            XLSX.writeFile(wb, "Grantel_Debug_Chaves_Conciliacao.xlsx");
+            toast({ title: 'Ficheiro de Depuração Gerado' });
+        } else {
+            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar' });
         }
-
-        XLSX.writeFile(wb, "Grantel_Debug_Chaves_Conciliacao.xlsx");
-        toast({ title: 'Ficheiro de Depuração Gerado' });
     };
+    
 
     return (
          <Card>
@@ -174,8 +211,8 @@ export function ReconciliationAnalysis({
                     <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full">
                         {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
                     </Button>
-                    <Button onClick={handleDownloadDebugKeys} disabled={!siengeFile || !costCenterFile} variant="outline" className="w-full sm:w-auto">
-                        <Database className="mr-2 h-4 w-4"/>Baixar Chaves de Depuração
+                    <Button onClick={handleDownloadDebugKeys} disabled={!siengeFile && !costCenterFile} variant="outline" className="w-full sm:w-auto">
+                        <Database className="mr-2 h-4 w-4"/>Gerar Chaves de Depuração
                     </Button>
                 </div>
                 
