@@ -1,4 +1,3 @@
-
 // Types
 type LogFunction = (message: string) => void;
 
@@ -310,7 +309,7 @@ const readFileAsText = (file: File): Promise<string> => {
                 try {
                     const text = decoder.decode(buffer);
                     // Check for the Unicode Replacement Character, which indicates a decoding error.
-                    if (text.includes('\uFFFD')) {
+                    if (text.includes('')) {
                         throw new Error("UTF-8 decoding resulted in replacement characters.");
                     }
                     resolve(text);

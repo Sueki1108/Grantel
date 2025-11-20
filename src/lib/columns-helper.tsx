@@ -49,12 +49,21 @@ const renderHeader = (column: any, columnId: string) => {
 };
 
 
-export function getColumns<TData extends Record<string, any>>(data: TData[]): ColumnDef<TData>[] {
+export function getColumns<TData extends Record<string, any>>(
+    data: TData[], 
+    columnsToShow?: (keyof TData)[]
+): ColumnDef<TData>[] {
   if (!data || data.length === 0) {
-    return []
+    if (!columnsToShow || columnsToShow.length === 0) return [];
+    // If no data but explicit columns, create them anyway
+    return columnsToShow.map(key => ({
+      id: String(key),
+      accessorKey: String(key),
+      header: ({ column }) => renderHeader(column, String(key)),
+      cell: () => null,
+    }));
   }
 
-  // Build a set of all unique keys from all rows in the data to ensure all columns are included.
   const allKeys = new Set<string>();
   data.forEach(row => {
     if (row && typeof row === 'object') {
@@ -62,7 +71,7 @@ export function getColumns<TData extends Record<string, any>>(data: TData[]): Co
     }
   });
 
-  const keys = Array.from(allKeys) as (keyof TData)[];
+  const keys = columnsToShow ? columnsToShow.filter(key => allKeys.has(String(key))) : Array.from(allKeys);
 
   return keys.map((key) => {
       const columnId = String(key);
@@ -86,21 +95,8 @@ export function getColumnsWithCustomRender<TData extends Record<string, any>>(
     columnsToShow: (keyof TData)[],
     customCellRender?: CustomCellRender<TData>
 ): ColumnDef<TData>[] {
-    if (!data || data.length === 0) {
-        return [];
-    }
-
-    const allKeys = new Set<string>();
-    data.forEach(row => {
-        if (row && typeof row === 'object') {
-            Object.keys(row).forEach(key => allKeys.add(key));
-        }
-    });
     
-    // Ensure that all columns intended to be shown are actually available in the data, at least in one row.
-    const columnsToRender = columnsToShow.filter(key => allKeys.has(String(key)));
-
-    return columnsToRender.map((key) => {
+    return columnsToShow.map((key) => {
         const columnId = String(key);
         return {
             id: columnId, 
