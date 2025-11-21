@@ -107,6 +107,8 @@ export function DataTable<TData, TValue>({
     table.setPageSize(pageSize);
   }, [pageSize, table]);
 
+  const pageRows = table.getRowModel().rows;
+  const emptyRowsCount = pagination.pageSize - pageRows.length;
 
   return (
     <div>
@@ -148,35 +150,42 @@ export function DataTable<TData, TValue>({
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() ? "selected" : undefined}
-                  className={isControllingSelection ? "cursor-pointer" : ""}
-                  onClick={() => {
-                      if (isControllingSelection) {
-                          row.toggleSelected();
-                      }
-                  }}
-                >
-                  {isControllingSelection && <TableCell className="p-2"><Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Selecionar linha" onClick={(e) => e.stopPropagation()} /></TableCell>}
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell 
-                      key={cell.id} 
-                      onClick={(e) => {
-                        const target = e.target as HTMLElement;
-                        const isInteractive = target.closest('button, a, input, [role="button"], [role="checkbox"]');
-                        if (isInteractive) {
-                          e.stopPropagation();
+            {pageRows.length ? (
+              <>
+                {pageRows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() ? "selected" : undefined}
+                    className={isControllingSelection ? "cursor-pointer" : ""}
+                    onClick={() => {
+                        if (isControllingSelection) {
+                            row.toggleSelected();
                         }
-                      }}
-                    >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+                    }}
+                  >
+                    {isControllingSelection && <TableCell className="p-2"><Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Selecionar linha" onClick={(e) => e.stopPropagation()} /></TableCell>}
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell 
+                        key={cell.id} 
+                        onClick={(e) => {
+                          const target = e.target as HTMLElement;
+                          const isInteractive = target.closest('button, a, input, [role="button"], [role="checkbox"]');
+                          if (isInteractive) {
+                            e.stopPropagation();
+                          }
+                        }}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+                {emptyRowsCount > 0 && (
+                  <TableRow style={{ height: `${emptyRowsCount * 53}px` }}>
+                    <TableCell colSpan={columns.length + (isControllingSelection ? 1 : 0)} />
+                  </TableRow>
+                )}
+              </>
             ) : (
               <TableRow>
                 <TableCell colSpan={table.getAllColumns().length} className="h-24 text-center">
