@@ -23,9 +23,10 @@ const getTagValue = (element: Element | undefined, tagName: string, namespace: s
     return tags[0]?.textContent ?? '';
 };
 
-const getCteTagValue = (element: Element | undefined, tagName: string): string => {
+// This helper is for tags that might not have a namespace, like inside <entrega> or in CTe XMLs.
+const getTagValueWithoutNamespace = (element: Element | undefined, tagName: string): string => {
     if (!element) return '';
-    const tags = element.getElementsByTagName(tagName); // CTe XML often does not use namespace prefixes consistently
+    const tags = element.getElementsByTagName(tagName);
     return tags[0]?.textContent ?? '';
 };
 
@@ -119,8 +120,8 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'Natureza da Operação': natOp,
         'infCpl': infCpl,
         'destUF': destUF,
-        'entrega_UF': entrega ? getTagValue(entrega, 'UF') : null,
-        'entrega_Mun': entrega ? getTagValue(entrega, 'xMun') : null,
+        'entrega_UF': entrega ? getTagValueWithoutNamespace(entrega, 'UF') : destUF,
+        'entrega_Mun': entrega ? getTagValueWithoutNamespace(entrega, 'xMun') : getTagValue(enderDest, 'xMun'),
     };
     
     // Universal key generation based on emitter
@@ -229,7 +230,7 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const toma = infCte.getElementsByTagName('toma3')[0] || infCte.getElementsByTagName('toma4')[0];
     let tomadorCnpj = '';
     if(toma) {
-        tomadorCnpj = getCteTagValue(toma, 'CNPJ');
+        tomadorCnpj = getTagValueWithoutNamespace(toma, 'CNPJ');
     }
 
 
@@ -239,28 +240,28 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     }
     
     const chaveAcesso = getAttributeValue(infCte, 'Id').replace('CTe', '');
-    const nCT = getCteTagValue(ide, 'nCT');
-    const serie = getCteTagValue(ide, 'serie');
-    const dhEmiRaw = getCteTagValue(ide, 'dhEmi');
-    const emitCNPJ = getCteTagValue(emit, 'CNPJ');
-    const emitIE = getCteTagValue(emit, 'IE');
-    const vTPrest = getCteTagValue(vPrest, 'vTPrest');
+    const nCT = getTagValueWithoutNamespace(ide, 'nCT');
+    const serie = getTagValueWithoutNamespace(ide, 'serie');
+    const dhEmiRaw = getTagValueWithoutNamespace(ide, 'dhEmi');
+    const emitCNPJ = getTagValueWithoutNamespace(emit, 'CNPJ');
+    const emitIE = getTagValueWithoutNamespace(emit, 'IE');
+    const vTPrest = getTagValueWithoutNamespace(vPrest, 'vTPrest');
     
-    const status = getCteTagValue(infProt, 'cStat') === '100' ? 'Autorizadas' : 'Canceladas';
+    const status = getTagValueWithoutNamespace(infProt, 'cStat') === '100' ? 'Autorizadas' : 'Canceladas';
 
     const notaCte: any = {
         'Chave de acesso': chaveAcesso,
         'Número': nCT,
         'Série': serie,
         'Emissão': dhEmiRaw,
-        'Fornecedor': getCteTagValue(emit, 'xNome'),
+        'Fornecedor': getTagValueWithoutNamespace(emit, 'xNome'),
         'CPF/CNPJ do Fornecedor': emitCNPJ,
         'emitCNPJ': emitCNPJ,
         'emitIE': emitIE,
-        'Remetente': getCteTagValue(rem, 'xNome'),
-        'CPF/CNPJ do Remetente': getCteTagValue(rem, 'CNPJ'),
-        'Destinatário': getCteTagValue(dest, 'xNome'),
-        'CPF/CNPJ do Destinatário': getCteTagValue(dest, 'CNPJ') || getCteTagValue(dest, 'CPF'),
+        'Remetente': getTagValueWithoutNamespace(rem, 'xNome'),
+        'CPF/CNPJ do Remetente': getTagValueWithoutNamespace(rem, 'CNPJ'),
+        'Destinatário': getTagValueWithoutNamespace(dest, 'xNome'),
+        'CPF/CNPJ do Destinatário': getTagValueWithoutNamespace(dest, 'CNPJ') || getTagValueWithoutNamespace(dest, 'CPF'),
         'Valor da Prestação': parseFloat(vTPrest) || 0,
         'Status': status,
         'Chave Unica': `${cleanAndToStr(nCT)}-${cleanAndToStr(emitCNPJ)}`,
@@ -268,11 +269,11 @@ const parseCTe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     };
     
     if (receb) {
-        notaCte.recebCNPJ = getCteTagValue(receb, 'CNPJ');
-        notaCte.recebIE = getCteTagValue(receb, 'IE');
+        notaCte.recebCNPJ = getTagValueWithoutNamespace(receb, 'CNPJ');
+        notaCte.recebIE = getTagValueWithoutNamespace(receb, 'IE');
         const enderReceb = receb.getElementsByTagName('enderReceb')[0];
         if (enderReceb) {
-            notaCte.recebUF = getCteTagValue(enderReceb, 'UF');
+            notaCte.recebUF = getTagValueWithoutNamespace(enderReceb, 'UF');
         }
     }
 
