@@ -1,4 +1,3 @@
-
 // Types
 type LogFunction = (message: string) => void;
 
@@ -24,7 +23,6 @@ const getTagValue = (element: Element | undefined, tagName: string, namespace: s
     return tags[0]?.textContent ?? '';
 };
 
-// This helper is for tags that might not have a namespace, like inside <entrega> or in CTe XMLs.
 const getTagValueWithoutNamespace = (element: Element | undefined, tagName: string): string => {
     if (!element) return '';
     const tags = element.getElementsByTagName(tagName);
@@ -312,8 +310,7 @@ const readFileAsText = (file: File): Promise<string> => {
                     // Try UTF-8 first.
                     const decoder = new TextDecoder('utf-8', { fatal: true });
                     const text = decoder.decode(buffer);
-                    // Check for the Unicode Replacement Character, which indicates a decoding error.
-                    if (text.includes('')) {
+                    if (text.includes('\uFFFD')) { // Check for the Unicode Replacement Character
                         throw new Error("UTF-8 decoding resulted in replacement characters.");
                     }
                     resolve(text);

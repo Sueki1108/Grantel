@@ -127,7 +127,7 @@ const readFileAsText = (file: File): Promise<string> => {
                 try {
                     const decoder = new TextDecoder('utf-8', { fatal: true });
                     const text = decoder.decode(buffer);
-                    if (text.includes('')) {
+                    if (text.includes('\uFFFD')) {
                         throw new Error("UTF-8 decoding resulted in replacement characters.");
                     }
                     resolve(text);
@@ -207,6 +207,11 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                     const errorNode = xmlDoc.querySelector("parsererror");
                     if (errorNode) {
                         console.error("Erro de Análise de XML em", file.name, errorNode.textContent);
+                        toast({
+                            variant: "destructive",
+                            title: `Erro ao analisar ${file.name}`,
+                            description: "O ficheiro XML parece estar malformado.",
+                        });
                         continue;
                     }
                     
@@ -235,7 +240,7 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                      toast({
                         variant: "destructive",
                         title: `Erro ao processar ${file.name}`,
-                        description: "O ficheiro pode estar corrompido ou num formato inválido.",
+                        description: e.message || "Ocorreu um erro desconhecido.",
                     });
                 }
             }
