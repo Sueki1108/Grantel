@@ -1,5 +1,4 @@
 
-
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import type { KeyCheckResult } from '@/components/app/key-checker';
@@ -306,10 +305,26 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const chavesValidas = [...chavesValidasEntrada, ...chavesValidasCte, ...chavesValidasSaida];
     log(`- ${chavesValidas.length} chaves válidas totais para verificação SPED geradas.`);
     
-    const addCfopDescriptionToRow = (row: any) => {
-        if (!row || typeof row !== 'object') return { ...row, 'Descricao CFOP': 'N/A' };
+    const sheets: DataFrames = {
+        "Notas Válidas": notasValidas,
+        "Itens Válidos": itensValidos,
+        "Chaves Válidas": chavesValidas,
+        "Saídas": saidasValidas,
+        "Itens Válidos Saídas": itensValidosSaidas,
+        "Imobilizados": imobilizados,
+        "Devoluções de Compra (Fornecedor)": devolucoesDeCompra,
+        "Devoluções de Clientes": devolucoesDeClientes,
+        "Remessas e Retornos": remessasEretornos,
+        "Notas Canceladas": notasCanceladas,
+        ...originalDfs 
+    };
     
-        const newRow = { ...row };
+    const addCfopDescriptionToRow = (row: any) => {
+        if (!row || typeof row !== 'object') {
+            return { ...row, 'Descricao CFOP': 'N/A' };
+        }
+    
+        const newRow: { [key: string]: any } = { ...row };
         let cfopCodeStr = newRow['CFOP'];
     
         if (!cfopCodeStr && newRow['Chave Unica']) {
@@ -333,12 +348,11 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     ];
 
     displayOrder.forEach(name => {
-        let sheetData = finalResult[name];
+        let sheetData = sheets[name];
         if (sheetData && sheetData.length > 0) {
             finalSheetSet[name] = sheetData.map(addCfopDescriptionToRow);
         }
     });
-
     log("Processamento concluído. Resultados estão prontos para as próximas etapas.");
 
     return {
@@ -604,3 +618,5 @@ export function runReconciliation(
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
+
+    
