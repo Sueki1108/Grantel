@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { KeyCheckResult, KeyInfo, DateValueDivergence, IEUFDivergence, ConsolidatedDivergence } from "@/components/app/key-checker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "./data-table";
-import { getColumns } from "@/lib/columns-helper";
+import { getColumns, getColumnsWithCustomRender } from "@/lib/columns-helper";
 
 
 const identifyInvoiceModel = (key: string): 'NFE' | 'CTE' | '?' => {
@@ -353,46 +353,36 @@ export function KeyResultsDisplay({ results }: KeyResultsDisplayProps) {
                                     <TabsTrigger value="valor">Valor ({results.valueDivergences.length})</TabsTrigger>
                                 </TabsList>
                                 <div className="pt-4">
-                                    {activeDivergenceTab === 'consolidated' && (
-                                        <div>
-                                            <Button onClick={() => handleDownload(results.consolidatedDivergences, "Inconformidades_Consolidado", toast)} disabled={results.consolidatedDivergences.length === 0} size="sm" className="mb-4">
-                                                <Download className="mr-2 h-4 w-4" /> Baixar esta lista
-                                            </Button>
-                                            <DataTable columns={getColumns(results.consolidatedDivergences)} data={results.consolidatedDivergences} />
-                                        </div>
-                                    )}
-                                     {activeDivergenceTab === 'uf-divergence' && (
-                                         <div>
-                                            <Button onClick={() => handleDownload(results.ufDivergences, "Inconformidades_Cadastrais_UF", toast)} disabled={results.ufDivergences.length === 0} size="sm" className="mb-4">
-                                                <Download className="mr-2 h-4 w-4" /> Baixar esta lista
-                                            </Button>
-                                            <DataTable columns={getColumns(results.ufDivergences)} data={results.ufDivergences} />
-                                         </div>
-                                    )}
-                                    {activeDivergenceTab === 'ie-divergence' && (
-                                        <div>
-                                            <Button onClick={() => handleDownload(results.ieDivergences, "Inconformidades_Cadastrais_IE", toast)} disabled={results.ieDivergences.length === 0} size="sm" className="mb-4">
-                                                <Download className="mr-2 h-4 w-4" /> Baixar esta lista
-                                            </Button>
-                                            <DataTable columns={getColumns(results.ieDivergences)} data={results.ieDivergences} />
-                                        </div>
-                                    )}
-                                    {activeDivergenceTab === 'data' && (
-                                        <div>
-                                            <Button onClick={() => handleDownload(results.dateDivergences, "Divergencias_Data", toast)} disabled={results.dateDivergences.length === 0} size="sm" className="mb-4">
-                                                <Download className="mr-2 h-4 w-4" /> Baixar
-                                            </Button>
-                                            <DataTable columns={getColumns(results.dateDivergences)} data={results.dateDivergences} />
-                                        </div>
-                                    )}
-                                     {activeDivergenceTab === 'valor' && (
-                                        <div>
-                                            <Button onClick={() => handleDownload(results.valueDivergences, "Divergencias_Valor", toast)} disabled={results.valueDivergences.length === 0} size="sm" className="mb-4">
-                                                <Download className="mr-2 h-4 w-4" /> Baixar
-                                            </Button>
-                                            <DataTable columns={getColumns(results.valueDivergences)} data={results.valueDivergences} />
-                                        </div>
-                                    )}
+                                    <TabsContent value="consolidated">
+                                        <Button onClick={() => handleDownload(results.consolidatedDivergences, "Inconformidades_Consolidado", toast)} disabled={results.consolidatedDivergences.length === 0} size="sm" className="mb-4">
+                                            <Download className="mr-2 h-4 w-4" /> Baixar esta lista
+                                        </Button>
+                                        <DataTable columns={getColumns(results.consolidatedDivergences)} data={results.consolidatedDivergences} />
+                                    </TabsContent>
+                                     <TabsContent value="uf-divergence">
+                                         <Button onClick={() => handleDownload(results.ufDivergences, "Inconformidades_Cadastrais_UF", toast)} disabled={results.ufDivergences.length === 0} size="sm" className="mb-4">
+                                            <Download className="mr-2 h-4 w-4" /> Baixar esta lista
+                                        </Button>
+                                        <DataTable columns={getColumnsWithCustomRender(results.ufDivergences, ['Tipo', 'Chave de Acesso', 'CNPJ do Emissor', 'Nome do Emissor', 'UF no XML'])} data={results.ufDivergences} />
+                                     </TabsContent>
+                                    <TabsContent value="ie-divergence">
+                                        <Button onClick={() => handleDownload(results.ieDivergences, "Inconformidades_Cadastrais_IE", toast)} disabled={results.ieDivergences.length === 0} size="sm" className="mb-4">
+                                            <Download className="mr-2 h-4 w-4" /> Baixar esta lista
+                                        </Button>
+                                        <DataTable columns={getColumnsWithCustomRender(results.ieDivergences, ['Tipo', 'Chave de Acesso', 'CNPJ do Emissor', 'Nome do Emissor', 'IE no XML'])} data={results.ieDivergences} />
+                                    </TabsContent>
+                                    <TabsContent value="data">
+                                        <Button onClick={() => handleDownload(results.dateDivergences, "Divergencias_Data", toast)} disabled={results.dateDivergences.length === 0} size="sm" className="mb-4">
+                                            <Download className="mr-2 h-4 w-4" /> Baixar
+                                        </Button>
+                                        <DataTable columns={getColumns(results.dateDivergences)} data={results.dateDivergences} />
+                                    </TabsContent>
+                                     <TabsContent value="valor">
+                                        <Button onClick={() => handleDownload(results.valueDivergences, "Divergencias_Valor", toast)} disabled={results.valueDivergences.length === 0} size="sm" className="mb-4">
+                                            <Download className="mr-2 h-4 w-4" /> Baixar
+                                        </Button>
+                                        <DataTable columns={getColumns(results.valueDivergences)} data={results.valueDivergences} />
+                                    </TabsContent>
                                 </div>
                             </Tabs>
                         </CardContent>
@@ -402,7 +392,3 @@ export function KeyResultsDisplay({ results }: KeyResultsDisplayProps) {
         </Tabs>
     );
 }
-
-    
-
-    

@@ -403,7 +403,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             </div>
         );
 
-        const columnsToShow: (keyof ImobilizadoItemData)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Alíq. ICMS (%)', 'CEST', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
+        const columnsToShow: (keyof ImobilizadoItemData)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'destUF', 'Alíq. ICMS (%)', 'CEST', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
 
         const baseColumns = getColumnsWithCustomRender(
             imobilizadoItems,
@@ -630,7 +630,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                                             Estes itens não estão a ser exibidos na análise principal porque o seu CFOP foi desmarcado na lista de configuração.
                                         </DialogDescription>
                                     </DialogHeader>
-                                     <DataTable columns={getColumnsWithCustomRender(disregardedItems, ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Descricao CFOP', 'Valor Total'])} data={disregardedItems} />
+                                     <DataTable columns={getColumns(disregardedItems)} data={disregardedItems} />
                                 </DialogContent>
                             </Dialog>
                             <Button onClick={handleSaveChanges} disabled={!hasChanges}>

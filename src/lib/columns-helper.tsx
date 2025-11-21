@@ -4,9 +4,8 @@
 import { ColumnDef } from "@tanstack/react-table"
 import { ArrowUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Row } from "@tanstack/react-table";
 
-type CustomCellRender<TData> = (row: Row<TData>, id: string) => React.ReactNode;
+type CustomCellRender<TData> = (row: { original: TData }, id: string) => React.ReactNode;
 
 const columnNameMap: Record<string, string> = {
     'Chave de acesso': 'Chave',
@@ -36,15 +35,14 @@ const columnNameMap: Record<string, string> = {
 const renderHeader = (column: any, columnId: string) => {
     const displayName = columnNameMap[columnId] || columnId;
     return (
-        <div 
-            className="flex items-center text-left w-full cursor-pointer"
+        <Button
+            variant="ghost"
+            className="p-0 hover:bg-transparent"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
         >
-            <Button variant="ghost" className="p-0 hover:bg-transparent">
-                {displayName}
-                <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
-        </div>
+            {displayName}
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
     );
 };
 

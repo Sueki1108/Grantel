@@ -1,4 +1,5 @@
 
+
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import type { KeyCheckResult } from '@/components/app/key-checker';
@@ -305,28 +306,22 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const chavesValidas = [...chavesValidasEntrada, ...chavesValidasCte, ...chavesValidasSaida];
     log(`- ${chavesValidas.length} chaves válidas totais para verificação SPED geradas.`);
     
-    const finalResult: DataFrames = {
-        "Notas Válidas": notasValidas,
-        "Itens Válidos": itensValidos, 
-        "Chaves Válidas": chavesValidas,
-        "Saídas": saidasValidas, 
-        "Itens Válidos Saídas": itensValidosSaidas,
-        "Imobilizados": imobilizados,
-        "Devoluções de Compra (Fornecedor)": devolucoesDeCompra,
-        "Devoluções de Clientes": devolucoesDeClientes,
-        "Remessas e Retornos": remessasEretornos,
-        "Notas Canceladas": notasCanceladas,
-        ...originalDfs 
-    };
-    
     const addCfopDescriptionToRow = (row: any) => {
-        if (!row || typeof row !== 'object') {
-            return row;
+        if (!row || typeof row !== 'object') return { ...row, 'Descricao CFOP': 'N/A' };
+    
+        const newRow = { ...row };
+        let cfopCodeStr = newRow['CFOP'];
+    
+        if (!cfopCodeStr && newRow['Chave Unica']) {
+            const relatedItem = itens.find(item => item['Chave Unica'] === newRow['Chave Unica'] && item['CFOP']);
+            if (relatedItem) {
+                cfopCodeStr = relatedItem['CFOP'];
+            }
         }
-        const newRow = { ...row }; // Create a shallow copy to avoid mutating the original object.
-        const cfopCode = newRow['CFOP'] ? parseInt(cleanAndToStr(newRow['CFOP']), 10) : 0;
-        const fullDescription = cfopDescriptions[cfopCode] || 'Descrição não encontrada';
-        newRow['Descricao CFOP'] = fullDescription;
+    
+        const cfopCode = cfopCodeStr ? parseInt(cleanAndToStr(cfopCodeStr), 10) : 0;
+        newRow['Descricao CFOP'] = cfopDescriptions[cfopCode] || 'Descrição não encontrada';
+        
         return newRow;
     };
     
@@ -340,10 +335,10 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     displayOrder.forEach(name => {
         let sheetData = finalResult[name];
         if (sheetData && sheetData.length > 0) {
-            sheetData = sheetData.map(addCfopDescriptionToRow);
-            finalSheetSet[name] = sheetData;
+            finalSheetSet[name] = sheetData.map(addCfopDescriptionToRow);
         }
     });
+
     log("Processamento concluído. Resultados estão prontos para as próximas etapas.");
 
     return {
