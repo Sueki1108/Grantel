@@ -52,6 +52,7 @@ const requiredFiles = [
 ];
 
 const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications_v2';
+const DISREGARDED_NFSE_STORAGE_KEY = 'disregardedNfseNotes';
 
 
 export function AutomatorClientPage() {
@@ -100,7 +101,28 @@ export function AutomatorClientPage() {
         } catch (e) {
             console.error("Failed to load imobilizado classifications from localStorage", e);
         }
+
+        // Load disregarded NFS-e notes from localStorage
+        try {
+            const savedNfse = localStorage.getItem(DISREGARDED_NFSE_STORAGE_KEY);
+            if (savedNfse) {
+                setDisregardedNfseNotes(new Set(JSON.parse(savedNfse)));
+            }
+        } catch (e) {
+            console.error("Failed to load disregarded NFS-e notes from localStorage", e);
+        }
+
     }, []);
+
+    // Save disregarded NFS-e notes to localStorage whenever they change
+    useEffect(() => {
+        try {
+            const notesArray = Array.from(disregardedNfseNotes);
+            localStorage.setItem(DISREGARDED_NFSE_STORAGE_KEY, JSON.stringify(notesArray));
+        } catch (e) {
+            console.error("Failed to save disregarded NFS-e notes to localStorage", e);
+        }
+    }, [disregardedNfseNotes]);
 
     const handleWideModeChange = (checked: boolean) => {
         setIsWideMode(checked);
