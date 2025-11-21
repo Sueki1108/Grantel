@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, type ChangeEvent } from 'react';
@@ -8,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Loader2, Download, Cpu, TicketPercent, Copy, Hash, Sigma, Coins, ClipboardCopy, X, UploadCloud } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { DataTable } from '@/components/app/data-table';
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '../ui/dialog';
@@ -16,6 +16,8 @@ import JSZip from 'jszip';
 import { FileUploadForm } from './file-upload-form';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from '../ui/scroll-area';
 
 
 // ===============================================================
@@ -145,33 +147,6 @@ export function DifalAnalysis() {
             toast({ variant: 'destructive', title: 'Falha ao copiar', description: 'Não foi possível copiar o valor.' });
         });
     };
-
-    const columns = useMemo(() => getColumnsWithCustomRender(
-        processedItems, 
-        ['Número da Nota', 'Chave de Acesso', 'Data de Emissão', 'Valor Total da Nota', 'Valor da Guia (10%)', 'Município Entrega', 'UF Entrega'],
-        (row, id) => {
-            const item = row.original as DifalDataItem;
-            const value = item[id as keyof DifalDataItem];
-            let displayValue: React.ReactNode = String(value ?? '');
-            
-             if (id === 'Data de Emissão' && typeof value === 'string') {
-                try {
-                    displayValue = format(parseISO(value), 'dd/MM/yyyy');
-                } catch (e) {
-                    displayValue = "Data Inválida";
-                }
-             } else if (typeof value === 'number') {
-                displayValue = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-             }
-             
-             return (
-                <div className="cursor-pointer hover:bg-muted p-1 rounded group flex items-center gap-1 justify-between" onClick={() => copyToClipboard(String(value))}>
-                    <span>{displayValue}</span>
-                    <ClipboardCopy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-             )
-        }
-    ), [processedItems]);
     
     const handleVencimentoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         let value = e.target.value.replace(/\D/g, ''); 
@@ -250,7 +225,7 @@ export function DifalAnalysis() {
                      <DialogHeader>
                         <DialogTitle>Resultados da Análise DIFAL</DialogTitle>
                         <DialogDescription>
-                            Os dados foram extraídos dos XMLs. Clique num valor para o copiar para a área de transferência.
+                           Os dados foram extraídos dos XMLs. Cada aba representa uma nota.
                         </DialogDescription>
                     </DialogHeader>
                     
@@ -273,11 +248,43 @@ export function DifalAnalysis() {
                     {processedItems.length > 0 && (
                         <Card className="flex-grow overflow-hidden">
                             <CardContent className='pt-6 h-full'>
-                            <DataTable 
-                                columns={columns}
-                                data={processedItems}
-                                pageSize={1}
-                            />
+                                <Tabs defaultValue={processedItems[0]['Chave de Acesso']} className="w-full">
+                                    <ScrollArea className="whitespace-nowrap">
+                                        <TabsList>
+                                            {processedItems.map(item => {
+                                                const date = parseISO(item['Data de Emissão']);
+                                                const tabTitle = `Grantel - ICMS DIFAL NF ${item['Número da Nota']} - ${format(date, 'MMM yyyy', { locale: ptBR })}`;
+                                                return (
+                                                    <TabsTrigger key={item['Chave de Acesso']} value={item['Chave de Acesso']}>
+                                                        {tabTitle}
+                                                    </TabsTrigger>
+                                                )
+                                            })}
+                                        </TabsList>
+                                        <ScrollBar orientation="horizontal" />
+                                    </ScrollArea>
+                                     <div className="mt-4">
+                                        {processedItems.map(item => (
+                                            <TabsContent key={item['Chave de Acesso']} value={item['Chave de Acesso']}>
+                                                <div className="space-y-3 rounded-lg border p-4">
+                                                    {Object.entries(item).map(([key, value]) => (
+                                                         <div key={key} className="flex items-center justify-between text-sm">
+                                                             <span className="font-medium text-muted-foreground">{key}:</span>
+                                                             <div className="flex items-center gap-2">
+                                                                <span className="font-mono text-foreground">
+                                                                    {typeof value === 'number' ? value.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}) : value}
+                                                                </span>
+                                                                 <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(value)}>
+                                                                    <Copy className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </div>
+                                                         </div>
+                                                    ))}
+                                                </div>
+                                            </TabsContent>
+                                        ))}
+                                    </div>
+                                </Tabs>
                             </CardContent>
                         </Card>
                     )}
@@ -296,5 +303,3 @@ export function DifalAnalysis() {
         </div>
     );
 }
-
-    
