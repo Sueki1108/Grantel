@@ -55,7 +55,7 @@ export function getColumns<TData extends Record<string, any>>(
 ): ColumnDef<TData>[] {
   if (!data || data.length === 0) {
     if (!columnsToShow || columnsToShow.length === 0) return [];
-    // If no data but explicit columns, create them anyway
+    // If no data but explicit columns, create them anyway to ensure table structure
     return columnsToShow.map(key => ({
       id: String(key),
       accessorKey: String(key),
@@ -96,6 +96,8 @@ export function getColumnsWithCustomRender<TData extends Record<string, any>>(
     customCellRender?: CustomCellRender<TData>
 ): ColumnDef<TData>[] {
     
+    // Always render all columns from the explicit list, even if data is initially empty.
+    // This prevents hydration issues in production.
     return columnsToShow.map((key) => {
         const columnId = String(key);
         return {

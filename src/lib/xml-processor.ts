@@ -183,7 +183,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
                         if (tagName === 'CST' || tagName === 'CSOSN') {
                              item['CST do ICMS'] = textContent;
                         } else if (tagName === 'pICMS') {
-                             item['Alíq. ICMS (%)'] = textContent ? parseFloat(textContent) : 0;
+                             item['Alíq. ICMS (%)'] = textContent ? parseFloat(textContent) : null;
                         }
                     }
                 }

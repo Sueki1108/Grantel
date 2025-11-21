@@ -321,17 +321,14 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     
     const addCfopDescriptionToRow = (row: any) => {
         if (!row || typeof row !== 'object') {
-            return { ...row };
+            return row;
         }
-    
         const newRow = { ...row }; // Create a shallow copy to avoid mutating the original object.
         const cfopCode = newRow['CFOP'] ? parseInt(cleanAndToStr(newRow['CFOP']), 10) : 0;
         const fullDescription = cfopDescriptions[cfopCode] || 'Descrição não encontrada';
-    
         newRow['Descricao CFOP'] = fullDescription;
         return newRow;
     };
-    
     
     const finalSheetSet: DataFrames = {};
     const displayOrder = [
