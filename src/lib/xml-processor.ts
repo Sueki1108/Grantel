@@ -120,6 +120,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'infCpl': infCpl,
         'destUF': destUF,
         'entrega_UF': entrega ? getTagValue(entrega, 'UF') : null,
+        'entrega_Mun': entrega ? getTagValue(entrega, 'xMun') : null,
     };
     
     // Universal key generation based on emitter
@@ -309,7 +310,7 @@ const readFileAsText = (file: File): Promise<string> => {
                 try {
                     const text = decoder.decode(buffer);
                     // Check for the Unicode Replacement Character, which indicates a decoding error.
-                    if (text.includes('')) {
+                    if (text.includes('\uFFFD')) {
                         throw new Error("UTF-8 decoding resulted in replacement characters.");
                     }
                     resolve(text);

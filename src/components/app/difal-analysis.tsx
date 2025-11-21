@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, type ChangeEvent } from 'react';
@@ -27,7 +26,8 @@ type DifalDataItem = {
     'Data de Emissão': string;
     'Valor Total da Nota': number;
     'Valor da Guia (10%)': number;
-    'Entrega': string;
+    'Município Entrega': string;
+    'UF Entrega': string;
 };
 
 
@@ -40,6 +40,7 @@ export function DifalAnalysis() {
     const [difalXmlFiles, setDifalXmlFiles] = useState<File[]>([]);
     const [processedItems, setProcessedItems] = useState<DifalDataItem[]>([]);
     const [vencimento, setVencimento] = useState('');
+    const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 5 });
     
     const { toast } = useToast();
 
@@ -87,20 +88,19 @@ export function DifalAnalysis() {
             const { nfe, saidas } = await processUploadedXmls(difalXmlFiles);
             const allItems = [...nfe, ...saidas];
             
-            const difalData: DifalDataItem[] = allItems
-                .filter(item => item.entrega_UF && item.destUF && item.entrega_UF !== item.destUF)
-                .map(item => ({
-                    'Chave de Acesso': item['Chave de acesso'],
-                    'Número da Nota': item['Número'],
-                    'Data de Emissão': item['Emissão'],
-                    'Valor Total da Nota': item['Total'],
-                    'Valor da Guia (10%)': parseFloat((item['Total'] * 0.10).toFixed(2)),
-                    'Entrega': item.entrega_UF,
-                }));
+            const difalData: DifalDataItem[] = allItems.map(item => ({
+                'Chave de Acesso': item['Chave de acesso'],
+                'Número da Nota': item['Número'],
+                'Data de Emissão': item['Emissão'],
+                'Valor Total da Nota': item['Total'],
+                'Valor da Guia (10%)': parseFloat((item['Total'] * 0.10).toFixed(2)),
+                'Município Entrega': item.entrega_Mun || 'N/A',
+                'UF Entrega': item.entrega_UF || 'N/A',
+            }));
 
             setProcessedItems(difalData);
             setIsResultsModalOpen(true);
-            toast({ title: "Análise DIFAL Concluída", description: `${difalData.length} notas elegíveis para DIFAL encontradas.` });
+            toast({ title: "Análise DIFAL Concluída", description: `${difalData.length} notas processadas.` });
         } catch (err: any) {
             toast({ variant: "destructive", title: "Erro ao processar XMLs", description: err.message });
         } finally {
@@ -147,7 +147,7 @@ export function DifalAnalysis() {
 
     const columns = useMemo(() => getColumnsWithCustomRender(
         processedItems, 
-        ['Número da Nota', 'Chave de Acesso', 'Data de Emissão', 'Valor Total da Nota', 'Valor da Guia (10%)'],
+        ['Número da Nota', 'Chave de Acesso', 'Data de Emissão', 'Valor Total da Nota', 'Valor da Guia (10%)', 'Município Entrega', 'UF Entrega'],
         (row, id) => {
             const item = row.original as DifalDataItem;
             const value = item[id as keyof DifalDataItem];
