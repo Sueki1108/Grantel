@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, type ChangeEvent } from 'react';
@@ -125,14 +124,16 @@ const readFileAsText = (file: File): Promise<string> => {
             if (event.target && event.target.result instanceof ArrayBuffer) {
                 const buffer = event.target.result;
                 try {
+                    // Try UTF-8 first.
                     const decoder = new TextDecoder('utf-8', { fatal: true });
                     const text = decoder.decode(buffer);
-                    if (text.includes('\uFFFD')) {
+                    if (text.includes('\uFFFD')) { // Check for the Unicode Replacement Character
                         throw new Error("UTF-8 decoding resulted in replacement characters.");
                     }
                     resolve(text);
                 } catch (e) {
                     try {
+                        // Fallback to ISO-8859-1 if UTF-8 fails
                         const decoder = new TextDecoder('iso-8859-1');
                         resolve(decoder.decode(buffer));
                     } catch (e2) {
@@ -210,14 +211,21 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                         toast({
                             variant: "destructive",
                             title: `Erro ao analisar ${file.name}`,
-                            description: "O ficheiro XML parece estar malformado.",
+                            description: "O ficheiro XML parece estar malformado ou não é um XML.",
                         });
                         continue;
                     }
                     
                     const nfNode = xmlDoc.querySelector('nf');
                     const listaNode = xmlDoc.querySelector('itens > lista');
-                    if (!nfNode || !listaNode) continue;
+                    if (!nfNode || !listaNode) {
+                        toast({
+                            variant: "destructive",
+                            title: `Estrutura Incompatível: ${file.name}`,
+                            description: "O XML não contém as tags <nf> ou <itens> necessárias. O ficheiro será ignorado.",
+                        });
+                        continue;
+                    }
                     
                     const data: NfseData = {
                         fileName: file.name,
