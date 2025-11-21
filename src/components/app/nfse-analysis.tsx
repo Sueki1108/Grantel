@@ -329,8 +329,8 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
     const handleDisregardNote = () => {
         if (!noteInput.trim()) return;
         const newNotes = new Set(disregardedNotes);
-        noteInput.split(',').forEach(n => {
-            const trimmed = n.trim();
+        noteInput.split(/\s+/).forEach(n => {
+            const trimmed = n.trim().replace(',', '');
             if (trimmed) newNotes.add(trimmed);
         });
         onDisregardedNotesChange(newNotes);
@@ -584,7 +584,7 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                                 <div className="flex gap-4 items-end">
                                     <div className="flex-grow">
                                         <Label htmlFor="disregarded-notes-input">Número(s) da NFS-e</Label>
-                                        <Input id="disregarded-notes-input" placeholder="Ex: 3673, 3674" value={noteInput} onChange={(e) => setNoteInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleDisregardNote()} />
+                                        <Input id="disregarded-notes-input" placeholder="Ex: 3673 3674" value={noteInput} onChange={(e) => setNoteInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleDisregardNote()} />
                                     </div>
                                     <Button onClick={handleDisregardNote}><FilterX className='h-4 w-4 mr-2'/>Desconsiderar</Button>
                                 </div>
