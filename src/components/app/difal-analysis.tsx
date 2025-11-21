@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, type ChangeEvent } from 'react';
@@ -40,7 +41,6 @@ export function DifalAnalysis() {
     const [difalXmlFiles, setDifalXmlFiles] = useState<File[]>([]);
     const [processedItems, setProcessedItems] = useState<DifalDataItem[]>([]);
     const [vencimento, setVencimento] = useState('');
-    const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 5 });
     
     const { toast } = useToast();
 
@@ -229,7 +229,7 @@ export function DifalAnalysis() {
             </Card>
 
             <Dialog open={isResultsModalOpen} onOpenChange={setIsResultsModalOpen}>
-                <DialogContent className="max-w-5xl h-auto max-h-[90vh] flex flex-col">
+                <DialogContent className="max-w-7xl h-auto max-h-[90vh] flex flex-col">
                      <DialogHeader>
                         <DialogTitle>Resultados da Análise DIFAL</DialogTitle>
                         <DialogDescription>
