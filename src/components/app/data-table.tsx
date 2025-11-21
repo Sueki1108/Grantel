@@ -14,6 +14,7 @@ import {
   getSortedRowModel,
   useReactTable,
   RowSelectionState,
+  PaginationState,
 } from "@tanstack/react-table"
 
 import {
@@ -38,6 +39,7 @@ interface DataTableProps<TData, TValue> {
   rowSelection?: RowSelectionState;
   setRowSelection?: React.Dispatch<React.SetStateAction<RowSelectionState>>;
   pageSize?: number;
+  autoResetPageIndex?: boolean;
 }
 
 export function DataTable<TData, TValue>({
@@ -49,10 +51,15 @@ export function DataTable<TData, TValue>({
   rowSelection: externalRowSelection,
   setRowSelection: externalSetRowSelection,
   pageSize = 10,
+  autoResetPageIndex = true,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = React.useState('')
+  const [pagination, setPagination] = React.useState<PaginationState>({
+    pageIndex: 0,
+    pageSize,
+  });
   
   const [internalRowSelection, setInternalRowSelection] = React.useState<RowSelectionState>({});
   
@@ -64,7 +71,7 @@ export function DataTable<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
-    autoResetPageIndex: false,
+    autoResetPageIndex,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
@@ -73,16 +80,14 @@ export function DataTable<TData, TValue>({
     onGlobalFilterChange: setGlobalFilter,
     getFilteredRowModel: getFilteredRowModel(),
     onRowSelectionChange: setRowSelection,
+    onPaginationChange: setPagination,
     enableRowSelection: isControllingSelection, 
     state: {
       sorting,
       columnFilters,
       globalFilter,
       rowSelection,
-      pagination: {
-        pageIndex: 0,
-        pageSize,
-      }
+      pagination,
     },
   })
   
@@ -97,6 +102,10 @@ export function DataTable<TData, TValue>({
       onSelectionChange(Object.keys(rowSelection).length);
     }
   }, [rowSelection, onSelectionChange, isControllingSelection]);
+
+  React.useEffect(() => {
+    table.setPageSize(pageSize);
+  }, [pageSize, table]);
 
 
   return (
@@ -122,6 +131,7 @@ export function DataTable<TData, TValue>({
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
+                 {isControllingSelection && <TableHead className='p-2 w-[40px]'><Checkbox checked={table.getIsAllPageRowsSelected()} onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)} aria-label="Selecionar todas as linhas" /></TableHead>}
                 {headerGroup.headers.map((header) => {
                   return (
                     <TableHead key={header.id} className='p-2'>
@@ -150,6 +160,7 @@ export function DataTable<TData, TValue>({
                       }
                   }}
                 >
+                  {isControllingSelection && <TableCell className="p-2"><Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Selecionar linha" onClick={(e) => e.stopPropagation()} /></TableCell>}
                   {row.getVisibleCells().map((cell) => (
                     <TableCell 
                       key={cell.id} 
@@ -177,6 +188,7 @@ export function DataTable<TData, TValue>({
            {footer && (
             <TableFooter>
                 <TableRow>
+                     {isControllingSelection && <TableCell />}
                     {columns.map((column: any) => (
                         <TableCell key={column.id} className="font-bold text-base">
                             {footer[column.id] || ''}
