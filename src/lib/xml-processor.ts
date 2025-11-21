@@ -1,3 +1,4 @@
+
 // Types
 type LogFunction = (message: string) => void;
 
@@ -307,18 +308,23 @@ const readFileAsText = (file: File): Promise<string> => {
         reader.onload = (event) => {
             if (event.target && event.target.result instanceof ArrayBuffer) {
                 const buffer = event.target.result;
-                let decoder = new TextDecoder('utf-8', { fatal: true });
                 try {
+                    // Try UTF-8 first.
+                    const decoder = new TextDecoder('utf-8', { fatal: true });
                     const text = decoder.decode(buffer);
                     // Check for the Unicode Replacement Character, which indicates a decoding error.
-                    if (text.includes('\uFFFD')) {
+                    if (text.includes('')) {
                         throw new Error("UTF-8 decoding resulted in replacement characters.");
                     }
                     resolve(text);
-                } catch(e) {
-                    // Fallback to ISO-8859-1 if UTF-8 fails
-                    decoder = new TextDecoder('iso-8859-1');
-                    resolve(decoder.decode(buffer));
+                } catch (e) {
+                    try {
+                        // Fallback to ISO-8859-1 if UTF-8 fails
+                        const decoder = new TextDecoder('iso-8859-1');
+                        resolve(decoder.decode(buffer));
+                    } catch (e2) {
+                        reject(new Error(`Falha ao descodificar o ficheiro ${file.name} com UTF-8 e ISO-8859-1.`));
+                    }
                 }
             } else {
                 reject(new Error('Falha ao ler o ficheiro como ArrayBuffer.'));

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, type ChangeEvent } from 'react';
 import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -126,7 +126,11 @@ const readFileAsText = (file: File): Promise<string> => {
                 const buffer = event.target.result;
                 try {
                     const decoder = new TextDecoder('utf-8', { fatal: true });
-                    resolve(decoder.decode(buffer));
+                    const text = decoder.decode(buffer);
+                    if (text.includes('')) {
+                        throw new Error("UTF-8 decoding resulted in replacement characters.");
+                    }
+                    resolve(text);
                 } catch (e) {
                     try {
                         const decoder = new TextDecoder('iso-8859-1');
@@ -228,13 +232,18 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                     extractedData.push(data);
                 } catch (e: any) {
                      console.error(`Error processing file ${file.name}:`, e);
+                     toast({
+                        variant: "destructive",
+                        title: `Erro ao processar ${file.name}`,
+                        description: "O ficheiro pode estar corrompido ou num formato inválido.",
+                    });
                 }
             }
             setAllExtractedData(extractedData);
             setIsLoading(false);
         };
         extractData();
-    }, [nfseFiles]);
+    }, [nfseFiles, toast]);
     
     // Perform analysis based on selected phrases
     const analysisResults = useMemo((): AnalysisResults | null => {
