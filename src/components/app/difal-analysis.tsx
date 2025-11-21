@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, type ChangeEvent } from 'react';
@@ -259,7 +258,7 @@ export function DifalAnalysis() {
                             <DataTable 
                                 columns={columns}
                                 data={processedItems}
-                                pageSize={5}
+                                pageSize={1}
                             />
                             </CardContent>
                         </Card>
@@ -279,3 +278,5 @@ export function DifalAnalysis() {
         </div>
     );
 }
+
+    
