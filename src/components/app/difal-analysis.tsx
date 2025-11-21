@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { processUploadedXmls } from '@/lib/xml-processor';
 import JSZip from 'jszip';
 import { FileUploadForm } from './file-upload-form';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
 
 
 // ===============================================================
@@ -24,7 +26,7 @@ type DifalDataItem = {
     'Número da Nota': string;
     'Data de Emissão': string;
     'Valor Total da Nota': number;
-    'Valor da Guia (11%)': number;
+    'Valor da Guia (10%)': number;
     'Entrega': string;
 };
 
@@ -37,6 +39,7 @@ export function DifalAnalysis() {
     const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
     const [difalXmlFiles, setDifalXmlFiles] = useState<File[]>([]);
     const [processedItems, setProcessedItems] = useState<DifalDataItem[]>([]);
+    const [vencimento, setVencimento] = useState('');
     
     const { toast } = useToast();
 
@@ -91,7 +94,7 @@ export function DifalAnalysis() {
                     'Número da Nota': item['Número'],
                     'Data de Emissão': item['Emissão'],
                     'Valor Total da Nota': item['Total'],
-                    'Valor da Guia (11%)': parseFloat((item['Total'] * 0.11).toFixed(2)),
+                    'Valor da Guia (10%)': parseFloat((item['Total'] * 0.10).toFixed(2)),
                     'Entrega': item.entrega_UF,
                 }));
 
@@ -111,7 +114,7 @@ export function DifalAnalysis() {
         return {
             count: processedItems.length,
             totalNotesValue,
-            totalGuideValue: totalNotesValue * 0.11,
+            totalGuideValue: totalNotesValue * 0.10,
         }
     }, [processedItems]);
     
@@ -144,7 +147,7 @@ export function DifalAnalysis() {
 
     const columns = useMemo(() => getColumnsWithCustomRender(
         processedItems, 
-        ['Número da Nota', 'Chave de Acesso', 'Data de Emissão', 'Valor Total da Nota', 'Valor da Guia (11%)'],
+        ['Número da Nota', 'Chave de Acesso', 'Data de Emissão', 'Valor Total da Nota', 'Valor da Guia (10%)'],
         (row, id) => {
             const item = row.original as DifalDataItem;
             const value = item[id as keyof DifalDataItem];
@@ -179,27 +182,42 @@ export function DifalAnalysis() {
                         <div>
                             <CardTitle className="font-headline text-2xl">Ferramenta de Extração de Dados DIFAL</CardTitle>
                             <CardDescription>
-                                Carregue os XMLs, processe e visualize os dados para análise de DIFAL.
+                                Carregue os XMLs, insira a data de vencimento e visualize os dados para análise de DIFAL.
                             </CardDescription>
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-8">
-                     <div>
-                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><UploadCloud className="h-5 w-5" />Etapa 1: Carregar XMLs</h3>
-                        <FileUploadForm
-                            formId="xml-difal"
-                            files={{ 'xml-difal': difalXmlFiles.length > 0 }}
-                            onFileChange={handleXmlFileChange}
-                            onClearFile={() => setDifalXmlFiles([])}
-                            xmlFileCount={difalXmlFiles.length}
-                            displayName="Carregar XMLs para DIFAL"
-                        />
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><UploadCloud className="h-5 w-5" />Etapa 1: Carregar XMLs</h3>
+                            <FileUploadForm
+                                formId="xml-difal"
+                                files={{ 'xml-difal': difalXmlFiles.length > 0 }}
+                                onFileChange={handleXmlFileChange}
+                                onClearFile={() => setDifalXmlFiles([])}
+                                xmlFileCount={difalXmlFiles.length}
+                                displayName="Carregar XMLs para DIFAL"
+                            />
+                        </div>
+                         <div>
+                            <h3 className="text-lg font-bold mb-4">Etapa 2: Informar Vencimento</h3>
+                            <div className="space-y-2">
+                                <Label htmlFor="vencimento-input">Data de Vencimento da Guia</Label>
+                                <Input 
+                                    id="vencimento-input"
+                                    placeholder="DD/MM/AAAA"
+                                    value={vencimento}
+                                    onChange={(e) => setVencimento(e.target.value)}
+                                />
+                                <p className="text-xs text-muted-foreground">Esta data será exibida no relatório final.</p>
+                            </div>
+                        </div>
                     </div>
                     
                      <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Etapa Final</span></div></div>
                      <div>
-                        <h3 className="text-lg font-bold mb-2">Etapa 2: Processar e Visualizar</h3>
+                        <h3 className="text-lg font-bold mb-2">Etapa 3: Processar e Visualizar</h3>
                          <p className='text-sm text-muted-foreground mb-4'>Clique para analisar os XMLs e ver os resultados.</p>
                         <div className='flex flex-col sm:flex-row gap-4'>
                             <Button onClick={processDifalItems} disabled={isLoading || difalXmlFiles.length === 0} className="w-full">
@@ -220,10 +238,18 @@ export function DifalAnalysis() {
                     </DialogHeader>
                     
                     {totals && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-4">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 my-4">
                              <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total de Notas</CardTitle><Hash className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{totals.count}</div></CardContent></Card>
                              <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Valor Total das Notas</CardTitle><Sigma className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{totals.totalNotesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div></CardContent></Card>
-                             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Valor Total Guias (11%)</CardTitle><Coins className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{totals.totalGuideValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div></CardContent></Card>
+                             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Valor Total Guias (10%)</CardTitle><Coins className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{totals.totalGuideValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div></CardContent></Card>
+                             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Vencimento</CardTitle><ClipboardCopy className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>
+                                <div className="text-2xl font-bold flex items-center justify-between">
+                                    <span>{vencimento || 'N/A'}</span>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => copyToClipboard(vencimento)}>
+                                        <Copy className="h-4 w-4"/>
+                                    </Button>
+                                </div>
+                             </CardContent></Card>
                         </div>
                     )}
                     
