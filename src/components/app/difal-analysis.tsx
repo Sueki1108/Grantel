@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, type ChangeEvent } from 'react';
@@ -87,15 +88,16 @@ export function DifalAnalysis() {
             const { nfe, saidas } = await processUploadedXmls(difalXmlFiles);
             const allItems = [...nfe, ...saidas];
             
-            const difalData: DifalDataItem[] = allItems.map(item => ({
-                'Chave de Acesso': item['Chave de acesso'],
-                'Número da Nota': item['Número'],
-                'Data de Emissão': item['Emissão'],
-                'Valor Total da Nota': item['Total'],
-                'Valor da Guia (10%)': parseFloat((item['Total'] * 0.10).toFixed(2)),
-                'Município Entrega': item.entrega_Mun || 'N/A',
-                'UF Entrega': item.entrega_UF || 'N/A',
-            }));
+            const difalData: DifalDataItem[] = allItems
+                .map(item => ({
+                    'Chave de Acesso': item['Chave de acesso'],
+                    'Número da Nota': item['Número'],
+                    'Data de Emissão': item['Emissão'],
+                    'Valor Total da Nota': item['Total'],
+                    'Valor da Guia (10%)': parseFloat((item['Total'] * 0.10).toFixed(2)),
+                    'Município Entrega': item.entrega_Mun || 'N/A',
+                    'UF Entrega': item.entrega_UF || 'N/A',
+                }));
 
             setProcessedItems(difalData);
             setIsResultsModalOpen(true);
@@ -170,6 +172,21 @@ export function DifalAnalysis() {
              )
         }
     ), [processedItems]);
+    
+    const handleVencimentoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let value = e.target.value.replace(/\D/g, ''); 
+        if (value.length > 8) {
+            value = value.substring(0, 8); 
+        }
+
+        if (value.length > 4) {
+            value = `${value.substring(0, 2)}/${value.substring(2, 4)}/${value.substring(4)}`;
+        } else if (value.length > 2) {
+            value = `${value.substring(0, 2)}/${value.substring(2)}`;
+        }
+        
+        setVencimento(value);
+    };
 
 
     return (
@@ -207,7 +224,8 @@ export function DifalAnalysis() {
                                     id="vencimento-input"
                                     placeholder="DD/MM/AAAA"
                                     value={vencimento}
-                                    onChange={(e) => setVencimento(e.target.value)}
+                                    onChange={handleVencimentoChange}
+                                    maxLength={10}
                                 />
                                 <p className="text-xs text-muted-foreground">Esta data será exibida no relatório final.</p>
                             </div>
