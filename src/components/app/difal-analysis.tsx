@@ -8,20 +8,21 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Loader2, Download, Cpu, TicketPercent, Copy, Hash, Sigma, Coins, ClipboardCopy, X, UploadCloud } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { DataTable } from '@/components/app/data-table';
+import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '../ui/dialog';
 import { processUploadedXmls } from '@/lib/xml-processor';
 import JSZip from 'jszip';
 import { FileUploadForm } from './file-upload-form';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea, ScrollBar } from '../ui/scroll-area';
 
 
 // ===============================================================
 // Tipos
 // ===============================================================
 type DifalDataItem = {
+    'Nome da Guia': string;
     'Chave de Acesso': string;
     'Número da Nota': string;
     'Data de Emissão': string;
@@ -88,8 +89,14 @@ export function DifalAnalysis() {
             const { nfe, saidas } = await processUploadedXmls(difalXmlFiles);
             const allItems = [...nfe, ...saidas];
             
-            const difalData: DifalDataItem[] = allItems
-                .map(item => ({
+            const difalData: DifalDataItem[] = allItems.map(item => {
+                const date = parseISO(item['Emissão']);
+                const formattedMonth = format(date, 'MMM', { locale: ptBR });
+                const formattedYear = format(date, 'yyyy');
+                const guideName = `Grantel - ICMS DIFAL NF ${item['Número']} - ${formattedMonth} ${formattedYear}`;
+
+                return {
+                    'Nome da Guia': guideName,
                     'Chave de Acesso': item['Chave de acesso'],
                     'Número da Nota': item['Número'],
                     'Data de Emissão': item['Emissão'],
@@ -97,7 +104,8 @@ export function DifalAnalysis() {
                     'Valor da Guia (10%)': parseFloat((item['Total'] * 0.10).toFixed(2)),
                     'Município Entrega': item.entrega_Mun || 'N/A',
                     'UF Entrega': item.entrega_UF || 'N/A',
-                }));
+                }
+            });
 
             setProcessedItems(difalData);
             setIsResultsModalOpen(true);
@@ -161,6 +169,31 @@ export function DifalAnalysis() {
         setVencimento(value);
     };
 
+    const columns = useMemo(() => getColumnsWithCustomRender(
+        processedItems, 
+        ['Nome da Guia', 'Chave de Acesso', 'Data de Emissão', 'Valor Total da Nota', 'Valor da Guia (10%)', 'Município Entrega', 'UF Entrega'],
+        (row, id) => {
+            const item = row.original as DifalDataItem;
+            const value = item[id as keyof DifalDataItem];
+            let displayValue: React.ReactNode = String(value ?? '');
+            
+             if (id === 'Data de Emissão' && typeof value === 'string') {
+                displayValue = format(parseISO(value), 'dd/MM/yyyy');
+             } else if (typeof value === 'number') {
+                displayValue = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+             } else if (id === 'Nome da Guia') {
+                 displayValue = <span className='font-bold'>{value}</span>
+             }
+             
+             return (
+                <div className="cursor-pointer hover:bg-muted p-1 rounded group flex items-center gap-1 justify-between" onClick={() => copyToClipboard(String(value))}>
+                    <span>{displayValue}</span>
+                    <ClipboardCopy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+             )
+        }
+    ), [processedItems]);
+
 
     return (
         <div className="space-y-6">
@@ -223,7 +256,7 @@ export function DifalAnalysis() {
                      <DialogHeader>
                         <DialogTitle>Resultados da Análise DIFAL</DialogTitle>
                         <DialogDescription>
-                           Os dados foram extraídos dos XMLs. Cada aba representa uma nota.
+                            Os dados foram extraídos dos XMLs. Clique num valor para o copiar para a área de transferência.
                         </DialogDescription>
                     </DialogHeader>
                     
@@ -246,43 +279,11 @@ export function DifalAnalysis() {
                     {processedItems.length > 0 && (
                         <Card className="flex-grow overflow-hidden">
                             <CardContent className='pt-6 h-full'>
-                                <Tabs defaultValue={processedItems[0]['Chave de Acesso']} className="w-full">
-                                    <ScrollArea className="whitespace-nowrap">
-                                        <TabsList>
-                                            {processedItems.map(item => {
-                                                const date = parseISO(item['Data de Emissão']);
-                                                const tabTitle = `Grantel - ICMS DIFAL NF ${item['Número da Nota']} - ${format(date, 'MMM yyyy', { locale: ptBR })}`;
-                                                return (
-                                                    <TabsTrigger key={item['Chave de Acesso']} value={item['Chave de Acesso']}>
-                                                        {tabTitle}
-                                                    </TabsTrigger>
-                                                )
-                                            })}
-                                        </TabsList>
-                                        <ScrollBar orientation="horizontal" />
-                                    </ScrollArea>
-                                     <div className="mt-4">
-                                        {processedItems.map(item => (
-                                            <TabsContent key={item['Chave de Acesso']} value={item['Chave de Acesso']}>
-                                                <div className="space-y-3 rounded-lg border p-4">
-                                                    {Object.entries(item).map(([key, value]) => (
-                                                         <div key={key} className="flex items-center justify-between text-sm">
-                                                             <span className="font-medium text-muted-foreground">{key}:</span>
-                                                             <div className="flex items-center gap-2">
-                                                                <span className="font-mono text-foreground">
-                                                                    {typeof value === 'number' ? value.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}) : value}
-                                                                </span>
-                                                                 <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(value)}>
-                                                                    <Copy className="h-3.5 w-3.5" />
-                                                                </Button>
-                                                            </div>
-                                                         </div>
-                                                    ))}
-                                                </div>
-                                            </TabsContent>
-                                        ))}
-                                    </div>
-                                </Tabs>
+                                <DataTable 
+                                    columns={columns}
+                                    data={processedItems}
+                                    pageSize={1}
+                                />
                             </CardContent>
                         </Card>
                     )}
@@ -301,3 +302,4 @@ export function DifalAnalysis() {
         </div>
     );
 }
+    
