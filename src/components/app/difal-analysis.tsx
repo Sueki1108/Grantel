@@ -78,7 +78,6 @@ export function DifalAnalysis() {
             toast({ variant: "destructive", title: "Nenhum XML carregado", description: "Carregue os ficheiros XML para processar." });
             return;
         }
-
         setIsLoading(true);
         
         try {
@@ -86,18 +85,19 @@ export function DifalAnalysis() {
             const allItems = [...nfe, ...saidas];
             
             const difalData: DifalDataItem[] = allItems
+                .filter(item => item.entrega_UF && item.destUF && item.entrega_UF !== item.destUF)
                 .map(item => ({
                     'Chave de Acesso': item['Chave de acesso'],
                     'Número da Nota': item['Número'],
                     'Data de Emissão': item['Emissão'],
                     'Valor Total da Nota': item['Total'],
                     'Valor da Guia (11%)': parseFloat((item['Total'] * 0.11).toFixed(2)),
-                    'Entrega': item.entrega_UF || item.destUF,
+                    'Entrega': item.entrega_UF,
                 }));
 
             setProcessedItems(difalData);
             setIsResultsModalOpen(true);
-            toast({ title: "Extração Concluída", description: `${difalData.length} notas encontradas nos XMLs.` });
+            toast({ title: "Análise DIFAL Concluída", description: `${difalData.length} notas elegíveis para DIFAL encontradas.` });
         } catch (err: any) {
             toast({ variant: "destructive", title: "Erro ao processar XMLs", description: err.message });
         } finally {
@@ -211,7 +211,7 @@ export function DifalAnalysis() {
             </Card>
 
             <Dialog open={isResultsModalOpen} onOpenChange={setIsResultsModalOpen}>
-                <DialogContent className="max-w-4xl h-auto max-h-[90vh] flex flex-col">
+                <DialogContent className="max-w-5xl h-auto max-h-[90vh] flex flex-col">
                      <DialogHeader>
                         <DialogTitle>Resultados da Análise DIFAL</DialogTitle>
                         <DialogDescription>
@@ -227,26 +227,26 @@ export function DifalAnalysis() {
                         </div>
                     )}
                     
-                    <div className="flex-grow overflow-auto">
-                      {processedItems.length > 0 && (
-                           <DataTable 
-                              columns={columns}
-                              data={processedItems}
-                          />
-                      )}
-                    </div>
-
-                    <DialogFooter className="mt-4">
+                    {processedItems.length > 0 && (
+                        <Card className="flex-grow overflow-hidden">
+                            <CardContent className='pt-6 h-full'>
+                            <DataTable 
+                                columns={columns}
+                                data={processedItems}
+                                pageSize={5}
+                            />
+                            </CardContent>
+                        </Card>
+                    )}
+                    <DialogFooter>
                          <Button onClick={handleDownloadExcel} disabled={processedItems.length === 0} variant="outline">
                             <Download className="mr-2 h-4 w-4" /> Baixar Excel
                         </Button>
                     </DialogFooter>
-                     <DialogClose asChild>
-                         <Button type="button" variant="secondary" className="absolute right-4 top-4 rounded-sm !p-1 h-auto w-auto opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-                            <X className="h-4 w-4" />
-                            <span className="sr-only">Close</span>
-                        </Button>
-                     </DialogClose>
+                     <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+                        <X className="h-4 w-4" />
+                        <span className="sr-only">Close</span>
+                    </DialogClose>
                 </DialogContent>
             </Dialog>
 
