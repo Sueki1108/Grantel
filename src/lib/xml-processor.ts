@@ -327,9 +327,7 @@ const readFileAsText = (file: File): Promise<string> => {
                 reject(new Error('Falha ao ler o ficheiro como ArrayBuffer.'));
             }
         };
-        reader.onerror = () => {
-            reject(new Error(`Erro ao ler o ficheiro: ${file.name}`));
-        };
+        reader.onerror = () => reject(new Error(`Erro ao ler o ficheiro: ${file.name}`));
         reader.readAsArrayBuffer(file);
     });
 };
