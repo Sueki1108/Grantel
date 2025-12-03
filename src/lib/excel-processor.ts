@@ -267,11 +267,12 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
             if (!item || !item['Valor Unitário']) return false;
             return parseFloat(String(item['Valor Unitário'])) > 1200;
         }).map((item) => {
-            const uniqueItemId = `${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${cleanAndToStr(item['Código'])}`;
-            const id = `${item['Chave Unica']}-${item['Item']}`;
             const header = nfeHeaderMap.get(item['Chave Unica']);
+            const emitenteCnpj = header?.['CPF/CNPJ do Fornecedor'] || item['CPF/CNPJ do Emitente'] || '';
+            const uniqueItemId = `${cleanAndToStr(emitenteCnpj)}-${cleanAndToStr(item['Código'])}`;
+            const id = `${item['Chave Unica']}-${item['Item']}`;
             const fornecedor = header?.Fornecedor || item.Fornecedor || 'N/A';
-            return { ...item, id, uniqueItemId, Fornecedor: fornecedor };
+            return { ...item, id, uniqueItemId, Fornecedor: fornecedor, 'CPF/CNPJ do Emitente': emitenteCnpj };
         });
     log(`- ${imobilizados.length} itens com valor unitário > R$ 1.200 encontrados para análise de imobilizado.`);
 
