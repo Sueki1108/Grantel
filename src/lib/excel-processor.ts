@@ -269,10 +269,18 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         }).map((item) => {
             const header = nfeHeaderMap.get(item['Chave Unica']);
             const emitenteCnpj = header?.['CPF/CNPJ do Fornecedor'] || item['CPF/CNPJ do Emitente'] || '';
-            const uniqueItemId = `${cleanAndToStr(emitenteCnpj)}-${cleanAndToStr(item['Código'])}`;
-            const id = `${item['Chave Unica']}-${item['Item']}`;
-            const fornecedor = header?.Fornecedor || item.Fornecedor || 'N/A';
-            return { ...item, id, uniqueItemId, Fornecedor: fornecedor, 'CPF/CNPJ do Emitente': emitenteCnpj };
+            const codigoProduto = item['Código'] || '';
+            const uniqueItemId = `${cleanAndToStr(emitenteCnpj)}-${cleanAndToStr(codigoProduto)}`;
+            const id = `${item['Chave Unica'] || ''}-${item['Item'] || ''}`;
+
+            return { 
+                ...item, 
+                id, 
+                uniqueItemId, 
+                Fornecedor: header?.Fornecedor || 'N/A', 
+                'CPF/CNPJ do Emitente': emitenteCnpj,
+                destUF: header?.destUF || '' // Adicionando UF do destinatário
+            };
         });
     log(`- ${imobilizados.length} itens com valor unitário > R$ 1.200 encontrados para análise de imobilizado.`);
 
@@ -619,5 +627,3 @@ export function runReconciliation(
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
-
-    
