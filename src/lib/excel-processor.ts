@@ -262,6 +262,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     
     log("Identificando itens para análise de imobilizado a partir dos itens válidos...");
     const nfeHeaderMap = new Map(notasValidas.map(n => [n['Chave Unica'], n]));
+
     const imobilizados = itensValidos
         .filter(item => {
             if (!item || !item['Valor Unitário']) return false;
@@ -270,16 +271,14 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
             const header = nfeHeaderMap.get(item['Chave Unica']);
             const emitenteCnpj = header?.['CPF/CNPJ do Fornecedor'] || item['CPF/CNPJ do Emitente'] || '';
             const codigoProduto = item['Código'] || '';
-            const uniqueItemId = `${cleanAndToStr(emitenteCnpj)}-${cleanAndToStr(codigoProduto)}`;
-            const id = `${item['Chave Unica'] || ''}-${item['Item'] || ''}`;
 
-            return { 
-                ...item, 
-                id, 
-                uniqueItemId, 
-                Fornecedor: header?.Fornecedor || 'N/A', 
+            return {
+                ...item,
+                id: `${item['Chave Unica'] || ''}-${item['Item'] || ''}`,
+                uniqueItemId: `${cleanAndToStr(emitenteCnpj)}-${cleanAndToStr(codigoProduto)}`,
+                Fornecedor: header?.Fornecedor || 'N/A',
                 'CPF/CNPJ do Emitente': emitenteCnpj,
-                destUF: header?.destUF || '' // Adicionando UF do destinatário
+                destUF: header?.destUF || '',
             };
         });
     log(`- ${imobilizados.length} itens com valor unitário > R$ 1.200 encontrados para análise de imobilizado.`);

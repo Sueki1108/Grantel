@@ -102,9 +102,12 @@ export function getColumnsWithCustomRender<TData extends Record<string, any>>(
             id: columnId, 
             accessorKey: columnId, 
             header: ({ column }) => renderHeader(column, columnId),
-            cell: ({ row }) => customCellRender ? customCellRender(row, columnId) : (
-                <div>{String(row.getValue(columnId) ?? '')}</div>
-            ),
+            cell: ({ row }) => {
+                if (!row.original) return null;
+                return customCellRender ? customCellRender(row, columnId) : (
+                    <div>{String(row.getValue(columnId) ?? '')}</div>
+                )
+            },
         };
     });
 }
