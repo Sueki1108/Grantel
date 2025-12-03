@@ -413,7 +413,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
                 const creditorCode = creditorCodeMatch ? creditorCodeMatch[1] : '';
 
                 if (creditorCode) {
-                    const docKey = `${cleanAndToStr(documentCell)}-${creditorCode}`;
+                    const docKey = `${cleanAndToStr(documentCell)}-${credorCode}`;
                     
                     const debugInfo = { 
                         'Chave Gerada (Centro de Custo)': docKey, 
