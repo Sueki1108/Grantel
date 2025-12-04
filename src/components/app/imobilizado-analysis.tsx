@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
+import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Save, Settings, X, EyeOff, Copy, HelpCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
@@ -111,7 +111,6 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
 export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
-    const [hasChanges, setHasChanges] = useState(false);
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
     const containerRef = React.useRef<HTMLDivElement>(null);
     const [isCfopModalOpen, setIsCfopModalOpen] = useState(false);
@@ -210,48 +209,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
     // ===============================================================
     // Classification and Persistence Logic
     // ===============================================================
-    
-    const { initialClassifications, initialCodes } = useMemo(() => {
-        const classifications: Record<string, Classification> = {};
-        const codes: Record<string, string> = {};
-        if (competence) {
-            const persistedForCompetence = allPersistedData[competence] || { classifications: {}, accountCodes: {} };
-            
-            imobilizadoItems.forEach(item => {
-                let currentClassification = persistedForCompetence.classifications?.[item.uniqueItemId]?.classification;
-                
-                if (!currentClassification) {
-                    for (const otherCompetence in allPersistedData) {
-                        if (otherCompetence !== competence) {
-                            const classification = allPersistedData[otherCompetence]?.classifications?.[item.uniqueItemId]?.classification;
-                            if (classification) {
-                                currentClassification = classification;
-                                break; 
-                            }
-                        }
-                    }
-                }
-                classifications[item.id] = currentClassification || 'unclassified';
-
-                const persistedCode = persistedForCompetence.accountCodes?.[item.id]?.accountCode;
-                if (persistedCode) {
-                    codes[item.id] = persistedCode;
-                }
-            });
-        }
-        return { initialClassifications: classifications, initialCodes: codes };
-    }, [competence, allPersistedData, imobilizadoItems]);
-    
-    const [sessionClassifications, setSessionClassifications] = useState(initialClassifications);
-    const [sessionAccountCodes, setSessionAccountCodes] = useState(initialCodes);
-    
-    useEffect(() => {
-        setSessionClassifications(initialClassifications);
-        setSessionAccountCodes(initialCodes);
-        setHasChanges(false);
-        setRowSelection({});
-    }, [initialClassifications, initialCodes]);
-
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -269,17 +226,18 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
     }, [rowSelection]);
     
      const handleClassificationChange = (itemsToUpdate: ImobilizadoItemData[], newClassification: Classification) => {
-        const newClassifications = { ...sessionClassifications };
+        if (!competence) return;
         
+        const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
+        if (!updatedPersistedData[competence]) updatedPersistedData[competence] = { classifications: {}, accountCodes: {} };
+        if (!updatedPersistedData[competence].classifications) updatedPersistedData[competence].classifications = {};
+
         itemsToUpdate.forEach(item => {
-            const itemsWithSameProductKey = imobilizadoItems.filter(i => i.uniqueItemId === item.uniqueItemId);
-            itemsWithSameProductKey.forEach(i => {
-                newClassifications[i.id] = newClassification;
-            });
+            updatedPersistedData[competence].classifications[item.uniqueItemId] = { classification: newClassification };
         });
 
-        setSessionClassifications(newClassifications);
-        setHasChanges(true);
+        onPersistData(updatedPersistedData);
+        toast({ title: "Classificação atualizada!" });
         setActiveTab(newClassification);
     };
 
@@ -294,53 +252,40 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
 
     
     const handleAccountCodeChange = (itemLineId: string, code: string) => {
-        setSessionAccountCodes(prev => ({...prev, [itemLineId]: code}));
-        setHasChanges(true);
+        if (!competence) return;
+
+        const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
+        if (!updatedPersistedData[competence]) updatedPersistedData[competence] = { classifications: {}, accountCodes: {} };
+        if (!updatedPersistedData[competence].accountCodes) updatedPersistedData[competence].accountCodes = {};
+
+        updatedPersistedData[competence].accountCodes[itemLineId] = { accountCode: code };
+
+        onPersistData(updatedPersistedData);
     };
 
-    const handleSaveChanges = () => {
-        if (!competence) return;
-    
-        const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
-        if (!updatedPersistedData[competence]) {
-            updatedPersistedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {} } };
-        }
-        if (!updatedPersistedData[competence].classifications) {
-            updatedPersistedData[competence].classifications = {};
-        }
-        if (!updatedPersistedData[competence].accountCodes) {
-            updatedPersistedData[competence].accountCodes = {};
-        }
-    
-        imobilizadoItems.forEach(item => {
-            const sessionClassification = sessionClassifications[item.id];
-            
-            if (sessionClassification && sessionClassification !== 'unclassified') {
-                 updatedPersistedData[competence].classifications[item.uniqueItemId] = { classification: sessionClassification };
-            } else if (sessionClassification === 'unclassified') {
-                if (updatedPersistedData[competence].classifications[item.uniqueItemId]) {
-                    delete updatedPersistedData[competence].classifications[item.uniqueItemId];
-                }
-            }
-    
-            const sessionCode = sessionAccountCodes[item.id];
-            if (sessionCode !== undefined) { 
-                updatedPersistedData[competence].accountCodes[item.id] = { accountCode: sessionCode };
-            }
-        });
-        
-        onPersistData(updatedPersistedData);
-        setHasChanges(false);
-        toast({title: 'Alterações guardadas!'});
-    };
 
     const filteredItems = useMemo(() => {
         const categories: Record<Classification, ImobilizadoItemData[]> = {
             unclassified: [], imobilizado: [], 'uso-consumo': [], 'utilizado-em-obra': [], verify: []
         };
+        
+        const persistedForCompetence = (competence && allPersistedData[competence]?.classifications) || {};
 
         imobilizadoItems.forEach(item => {
-            let classification = sessionClassifications[item.id] || 'unclassified';
+            let classification = persistedForCompetence[item.uniqueItemId]?.classification || 'unclassified';
+            
+            // Fallback to find classification from any other competence
+            if (classification === 'unclassified') {
+                 for (const otherCompetence in allPersistedData) {
+                    if (otherCompetence !== competence) {
+                        const otherClassification = allPersistedData[otherCompetence]?.classifications?.[item.uniqueItemId]?.classification;
+                        if (otherClassification && otherClassification !== 'unclassified') {
+                            classification = otherClassification;
+                            break; 
+                        }
+                    }
+                }
+            }
             
             if (!categories[classification]) {
                 classification = 'unclassified';
@@ -350,16 +295,18 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         });
         
         return categories;
-    }, [imobilizadoItems, sessionClassifications]);
+    }, [imobilizadoItems, competence, allPersistedData]);
     
     const handleDownload = (data: ImobilizadoItemData[], classification: Classification) => {
         if (data.length === 0) {
             toast({ title: 'Nenhum dado para exportar', variant: 'destructive' });
             return;
         }
+        
+        const persistedAccountCodes = (competence && allPersistedData[competence]?.accountCodes) || {};
 
         const dataToExport = data.map(item => {
-             const accountCode = sessionAccountCodes[item.id] || '';
+             const accountCode = persistedAccountCodes[item.id]?.accountCode || '';
             return {
                 'Número da Nota': item['Número da Nota'],
                 'Descrição': item['Descrição'],
@@ -395,6 +342,8 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
             });
         };
+        const persistedAccountCodes = (competence && allPersistedData[competence]?.accountCodes) || {};
+
 
         const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
             <div className="flex items-center justify-between gap-1 group">
@@ -469,8 +418,9 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                             <Input
                                 placeholder="Ex: 1.2.3.01.0001"
-                                value={sessionAccountCodes[item.id] || ''}
-                                onChange={(e) => handleAccountCodeChange(item.id, e.target.value)}
+                                defaultValue={persistedAccountCodes[item.id]?.accountCode || ''}
+                                onBlur={(e) => handleAccountCodeChange(item.id, e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                                 className="h-8"
                             />
                         </div>
@@ -517,7 +467,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         });
     
         return baseColumns;
-    }, [imobilizadoItems, activeTab, sessionAccountCodes, handleAccountCodeChange, handleClassificationChange, toast]);
+    }, [imobilizadoItems, activeTab, allPersistedData, competence, toast, handleAccountCodeChange, handleClassificationChange]);
 
     if (!initialAllItems || initialAllItems.length === 0) {
         return (
@@ -568,7 +518,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                             <Building className="h-8 w-8 text-primary" />
                             <div>
                                 <CardTitle className="font-headline text-2xl">Análise de Imobilizado (Competência: {competence})</CardTitle>
-                                <CardDescription>Classifique os itens. Clique nas linhas para selecionar múltiplos itens e use a barra de ações. Suas escolhas serão guardadas ao clicar no botão "Guardar Alterações".</CardDescription>
+                                <CardDescription>Classifique os itens. Clique nas linhas para selecionar múltiplos itens e use a barra de ações. Suas escolhas serão guardadas automaticamente.</CardDescription>
                             </div>
                         </div>
                         <div className='flex items-center gap-2'>
@@ -633,9 +583,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                                      <DataTable columns={getColumns(disregardedItems)} data={disregardedItems} />
                                 </DialogContent>
                             </Dialog>
-                            <Button onClick={handleSaveChanges} disabled={!hasChanges}>
-                                <Save className="mr-2 h-4 w-4" /> Guardar Alterações
-                            </Button>
                         </div>
                     </div>
                 </CardHeader>
@@ -677,5 +624,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         </div>
     );
 }
+
+    
 
     
