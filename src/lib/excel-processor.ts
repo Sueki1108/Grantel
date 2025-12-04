@@ -385,29 +385,27 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         if (!row || !Array.isArray(row)) return;
         
         let isHeaderRow = false;
-        // Search for "Centro de custo" in any cell of the row
+        
         for (let i = 0; i < row.length; i++) {
             const cellValue = String(row[i] || '').trim();
             if (cellValue.toLowerCase().includes('centro de custo')) {
-                // Now, search for the actual cost center name in the rest of the row
-                for (let j = i + 1; j < row.length; j++) {
-                    const nextCellValue = String(row[j] || '').trim();
-                    if (nextCellValue) {
-                        currentCostCenter = nextCellValue;
+                for (let j = i; j < row.length; j++) {
+                    const potentialName = String(row[j] || '').replace(/centro de custo/i, '').trim();
+                    if (potentialName) {
+                        currentCostCenter = potentialName;
                         costCenterSet.add(currentCostCenter);
                         costCenterHeaderRows.push({
                             'Linha Original': row.join('; '),
                             'Centro de Custo Identificado': currentCostCenter
                         });
                         isHeaderRow = true;
-                        break; // Found the name, stop searching this row
+                        break; 
                     }
                 }
-                if(isHeaderRow) break; // Found header and name, move to next row
+                if(isHeaderRow) break;
             }
         }
 
-        // If it's not a header row, check if it's a data row
         if (!isHeaderRow) {
             const itemNumberCell = String(row[0] || '').trim();
             const creditorCell = String(row[1] || '').trim();
@@ -420,7 +418,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
                 const creditorCode = creditorCodeMatch ? creditorCodeMatch[1] : '';
 
                 if (creditorCode) {
-                    const docKey = `${cleanAndToStr(documentCell)}-${credorCode}`;
+                    const docKey = `${cleanAndToStr(documentCell)}-${creditorCode}`;
                     
                     const debugInfo = { 
                         'Chave Gerada (Centro de Custo)': docKey, 
