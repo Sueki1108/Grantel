@@ -1,4 +1,3 @@
-
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import type { KeyCheckResult } from '@/components/app/key-checker';
@@ -277,7 +276,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
                 id: `${item['Chave Unica'] || ''}-${item['Item'] || ''}`,
                 uniqueItemId: `${cleanAndToStr(emitenteCnpj)}-${cleanAndToStr(codigoProduto)}`,
                 Fornecedor: header?.Fornecedor || 'N/A',
-                'CPF/CNPJ do Emitente': emitenteCnpj,
+                'CPF/CNPJ do Emitente': emitenteCnpj, // Ensure this exists
                 destUF: header?.destUF || '',
             };
         });

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, type ChangeEvent, useCallback, useEffect } from "react";
@@ -327,5 +326,3 @@ export function AdvancedAnalyses({
         </div>
     );
 }
-
-    
