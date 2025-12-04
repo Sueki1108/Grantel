@@ -212,25 +212,15 @@ const FilterDialog: React.FC<{
 export function CfopValidator({ items, competence, onPersistData, allPersistedData }: CfopValidatorProps) {
     const { toast } = useToast();
     
-    const [cfopValidations, setCfopValidations] = useState<Record<string, CfopClassification>>({});
     const [activeStatusTab, setActiveStatusTab] = useState<ValidationStatus>('unvalidated');
     const [activeCfopTabs, setActiveCfopTabs] = useState<Record<string, string>>({});
     const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
     const [bulkActionState, setBulkActionState] = useState<BulkActionState>({ classification: null, isDifal: null });
 
-
-    useEffect(() => {
-        if (competence && allPersistedData[competence]?.cfopValidations?.classifications) {
-            setCfopValidations(allPersistedData[competence].cfopValidations.classifications);
-        } else {
-            setCfopValidations({});
-        }
-    }, [competence, allPersistedData]);
-
+    const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
 
     const updateAndPersistValidations = (newValidations: Record<string, CfopClassification>) => {
-        setCfopValidations(newValidations);
         if (!competence) return;
 
         const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
@@ -409,11 +399,26 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     return (
                         <div className="flex justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                              <TooltipProvider>
-                                <Tooltip><TooltipTrigger asChild><Button variant={classification === 'correct' ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'correct' ? "bg-green-600 hover:bg-green-700 text-white" : "hover:bg-green-100 dark:hover:bg-green-900/50")} onClick={() => handleValidationChange([row.original], 'correct')}><Check className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Correto</p></TooltipContent></Tooltip>
-                                <Tooltip><TooltipTrigger asChild><Button variant={classification === 'incorrect' ? 'destructive' : 'ghost'} size="icon" className={cn("h-7 w-7", classification !== 'incorrect' && "hover:bg-red-100 dark:hover:bg-red-900/50")} onClick={() => handleValidationChange([row.original], 'incorrect')}><X className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Incorreto</p></TooltipContent></Tooltip>
-                                <Tooltip><TooltipTrigger asChild><Button variant={classification === 'verify' ? 'secondary' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'verify' ? "bg-yellow-500 hover:bg-yellow-600 text-white" : "hover:bg-yellow-100 dark:hover:bg-yellow-900/50")} onClick={() => handleValidationChange([row.original], 'verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>A Verificar</p></TooltipContent></Tooltip>
-                                <Tooltip><TooltipTrigger asChild><Button variant={isDifal ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", isDifal && "bg-primary hover:bg-primary/90")} onClick={() => handleDifalChange([row.original])}><Ticket className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>{isDifal ? 'Desmarcar DIFAL' : 'Marcar como DIFAL'}</p></TooltipContent></Tooltip>
-                                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange([row.original], 'unvalidated')}><RotateCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Limpar Validação</p></TooltipContent></Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild><Button variant={classification === 'correct' ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'correct' ? "bg-green-600 hover:bg-green-700 text-white" : "hover:bg-green-100 dark:hover:bg-green-900/50")} onClick={() => handleValidationChange([row.original], 'correct')}><Check className="h-4 w-4" /></Button></TooltipTrigger>
+                                    <TooltipContent><p>Correto</p></TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild><Button variant={classification === 'incorrect' ? 'destructive' : 'ghost'} size="icon" className={cn("h-7 w-7", classification !== 'incorrect' && "hover:bg-red-100 dark:hover:bg-red-900/50")} onClick={() => handleValidationChange([row.original], 'incorrect')}><X className="h-4 w-4" /></Button></TooltipTrigger>
+                                    <TooltipContent><p>Incorreto</p></TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild><Button variant={classification === 'verify' ? 'secondary' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'verify' ? "bg-yellow-500 hover:bg-yellow-600 text-white" : "hover:bg-yellow-100 dark:hover:bg-yellow-900/50")} onClick={() => handleValidationChange([row.original], 'verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger>
+                                    <TooltipContent><p>A Verificar</p></TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild><Button variant={isDifal ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", isDifal && "bg-primary hover:bg-primary/90")} onClick={() => handleDifalChange([row.original])}><Ticket className="h-4 w-4" /></Button></TooltipTrigger>
+                                    <TooltipContent><p>{isDifal ? 'Desmarcar DIFAL' : 'Marcar como DIFAL'}</p></TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange([row.original], 'unvalidated')}><RotateCw className="h-4 w-4" /></Button></TooltipTrigger>
+                                    <TooltipContent><p>Limpar Validação</p></TooltipContent>
+                                </Tooltip>
                             </TooltipProvider>
                         </div>
                     );
@@ -429,7 +434,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     
         items.forEach(item => {
             const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
-            const classification = cfopValidations[uniqueKey]?.classification || 'unvalidated';
+            const classification = (cfopValidations[uniqueKey]?.classification) || 'unvalidated';
             const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
             
             const cfop = item.Sienge_CFOP || 'N/A';
@@ -581,4 +586,3 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
-
