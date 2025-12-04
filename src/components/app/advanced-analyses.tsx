@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useMemo, type ChangeEvent, useCallback, useEffect } from "react";
-import * as XLSX from 'xlsx';
+import * * as XLSX from 'xlsx';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";

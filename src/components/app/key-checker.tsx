@@ -240,12 +240,12 @@ const processSpedFileInBrowser = (
             if (!line) continue;
 
             const parts = line.split('|');
-            const codeType = parts[1];
+            const regType = parts[1];
 
-            if (codeType === 'C100' || codeType === 'D100') {
+            if (regType === 'C100' || regType === 'D100') {
                 isInsideDivergentBlock = false;
                 currentDivergentKey = null;
-                const keyIndex = codeType === 'C100' ? 9 : 10;
+                const keyIndex = regType === 'C100' ? 9 : 10;
                 const key = parts.length > keyIndex ? cleanAndToStr(parts[keyIndex]) : '';
                 
                 if (key && divergentKeys.has(key)) {
@@ -260,7 +260,7 @@ const processSpedFileInBrowser = (
             }
             
             if (isInsideDivergentBlock) {
-                 if (currentDivergentKey && codeType !== 'C100' && codeType !== 'D100') {
+                 if (currentDivergentKey && regType !== 'C100' && regType !== 'D100') {
                      modifications.divergenceRemoval[currentDivergentKey].childrenLines.push({ lineNumber: i + 1, line: line });
                  }
                 continue; 
@@ -334,9 +334,9 @@ const processSpedFileInBrowser = (
         if (!originalLine) continue;
         
         const parts = originalLine.split('|');
-        const codeType = parts[1];
+        const regType = parts[1];
         
-        if (config.remove0190 && codeType === '0190') {
+        if (config.remove0190 && regType === '0190') {
             const lineToKeep1 = '|0190|un|Unidade|';
             const lineToKeep2 = '|0190|pc|Peça|';
             const trimmedLine = originalLine.trim();
@@ -351,7 +351,7 @@ const processSpedFileInBrowser = (
         let currentLine = originalLine;
         let lineWasModified = false;
         
-        if (config.fixIE && codeType === '0150' && parts.length > 7 && cnpjToIeMap.size > 0) {
+        if (config.fixIE && regType === '0150' && parts.length > 7 && cnpjToIeMap.size > 0) {
             const cnpj = cleanAndToStr(parts[5]);
             const spedIE = cleanAndToStr(parts[7]);
             const correctIE = cnpjToIeMap.get(cnpj);
@@ -363,7 +363,7 @@ const processSpedFileInBrowser = (
             }
         }
 
-        if (config.fixCteSeries && codeType === 'D100' && parts.length > 10 && cteKeyToSeriesMap.size > 0) {
+        if (config.fixCteSeries && regType === 'D100' && parts.length > 10 && cteKeyToSeriesMap.size > 0) {
             const cteKey = cleanAndToStr(parts[10]);
             const correctSeries = cteKeyToSeriesMap.get(cteKey);
             const currentSeries = parts[7];
@@ -378,7 +378,7 @@ const processSpedFileInBrowser = (
             }
         }
         
-        if (config.fixAddressSpaces && codeType === '0150' && parts.length > 12) {
+        if (config.fixAddressSpaces && regType === '0150' && parts.length > 12) {
             const addressComplement = parts[12] || '';
             if (/\s{2,}/.test(addressComplement)) {
                 parts[12] = addressComplement.replace(/\s+/g, ' ').trim();
@@ -388,8 +388,8 @@ const processSpedFileInBrowser = (
             }
         }
 
-        if (config.fixUnits && codeType) {
-            const unitFieldIndex = UNIT_FIELD_CONFIG[codeType];
+        if (config.fixUnits && regType) {
+            const unitFieldIndex = UNIT_FIELD_CONFIG[regType];
             if (unitFieldIndex && parts.length > unitFieldIndex) {
                 const currentUnit = (parts[unitFieldIndex] || '').trim().toLowerCase();
                 if (currentUnit && currentUnit !== 'un') {
@@ -401,7 +401,7 @@ const processSpedFileInBrowser = (
             }
         }
 
-        if (config.fixTruncation && codeType && TRUNCATION_CODES.has(codeType)) {
+        if (config.fixTruncation && regType && TRUNCATION_CODES.has(regType)) {
             const lastPipeIndex = currentLine.lastIndexOf('|');
             const secondLastPipeIndex = currentLine.lastIndexOf('|', lastPipeIndex - 1);
             if (lastPipeIndex > secondLastPipeIndex && secondLastPipeIndex > -1) {
@@ -431,11 +431,11 @@ const processSpedFileInBrowser = (
         modifiedLines.forEach(line => {
             if (!line) return;
             const parts = line.split('|');
-            const codeType = parts[1];
-            if (codeType) {
-                recordCounts[codeType] = (recordCounts[codeType] || 0) + 1;
+            const regType = parts[1];
+            if (regType) {
+                recordCounts[regType] = (recordCounts[regType] || 0) + 1;
 
-                const blockChar = codeType.charAt(0);
+                const blockChar = regType.charAt(0);
                 blockLineCounts[blockChar] = (blockLineCounts[blockChar] || 0) + 1;
             }
         });
@@ -444,9 +444,9 @@ const processSpedFileInBrowser = (
             let line = modifiedLines[i];
             if (!line) continue;
             const parts = line.split('|');
-            const codeType = parts[1];
+            const regType = parts[1];
             
-            if (codeType === '0990') {
+            if (regType === '0990') {
                  const expectedCount = blockLineCounts['0'] || 0;
                  if (parts.length > 2 && parseInt(parts[2], 10) !== expectedCount) {
                     const originalLine = line;
@@ -455,8 +455,8 @@ const processSpedFileInBrowser = (
                     modifications.blockCount.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
                     linesModifiedCount++;
                  }
-            } else if (codeType && codeType.endsWith('990') && codeType !== '0990') {
-                const blockChar = codeType.charAt(0);
+            } else if (regType && regType.endsWith('990') && regType !== '0990') {
+                const blockChar = regType.charAt(0);
                 const expectedCount = blockLineCounts[blockChar] || 0;
                 if (parts.length > 2 && parseInt(parts[2], 10) !== expectedCount) {
                     const originalLine = line;
@@ -465,7 +465,7 @@ const processSpedFileInBrowser = (
                     modifications.blockCount.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
                     linesModifiedCount++;
                 }
-            } else if (codeType === '9900' && parts.length > 3) {
+            } else if (regType === '9900' && parts.length > 3) {
                 const countedReg = parts[2];
                 const expectedCount = recordCounts[countedReg] || 0;
                 if (parseInt(parts[3], 10) !== expectedCount) {
@@ -475,7 +475,7 @@ const processSpedFileInBrowser = (
                     modifications.count9900.push({ lineNumber: i + 1, original: originalLine, corrected: modifiedLines[i] });
                     linesModifiedCount++;
                 }
-            } else if (codeType === '9999') {
+            } else if (regType === '9999') {
                 const expectedTotal = modifiedLines.length;
                 if (parts.length > 2 && parseInt(parts[2], 10) !== expectedTotal) {
                     const originalLine = line;
@@ -1181,3 +1181,5 @@ export function KeyChecker({
         </div>
     );
 }
+
+    

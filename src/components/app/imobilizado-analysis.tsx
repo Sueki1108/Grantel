@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
-import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
+import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Save, Settings, X, EyeOff, Copy, HelpCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
@@ -167,11 +167,11 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         if (!initialAllItems) return [];
     
         const siengeCfopMap = new Map<string, string>();
-        if (siengeData) {
+        if (siengeData && siengeData.length > 0 && siengeData[0]) {
             const h = {
-                numero: Object.keys(siengeData[0] || {}).find(k => k.toLowerCase().includes('número') || k.toLowerCase().includes('numero')),
-                cnpj: Object.keys(siengeData[0] || {}).find(k => k.toLowerCase().includes('cnpj')),
-                cfop: Object.keys(siengeData[0] || {}).find(k => k.toLowerCase() === 'cfop'),
+                numero: Object.keys(siengeData[0]).find(k => k.toLowerCase().includes('número') || k.toLowerCase().includes('numero')),
+                cnpj: Object.keys(siengeData[0]).find(k => k.toLowerCase().includes('cnpj')),
+                cfop: Object.keys(siengeData[0]).find(k => k.toLowerCase() === 'cfop'),
             };
     
             if (h.numero && h.cnpj && h.cfop) {
@@ -280,7 +280,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
 
         setSessionClassifications(newClassifications);
         setHasChanges(true);
-        setActiveTab(activeTab); // Stay on the same tab
+        setActiveTab(newClassification);
     };
 
     const handleBulkClassification = (newClassification: Classification) => {
@@ -427,7 +427,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                     );
                 }
     
-                if (id === 'Descricao CFOP' && typeof value === 'string') {
+                if (id === 'Descricao CFOP' && typeof value === 'string' && row.original.CFOP) {
                     const fullDescription = cfopDescriptions[parseInt(row.original.CFOP, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada";
                      return <TooltipProvider><Tooltip><TooltipTrigger asChild><span>{summarizedValue}</span></TooltipTrigger><TooltipContent><p>{fullDescription}</p></TooltipContent></Tooltip></TooltipProvider>;
                 }
@@ -677,3 +677,5 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         </div>
     );
 }
+
+    
