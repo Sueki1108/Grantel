@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
-import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
+import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Settings, EyeOff, Copy, HelpCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
@@ -84,7 +84,6 @@ interface ImobilizadoAnalysisProps {
 interface ClassificationTableProps {
     data: ImobilizadoItemData[];
     columns: any[];
-    classification: Classification;
     rowSelection: RowSelectionState;
     setRowSelection: React.Dispatch<React.SetStateAction<RowSelectionState>>;
     tableRef: React.MutableRefObject<ReactTable<ImobilizadoItemData> | null>;
@@ -227,9 +226,14 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
      const handleClassificationChange = (itemsToUpdate: ImobilizadoItemData[], newClassification: Classification) => {
         if (!competence) return;
         
+        // Deep copy to avoid mutation issues
         const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
-        if (!updatedPersistedData[competence]) updatedPersistedData[competence] = { classifications: {}, accountCodes: {} };
-        if (!updatedPersistedData[competence].classifications) updatedPersistedData[competence].classifications = {};
+        if (!updatedPersistedData[competence]) {
+            updatedPersistedData[competence] = { classifications: {}, accountCodes: {} };
+        }
+        if (!updatedPersistedData[competence].classifications) {
+            updatedPersistedData[competence].classifications = {};
+        }
 
         itemsToUpdate.forEach(item => {
             updatedPersistedData[competence].classifications[item.uniqueItemId] = { classification: newClassification };
@@ -237,7 +241,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
 
         onPersistData(updatedPersistedData);
         toast({ title: "Classificação atualizada!" });
-        setActiveTab(newClassification);
     };
 
     const handleBulkClassification = (newClassification: Classification) => {
@@ -271,10 +274,12 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         const persistedForCompetence = (competence && allPersistedData[competence]?.classifications) || {};
 
         imobilizadoItems.forEach(item => {
-            let classification = persistedForCompetence[item.uniqueItemId]?.classification || 'unclassified';
-            
-            // Fallback to find classification from any other competence
-            if (classification === 'unclassified') {
+            let classification: Classification = 'unclassified';
+            const persistedClassification = persistedForCompetence[item.uniqueItemId]?.classification;
+
+            if (persistedClassification) {
+                classification = persistedClassification;
+            } else {
                  for (const otherCompetence in allPersistedData) {
                     if (otherCompetence !== competence) {
                         const otherClassification = allPersistedData[otherCompetence]?.classifications?.[item.uniqueItemId]?.classification;
@@ -284,10 +289,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                         }
                     }
                 }
-            }
-            
-            if (!categories[classification]) {
-                classification = 'unclassified';
             }
             
             categories[classification].push(item);
@@ -326,11 +327,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
     };
 
     const tableRef = React.useRef<ReactTable<ImobilizadoItemData> | null>(null);
-
-    const onTabChange = (value: string) => {
-        setRowSelection({}); // Clear selection when changing tabs
-        setActiveTab(value as Classification);
-    };
     
     const columns = useMemo(() => {
         const copyToClipboard = (text: string | number, type: string) => {
@@ -464,7 +460,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         });
     
         return baseColumns;
-    }, [imobilizadoItems, activeTab, allPersistedData, competence, toast, handleAccountCodeChange, handleClassificationChange]);
+    }, [imobilizadoItems, activeTab, allPersistedData, competence, toast]);
 
 
     if (!initialAllItems || initialAllItems.length === 0) {
@@ -578,7 +574,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                                             Estes itens não estão a ser exibidos na análise principal porque o seu CFOP foi desmarcado na lista de configuração.
                                         </DialogDescription>
                                     </DialogHeader>
-                                     <DataTable columns={getColumnsWithCustomRender(disregardedItems, Object.keys(disregardedItems[0] || {}))} data={disregardedItems} />
+                                     <DataTable columns={getColumns(disregardedItems)} data={disregardedItems} />
                                 </DialogContent>
                             </Dialog>
                         </div>
@@ -586,7 +582,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 </CardHeader>
                 <CardContent>
                     <TooltipProvider>
-                        <Tabs value={activeTab} onValueChange={onTabChange} className="w-full">
+                        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Classification)} className="w-full">
                             <TabsList className="grid w-full grid-cols-5">
                                 <TabsTrigger value="unclassified" className="flex gap-2"><List />Não Classificados ({filteredItems.unclassified.length})</TabsTrigger>
                                 <TabsTrigger value="imobilizado" className="flex gap-2"><Factory />Imobilizado ({filteredItems.imobilizado.length})</TabsTrigger>
@@ -595,7 +591,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                                 <TabsTrigger value="verify" className="flex gap-2"><HelpCircle />A Verificar ({filteredItems.verify.length})</TabsTrigger>
                             </TabsList>
                             
-                            <TabsContent value="unclassified" className="mt-6">
+                             <TabsContent value="unclassified" className="mt-6">
                                 <ClassificationTable data={filteredItems.unclassified} columns={columns} {...{rowSelection, setRowSelection, tableRef}} />
                             </TabsContent>
                             <TabsContent value="imobilizado" className="mt-6">
@@ -614,7 +610,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                                 <Button onClick={() => handleDownload(filteredItems.verify, 'a-verificar')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
                                 <ClassificationTable data={filteredItems.verify} columns={columns} {...{rowSelection, setRowSelection, tableRef}} />
                             </TabsContent>
-
                         </Tabs>
                     </TooltipProvider>
                 </CardContent>
@@ -622,3 +617,5 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         </div>
     );
 }
+
+    
