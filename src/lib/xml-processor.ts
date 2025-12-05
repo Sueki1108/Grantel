@@ -191,7 +191,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
 
         if (isSaida && i === 0) {
             notaFiscal['CFOP'] = item['CFOP'];
-            notaFiscal['Alíq. ICMS (%)'] = item['Alíq. ICMS (%)'] || 0;
+            notaFiscal['Alíq. ICMS (%)'] = item['Alíq. ICMS (%)'];
         }
 
         itens.push(item);
@@ -308,6 +308,7 @@ const readFileAsText = (file: File): Promise<string> => {
             if (event.target && event.target.result instanceof ArrayBuffer) {
                 const buffer = event.target.result;
                 try {
+                    // Try UTF-8 first.
                     const decoder = new TextDecoder('utf-8', { fatal: true });
                     const text = decoder.decode(buffer);
                     if (text.includes('\uFFFD')) { // Check for the Unicode Replacement Character
@@ -316,6 +317,7 @@ const readFileAsText = (file: File): Promise<string> => {
                     resolve(text);
                 } catch (e) {
                     try {
+                        // Fallback to ISO-8859-1 if UTF-8 fails
                         const decoder = new TextDecoder('iso-8859-1');
                         resolve(decoder.decode(buffer));
                     } catch (e2) {

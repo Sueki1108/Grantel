@@ -5,8 +5,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Save, Settings, X, EyeOff, Copy, HelpCircle } from "lucide-react";
+import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
+import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Settings, EyeOff, Copy, HelpCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -20,7 +20,6 @@ import { cfopDescriptions } from '@/lib/cfop';
 import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
-import { cleanAndToStr } from '@/lib/utils';
 
 
 // Tipos
@@ -176,7 +175,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             if (h.numero && h.cnpj && h.cfop) {
                 siengeData.forEach(siengeItem => {
                     const partnerCnpj = siengeItem[h.cnpj!]
-                    const key = `${cleanAndToStr(siengeItem[h.numero!])}-${cleanAndToStr(partnerCnpj)}`;
+                    const key = `${siengeItem[h.numero!]}-${partnerCnpj}`;
                     if (!siengeCfopMap.has(key)) {
                         siengeCfopMap.set(key, siengeItem[h.cfop!]);
                     }
@@ -191,7 +190,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             })
             .map(item => {
                 const partnerCnpj = item['CPF/CNPJ do Emitente'] || item['CPF/CNPJ do Destinatário'];
-                const key = `${cleanAndToStr(item['Número da Nota'] || item['Número'] || '')}-${cleanAndToStr(partnerCnpj)}`;
+                const key = `${item['Número da Nota'] || item['Número'] || ''}-${partnerCnpj}`;
                 return {
                     ...item,
                     Sienge_CFOP: siengeCfopMap.get(key) || 'N/A',
@@ -332,7 +331,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         setRowSelection({}); // Clear selection when changing tabs
         setActiveTab(value as Classification);
     };
-
+    
     const columns = useMemo(() => {
         const copyToClipboard = (text: string | number, type: string) => {
             const textToCopy = String(text);
@@ -343,27 +342,27 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             });
         };
         const persistedAccountCodes = (competence && allPersistedData[competence]?.accountCodes) || {};
-
-
+    
         const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
             <div className="flex items-center justify-between gap-1 group">
                 <span className="truncate">{displayValue}</span>
                 <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(copyValue, typeName); }}><Copy className="h-3 w-3" /></Button>
             </div>
         );
-
+    
         const columnsToShow: (keyof ImobilizadoItemData)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'destUF', 'Alíq. ICMS (%)', 'CEST', 'Descricao CFOP', 'Valor Unitário', 'Valor Total'];
-
+    
         const baseColumns = getColumnsWithCustomRender(
             imobilizadoItems,
             columnsToShow,
             (row, id) => {
+                if(!row.original) return null;
                 const value = row.original[id as keyof typeof row.original];
                 if ((id === 'Valor Total' || id === 'Valor Unitário') && typeof value === 'number') {
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
                 }
-                if (id === 'Alíq. ICMS (%)' && typeof value === 'number') {
-                    return <div className="text-center">{value.toFixed(2)}%</div>
+                if (id === 'Alíq. ICMS (%)') {
+                    return <div className="text-center">{typeof value === 'number' ? `${value.toFixed(2)}%` : (value === null ? 'N/A' : 'N/A')}</div>;
                 }
                 
                 const summarizedValue = typeof value === 'string' && value.length > 35 ? `${value.substring(0, 35)}...` : value;
@@ -405,10 +404,8 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             enableSorting: false,
             enableHiding: false,
         });
-
-        const activeClassification = activeTab;
-
-        if (activeClassification === 'imobilizado') {
+    
+        if (activeTab === 'imobilizado') {
             baseColumns.push({
                 id: 'accountCode',
                 header: 'Código do Ativo',
@@ -468,6 +465,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
     
         return baseColumns;
     }, [imobilizadoItems, activeTab, allPersistedData, competence, toast, handleAccountCodeChange, handleClassificationChange]);
+
 
     if (!initialAllItems || initialAllItems.length === 0) {
         return (
@@ -580,7 +578,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                                             Estes itens não estão a ser exibidos na análise principal porque o seu CFOP foi desmarcado na lista de configuração.
                                         </DialogDescription>
                                     </DialogHeader>
-                                     <DataTable columns={getColumns(disregardedItems)} data={disregardedItems} />
+                                     <DataTable columns={getColumnsWithCustomRender(disregardedItems, Object.keys(disregardedItems[0] || {}))} data={disregardedItems} />
                                 </DialogContent>
                             </Dialog>
                         </div>
@@ -624,9 +622,3 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         </div>
     );
 }
-
-    
-
-    
-
-    
