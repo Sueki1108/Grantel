@@ -82,6 +82,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const nNF = getTagValue(ide, 'nNF');
     const natOp = getTagValue(ide, 'natOp');
     const dhEmiRaw = getTagValue(ide, 'dhEmi');
+    const refNFe = getTagValue(ide, 'refNFe');
     
     const emitCNPJ = getTagValue(emit, 'CNPJ');
     const emitNome = getTagValue(emit, 'xNome');
@@ -121,6 +122,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'destUF': destUF,
         'entrega_UF': entrega ? getTagValueWithoutNamespace(entrega, 'UF') : destUF,
         'entrega_Mun': entrega ? getTagValueWithoutNamespace(entrega, 'xMun') : getTagValue(enderDest, 'xMun'),
+        'refNFe': refNFe,
     };
     
     // Universal key generation based on emitter
