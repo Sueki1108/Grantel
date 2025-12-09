@@ -373,28 +373,27 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     };
 }
 
-
 export function processCostCenterData(data: any[][]): { costCenterMap: Map<string, string>; debugKeys: any[]; allCostCenters: string[]; costCenterHeaderRows: any[] } {
     const costCenterMap = new Map<string, string>();
     const debugKeys: any[] = [];
     const costCenterSet = new Set<string>();
     const costCenterHeaderRows: any[] = [];
-    let currentCostCenter = 'N/A';
 
-    if (!data || data.length === 0) {
-        return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
-    }
-
+    if (!data || data.length === 0) return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
+    
     let headerRowIndex = -1;
     let credorIndex = -1;
     let documentoIndex = -1;
 
-    for (let i = 0; i < data.length; i++) {
+    // Find the header row dynamically by looking for 'credor'/'fornecedor' and 'documento'/'nota'
+    for (let i = 0; i < Math.min(data.length, 20); i++) { // Search in the first 20 rows
         const row = data[i];
         if (row && Array.isArray(row)) {
             const lowerCaseRow = row.map(cell => String(cell || '').toLowerCase());
+            
             const credorIdx = lowerCaseRow.findIndex(cell => cell.includes('credor') || cell.includes('fornecedor'));
-            const docIdx = lowerCaseRow.findIndex(cell => cell.includes('documento') || cell.includes('nota fiscal'));
+            const docIdx = lowerCaseRow.findIndex(cell => cell.includes('documento') || cell.includes('nota'));
+
             if (credorIdx !== -1 && docIdx !== -1) {
                 headerRowIndex = i;
                 credorIndex = credorIdx;
@@ -405,9 +404,11 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     }
 
     if (headerRowIndex === -1) {
-        console.warn("Could not find header row with 'Credor' and 'Documento'");
+        console.warn("Cabeçalho com 'Credor' e 'Documento' não encontrado na planilha de Centro de Custo.");
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
+
+    let currentCostCenter = 'N/A';
 
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
@@ -436,11 +437,18 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         if (credorCell && docCell) {
              const cnpjRegex = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/;
              const cnpjMatch = String(credorCell).match(cnpjRegex);
-             const cnpj = cnpjMatch ? cnpjMatch[0] : null;
+             const cnpj = cnpjMatch ? cleanAndToStr(cnpjMatch[0]) : null;
 
              const docRegex = /(?:NFE|NFSE)\s*[\/]?\s*(\d+)/i;
              const docMatch = String(docCell).match(docRegex);
-             const docNumber = docMatch ? docMatch[1] : (String(docCell).match(/^\d+$/) ? String(docCell) : null);
+             let docNumber = docMatch ? docMatch[1] : null;
+
+             if (!docNumber) {
+                 const simpleNumMatch = String(docCell).match(/^\d+$/);
+                 if (simpleNumMatch) {
+                     docNumber = simpleNumMatch[0];
+                 }
+             }
              
              if (docNumber && cnpj) {
                 const docKey = `${cleanAndToStr(docNumber)}-${cleanAndToStr(cnpj)}`;
@@ -461,7 +469,6 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     
     return { costCenterMap, debugKeys, allCostCenters: Array.from(costCenterSet), costCenterHeaderRows };
 }
-
 
 export function generateSiengeDebugKeys(siengeData: any[]): any[] {
     if (!siengeData || siengeData.length === 0) return [];
@@ -663,5 +670,3 @@ export function runReconciliation(
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
-
-    
