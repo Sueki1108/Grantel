@@ -1,13 +1,12 @@
-
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, X, HelpCircle, RotateCw, ListFilter, Copy, Download, Factory, Wrench, HardHat, EyeOff, Settings, Ticket } from "lucide-react";
+import { Check, X, HelpCircle, RotateCw, ListFilter, Copy, Download, Factory, Wrench, HardHat, EyeOff, Settings, Ticket, Tag } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
-import type { AllClassifications } from '@/lib/types';
+import type { AllClassifications, SupplierCategory } from '@/lib/types';
 import {
   Tooltip,
   TooltipContent,
@@ -24,7 +23,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import * as XLSX from 'xlsx';
 import { Card } from '../ui/card';
 import type { RowSelectionState } from '@tanstack/react-table';
-import { cn } from '@/lib/utils';
+import { cn, cleanAndToStr } from '@/lib/utils';
+import * as LucideIcons from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { SupplierCategoryDialog } from './supplier-category-dialog';
 
 
 interface CfopValidatorProps {
@@ -327,21 +329,46 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             toast({ variant: 'destructive', title: `Falha ao copiar ${type}` });
         });
     };
+    
+    const handleSupplierCategoryChange = (supplierCnpj: string, categoryId: string | null) => {
+        if (!competence) return;
+
+        const updatedData = { ...allPersistedData };
+        if (!updatedData[competence]) {
+            updatedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {}}, supplierClassifications: {} };
+        }
+        if (!updatedData[competence].supplierClassifications) {
+             updatedData[competence].supplierClassifications = {};
+        }
+
+        updatedData[competence].supplierClassifications![supplierCnpj] = categoryId;
+        onPersistData(updatedData);
+        toast({ title: 'Fornecedor classificado!' });
+    };
+
+    const handleSaveSupplierCategories = (categories: SupplierCategory[]) => {
+         const updatedData = { ...allPersistedData };
+         updatedData.supplierCategories = categories;
+         onPersistData(updatedData);
+    };
 
     const columns = useMemo(() => {
         if (!items || items.length === 0) return [];
         const allKeys = new Set<string>();
         items.forEach(item => Object.keys(item).forEach(key => allKeys.add(key)));
 
-        const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'Centro de Custo', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
+        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'Centro de Custo', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
         const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
+        const supplierCategories = allPersistedData.supplierCategories || [];
+        const supplierClassifications = (competence && allPersistedData[competence]?.supplierClassifications) || {};
         
         return getColumnsWithCustomRender(
             items,
             columnsToShow,
             (row, id) => {
-                const value = row.original[id as keyof typeof row.original];
-                
+                const item = row.original;
+                const value = item[id as keyof typeof item];
+
                 const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
                      <div className="flex items-center justify-between gap-1">
                         <span className="truncate">{displayValue}</span>
@@ -350,12 +377,45 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                         </Button>
                     </div>
                 );
+                
+                if (id === 'Fornecedor') {
+                    const supplierCnpj = item['CPF/CNPJ do Emitente'];
+                    const supplierClassificationId = supplierClassifications[supplierCnpj];
+                    const category = supplierCategories.find(c => c.id === supplierClassificationId);
+                    
+                    const LucideIcon = category?.icon ? (LucideIcons[category.icon as keyof typeof LucideIcons] as React.ElementType) : Tag;
+                    const isBlockedCfop = category?.blockedCfops.includes(String(item.CFOP));
+
+                    return (
+                         <div className={cn("flex items-center gap-2 group/row", isBlockedCfop && "text-red-500 font-bold")}>
+                           <TooltipProvider>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <button onClick={(e) => e.stopPropagation()} className="transition-opacity">
+                                        <Tooltip><TooltipTrigger asChild>
+                                            <LucideIcon className={cn("h-4 w-4", category ? "text-primary" : "text-muted-foreground")} />
+                                        </TooltipTrigger><TooltipContent><p>{category?.name || "Sem categoria"}</p></TooltipContent></Tooltip>
+                                    </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-56 p-2" onClick={(e) => e.stopPropagation()}>
+                                     <div className="space-y-1">
+                                        {(supplierCategories || []).map(cat => (
+                                            <Button key={cat.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleSupplierCategoryChange(supplierCnpj, cat.id)}>{cat.name}</Button>
+                                        ))}
+                                        <hr className="my-1"/>
+                                        <Button variant="destructive" size="sm" className="w-full justify-start" onClick={() => handleSupplierCategoryChange(supplierCnpj, null)}>Remover Classificação</Button>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                            </TooltipProvider>
+                            {renderCellWithCopy(value, value, 'Fornecedor')}
+                        </div>
+                    );
+                }
+
 
                 if (id === 'Número da Nota') {
                     return renderCellWithCopy(value, value, 'Número da Nota');
-                }
-                if (id === 'Fornecedor') {
-                    return renderCellWithCopy(value, value, 'Fornecedor');
                 }
                  if (id === 'Descrição') {
                     const summarizedDesc = typeof value === 'string' && value.length > 30 ? `${value.substring(0, 30)}...` : value;
@@ -484,7 +544,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                         <div className="h-6 border-l" />
                         
                         <div className="flex gap-1">
-                             <Button size="sm" className={cn("bg-secondary text-secondary-foreground", bulkActionState.classification === 'correct' && "bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'correct'}))}><Check className="mr-2 h-4 w-4" /> Correto</Button>
+                            <Button size="sm" className={cn("bg-secondary text-secondary-foreground", bulkActionState.classification === 'correct' && "bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'correct'}))}><Check className="mr-2 h-4 w-4" /> Correto</Button>
                             <Button size="sm" className={cn("bg-secondary text-secondary-foreground", bulkActionState.classification === 'incorrect' && "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-100")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'incorrect'}))}><X className="mr-2 h-4 w-4" /> Incorreto</Button>
                             <Button size="sm" className={cn("bg-secondary text-secondary-foreground", bulkActionState.classification === 'verify' && "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
                             <Button size="sm" variant="outline" onClick={() => setBulkActionState(prev => ({...prev, classification: 'unvalidated'}))}><RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
@@ -496,12 +556,18 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             )}
             
             <Tabs value={activeStatusTab} onValueChange={(val) => setActiveStatusTab(val as ValidationStatus)} className="w-full">
-                <TabsList className="grid w-full grid-cols-5">
-                     {statusTabs.map(({status, label}) => {
-                         const count = Object.values(itemsByStatus[status] || {}).flat().length;
-                         return <TabsTrigger key={status} value={status} disabled={count === 0}>{label} ({count})</TabsTrigger>
-                     })}
-                </TabsList>
+                 <div className="flex justify-between items-center mb-2">
+                    <TabsList className="grid w-full grid-cols-5">
+                        {statusTabs.map(({status, label}) => {
+                            const count = Object.values(itemsByStatus[status] || {}).flat().length;
+                            return <TabsTrigger key={status} value={status} disabled={count === 0}>{label} ({count})</TabsTrigger>
+                        })}
+                    </TabsList>
+                     <SupplierCategoryDialog 
+                        categories={allPersistedData.supplierCategories || []} 
+                        onSave={handleSaveSupplierCategories}
+                     />
+                </div>
                 {statusTabs.map(({ status }) => {
                     const cfopGroupsForStatus = itemsByStatus[status] || {};
                     const allCfopsForStatus = Object.keys(cfopGroupsForStatus).sort((a,b) => parseInt(a,10) - parseInt(b,10));
@@ -597,4 +663,3 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
-

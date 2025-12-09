@@ -1,3 +1,5 @@
+import { KeyCheckResult } from "@/components/app/key-checker";
+import { ReconciliationResults, SpedCorrectionResult, SpedInfo } from "./excel-processor";
 
 export type SaidaStatus = 'emitida' | 'cancelada' | 'inutilizada';
 
@@ -25,3 +27,44 @@ export type SpedDuplicate = {
     'Valor Total': number;
     'Linhas': string;
 };
+
+export type Classification = 'unclassified' | 'imobilizado' | 'uso-consumo' | 'utilizado-em-obra' | 'verify';
+
+export type SupplierCategory = {
+    id: string;
+    name: string;
+    icon: string;
+    blockedCfops: string[];
+};
+
+export type DifalStatus = 'subject-to-difal' | 'disregard';
+
+export interface AllClassifications {
+    supplierCategories?: SupplierCategory[];
+    [competence: string]: {
+        classifications: {
+            [uniqueItemId: string]: { classification: Classification };
+        };
+        accountCodes: {
+            [itemLineId: string]: { accountCode: string };
+        };
+        cfopValidations: {
+            classifications: {
+                [uniqueKey: string]: {
+                    classification: 'correct' | 'incorrect' | 'verify' | 'unvalidated';
+                    isDifal?: boolean;
+                }
+            }
+        },
+        difalValidations?: {
+            classifications: {
+                [uniqueKey: string]: {
+                    status: DifalStatus;
+                }
+            }
+        },
+        supplierClassifications?: {
+            [supplierCnpj: string]: string | null; // categoryId or null
+        }
+    }
+}
