@@ -417,8 +417,9 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             const isDataRow = /^\d+$/.test(itemNumberCell) && creditorCell && documentCell;
 
             if (isDataRow) {
-                const credorCnpjMatch = creditorCell.match(/\d{14}/);
-                const credorCnpj = credorCnpjMatch ? credorCnpjMatch[0] : null;
+                // Corrected logic to extract CNPJ reliably
+                const cnpjMatch = creditorCell.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/) || creditorCell.match(/\d{14}/);
+                const credorCnpj = cnpjMatch ? cnpjMatch[0] : null;
                 
                 if (credorCnpj) {
                     const docKey = `${cleanAndToStr(documentCell)}-${cleanAndToStr(credorCnpj)}`;
@@ -469,7 +470,7 @@ export function generateSiengeDebugKeys(siengeData: any[]): any[] {
         return {
             'Chave Gerada (Sienge)': docKey,
             'Documento Original': documento,
-            'Credor Original': item[h.credor!],
+            'Credor Original': item[h.credor!] || 'N/A',
             'CNPJ Original': cnpj,
         };
     });
@@ -641,6 +642,3 @@ export function runReconciliation(
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
-
-    
-
