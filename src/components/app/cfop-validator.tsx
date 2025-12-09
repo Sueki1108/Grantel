@@ -404,9 +404,8 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                             size="icon"
                                             className={cn(
                                                 "h-7 w-7",
-                                                classification === 'correct'
-                                                    ? "bg-green-600 hover:bg-green-700 text-white"
-                                                    : "text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50"
+                                                classification === 'correct' && "bg-green-600 text-white hover:bg-green-700",
+                                                classification !== 'correct' && "text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50"
                                             )}
                                             onClick={() => handleValidationChange([row.original], 'correct')}
                                         >
@@ -546,7 +545,10 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                                 
                                                 const isTabDisabled = filteredCount === 0 && totalItemsInCfop > 0;
 
-                                                return <TabsTrigger key={`${status}-${cfop}`} value={cfop} disabled={isTabDisabled}>{cfop} ({filteredCount})</TabsTrigger>
+                                                if (totalItemsInCfop > 0 && !isTabDisabled) {
+                                                    return <TabsTrigger key={`${status}-${cfop}`} value={cfop}>{cfop} ({filteredCount})</TabsTrigger>
+                                                }
+                                                return <TabsTrigger key={`${status}-${cfop}`} value={cfop} disabled>{cfop} ({totalItemsInCfop})</TabsTrigger>
                                             })}
                                         </TabsList>
                                          <Button onClick={() => handleDownload(Object.values(cfopGroupsForStatus).flat(), `Validacao_${status}`)} size="sm" variant="outline" disabled={Object.values(cfopGroupsForStatus).flat().length === 0}>
@@ -598,5 +600,3 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
-
-    
