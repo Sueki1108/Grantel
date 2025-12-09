@@ -255,10 +255,11 @@ export function ReconciliationAnalysis({
                         {reconciliationResults ? (
                             <div className="mt-6">
                                 <Tabs defaultValue="reconciled">
-                                    <TabsList className="grid w-full grid-cols-3">
+                                    <TabsList className="grid w-full grid-cols-4">
                                         <TabsTrigger value="reconciled">Conciliados ({reconciliationResults.reconciled.length})</TabsTrigger>
                                         <TabsTrigger value="onlyInSienge">Apenas no Sienge ({reconciliationResults.onlyInSienge.length})</TabsTrigger>
                                         <TabsTrigger value="onlyInXml">Apenas no XML ({reconciliationResults.onlyInXml.length})</TabsTrigger>
+                                        <TabsTrigger value="otherSiengeItems">Outros Lançamentos Sienge</TabsTrigger>
                                     </TabsList>
                                     <div className="mt-4">
                                         <TabsContent value="reconciled">
@@ -272,6 +273,21 @@ export function ReconciliationAnalysis({
                                         <TabsContent value="onlyInXml">
                                             <Button onClick={() => handleDownload(reconciliationResults.onlyInXml, 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
                                             <DataTable columns={getColumnsForDivergentTabs(reconciliationResults.onlyInXml)} data={reconciliationResults.onlyInXml} />
+                                        </TabsContent>
+                                        <TabsContent value="otherSiengeItems">
+                                             <Tabs defaultValue={Object.keys(reconciliationResults.otherSiengeItems)[0]} className="w-full">
+                                                <TabsList>
+                                                    {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
+                                                        <TabsTrigger key={esp} value={esp}>{esp} ({items.length})</TabsTrigger>
+                                                    ))}
+                                                </TabsList>
+                                                {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
+                                                    <TabsContent key={esp} value={esp} className='mt-4'>
+                                                         <Button onClick={() => handleDownload(items, `Outros_Sienge_${esp}`)} size="sm" className="mb-4" disabled={items.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                                         <DataTable columns={getColumns(items)} data={items} />
+                                                    </TabsContent>
+                                                ))}
+                                            </Tabs>
                                         </TabsContent>
                                     </div>
                                 </Tabs>
@@ -332,6 +348,55 @@ interface DifalItemsAnalysisProps {
     onClassificationChange: (items: any[], newStatus: DifalStatus) => void;
 }
 
+const getDifalColumns = (
+    items: any[],
+    competence: string | null,
+    allClassifications: AllClassifications,
+    onClassificationChange: (items: any[], newStatus: DifalStatus) => void
+): ColumnDef<any>[] => {
+    
+    const currencyCellRenderer = (row: any, id: string) => (
+        <div className='text-right'>{Number(row.original[id] || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+    );
+    const leftAlignedCellRenderer = (row: any, id: string) => (
+        <div>{row.original[id]}</div>
+    );
+
+    const columns: ColumnDef<any>[] = getColumnsWithCustomRender(
+        items, 
+        ['Fornecedor', 'Número da Nota', 'Descrição', 'Centro de Custo', 'NCM', 'CFOP', 'Valor Total'],
+        (row, id) => {
+            if (id === 'Valor Total') return currencyCellRenderer(row, id);
+            return leftAlignedCellRenderer(row, id);
+        }
+    );
+
+    columns.push({
+        id: 'actions',
+        header: 'Ações',
+        cell: ({row}) => {
+             const itemKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
+             const status = (competence && allClassifications[competence]?.difalValidations?.classifications[itemKey]?.status) || 'subject-to-difal';
+
+            return (
+                <div className="flex gap-1 justify-center">
+                    <TooltipProvider>
+                        {status !== 'disregard' && (
+                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onClassificationChange([row.original], 'disregard')}><X className="h-4 w-4 text-red-600"/></Button></TooltipTrigger><TooltipContent><p>Desconsiderar</p></TooltipContent></Tooltip>
+                        )}
+                        {status === 'disregard' && (
+                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onClassificationChange([row.original], 'subject-to-difal')}><RotateCw className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent><p>Reverter para Sujeito ao DIFAL</p></TooltipContent></Tooltip>
+                        )}
+                    </TooltipProvider>
+                </div>
+            )
+        }
+    });
+
+    return columns;
+};
+
+
 function DifalItemsAnalysis({ items, allClassifications, competence, onClassificationChange }: DifalItemsAnalysisProps) {
     
     const { subject, disregarded } = useMemo(() => {
@@ -353,33 +418,10 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
         return { subject, disregarded };
     }, [items, allClassifications, competence]);
 
-    const difalColumns = useMemo(() => {
-        const baseCols = getColumns(items.length > 0 ? items : [{}]);
-        
-        baseCols.push({
-            id: 'actions',
-            header: 'Ações',
-            cell: ({row}) => {
-                 const itemKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
-                 const status = (competence && allClassifications[competence]?.difalValidations?.classifications[itemKey]?.status) || 'subject-to-difal';
-
-                return (
-                    <div className="flex gap-1 justify-center">
-                        <TooltipProvider>
-                            {status !== 'disregard' && (
-                                 <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onClassificationChange([row.original], 'disregard')}><X className="h-4 w-4 text-red-600"/></Button></TooltipTrigger><TooltipContent><p>Desconsiderar</p></TooltipContent></Tooltip>
-                            )}
-                            {status === 'disregard' && (
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onClassificationChange([row.original], 'subject-to-difal')}><RotateCw className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent><p>Reverter para Sujeito ao DIFAL</p></TooltipContent></Tooltip>
-                            )}
-                        </TooltipProvider>
-                    </div>
-                )
-            }
-        });
-        return baseCols;
-
-    }, [items, onClassificationChange, competence, allClassifications]);
+    const difalColumns = useMemo(
+        () => getDifalColumns(items, competence, allClassifications, onClassificationChange),
+        [items, competence, allClassifications, onClassificationChange]
+    );
 
 
     if (items.length === 0) {
@@ -450,5 +492,4 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
         </Card>
     )
 }
-
     
