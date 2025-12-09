@@ -1,4 +1,5 @@
 
+
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import type { KeyCheckResult } from '@/components/app/key-checker';
@@ -387,15 +388,15 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
 
     data.forEach(row => {
         if (!row || !Array.isArray(row)) return;
-        
+
         let isHeaderRow = false;
-        
-        // Check for header row
-        for (let i = 0; i < row.length; i++) {
-            const cellValue = String(row[i] || '').trim();
-            if (cellValue.toLowerCase().includes('centro de custo')) {
-                for (let j = i; j < row.length; j++) {
-                    const potentialName = String(row[j] || '').replace(/centro de custo/i, '').replace(/:/g, '').trim();
+        const rowAsString = row.join(';').toLowerCase();
+
+        if (rowAsString.includes('centro de custo')) {
+            for (let i = 0; i < row.length; i++) {
+                const cellValue = String(row[i] || '').trim();
+                if (cellValue.toLowerCase().includes('centro de custo')) {
+                    const potentialName = cellValue.replace(/centro de custo/i, '').replace(/:/g, '').trim();
                     if (potentialName && potentialName.length > 1) {
                         currentCostCenter = potentialName;
                         costCenterSet.add(currentCostCenter);
@@ -407,7 +408,6 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
                         break; 
                     }
                 }
-                if(isHeaderRow) break;
             }
         }
 
@@ -420,14 +420,18 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             const isDataRow = /^\d+$/.test(itemNumberCell) && creditorCell && documentCell;
 
             if (isDataRow) {
-                 // Flexible CNPJ extraction
+                // Flexible CNPJ extraction
                 const cnpjRegex = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/;
                 const cnpjMatch = creditorCell.match(cnpjRegex);
                 const credorCnpj = cnpjMatch ? cnpjMatch[0] : null;
+
+                const docNumberMatch = documentCell.match(/\d+/);
+                const docNumber = docNumberMatch ? docNumberMatch[0] : null;
                 
-                if (credorCnpj) {
+                if (credorCnpj && docNumber) {
                     const cleanCnpj = cleanAndToStr(credorCnpj);
-                    const docKey = `${cleanAndToStr(documentCell)}-${cleanCnpj}`;
+                    const cleanDocNumber = cleanAndToStr(docNumber);
+                    const docKey = `${cleanDocNumber}-${cleanCnpj}`;
                     
                     const debugInfo = { 
                         'Chave Gerada (Centro de Custo)': docKey, 
@@ -632,7 +636,6 @@ export function runReconciliation(
                 const foundInSienge = siengeData.some(siengeRow => {
                     const siengeDocNumber = cleanAndToStr(siengeRow[h.numero!]);
                     const siengeCnpjClean = cleanAndToStr(siengeRow[h.cnpj!]);
-                    // A chave referenciada no XML de devolução é a chave de acesso completa, não o número da nota.
                     return originalKeyClean === `${siengeDocNumber}${siengeCnpjClean}`;
                 });
                 return {
