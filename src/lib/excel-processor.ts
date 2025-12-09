@@ -389,14 +389,12 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     let credorIndex = -1;
     let documentoIndex = -1;
 
-    // Encontra a linha de cabeçalho e os índices das colunas de forma flexível
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
         if (row && Array.isArray(row)) {
             const lowerCaseRow = row.map(cell => String(cell || '').toLowerCase());
             const credorIdx = lowerCaseRow.findIndex(cell => cell.includes('credor') || cell.includes('fornecedor'));
             const docIdx = lowerCaseRow.findIndex(cell => cell.includes('documento') || cell.includes('nota fiscal'));
-
             if (credorIdx !== -1 && docIdx !== -1) {
                 headerRowIndex = i;
                 credorIndex = credorIdx;
@@ -407,14 +405,14 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     }
 
     if (headerRowIndex === -1) {
+        console.warn("Could not find header row with 'Credor' and 'Documento'");
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
-
 
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
         if (!row || !Array.isArray(row) || row.every(cell => cell === null || cell === '')) continue;
-
+        
         const rowAsString = row.join(';').toLowerCase();
         
         if (rowAsString.includes('centro de custo')) {
@@ -440,7 +438,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
              const cnpjMatch = String(credorCell).match(cnpjRegex);
              const cnpj = cnpjMatch ? cnpjMatch[0] : null;
 
-             const docRegex = /(?:NFE|NFSE)\s*\/?\s*(\d+)/i;
+             const docRegex = /(?:NFE|NFSE)\s*[\/]?\s*(\d+)/i;
              const docMatch = String(docCell).match(docRegex);
              const docNumber = docMatch ? docMatch[1] : (String(docCell).match(/^\d+$/) ? String(docCell) : null);
              
@@ -463,7 +461,6 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     
     return { costCenterMap, debugKeys, allCostCenters: Array.from(costCenterSet), costCenterHeaderRows };
 }
-
 
 
 export function generateSiengeDebugKeys(siengeData: any[]): any[] {
@@ -666,3 +663,5 @@ export function runReconciliation(
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
+
+    
