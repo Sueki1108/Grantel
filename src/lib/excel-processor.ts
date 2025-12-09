@@ -383,7 +383,9 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
 
     let credorIndex = -1;
     let docIndex = -1;
+    let headerRowIndex = -1;
 
+    // Find header row and indexes
     for (let i = 0; i < Math.min(data.length, 20); i++) {
         const row = data[i];
         if (row && Array.isArray(row)) {
@@ -394,6 +396,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             if (credorIdx !== -1 && docIdx !== -1) {
                 credorIndex = credorIdx;
                 docIndex = docIdx;
+                headerRowIndex = i;
                 break;
             }
         }
@@ -423,6 +426,9 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             continue;
         }
 
+        // Only process rows after the header
+        if (i <= headerRowIndex) continue;
+
         const credorCell = row[credorIndex];
         const docCell = row[docIndex];
         
@@ -430,8 +436,8 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             const credorCodeMatch = String(credorCell).match(/^(\d+)/);
             const credorCode = credorCodeMatch ? credorCodeMatch[1] : null;
 
-            const docNumberMatch = String(docCell).match(/(?:NFSE?|NFE|CTE)\s*\/?\s*(\d+)/i) || String(docCell).match(/^(\d+)$/);
-            const docNumber = docNumberMatch ? docNumberMatch[1] : null;
+            const docNumberMatch = String(docCell).match(/(?:NFSE?|NFE|CTE)\s*\/?\s*(\d+)|(^\d+$)/);
+            const docNumber = docNumberMatch ? (docNumberMatch[1] || docNumberMatch[2]) : null;
 
             if (docNumber && credorCode) {
                 const docKey = `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCode)}`;
@@ -463,8 +469,8 @@ export function generateSiengeDebugKeys(siengeData: any[]): any[] {
     };
 
     const h = {
-        credor: findHeader(siengeData, ['credor', 'fornecedor', 'nome do fornecedor']),
-        documento: findHeader(siengeData, ['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
+        credor: findHeader(siengeData, ['credor', 'fornecedor']),
+        documento: findHeader(siengeData, ['documento', 'número', 'numero', 'notafiscal']),
     };
 
     if (!h.documento || !h.credor) {
@@ -486,7 +492,6 @@ export function generateSiengeDebugKeys(siengeData: any[]): any[] {
         };
     });
 }
-
 
 export function runReconciliation(
     siengeData: any[] | null,
@@ -523,28 +528,8 @@ export function runReconciliation(
         if (!hSienge.documento || !hSienge.credor || !hSienge.valorTotal) {
             throw new Error("Não foi possível encontrar as colunas essenciais ('Documento', 'Credor', 'Valor Total') na planilha Sienge.");
         }
-
-        const cnpjToCredorCodeMap = new Map<string, string>();
-        siengeData.forEach(siengeItem => {
-            const credorCell = siengeItem[hSienge.credor!];
-            if (!credorCell) return;
-            const credorCodeMatch = String(credorCell).match(/^(\d+)/);
-            const credorCode = credorCodeMatch ? credorCodeMatch[1] : null;
-            const cnpjMatch = String(credorCell).match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/);
-            const cnpj = cnpjMatch ? cleanAndToStr(cnpjMatch[0]) : null;
-            if(cnpj && credorCode && !cnpjToCredorCodeMap.has(cnpj)){
-                cnpjToCredorCodeMap.set(cnpj, credorCode);
-            }
-        });
-
-
-        const getXmlComparisonKey = (item: any): string | null => {
-            const docNumber = item['Número da Nota'];
-            const emitterCnpj = cleanAndToStr(item['CPF/CNPJ do Emitente']);
-            const credorCode = cnpjToCredorCodeMap.get(emitterCnpj);
-            if (!docNumber || !credorCode) return null;
-            return `${cleanAndToStr(docNumber)}-${credorCode}`;
-        };
+        
+        const nfeHeaderMap = new Map((nfeEntradas || []).map(n => [n['Chave Unica'], n]));
 
         const getSiengeComparisonKey = (siengeItem: any): string | null => {
             const docNumber = siengeItem[hSienge.documento!];
@@ -554,11 +539,22 @@ export function runReconciliation(
             if (!docNumber || !credorCode) return null;
             return `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCode)}`;
         };
-
-        const reconciled: any[] = [];
-        const stillUnmatchedSienge: any[] = [];
-        const xmlMap = new Map<string, any[]>();
         
+        const getXmlComparisonKey = (xmlItem: any): string | null => {
+            const docNumber = xmlItem['Número da Nota'];
+            const nfeHeader = nfeHeaderMap.get(xmlItem['Chave Unica']);
+            if (!nfeHeader) return null; // Only reconcile items with a valid header
+            
+            const credorCell = nfeHeader['Fornecedor'];
+            const credorCodeMatch = String(credorCell).match(/^(\d+)/);
+            const credorCode = credorCodeMatch ? credorCodeMatch[1] : null;
+
+            if (!docNumber || !credorCode) return null;
+            return `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCode)}`;
+        };
+
+
+        const xmlMap = new Map<string, any[]>();
         xmlItems.forEach(item => {
             const key = getXmlComparisonKey(item);
             if (key) {
@@ -566,10 +562,12 @@ export function runReconciliation(
                 xmlMap.get(key)!.push(item);
             }
         });
-        
-        siengeData.forEach(siengeItem => {
-            const key = getSiengeComparisonKey(siengeItem);
 
+        const reconciled: any[] = [];
+        const unmatchedSiengeItems = new Set(siengeData);
+        
+        unmatchedSiengeItems.forEach(siengeItem => {
+            const key = getSiengeComparisonKey(siengeItem);
             if (key && xmlMap.has(key)) {
                 const matchedXmlItems = xmlMap.get(key)!;
                 const siengeValor = parseFloat(String(siengeItem[hSienge.valorTotal!] || '0').replace(',', '.'));
@@ -580,12 +578,8 @@ export function runReconciliation(
 
                 if (exactMatchIndex !== -1) {
                     const matchedXmlItem = matchedXmlItems.splice(exactMatchIndex, 1)[0];
-                    if (matchedXmlItems.length === 0) {
-                        xmlMap.delete(key);
-                    }
                     
                     const costCenter = costCenterMap?.get(key) || 'N/A';
-
                     reconciled.push({ 
                         ...matchedXmlItem, 
                         Sienge_CFOP: siengeItem[hSienge.cfop!],
@@ -593,13 +587,21 @@ export function runReconciliation(
                         'Centro de Custo': costCenter,
                         'Observações': `Conciliado` 
                     });
-                    return;
+                    
+                    // Since it's matched, remove it from the set of unmatched Sienge items
+                    unmatchedSiengeItems.delete(siengeItem);
+
+                    // If a group of XML items is now empty, remove it from the map
+                    if (matchedXmlItems.length === 0) {
+                        xmlMap.delete(key);
+                    }
                 }
             }
-            stillUnmatchedSienge.push(siengeItem);
         });
 
         const remainingXml = Array.from(xmlMap.values()).flat();
+        const onlyInSienge = Array.from(unmatchedSiengeItems);
+
 
         const devolucoesEP = xmlItems
             .filter(item => {
@@ -621,11 +623,11 @@ export function runReconciliation(
                     'Valor': item['Valor Total'],
                     'Data Emissão': item.Emissão,
                     'Chave da Nota Original': originalKeyClean || 'Não encontrada no XML',
-                    'Encontrada no Sienge': foundInS-ienge ? 'Sim' : 'Não'
+                    'Encontrada no Sienge': foundInSienge ? 'Sim' : 'Não'
                 };
             });
 
-        return { reconciled, onlyInSienge: stillUnmatchedSienge, onlyInXml: remainingXml, devolucoesEP, debug: emptyResult.debug };
+        return { reconciled, onlyInSienge, onlyInXml: remainingXml, devolucoesEP, debug: emptyResult.debug };
     } catch (err: any) {
         console.error("Reconciliation Error:", err);
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
