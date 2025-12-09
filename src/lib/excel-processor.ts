@@ -280,7 +280,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
                 Fornecedor: header?.Fornecedor || 'N/A',
                 'CPF/CNPJ do Emitente': emitenteCnpj,
                 destUF: header?.destUF || '',
-                'Alíq. ICMS (%)': item['pICMS'] === undefined ? null : item['pICMS']
+                'Alíq. ICMS (%)': item['Alíq. ICMS (%)'] === undefined ? null : item['Alíq. ICMS (%)']
             };
         });
     log(`- ${imobilizados.length} itens com valor unitário > R$ 1.200 encontrados para análise de imobilizado.`);
@@ -417,8 +417,8 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             const isDataRow = /^\d+$/.test(itemNumberCell) && creditorCell && documentCell;
 
             if (isDataRow) {
-                const credorCnpjMatch = creditorCell.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/);
-                const credorCnpj = credorCnpjMatch ? credorCnpjMatch[0] : '';
+                const credorCnpjMatch = creditorCell.match(/\d{14}/);
+                const credorCnpj = credorCnpjMatch ? credorCnpjMatch[0] : null;
                 
                 if (credorCnpj) {
                     const docKey = `${cleanAndToStr(documentCell)}-${cleanAndToStr(credorCnpj)}`;
@@ -427,6 +427,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
                         'Chave Gerada (Centro de Custo)': docKey, 
                         'Documento Original': documentCell, 
                         'Credor Original': creditorCell,
+                        'CNPJ Extraído': credorCnpj,
                         'Centro de Custo': currentCostCenter
                     };
                     debugKeys.push(debugInfo);
@@ -642,3 +643,4 @@ export function runReconciliation(
 }
 
     
+
