@@ -455,19 +455,16 @@ export function runReconciliation(
                         const siengeMatches = siengeMap.get(key)!;
                         if (siengeMatches.length > 0) {
                             const siengeMatch = siengeMatches.shift()!;
-                            
-                            const numeroDocumento = siengeMatch.item[h.numero!];
-                            const cnpjCredor = cleanAndToStr(siengeMatch.item[h.cnpj!]);
-                            const costCenterKey = `${cleanAndToStr(numeroDocumento)}-${cnpjCredor}`;
-                            const costCenter = costCenterMap?.get(costCenterKey) || 'N/A';
                             const nfeHeader = nfeHeaderMap.get(item['Chave Unica']);
+                            
+                            const costCenterKey = `${cleanAndToStr(siengeMatch.item[h.numero!])}-${cleanAndToStr(siengeMatch.item[h.cnpj!])}`;
                             
                             reconciled.push({
                                 ...item,
                                 Fornecedor: nfeHeader?.Fornecedor || 'N/A',
                                 'Sienge_CFOP': siengeMatch.item[h.cfop!],
                                 'Sienge_Esp': siengeMatch.item[h.esp!],
-                                'Centro de Custo': costCenter,
+                                'Centro de Custo': costCenterMap?.get(costCenterKey) || 'N/A',
                                 'Observações': `Conciliado via ${pass.name}`
                             });
                             siengeMatchedIndices.add(siengeMatch.index);
@@ -556,7 +553,7 @@ export function processCostCenterData(costCenterData: any[][]) {
     let docIndex = -1;
     let credorIndex = -1;
     let headers: any[] = [];
-
+    
     // Tenta encontrar a linha de cabeçalho dinamicamente
     for (let i = 0; i < costCenterData.length; i++) {
         const row = costCenterData[i] || [];
@@ -611,7 +608,7 @@ export function processCostCenterData(costCenterData: any[][]) {
                     }
                 }
             }
-            debugKeys.push({
+             debugKeys.push({
                 "Chave de Comparação (Centro Custo)": key,
                 "Número Documento (Original)": docNumber,
                 "Credor (Original)": credor,
