@@ -398,15 +398,15 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                         <div className="flex justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                              <TooltipProvider>
                                 <Tooltip>
-                                    <TooltipTrigger asChild><Button variant={classification === 'correct' ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'correct' ? "bg-green-600 hover:bg-green-700 text-white" : "hover:bg-green-100 dark:hover:bg-green-900/50")} onClick={() => handleValidationChange([row.original], 'correct')}><Check className="h-4 w-4" /></Button></TooltipTrigger>
+                                    <TooltipTrigger asChild><Button variant={classification === 'correct' ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'correct' ? "bg-green-600 hover:bg-green-700 text-white" : "text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50")} onClick={() => handleValidationChange([row.original], 'correct')}><Check className="h-4 w-4" /></Button></TooltipTrigger>
                                     <TooltipContent><p>Correto</p></TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
-                                    <TooltipTrigger asChild><Button variant={classification === 'incorrect' ? 'destructive' : 'ghost'} size="icon" className={cn("h-7 w-7", classification !== 'incorrect' && "hover:bg-red-100 dark:hover:bg-red-900/50")} onClick={() => handleValidationChange([row.original], 'incorrect')}><X className="h-4 w-4" /></Button></TooltipTrigger>
+                                    <TooltipTrigger asChild><Button variant={classification === 'incorrect' ? 'destructive' : 'ghost'} size="icon" className={cn("h-7 w-7", classification !== 'incorrect' && "text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50")} onClick={() => handleValidationChange([row.original], 'incorrect')}><X className="h-4 w-4" /></Button></TooltipTrigger>
                                     <TooltipContent><p>Incorreto</p></TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
-                                    <TooltipTrigger asChild><Button variant={classification === 'verify' ? 'secondary' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'verify' ? "bg-yellow-500 hover:bg-yellow-600 text-white" : "hover:bg-yellow-100 dark:hover:bg-yellow-900/50")} onClick={() => handleValidationChange([row.original], 'verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger>
+                                    <TooltipTrigger asChild><Button variant={classification === 'verify' ? 'secondary' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'verify' ? "bg-yellow-500 hover:bg-yellow-600 text-white" : "text-yellow-600 hover:bg-yellow-100 dark:hover:bg-yellow-900/50")} onClick={() => handleValidationChange([row.original], 'verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger>
                                     <TooltipContent><p>A Verificar</p></TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
@@ -432,7 +432,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         };
     
         items.forEach(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const classification = (cfopValidations[uniqueKey]?.classification) || 'unvalidated';
             const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
             
@@ -585,3 +585,4 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
+

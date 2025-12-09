@@ -384,12 +384,11 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     let headerRowIndex = -1;
     let credorIndex = -1;
     let tituloIndex = -1;
-
+    
     for (let i = 0; i < Math.min(data.length, 20); i++) {
         const row = data[i];
         if (row && Array.isArray(row)) {
             const lowerCaseRow = row.map(cell => String(cell || '').toLowerCase());
-            
             const credorIdx = lowerCaseRow.findIndex(cell => cell && (cell.includes('credor') || cell.includes('fornecedor')));
             const tituloIdx = lowerCaseRow.findIndex(cell => cell && (cell.includes('titulo') || cell.includes('título')));
 
@@ -401,6 +400,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             }
         }
     }
+
 
     if (headerRowIndex === -1) {
         console.warn("Cabeçalho com 'Credor' e 'Título' não encontrado na planilha de Centro de Custo.");
@@ -415,16 +415,14 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         
         const rowAsString = row.join(';').toLowerCase();
         
-        if (rowAsString.includes('centro de custo')) {
-            const match = rowAsString.match(/centro de custo\s*;\s*;\s*(.*)/);
-            if (match && match[1]) {
-                currentCostCenter = match[1].trim().toUpperCase();
-                costCenterSet.add(currentCostCenter);
-                costCenterHeaderRows.push({
-                    'Linha Original': row.join('; '),
-                    'Centro de Custo Identificado': currentCostCenter
-                });
-            }
+        const ccMatch = rowAsString.match(/centro de custo\s*;\s*;\s*(.*)/);
+        if (ccMatch && ccMatch[1]) {
+            currentCostCenter = ccMatch[1].trim().toUpperCase();
+            costCenterSet.add(currentCostCenter);
+            costCenterHeaderRows.push({
+                'Linha Original': row.join('; '),
+                'Centro de Custo Identificado': currentCostCenter
+            });
             continue;
         }
         
@@ -515,11 +513,6 @@ export function runReconciliation(
             const headers = Object.keys(data[0]);
             return headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
         };
-
-        const espHeader = findHeader(siengeData, ['esp']);
-        if (!espHeader) {
-            throw new Error("Não foi possível encontrar a coluna 'Esp' na planilha Sienge para filtragem.");
-        }
         
         const nfeHeaderMap = new Map();
         [...(nfeEntradas || []), ...(cteData || [])].forEach(n => nfeHeaderMap.set(n['Chave Unica'], n));
@@ -534,21 +527,15 @@ export function runReconciliation(
             };
         });
 
-        const filteredSiengeData = siengeData.filter(row => {
-            const espValue = row[espHeader] ? String(row[espHeader]).trim().toUpperCase() : '';
-            return espValue === 'NFE' || espValue === 'NFSR' || espValue === 'CTE';
-        });
-
-        const h = {
-            cnpj: findHeader(filteredSiengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
-            titulo: findHeader(filteredSiengeData, ['título', 'titulo']),
-            valorTotal: findHeader(filteredSiengeData, ['valor total', 'valor', 'vlr total']),
-            credor: findHeader(filteredSiengeData, ['credor', 'fornecedor', 'nome do fornecedor']),
+        const hSienge = {
+            cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
+            titulo: findHeader(siengeData, ['título', 'titulo']),
+            valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total']),
             cfop: findHeader(siengeData, ['cfop']),
             esp: findHeader(siengeData, ['esp']),
         };
         
-        if (!h.titulo || !h.cnpj || !h.valorTotal) {
+        if (!hSienge.titulo || !hSienge.cnpj || !hSienge.valorTotal) {
             throw new Error("Não foi possível encontrar as colunas essenciais ('Título', 'CPF/CNPJ', 'Valor Total') na planilha Sienge.");
         }
 
@@ -559,72 +546,52 @@ export function runReconciliation(
             return `${cleanTitulo}-${cleanCnpj}`;
         };
 
-        const reconciliationPass = (
-            siengeItems: any[],
-            xmlItems: any[],
-            passName: string
-        ) => {
-            const matchedInPass: any[] = [];
-            const stillUnmatchedSienge: any[] = [];
-            const xmlMap = new Map<string, any[]>();
+        const reconciled: any[] = [];
+        const stillUnmatchedSienge: any[] = [];
+        const xmlMap = new Map<string, any[]>();
+        
+        enrichedXmlItems.forEach(item => {
+            const key = getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente']);
+            if (key) {
+                if (!xmlMap.has(key)) xmlMap.set(key, []);
+                xmlMap.get(key)!.push(item);
+            }
+        });
+        
+        siengeData.forEach(siengeItem => {
+            const key = getComparisonKey(siengeItem[hSienge.titulo!], siengeItem[hSienge.cnpj!]);
 
-            xmlItems.forEach(item => {
-                const key = getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente']);
-                if (key) {
-                    if (!xmlMap.has(key)) xmlMap.set(key, []);
-                    xmlMap.get(key)!.push(item);
-                }
-            });
+            if (key && xmlMap.has(key)) {
+                const matchedXmlItems = xmlMap.get(key)!;
+                const siengeValor = parseFloat(String(siengeItem[hSienge.valorTotal!] || '0').replace(',', '.'));
+                
+                const exactMatchIndex = matchedXmlItems.findIndex(xmlItem => 
+                    Math.abs((xmlItem['Valor Total'] || 0) - siengeValor) < 0.01
+                );
 
-            siengeItems.forEach(siengeItem => {
-                const key = getComparisonKey(siengeItem[h.titulo!], siengeItem[h.cnpj!]);
-
-                if (key && xmlMap.has(key)) {
-                    const matchedXmlItems = xmlMap.get(key)!;
-                    
-                    const siengeValor = parseFloat(String(siengeItem[h.valorTotal!] || '0').replace(',', '.'));
-
-                    const exactMatchIndex = matchedXmlItems.findIndex(xmlItem => Math.abs((xmlItem['Valor Total'] || 0) - siengeValor) < 0.01);
-
-                    if (exactMatchIndex !== -1) {
-                         const matchedXmlItem = matchedXmlItems.splice(exactMatchIndex, 1)[0];
-                        
-                        let costCenter = 'N/A';
-                         if (costCenterMap && h.titulo && h.cnpj) {
-                            const siengeTitulo = siengeItem[h.titulo!];
-                             const siengeCnpj = siengeItem[h.cnpj!];
-                             const docKey = `${cleanAndToStr(siengeTitulo)}-${cleanAndToStr(siengeCnpj)}`;
-                            if (costCenterMap.has(docKey)) {
-                                costCenter = costCenterMap.get(docKey)!;
-                            }
-                        }
-
-                        matchedInPass.push({ 
-                            ...matchedXmlItem, 
-                            Sienge_CFOP: siengeItem[h.cfop!],
-                            Sienge_Esp: siengeItem[h.esp!],
-                            'Centro de Custo': costCenter,
-                            'Observações': `Conciliado via ${passName}` 
-                        });
-
-                        if (matchedXmlItems.length === 0) xmlMap.delete(key);
-                        return;
+                if (exactMatchIndex !== -1) {
+                    const matchedXmlItem = matchedXmlItems.splice(exactMatchIndex, 1)[0];
+                    if (matchedXmlItems.length === 0) {
+                        xmlMap.delete(key);
                     }
+                    
+                    let costCenter = costCenterMap?.get(key) || 'N/A';
+
+                    reconciled.push({ 
+                        ...matchedXmlItem, 
+                        Sienge_CFOP: siengeItem[hSienge.cfop!],
+                        Sienge_Esp: siengeItem[hSienge.esp!],
+                        'Centro de Custo': costCenter,
+                        'Observações': `Conciliado` 
+                    });
+                    return; 
                 }
-                stillUnmatchedSienge.push(siengeItem);
-            });
-            
-            const stillUnmatchedXml = Array.from(xmlMap.values()).flat();
-            return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
-        };
-        
-        let { matched, remainingSienge, remainingXml } = reconciliationPass(
-            filteredSiengeData,
-            enrichedXmlItems, 
-            "Valor Total"
-        );
-        let reconciled = matched;
-        
+            }
+            stillUnmatchedSienge.push(siengeItem);
+        });
+
+        const remainingXml = Array.from(xmlMap.values()).flat();
+
         const devolucoesEP = (enrichedXmlItems || [])
             .filter(item => {
                 const cfop = cleanAndToStr(item.CFOP);
@@ -634,8 +601,8 @@ export function runReconciliation(
             .map(item => {
                 const originalKeyClean = cleanAndToStr(item['refNFe'] || '');
                 const foundInSienge = siengeData.some(siengeRow => {
-                    const siengeDocNumber = cleanAndToStr(siengeRow[h.numero!]);
-                    const siengeCnpjClean = cleanAndToStr(siengeRow[h.cnpj!]);
+                    const siengeDocNumber = cleanAndToStr(siengeRow[hSienge.numero!]);
+                    const siengeCnpjClean = cleanAndToStr(siengeRow[hSienge.cnpj!]);
                     return originalKeyClean === `${siengeDocNumber}${siengeCnpjClean}`;
                 });
                 return {
@@ -648,7 +615,7 @@ export function runReconciliation(
                 };
             });
 
-        return { reconciled, onlyInSienge: remainingSienge, onlyInXml: remainingXml, devolucoesEP, debug: emptyResult.debug };
+        return { reconciled, onlyInSienge: stillUnmatchedSienge, onlyInXml: remainingXml, devolucoesEP, debug: emptyResult.debug };
     } catch (err: any) {
         console.error("Reconciliation Error:", err);
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
