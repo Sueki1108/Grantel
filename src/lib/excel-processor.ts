@@ -412,57 +412,50 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         }
 
         if (!isHeaderRow) {
-            let docCell: string | null = null;
-            let creditorCell: string | null = null;
-            
+            let docNumber: string | null = null;
+            let credorCnpj: string | null = null;
+            let credorName: string | null = null;
+
             for (const cell of row) {
                 const cellStr = String(cell || '').trim();
-                if (cellStr.match(/^(NFE|NFSE)\s*\/?\s*\d+/i)) {
-                    docCell = cellStr;
-                } else if (cellStr.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/) || cellStr.match(/\d{14}/)) {
-                    creditorCell = cellStr;
+                
+                // Procurar por número de documento (NFE/NFSE/NUM)
+                const docMatch = cellStr.match(/(?:NFE|NFSE)\s*\/?\s*(\d+)/i);
+                if (docMatch && docMatch[1]) {
+                    docNumber = docMatch[1];
                 }
-            }
 
-            if (!docCell) { // Fallback if format is not NFSE/NUM
-                const potentialDocCell = String(row[2] || '').trim();
-                if (potentialDocCell.match(/^\d+$/)) {
-                     docCell = potentialDocCell;
-                }
-            }
-
-            if (!creditorCell) {
-                 creditorCell = String(row[1] || '').trim();
-            }
-
-
-            if (docCell && creditorCell) {
-                const docNumberMatch = docCell.match(/\d+/g);
-                const docNumber = docNumberMatch ? docNumberMatch.join('') : null;
-
+                // Procurar por CNPJ
                 const cnpjRegex = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/;
-                const cnpjMatch = creditorCell.match(cnpjRegex);
-                const credorCnpj = cnpjMatch ? cnpjMatch[0] : null;
-
-                if (docNumber && credorCnpj) {
-                    const cleanDocNumber = cleanAndToStr(docNumber);
-                    const cleanCnpj = cleanAndToStr(credorCnpj);
-                    
-                    if (cleanDocNumber && cleanCnpj) {
-                        const docKey = `${cleanDocNumber}-${cleanCnpj}`;
-                        
-                        if (!costCenterMap.has(docKey)) {
-                            costCenterMap.set(docKey, currentCostCenter);
-                        }
-
-                        debugKeys.push({
-                            'Chave Gerada (Centro de Custo)': docKey,
-                            'Documento Original': docCell,
-                            'Credor Original (Centro de Custo)': creditorCell,
-                            'Centro de Custo': currentCostCenter,
-                        });
-                    }
+                const cnpjMatch = cellStr.match(cnpjRegex);
+                if (cnpjMatch) {
+                    credorCnpj = cnpjMatch[0];
+                    credorName = cellStr;
                 }
+            }
+            
+            // Se o documento não foi encontrado no formato NFSE/NUM, tenta um fallback numérico
+            if (!docNumber && row.length > 2) {
+                 const potentialDocCell = String(row[2] || '').trim();
+                 if (potentialDocCell.match(/^\d+$/)) {
+                     docNumber = potentialDocCell;
+                 }
+            }
+
+            if (docNumber && credorCnpj && credorName) {
+                const docKey = `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCnpj)}`;
+                
+                if (!costCenterMap.has(docKey)) {
+                    costCenterMap.set(docKey, currentCostCenter);
+                }
+
+                debugKeys.push({
+                    'Chave Gerada (Centro de Custo)': docKey,
+                    'Documento Original': docNumber,
+                    'Credor (Centro de Custo)': credorName,
+                    'CNPJ Original': credorCnpj,
+                    'Centro de Custo': currentCostCenter,
+                });
             }
         }
     });
