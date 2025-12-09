@@ -115,9 +115,9 @@ export function AutomatorClientPage() {
                  const parsedData = JSON.parse(savedImobilizado);
                  if (!parsedData.supplierCategories) {
                      parsedData.supplierCategories = [
-                        { id: 'mat-construcao', name: 'Materiais de Construção', icon: 'BrickWall', blockedCfops: [] },
-                        { id: 'ferramentas', name: 'Ferramentas', icon: 'Wrench', blockedCfops: [] },
-                        { id: 'pecas-veiculos', name: 'Peças para Veículos', icon: 'Car', blockedCfops: ['1128', '2128'] },
+                        { id: 'mat-construcao', name: 'Materiais de Construção', icon: 'BrickWall', allowedCfops: [] },
+                        { id: 'ferramentas', name: 'Ferramentas', icon: 'Wrench', allowedCfops: [] },
+                        { id: 'pecas-veiculos', name: 'Peças para Veículos', icon: 'Car', allowedCfops: [] },
                     ]
                  }
                  setAllClassifications(parsedData);

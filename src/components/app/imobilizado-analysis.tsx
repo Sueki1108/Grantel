@@ -284,11 +284,12 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 const supplierCnpj = item['CPF/CNPJ do Emitente'];
                 const supplierClassificationId = supplierClassifications[supplierCnpj];
                 const supplierCategory = supplierCategories.find(c => c.id === supplierClassificationId);
-                const isBlockedCfop = supplierCategory?.blockedCfops.includes(String(item.CFOP));
+                
+                const isIncorrectCfop = supplierCategory && supplierCategory.allowedCfops.length > 0 && !supplierCategory.allowedCfops.includes(String(item.CFOP));
 
                 if (id === 'Fornecedor') {
                     return (
-                        <div className={cn("flex items-center gap-2 group/row", isBlockedCfop && "text-red-500")}>
+                        <div className={cn("flex items-center gap-2 group/row", isIncorrectCfop && "text-red-500")}>
                             {supplierCategory && <TooltipProvider><Tooltip><TooltipTrigger><Factory className="h-4 w-4" /></TooltipTrigger><TooltipContent><p>{supplierCategory.name}</p></TooltipContent></Tooltip></TooltipProvider>}
                             {renderCellWithCopy(value, value, 'Fornecedor')}
                             <Popover>
@@ -323,7 +324,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                     );
                 }
                 
-                return <div className={cn("truncate max-w-xs", isBlockedCfop && "text-red-500")}>{String(value ?? '')}</div>;
+                return <div className={cn("truncate max-w-xs", isIncorrectCfop && "text-red-500")}>{String(value ?? '')}</div>;
             }
         );
     

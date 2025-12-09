@@ -37,7 +37,7 @@ export function SupplierCategoryDialog({ categories, onSave }: SupplierCategoryD
   const handleAddNew = () => {
     setLocalCategories([
       ...localCategories,
-      { id: `new-${Date.now()}`, name: 'Nova Categoria', icon: 'Box', blockedCfops: [] }
+      { id: `new-${Date.now()}`, name: 'Nova Categoria', icon: 'Box', allowedCfops: [] }
     ]);
   };
 
@@ -53,9 +53,9 @@ export function SupplierCategoryDialog({ categories, onSave }: SupplierCategoryD
     );
   };
   
-  const handleBlockedCfopsChange = (idToUpdate: string, cfopString: string) => {
+  const handleAllowedCfopsChange = (idToUpdate: string, cfopString: string) => {
     const cfops = cfopString.split(',').map(s => s.trim()).filter(Boolean);
-    handleUpdate(idToUpdate, 'blockedCfops', cfops);
+    handleUpdate(idToUpdate, 'allowedCfops', cfops);
   };
 
   const handleSave = () => {
@@ -77,7 +77,7 @@ export function SupplierCategoryDialog({ categories, onSave }: SupplierCategoryD
         <DialogHeader>
           <DialogTitle>Gerir Categorias de Fornecedores</DialogTitle>
           <DialogDescription>
-            Adicione, edite ou remova categorias para classificar os seus fornecedores. Defina os CFOPs a serem bloqueados para cada categoria.
+            Adicione, edite ou remova categorias para classificar os seus fornecedores. Defina os CFOPs permitidos para cada categoria.
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className='h-96 pr-4'>
@@ -101,11 +101,11 @@ export function SupplierCategoryDialog({ categories, onSave }: SupplierCategoryD
                      </div>
                 </div>
                  <div className='col-span-3'>
-                    <Label>CFOPs Bloqueados (separados por vírgula)</Label>
+                    <Label>CFOPs Permitidos (separados por vírgula)</Label>
                     <Input
-                        value={category.blockedCfops.join(', ')}
-                        onChange={(e) => handleBlockedCfopsChange(category.id, e.target.value)}
-                        placeholder="Ex: 1128, 2128"
+                        value={category.allowedCfops.join(', ')}
+                        onChange={(e) => handleAllowedCfopsChange(category.id, e.target.value)}
+                        placeholder="Ex: 1551, 2551"
                     />
                 </div>
                 <div className='flex items-end h-full'>

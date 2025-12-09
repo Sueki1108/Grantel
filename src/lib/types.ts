@@ -35,7 +35,7 @@ export type SupplierCategory = {
     id: string;
     name: string;
     icon: string;
-    blockedCfops: string[];
+    allowedCfops: string[];
 };
 
 export type DifalStatus = 'subject-to-difal' | 'disregard';
