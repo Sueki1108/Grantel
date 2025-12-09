@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, X, HelpCircle, RotateCw, ListFilter, Copy, Download, Factory, Wrench, HardHat, EyeOff, Settings, Ticket, Tag } from "lucide-react";
+import { Check, X, HelpCircle, RotateCw, ListFilter, Copy, Download, Factory, Wrench, HardHat, EyeOff, Settings, Ticket, Tag, RefreshCw } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import type { AllClassifications, SupplierCategory } from '@/lib/types';
 import {
@@ -31,6 +31,7 @@ import { SupplierCategoryDialog } from './supplier-category-dialog';
 
 interface CfopValidatorProps {
     items: any[];
+    originalXmlItems: any[]; // Pass original XML items for enrichment
     competence: string | null; 
     onPersistData: (allData: AllClassifications) => void;
     allPersistedData: AllClassifications;
@@ -211,14 +212,50 @@ const FilterDialog: React.FC<{
 // ===============================================================
 
 
-export function CfopValidator({ items, competence, onPersistData, allPersistedData }: CfopValidatorProps) {
+export function CfopValidator({ items: initialItems, originalXmlItems, competence, onPersistData, allPersistedData }: CfopValidatorProps) {
     const { toast } = useToast();
     
+    const [enrichedItems, setEnrichedItems] = useState(initialItems);
     const [activeStatusTab, setActiveStatusTab] = useState<ValidationStatus>('unvalidated');
     const [activeCfopTabs, setActiveCfopTabs] = useState<Record<string, string>>({});
     const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
     const [bulkActionState, setBulkActionState] = useState<BulkActionState>({ classification: null, isDifal: null });
+
+    useEffect(() => {
+        // Reset enriched items when initial items change
+        setEnrichedItems(initialItems);
+    }, [initialItems]);
+
+    const handleEnrichData = () => {
+        if (!originalXmlItems || originalXmlItems.length === 0) {
+            toast({ variant: 'destructive', title: 'Dados XML originais não encontrados.' });
+            return;
+        }
+
+        const originalXmlItemsMap = new Map();
+        originalXmlItems.forEach(item => {
+            const key = `${item['Chave de acesso']}-${item['Item']}`;
+            originalXmlItemsMap.set(key, item);
+        });
+
+        const newEnrichedItems = enrichedItems.map(item => {
+            const key = `${item['Chave de acesso']}-${item['Item']}`;
+            const originalItem = originalXmlItemsMap.get(key);
+            if (originalItem) {
+                return {
+                    ...item,
+                    'CST do ICMS': originalItem['CST do ICMS'] ?? item['CST do ICMS'],
+                    'Alíq. ICMS (%)': originalItem['Alíq. ICMS (%)'] ?? item['Alíq. ICMS (%)'],
+                    'CEST': originalItem['CEST'] ?? item['CEST'],
+                };
+            }
+            return item;
+        });
+        
+        setEnrichedItems(newEnrichedItems);
+        toast({ title: 'Dados Enriquecidos!', description: 'As colunas de ICMS e CEST foram carregadas do XML.' });
+    };
 
     const handleValidationChange = (
         itemsToUpdate: any[],
@@ -262,7 +299,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         
         const selectedItems = selectedItemKeys.map(itemKey => {
             const uniqueKey = itemKey.replace('cfop-pending-', '');
-            return items.find(item => `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}` === uniqueKey);
+            return enrichedItems.find(item => `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}` === uniqueKey);
         }).filter(Boolean);
 
         let changedCount = 0;
@@ -353,9 +390,9 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     };
 
     const columns = useMemo(() => {
-        if (!items || items.length === 0) return [];
+        if (!enrichedItems || enrichedItems.length === 0) return [];
         const allKeys = new Set<string>();
-        items.forEach(item => Object.keys(item).forEach(key => allKeys.add(key)));
+        enrichedItems.forEach(item => Object.keys(item).forEach(key => allKeys.add(key)));
 
         const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'Centro de Custo', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
         const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
@@ -363,7 +400,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         const supplierClassifications = (competence && allPersistedData[competence]?.supplierClassifications) || {};
         
         return getColumnsWithCustomRender(
-            items,
+            enrichedItems,
             columnsToShow,
             (row, id) => {
                 const item = row.original;
@@ -384,10 +421,10 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                     const category = supplierCategories.find(c => c.id === supplierClassificationId);
                     
                     const LucideIcon = category?.icon ? (LucideIcons[category.icon as keyof typeof LucideIcons] as React.ElementType) : Tag;
-                    const isBlockedCfop = category?.blockedCfops.includes(String(item.CFOP));
+                    const isAllowedCfop = category?.allowedCfops.length === 0 || category?.allowedCfops.includes(String(item.CFOP));
 
                     return (
-                         <div className={cn("flex items-center gap-2 group/row", isBlockedCfop && "text-red-500 font-bold")}>
+                         <div className={cn("flex items-center gap-2 group/row", !isAllowedCfop && "text-red-500 font-bold")}>
                            <TooltipProvider>
                             <Popover>
                                 <PopoverTrigger asChild>
@@ -495,7 +532,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 }
             },
         ]);
-    }, [items, allPersistedData, competence, toast]);
+    }, [enrichedItems, allPersistedData, competence, toast]);
     
     const itemsByStatus = useMemo(() => {
         const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
@@ -503,7 +540,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}
         };
     
-        items.forEach(item => {
+        enrichedItems.forEach(item => {
             const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const classification = (cfopValidations[uniqueKey]?.classification) || 'unvalidated';
             const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
@@ -518,11 +555,11 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             result[classification][cfop].push(itemWithKey);
         });
         return result;
-    }, [items, competence, allPersistedData]);
+    }, [enrichedItems, competence, allPersistedData]);
 
     const numSelected = Object.keys(rowSelection).length;
     
-    if (!items || items.length === 0) {
+    if (!initialItems || initialItems.length === 0) {
         return <p className="text-center text-muted-foreground p-8">Nenhum item conciliado para validar o CFOP.</p>;
     }
     
@@ -563,10 +600,13 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                             return <TabsTrigger key={status} value={status} disabled={count === 0}>{label} ({count})</TabsTrigger>
                         })}
                     </TabsList>
-                     <SupplierCategoryDialog 
-                        categories={allPersistedData.supplierCategories || []} 
-                        onSave={handleSaveSupplierCategories}
-                     />
+                    <div className="flex gap-2 ml-4">
+                        <Button onClick={handleEnrichData} variant="outline" size="sm"><RefreshCw className="mr-2 h-4 w-4" />Carregar ICMS/CEST do XML</Button>
+                         <SupplierCategoryDialog 
+                            categories={allPersistedData.supplierCategories || []} 
+                            onSave={handleSaveSupplierCategories}
+                         />
+                    </div>
                 </div>
                 {statusTabs.map(({ status }) => {
                     const cfopGroupsForStatus = itemsByStatus[status] || {};
