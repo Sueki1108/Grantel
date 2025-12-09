@@ -96,12 +96,14 @@ export function AutomatorClientPage() {
     
     const [activeMainTab, setActiveMainTab] = useState("history");
     const [isWideMode, setIsWideMode] = useState(false);
+    const [isClient, setIsClient] = useState(false);
 
 
     // =================================================================
     // UI SETTINGS & PERSISTENCE
     // =================================================================
     useEffect(() => {
+        setIsClient(true);
         // Load UI settings from localStorage on initial load
         const wideMode = localStorage.getItem('ui-widemode') === 'true';
         setIsWideMode(wideMode);
@@ -109,7 +111,17 @@ export function AutomatorClientPage() {
         // Load imobilizado classifications from localStorage
         try {
             const savedImobilizado = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
-            if (savedImobilizado) setAllClassifications(JSON.parse(savedImobilizado));
+            if (savedImobilizado) {
+                 const parsedData = JSON.parse(savedImobilizado);
+                 if (!parsedData.supplierCategories) {
+                     parsedData.supplierCategories = [
+                        { id: 'mat-construcao', name: 'Materiais de Construção', icon: 'BrickWall', blockedCfops: [] },
+                        { id: 'ferramentas', name: 'Ferramentas', icon: 'Wrench', blockedCfops: [] },
+                        { id: 'pecas-veiculos', name: 'Peças para Veículos', icon: 'Car', blockedCfops: ['1128', '2128'] },
+                    ]
+                 }
+                 setAllClassifications(parsedData);
+            }
         } catch (e) {
             console.error("Failed to load imobilizado classifications from localStorage", e);
         }
@@ -128,13 +140,14 @@ export function AutomatorClientPage() {
 
     // Save disregarded NFS-e notes to localStorage whenever they change
     useEffect(() => {
+        if (!isClient) return;
         try {
             const notesArray = Array.from(disregardedNfseNotes);
             localStorage.setItem(DISREGARDED_NFSE_STORAGE_KEY, JSON.stringify(notesArray));
         } catch (e) {
             console.error("Failed to save disregarded NFS-e notes to localStorage", e);
         }
-    }, [disregardedNfseNotes]);
+    }, [disregardedNfseNotes, isClient]);
 
     const handleWideModeChange = (checked: boolean) => {
         setIsWideMode(checked);
@@ -693,6 +706,14 @@ export function AutomatorClientPage() {
     const nfseTabDisabled = xmlFiles.nfse.length === 0 && (!processedData || !processedData.fileNames?.nfse || processedData.fileNames.nfse.length === 0);
     const analysisTabDisabled = !processedData?.sheets['Chaves Válidas'] || processedData.sheets['Chaves Válidas'].length === 0;
     const imobilizadoTabDisabled = !processedData?.sheets['Imobilizados'] || processedData.sheets['Imobilizados'].length === 0;
+    
+    if (!isClient) {
+        return (
+            <div className="flex h-screen w-screen items-center justify-center">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            </div>
+        );
+    }
     
     return (
         <div className="min-h-screen bg-background text-foreground">
