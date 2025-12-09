@@ -561,11 +561,11 @@ export function processCostCenterData(costCenterData: any[][]) {
     let credorIndex = -1;
     let headers: any[] = [];
     
-    // Dynamically find the header row
+    // Dynamically find the header row by looking for specific column names
     for (let i = 0; i < costCenterData.length; i++) {
         const row = costCenterData[i] || [];
         const normalizedRow = row.map(cell => normalizeKey(String(cell)));
-        const docIdx = normalizedRow.indexOf('numerododocumento');
+        const docIdx = normalizedRow.indexOf('numerodocumento');
         const credorIdx = normalizedRow.indexOf('credor');
 
         if (docIdx !== -1 && credorIdx !== -1) {
@@ -578,6 +578,7 @@ export function processCostCenterData(costCenterData: any[][]) {
     }
 
     if (headerRowIndex === -1) {
+        console.warn("Cost Center: Header row not found. Searched for 'Número do Documento' and 'Credor'.");
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
     
@@ -599,8 +600,9 @@ export function processCostCenterData(costCenterData: any[][]) {
         const credor = row[credorIndex];
 
         if (docNumber && credor) {
-            const cnpjMatch = String(credor).match(/\s([\d./-]+)$/);
-            const cnpj = cnpjMatch ? cleanAndToStr(cnpjMatch[1]) : '';
+            // Assume the CNPJ is the last part of the "Credor" string
+            const credorParts = String(credor).split(' ');
+            const cnpj = cleanAndToStr(credorParts[credorParts.length - 1]);
             const key = `${cleanAndToStr(docNumber)}-${cnpj}`;
             
             let foundCostCenter = false;
@@ -611,7 +613,7 @@ export function processCostCenterData(costCenterData: any[][]) {
                     if (centerName) {
                         costCenterMap.set(key, centerName);
                         foundCostCenter = true;
-                        break;
+                        break; // Stop at the first cost center found for the row
                     }
                 }
             }

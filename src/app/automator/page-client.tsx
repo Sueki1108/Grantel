@@ -359,7 +359,7 @@ export function AutomatorClientPage() {
                 const worksheet = workbook.Sheets[sheetName];
                 const costCenterData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
     
-                const { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows } = processCostCenterData(costCenterData);
+                const { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows } = await processCostCenterData(costCenterData);
                 
                 setProcessedData(prev => ({
                     ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
