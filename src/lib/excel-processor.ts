@@ -278,7 +278,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
                 id: `${item['Chave Unica'] || ''}-${item['Item'] || ''}`,
                 uniqueItemId: `${cleanAndToStr(emitenteCnpj)}-${cleanAndToStr(codigoProduto)}`,
                 Fornecedor: header?.Fornecedor || 'N/A',
-                'CPF/CNPJ do Emitente': emitenteCnpj, // Ensure this exists
+                'CPF/CNPJ do Emitente': emitenteCnpj,
                 destUF: header?.destUF || '',
                 'Alíq. ICMS (%)': item['Alíq. ICMS (%)'] === undefined ? null : item['Alíq. ICMS (%)']
             };
@@ -392,10 +392,9 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         for (let i = 0; i < row.length; i++) {
             const cellValue = String(row[i] || '').trim();
             if (cellValue.toLowerCase().includes('centro de custo')) {
-                // Look for the name in the rest of the cells on the same row
                 for (let j = i; j < row.length; j++) {
-                    const potentialName = String(row[j] || '').replace(/centro de custo/i, '').trim();
-                    if (potentialName && potentialName.length > 1) { // Check for a meaningful name
+                    const potentialName = String(row[j] || '').replace(/centro de custo/i, '').replace(/:/g, '').trim();
+                    if (potentialName && potentialName.length > 1) {
                         currentCostCenter = potentialName;
                         costCenterSet.add(currentCostCenter);
                         costCenterHeaderRows.push({
@@ -413,7 +412,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         if (!isHeaderRow) {
             const itemNumberCell = String(row[0] || '').trim();
             const creditorCell = String(row[1] || '').trim();
-            const documentCell = String(row[3] || '').trim();
+            const documentCell = String(row[2] || '').trim();
 
             const isDataRow = /^\d+$/.test(itemNumberCell) && creditorCell && documentCell;
 
@@ -440,7 +439,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         }
     });
     
-    return { costCenterMap, debugKeys, allCostCenters: Array.from(costCenterSet), costCenterHeaderRows };
+    return { costCenterMap, debugKeys, allCostCenters: Array.from(costCenterSet), costCenterHeaderRows: [] };
 }
 
 
@@ -625,11 +624,12 @@ export function runReconciliation(
         const devolucoesEP = (enrichedXmlItems || [])
             .filter(item => {
                 const cfop = cleanAndToStr(item.CFOP);
-                return (item['Natureza da Operação']?.toUpperCase().includes('DEVOLUCAO') && (cfop.startsWith('1') || cfop.startsWith('2')))
+                const natOp = (item['Natureza da Operação'] || '').toUpperCase();
+                return natOp.includes('DEVOLUCAO') && (cfop.startsWith('1') || cfop.startsWith('2'))
             })
             .map(item => {
                 const originalKey = cleanAndToStr(item['refNFe'] || '');
-                const foundInSienge = siengeData.some(siengeRow => cleanAndToStr(siengeRow[h.numero!]) === cleanAndToStr(originalKey));
+                const foundInSienge = siengeData.some(siengeRow => cleanAndToStr(siengeRow[h.numero!]) === originalKey);
                 return {
                     'Número da Nota de Devolução': item['Número da Nota'],
                     'Fornecedor': item.Fornecedor,

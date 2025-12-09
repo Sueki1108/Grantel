@@ -97,7 +97,17 @@ export function AutomatorClientPage() {
         // Load imobilizado classifications from localStorage
         try {
             const savedImobilizado = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
-            if (savedImobilizado) setAllClassifications(JSON.parse(savedImobilizado));
+            if (savedImobilizado) {
+                 const parsedData = JSON.parse(savedImobilizado);
+                 if (!parsedData.supplierCategories) {
+                     parsedData.supplierCategories = [
+                        { id: 'mat-construcao', name: 'Materiais de Construção', icon: 'BrickWall', blockedCfops: [] },
+                        { id: 'ferramentas', name: 'Ferramentas', icon: 'Wrench', blockedCfops: [] },
+                        { id: 'pecas-veiculos', name: 'Peças para Veículos', icon: 'Car', blockedCfops: ['1128', '2128'] },
+                    ]
+                 }
+                 setAllClassifications(parsedData);
+            }
         } catch (e) {
             console.error("Failed to load imobilizado classifications from localStorage", e);
         }
