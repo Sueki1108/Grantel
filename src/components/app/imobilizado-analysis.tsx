@@ -22,7 +22,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { SupplierCategoryDialog } from './supplier-category-dialog';
 import { cn } from '@/lib/utils';
 import type { AllClassifications, Classification, SupplierCategory } from '@/lib/types';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '../ui/input';
 
 
@@ -143,9 +142,21 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
 
     const imobilizadoItems = useMemo(() => {
         if (!initialAllItems) return [];
+        const siengeItemMap = new Map();
+        if (siengeData) {
+            siengeData.forEach(sItem => {
+                const key = `${sItem['Chave de acesso']}-${sItem['Item']}`;
+                siengeItemMap.set(key, sItem);
+            });
+        }
+        
         return initialAllItems.map(item => {
             const emitenteCnpj = item['CPF/CNPJ do Emitente'] || '';
             const codigoProduto = item['Código'] || '';
+            const key = `${item['Chave de acesso']}-${item['Item']}`;
+            const siengeItem = siengeItemMap.get(key);
+            
+            const finalCfop = siengeItem?.Sienge_CFOP || item.CFOP;
 
             return {
                 ...item,
@@ -153,9 +164,11 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 uniqueItemId: `${emitenteCnpj}-${codigoProduto}`,
                 Fornecedor: item.Fornecedor || 'N/A',
                 'CPF/CNPJ do Emitente': emitenteCnpj,
+                CFOP: finalCfop, 
+                Sienge_CFOP: siengeItem?.Sienge_CFOP || 'N/A',
             };
         });
-    }, [initialAllItems]);
+    }, [initialAllItems, siengeData]);
 
     
     const filteredItems = useMemo(() => {
@@ -230,7 +243,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             </div>
         );
     
-        const columnsToShow = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Valor Unitário', 'Valor Total'];
+        const columnsToShow = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Valor Unitário', 'Valor Total'];
     
         const baseColumns = getColumnsWithCustomRender(
             imobilizadoItems,
