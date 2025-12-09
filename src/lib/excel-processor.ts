@@ -558,7 +558,7 @@ export function runReconciliation(
         ) => {
             const matchedInPass: any[] = [];
             const stillUnmatchedSienge: any[] = [];
-            const xmlMap = new Map<string, any[]>();
+            const xmlMap = new Map<string, any,any>();
 
             xmlItems.forEach(item => {
                 const key = getXmlKeyFn(item);
@@ -609,7 +609,7 @@ export function runReconciliation(
             return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
         };
         
-        result = reconciliationPass(
+        const result = reconciliationPass(
             remainingSiengeItems,
             remainingXmlItems, 
             (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]),
@@ -643,3 +643,5 @@ export function runReconciliation(
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
+
+    
