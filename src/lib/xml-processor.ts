@@ -82,7 +82,9 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const nNF = getTagValue(ide, 'nNF');
     const natOp = getTagValue(ide, 'natOp');
     const dhEmiRaw = getTagValue(ide, 'dhEmi');
-    const refNFe = getTagValue(ide, 'refNFe');
+    const finNFe = getTagValue(ide, 'finNFe'); // Finalidade da NF-e
+    const nfRefNode = ide.getElementsByTagNameNS(NFE_NAMESPACE, 'NFref')[0];
+    const refNFe = nfRefNode ? getTagValue(nfRefNode, 'refNFe') : '';
     
     const emitCNPJ = getTagValue(emit, 'CNPJ');
     const emitNome = getTagValue(emit, 'xNome');
@@ -118,6 +120,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         'Total': parseFloat(vNF) || 0,
         'Status': status,
         'Natureza da Operação': natOp,
+        'finNFe': finNFe,
         'infCpl': infCpl,
         'destUF': destUF,
         'entrega_UF': entrega ? getTagValueWithoutNamespace(entrega, 'UF') : destUF,

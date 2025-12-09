@@ -13,6 +13,7 @@ export interface SaidaItem {
     'CFOP'?: string;
     'Base ICMS'?: number;
     'Alíq. ICMS (%)'?: number;
+    'CST do ICMS'?: string;
     'Valor ICMS'?: number;
     'Total'?: number;
 }
@@ -67,4 +68,13 @@ export interface AllClassifications {
             [supplierCnpj: string]: string | null; // categoryId or null
         }
     }
+}
+
+export interface DevolucaoClienteItem {
+    'Número da Nota de Devolução': string;
+    'Fornecedor': string;
+    'Valor': number;
+    'Data Emissão': string;
+    'Chave da Nota Original': string;
+    'Status Sienge': 'Lançada' | 'Não Lançada';
 }
