@@ -525,6 +525,41 @@ export function AutomatorClientPage() {
         XLSX.writeFile(workbook, fileName);
     };
 
+    const handleDownloadDebugKeys = async () => {
+        if (!processedData || (!processedData.siengeDebugKeys?.length && !processedData.costCenterDebugKeys?.length)) {
+            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar' });
+            return;
+        }
+    
+        const XLSX = await import('xlsx');
+        const wb = XLSX.utils.book_new();
+        let generated = false;
+    
+        if (processedData.costCenterDebugKeys && processedData.costCenterDebugKeys.length > 0) {
+            const ws = XLSX.utils.json_to_sheet(processedData.costCenterDebugKeys);
+            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Centro_Custo");
+            generated = true;
+        }
+
+        if (processedData.costCenterHeaderRows && processedData.costCenterHeaderRows.length > 0) {
+            const ws = XLSX.utils.json_to_sheet(processedData.costCenterHeaderRows);
+            XLSX.utils.book_append_sheet(wb, ws, "Centros de Custo Encontrados");
+            generated = true;
+        }
+    
+        if (processedData.siengeDebugKeys && processedData.siengeDebugKeys.length > 0) {
+            const ws = XLSX.utils.json_to_sheet(processedData.siengeDebugKeys);
+            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
+            generated = true;
+        }
+    
+        if (generated) {
+            XLSX.writeFile(wb, "Grantel_Debug_Chaves_Conciliacao.xlsx");
+            toast({ title: 'Ficheiro de Depuração Gerado' });
+        } else {
+            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar' });
+        }
+    };
 
     // =================================================================
     // MAIN PROCESSING & CHILD CALLBACKS
@@ -910,6 +945,7 @@ export function AutomatorClientPage() {
                                 isReconciliationRunning={processing}
                                 allClassifications={allClassifications}
                                 onPersistClassifications={handlePersistClassifications}
+                                onDownloadDebugKeys={handleDownloadDebugKeys}
                                 competence={competence}
                             /> 
                             : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a conciliação.</p></CardContent></Card>
@@ -1006,5 +1042,3 @@ export function AutomatorClientPage() {
         </div>
     );
 }
-
-    

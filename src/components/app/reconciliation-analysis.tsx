@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { type ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, X, RotateCw, HelpCircle, FileDown, Database, Undo2 } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, X, RotateCw, HelpCircle, FileDown, Database } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
@@ -31,6 +31,7 @@ interface ReconciliationAnalysisProps {
     isReconciliationRunning: boolean;
     allClassifications: AllClassifications;
     onPersistClassifications: (allData: AllClassifications) => void;
+    onDownloadDebugKeys: () => void;
     competence: string | null;
 }
 
@@ -65,6 +66,7 @@ export function ReconciliationAnalysis({
     isReconciliationRunning,
     allClassifications,
     onPersistClassifications,
+    onDownloadDebugKeys,
     competence
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
@@ -114,43 +116,6 @@ export function ReconciliationAnalysis({
         XLSX.writeFile(workbook, fileName);
     };
 
-    const handleDownloadDebugKeys = async () => {
-        if (!processedData || (!processedData.siengeDebugKeys?.length && !processedData.costCenterDebugKeys?.length)) {
-            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar' });
-            return;
-        }
-    
-        const XLSX = await import('xlsx');
-        const wb = XLSX.utils.book_new();
-        let generated = false;
-    
-        if (processedData.costCenterDebugKeys && processedData.costCenterDebugKeys.length > 0) {
-            const ws = XLSX.utils.json_to_sheet(processedData.costCenterDebugKeys);
-            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Centro_Custo");
-            generated = true;
-        }
-
-        if (processedData.costCenterHeaderRows && processedData.costCenterHeaderRows.length > 0) {
-            const ws = XLSX.utils.json_to_sheet(processedData.costCenterHeaderRows);
-            XLSX.utils.book_append_sheet(wb, ws, "Centros de Custo Encontrados");
-            generated = true;
-        }
-    
-        if (processedData.siengeDebugKeys && processedData.siengeDebugKeys.length > 0) {
-            const ws = XLSX.utils.json_to_sheet(processedData.siengeDebugKeys);
-            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
-            generated = true;
-        }
-    
-        if (generated) {
-            XLSX.writeFile(wb, "Grantel_Debug_Chaves_Conciliacao.xlsx");
-            toast({ title: 'Ficheiro de Depuração Gerado' });
-        } else {
-            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar' });
-        }
-    };
-    
-
     return (
          <Card>
             <CardHeader>
@@ -183,7 +148,7 @@ export function ReconciliationAnalysis({
                     <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full">
                         {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
                     </Button>
-                    <Button onClick={handleDownloadDebugKeys} disabled={!siengeFile && !costCenterFile} variant="outline" className="w-full sm:w-auto">
+                    <Button onClick={onDownloadDebugKeys} disabled={!siengeFile && !costCenterFile} variant="outline" className="w-full sm:w-auto">
                         <Database className="mr-2 h-4 w-4"/>Gerar Chaves de Depuração
                     </Button>
                 </div>
