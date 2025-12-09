@@ -70,7 +70,7 @@ const FilterDialog: React.FC<{
                 xmlCsts.add(`${cstCode}: ${cstDesc}`);
             }
 
-            if (item['Alíq. ICMS (%)'] !== undefined) xmlPicms.add(String(item['Alíq. ICMS (%)']));
+            if (item['Alíq. ICMS (%)'] !== undefined && item['Alíq. ICMS (%)'] !== null) xmlPicms.add(String(item['Alíq. ICMS (%)']));
             
             const cfopCode = item.CFOP;
             if (cfopCode) {
@@ -553,7 +553,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                             const cstDesc = getCstDescription(cstCode);
                                             const combinedCst = `${cstCode}: ${cstDesc}`;
 
-                                            const picmsValue = String(item['Alíq. ICMS (%)'] || '0');
+                                            const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
 
                                             const cfopFilter = currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(combinedCfop);
                                             const cstFilter = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(combinedCst);

@@ -1,3 +1,4 @@
+
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import type { KeyCheckResult } from '@/components/app/key-checker';
@@ -48,6 +49,7 @@ export interface ReconciliationResults {
     reconciled: any[];
     onlyInSienge: any[];
     onlyInXml: any[];
+    devolucoesEP: any[];
     debug: {
         costCenterKeys: any[];
         siengeKeys: any[];
@@ -278,6 +280,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
                 Fornecedor: header?.Fornecedor || 'N/A',
                 'CPF/CNPJ do Emitente': emitenteCnpj, // Ensure this exists
                 destUF: header?.destUF || '',
+                'Alíq. ICMS (%)': item['Alíq. ICMS (%)'] === undefined ? null : item['Alíq. ICMS (%)']
             };
         });
     log(`- ${imobilizados.length} itens com valor unitário > R$ 1.200 encontrados para análise de imobilizado.`);
@@ -389,9 +392,10 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         for (let i = 0; i < row.length; i++) {
             const cellValue = String(row[i] || '').trim();
             if (cellValue.toLowerCase().includes('centro de custo')) {
+                // Look for the name in the rest of the cells on the same row
                 for (let j = i; j < row.length; j++) {
                     const potentialName = String(row[j] || '').replace(/centro de custo/i, '').trim();
-                    if (potentialName) {
+                    if (potentialName && potentialName.length > 1) { // Check for a meaningful name
                         currentCostCenter = potentialName;
                         costCenterSet.add(currentCostCenter);
                         costCenterHeaderRows.push({
@@ -418,7 +422,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
                 const creditorCode = creditorCodeMatch ? creditorCodeMatch[1] : '';
 
                 if (creditorCode) {
-                    const docKey = `${cleanAndToStr(documentCell)}-${creditorCode}`;
+                    const docKey = `${cleanAndToStr(documentCell)}-${credorCode}`;
                     
                     const debugInfo = { 
                         'Chave Gerada (Centro de Custo)': docKey, 
@@ -481,7 +485,7 @@ export function runReconciliation(
     costCenterMap?: Map<string, string> | null
 ): ReconciliationResults {
     
-    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], debug: { costCenterKeys: [], siengeKeys: [] } };
+    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], devolucoesEP: [], debug: { costCenterKeys: [], siengeKeys: [] } };
     
     if (!siengeData || siengeData.length === 0) {
         return { ...emptyResult, onlyInXml: xmlItems || [] };
@@ -512,6 +516,7 @@ export function runReconciliation(
                 ...item,
                 Fornecedor: header?.Fornecedor || 'N/A',
                 destUF: header?.destUF || '',
+                'refNFe': header?.refNFe
             };
         });
 
@@ -606,8 +611,7 @@ export function runReconciliation(
             const stillUnmatchedXml = Array.from(xmlMap.values()).flat();
             return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
         };
-
-        // Pass 1: Valor Total
+        
         let result = reconciliationPass(
             remainingSiengeItems,
             remainingXmlItems, 
@@ -617,7 +621,26 @@ export function runReconciliation(
         );
         reconciled.push(...result.matched);
         
-        return { reconciled, onlyInSienge: result.remainingSienge, onlyInXml: result.remainingXml, debug: emptyResult.debug };
+        // Devoluções EP
+        const devolucoesEP = (enrichedXmlItems || [])
+            .filter(item => {
+                const cfop = cleanAndToStr(item.CFOP);
+                return (item['Natureza da Operação']?.toUpperCase().includes('DEVOLUCAO') && (cfop.startsWith('1') || cfop.startsWith('2')))
+            })
+            .map(item => {
+                const originalKey = cleanAndToStr(item['refNFe'] || '');
+                const foundInSienge = siengeData.some(siengeRow => cleanAndToStr(siengeRow[h.numero!]) === cleanAndToStr(originalKey));
+                return {
+                    'Número da Nota de Devolução': item['Número da Nota'],
+                    'Fornecedor': item.Fornecedor,
+                    'Valor': item['Valor Total'],
+                    'Data Emissão': item.Emissão,
+                    'Chave da Nota Original': originalKey || 'Não encontrada no XML',
+                    'Encontrada no Sienge': foundInSienge ? 'Sim' : 'Não'
+                };
+            });
+
+        return { reconciled, onlyInSienge: result.remainingSienge, onlyInXml: result.remainingXml, devolucoesEP, debug: emptyResult.debug };
     } catch (err: any) {
         console.error("Reconciliation Error:", err);
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };

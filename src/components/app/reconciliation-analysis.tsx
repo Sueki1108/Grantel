@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useMemo } from 'react';
@@ -5,13 +6,13 @@ import * as XLSX from 'xlsx';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUploadForm } from "@/components/app/file-upload-form";
-import { type ProcessedData, processCostCenterData, generateSiengeDebugKeys } from '@/lib/excel-processor';
+import { type ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, X, RotateCw, HelpCircle, FileDown, Database } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, X, RotateCw, HelpCircle, FileDown, Database, Undo2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns } from "@/components/app/columns-helper";
+import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { SiengeTaxCheck } from './sienge-tax-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { CfopValidator } from './cfop-validator';
@@ -69,10 +70,11 @@ export function ReconciliationAnalysis({
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
-    const { reconciliationResults, siengeDataForTaxCheck } = useMemo(() => {
+    const { reconciliationResults, siengeDataForTaxCheck, devolucoesEP } = useMemo(() => {
         return {
             reconciliationResults: processedData?.reconciliationResults,
             siengeDataForTaxCheck: processedData?.siengeSheetData,
+            devolucoesEP: processedData?.reconciliationResults?.devolucoesEP,
         };
     }, [processedData]);
 
@@ -186,8 +188,9 @@ export function ReconciliationAnalysis({
                 </div>
                 
                 <Tabs defaultValue="reconciliation">
-                    <TabsList className="grid w-full grid-cols-4">
+                    <TabsList className="grid w-full grid-cols-5">
                         <TabsTrigger value="reconciliation" disabled={!reconciliationResults}>Conciliação de Itens</TabsTrigger>
+                        <TabsTrigger value="devolucoes-ep" disabled={!devolucoesEP || devolucoesEP.length === 0}><Undo2 className="h-4 w-4 mr-2"/>Devoluções - EP</TabsTrigger>
                         <TabsTrigger value="tax_check" disabled={!siengeDataForTaxCheck}>Conferência de Impostos</TabsTrigger>
                         <TabsTrigger value="cfop_validation" disabled={!reconciliationResults}><BarChart className='h-4 w-4 mr-2'/>Validação CFOP</TabsTrigger>
                         <TabsTrigger value="difal" disabled={difalItems.length === 0}><Ticket className='h-4 w-4 mr-2'/>DIFAL ({difalItems.length})</TabsTrigger>
@@ -230,6 +233,19 @@ export function ReconciliationAnalysis({
                             <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
                                 <FileSearch className="h-12 w-12 text-primary" />
                                 <p className="mt-4 text-center">Carregue as planilhas e clique no botão "Conciliar XML vs Sienge" para ver os resultados.</p>
+                            </div>
+                        )}
+                    </TabsContent>
+                     <TabsContent value="devolucoes-ep" className="mt-4">
+                        {devolucoesEP && devolucoesEP.length > 0 ? (
+                           <div>
+                                <Button onClick={() => handleDownload(devolucoesEP, 'Devolucoes_EP')} size="sm" className="mb-4"><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                <DataTable columns={getColumns(devolucoesEP)} data={devolucoesEP} />
+                           </div>
+                        ) : (
+                             <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
+                                <FileSearch className="h-12 w-12 text-primary" />
+                                <p className="mt-4 text-center">Nenhuma devolução de emissão própria foi encontrada ou a conciliação ainda não foi executada.</p>
                             </div>
                         )}
                     </TabsContent>
