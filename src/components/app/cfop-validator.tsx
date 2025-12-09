@@ -398,7 +398,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                         <div className="flex justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                              <TooltipProvider>
                                 <Tooltip>
-                                    <TooltipTrigger asChild><Button variant={classification === 'correct' ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'correct' ? "bg-green-600 hover:bg-green-700 text-white" : "text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50")} onClick={() => handleValidationChange([row.original], 'correct')}><Check className="h-4 w-4" /></Button></TooltipTrigger>
+                                    <TooltipTrigger asChild><Button variant={classification === 'correct' ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", classification === 'correct' ? "bg-green-600 hover:bg-green-700 text-white" : "text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50", classification === 'correct' && "bg-green-500 hover:bg-green-600")} onClick={() => handleValidationChange([row.original], 'correct')}><Check className="h-4 w-4" /></Button></TooltipTrigger>
                                     <TooltipContent><p>Correto</p></TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
