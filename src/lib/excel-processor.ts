@@ -434,35 +434,35 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         const docCell = row[documentoIndex];
         
         if (credorCell && docCell) {
-             const cnpjRegex = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/;
-             const cnpjMatch = String(credorCell).match(cnpjRegex);
-             const cnpj = cnpjMatch ? cleanAndToStr(cnpjMatch[0]) : null;
+            const cnpjRegex = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/;
+            const cnpjMatch = String(credorCell).match(cnpjRegex);
+            const cnpj = cnpjMatch ? cleanAndToStr(cnpjMatch[0]) : null;
 
-             const docRegex = /(?:NFE|NFSE)\s*[\/]?\s*(\d+)/i;
-             const docMatch = String(docCell).match(docRegex);
-             let docNumber = docMatch ? docMatch[1] : null;
+            const docRegex = /(?:NFSE|NFE)\s*\/?\s*(\d+)/i;
+            const docMatch = String(docCell).match(docRegex);
+            let docNumber = docMatch ? docMatch[1] : null;
 
-             if (!docNumber) {
-                 const simpleNumMatch = String(docCell).match(/^\d+$/);
-                 if (simpleNumMatch) {
-                     docNumber = simpleNumMatch[0];
-                 }
-             }
+            if (!docNumber) {
+                const simpleNumMatch = String(docCell).match(/^\d+$/);
+                if (simpleNumMatch) {
+                    docNumber = simpleNumMatch[0];
+                }
+            }
              
-             if (docNumber && cnpj) {
+            if (docNumber && cnpj) {
                 const docKey = `${cleanAndToStr(docNumber)}-${cleanAndToStr(cnpj)}`;
-                 if (!costCenterMap.has(docKey)) {
-                     costCenterMap.set(docKey, currentCostCenter);
-                 }
-                 const debugInfo = {
-                     'Chave Gerada (Centro de Custo)': docKey,
-                     'Documento Original': docCell,
-                     'Credor (Centro de Custo)': credorCell,
-                     'CNPJ Encontrado': cnpj,
-                     'Centro de Custo': currentCostCenter,
-                 };
-                 debugKeys.push(debugInfo);
-             }
+                if (!costCenterMap.has(docKey)) {
+                    costCenterMap.set(docKey, currentCostCenter);
+                }
+                const debugInfo = {
+                    'Chave Gerada (Centro de Custo)': docKey,
+                    'Credor (Centro de Custo)': credorCell,
+                    'Documento Original': docCell,
+                    'CNPJ Encontrado': cnpj,
+                    'Centro de Custo': currentCostCenter,
+                };
+                debugKeys.push(debugInfo);
+            }
         }
     }
     
@@ -669,3 +669,5 @@ export function runReconciliation(
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
+
+    
