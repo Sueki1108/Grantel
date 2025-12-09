@@ -380,10 +380,10 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     const costCenterHeaderRows: any[] = [];
 
     if (!data || data.length === 0) return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
-    
+
     let headerRowIndex = -1;
     let credorIndex = -1;
-    let documentoIndex = -1;
+    let tituloIndex = -1;
 
     for (let i = 0; i < Math.min(data.length, 20); i++) {
         const row = data[i];
@@ -391,19 +391,19 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             const lowerCaseRow = row.map(cell => String(cell || '').toLowerCase());
             
             const credorIdx = lowerCaseRow.findIndex(cell => cell && (cell.includes('credor') || cell.includes('fornecedor')));
-            const docIdx = lowerCaseRow.findIndex(cell => cell && (cell.includes('documento')));
+            const tituloIdx = lowerCaseRow.findIndex(cell => cell && (cell.includes('titulo') || cell.includes('título')));
 
-            if (credorIdx !== -1 && docIdx !== -1) {
+            if (credorIdx !== -1 && tituloIdx !== -1) {
                 headerRowIndex = i;
                 credorIndex = credorIdx;
-                documentoIndex = docIdx;
+                tituloIndex = tituloIdx;
                 break;
             }
         }
     }
 
     if (headerRowIndex === -1) {
-        console.warn("Cabeçalho com 'Credor' e 'Documento' não encontrado na planilha de Centro de Custo.");
+        console.warn("Cabeçalho com 'Credor' e 'Título' não encontrado na planilha de Centro de Custo.");
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
 
@@ -416,9 +416,9 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         const rowAsString = row.join(';').toLowerCase();
         
         if (rowAsString.includes('centro de custo')) {
-            const match = rowAsString.match(/centro de custo\s*;\s*;\s*([\d\s\w-]+)/);
+            const match = rowAsString.match(/centro de custo\s*;\s*;\s*(.*)/);
             if (match && match[1]) {
-                currentCostCenter = match[1].trim();
+                currentCostCenter = match[1].trim().toUpperCase();
                 costCenterSet.add(currentCostCenter);
                 costCenterHeaderRows.push({
                     'Linha Original': row.join('; '),
@@ -431,26 +431,22 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         if (i <= headerRowIndex) continue;
 
         const credorCell = row[credorIndex];
-        const docCell = row[documentoIndex];
+        const tituloCell = row[tituloIndex];
         
-        if (credorCell && docCell) {
-            const credorMatch = String(credorCell).match(/^(\d+)/);
-            const codigoCredor = credorMatch ? credorMatch[1] : null;
+        if (credorCell && tituloCell) {
+            const cnpjMatch = String(credorCell).match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/);
+            const cnpj = cnpjMatch ? cnpjMatch[0] : null;
 
-            const docNumberMatch = String(docCell).match(/(?:NFSE?|NFE)\s*\/?\s*(\d+)/i) || String(docCell).match(/^\d+$/);
-            const numeroDocumento = docNumberMatch ? (docNumberMatch[1] || docNumberMatch[0]) : null;
-
-            if (numeroDocumento && codigoCredor) {
-                const docKey = `${cleanAndToStr(numeroDocumento)}-${cleanAndToStr(codigoCredor)}`;
+            if (tituloCell && cnpj) {
+                const docKey = `${cleanAndToStr(tituloCell)}-${cleanAndToStr(cnpj)}`;
                 if (!costCenterMap.has(docKey)) {
                     costCenterMap.set(docKey, currentCostCenter);
                 }
                 const debugInfo = {
                     'Chave Gerada (Centro de Custo)': docKey,
                     'Credor (Centro de Custo)': credorCell,
-                    'Documento Original': docCell,
-                    'Codigo Credor Encontrado': codigoCredor,
-                    'Numero Documento Encontrado': numeroDocumento,
+                    'Título Original': tituloCell,
+                    'CNPJ Encontrado': cnpj,
                     'Centro de Custo': currentCostCenter,
                 };
                 debugKeys.push(debugInfo);
@@ -471,29 +467,25 @@ export function generateSiengeDebugKeys(siengeData: any[]): any[] {
 
     const h = {
         cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
-        numero: findHeader(siengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
+        titulo: findHeader(siengeData, ['título', 'titulo']),
         credor: findHeader(siengeData, ['credor', 'fornecedor', 'nome do fornecedor']),
     };
 
-    if (!h.credor || !h.numero) {
-        console.warn("Colunas 'Credor' ou 'Número' não encontradas na planilha Sienge para depuração.");
+    if (!h.titulo || !h.cnpj) {
+        console.warn("Colunas 'Título' ou 'CPF/CNPJ' não encontradas na planilha Sienge para depuração.");
         return [];
     }
 
     return siengeData.map(item => {
-        const credorCell = item[h.credor!];
-        const numero = item[h.numero!];
-
-        const credorMatch = String(credorCell).match(/^(\d+)/);
-        const codigoCredor = credorMatch ? credorMatch[1] : null;
-        
-        const docKey = `${cleanAndToStr(numero)}-${cleanAndToStr(codigoCredor)}`;
+        const numeroTitulo = item[h.titulo!];
+        const cnpj = item[h.cnpj!];
+        const docKey = `${cleanAndToStr(numeroTitulo)}-${cleanAndToStr(cnpj)}`;
         
         return {
             'Chave Gerada (Sienge)': docKey,
-            'Documento Original': numero,
-            'Credor Original': credorCell || 'N/A',
-            'CNPJ Original': item[h.cnpj!] || 'N/A',
+            'Título Original': numeroTitulo,
+            'Credor Original': item[h.credor!] || 'N/A',
+            'CNPJ Original': cnpj || 'N/A',
         };
     });
 }
@@ -549,30 +541,27 @@ export function runReconciliation(
 
         const h = {
             cnpj: findHeader(filteredSiengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
-            numero: findHeader(filteredSiengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
+            titulo: findHeader(filteredSiengeData, ['título', 'titulo']),
             valorTotal: findHeader(filteredSiengeData, ['valor total', 'valor', 'vlr total']),
             credor: findHeader(filteredSiengeData, ['credor', 'fornecedor', 'nome do fornecedor']),
             cfop: findHeader(siengeData, ['cfop']),
             esp: findHeader(siengeData, ['esp']),
         };
         
-        if (!h.cnpj || !h.numero || !h.valorTotal || !h.credor) {
-            throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Credor', 'Valor Total') na planilha Sienge.");
+        if (!h.titulo || !h.cnpj || !h.valorTotal) {
+            throw new Error("Não foi possível encontrar as colunas essenciais ('Título', 'CPF/CNPJ', 'Valor Total') na planilha Sienge.");
         }
 
-        const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
-            const cleanNumero = cleanAndToStr(numero);
-            const cleanCnpj = cleanAndToStr(cnpj); // Standardize cleaning
-            const cleanValor = parseFloat(String(valor || '0').replace(',', '.')).toFixed(2);
-            if (!cleanNumero || !cleanCnpj || cleanValor === 'NaN') return null;
-            return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
+        const getComparisonKey = (titulo: any, cnpj: any): string | null => {
+            const cleanTitulo = cleanAndToStr(titulo);
+            const cleanCnpj = cleanAndToStr(cnpj);
+            if (!cleanTitulo || !cleanCnpj) return null;
+            return `${cleanTitulo}-${cleanCnpj}`;
         };
 
         const reconciliationPass = (
             siengeItems: any[],
             xmlItems: any[],
-            getSiengeKey: (item: any) => string | null,
-            getXmlKeyFn: (item: any) => string | null,
             passName: string
         ) => {
             const matchedInPass: any[] = [];
@@ -580,7 +569,7 @@ export function runReconciliation(
             const xmlMap = new Map<string, any[]>();
 
             xmlItems.forEach(item => {
-                const key = getXmlKeyFn(item);
+                const key = getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente']);
                 if (key) {
                     if (!xmlMap.has(key)) xmlMap.set(key, []);
                     xmlMap.get(key)!.push(item);
@@ -588,26 +577,25 @@ export function runReconciliation(
             });
 
             siengeItems.forEach(siengeItem => {
-                const key = getSiengeKey(siengeItem);
+                const key = getComparisonKey(siengeItem[h.titulo!], siengeItem[h.cnpj!]);
 
                 if (key && xmlMap.has(key)) {
                     const matchedXmlItems = xmlMap.get(key)!;
-                    if (matchedXmlItems.length > 0) {
-                        const matchedXmlItem = matchedXmlItems.shift(); 
-                        if (matchedXmlItems.length === 0) xmlMap.delete(key);
+                    
+                    const siengeValor = parseFloat(String(siengeItem[h.valorTotal!] || '0').replace(',', '.'));
+
+                    const exactMatchIndex = matchedXmlItems.findIndex(xmlItem => Math.abs((xmlItem['Valor Total'] || 0) - siengeValor) < 0.01);
+
+                    if (exactMatchIndex !== -1) {
+                         const matchedXmlItem = matchedXmlItems.splice(exactMatchIndex, 1)[0];
                         
                         let costCenter = 'N/A';
-                         if (costCenterMap && h.numero && h.credor) {
-                            const siengeNumero = siengeItem[h.numero!];
-                            const credorCell = siengeItem[h.credor!];
-                            const credorMatch = String(credorCell).match(/^(\d+)/);
-                            const codigoCredor = credorMatch ? credorMatch[1] : null;
-
-                            if (siengeNumero && codigoCredor) {
-                                const docKey = `${cleanAndToStr(siengeNumero)}-${cleanAndToStr(codigoCredor)}`;
-                                if (costCenterMap.has(docKey)) {
-                                    costCenter = costCenterMap.get(docKey)!;
-                                }
+                         if (costCenterMap && h.titulo && h.cnpj) {
+                            const siengeTitulo = siengeItem[h.titulo!];
+                             const siengeCnpj = siengeItem[h.cnpj!];
+                             const docKey = `${cleanAndToStr(siengeTitulo)}-${cleanAndToStr(siengeCnpj)}`;
+                            if (costCenterMap.has(docKey)) {
+                                costCenter = costCenterMap.get(docKey)!;
                             }
                         }
 
@@ -618,6 +606,8 @@ export function runReconciliation(
                             'Centro de Custo': costCenter,
                             'Observações': `Conciliado via ${passName}` 
                         });
+
+                        if (matchedXmlItems.length === 0) xmlMap.delete(key);
                         return;
                     }
                 }
@@ -628,17 +618,12 @@ export function runReconciliation(
             return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
         };
         
-        let remainingSiengeItems = [...filteredSiengeData];
-        let remainingXmlItems = [...enrichedXmlItems];
-
-        const result = reconciliationPass(
-            remainingSiengeItems,
-            remainingXmlItems, 
-            (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]),
-            (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
+        let { matched, remainingSienge, remainingXml } = reconciliationPass(
+            filteredSiengeData,
+            enrichedXmlItems, 
             "Valor Total"
         );
-        let reconciled = result.matched;
+        let reconciled = matched;
         
         const devolucoesEP = (enrichedXmlItems || [])
             .filter(item => {
@@ -663,10 +648,9 @@ export function runReconciliation(
                 };
             });
 
-        return { reconciled, onlyInSienge: result.remainingSienge, onlyInXml: result.remainingXml, devolucoesEP, debug: emptyResult.debug };
+        return { reconciled, onlyInSienge: remainingSienge, onlyInXml: remainingXml, devolucoesEP, debug: emptyResult.debug };
     } catch (err: any) {
         console.error("Reconciliation Error:", err);
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
-
