@@ -1,6 +1,5 @@
 
 import { cfopDescriptions } from './cfop';
-import XLSX from 'xlsx';
 import type { KeyCheckResult } from '@/components/app/key-checker';
 import type { AllClassifications } from '@/lib/types';
 import { normalizeKey, cleanAndToStr } from './utils';
@@ -205,7 +204,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     // 1. Separar notas com base no emitente e CFOP dos itens
     const notasValidas: any[] = [];
     const devolucoesDeCompra: any[] = []; // Emitente = Grantel, Destinatário != Grantel
-    const devolucoesDeClientes: any[] = []; // Emitente != Grantel, mas CFOP do item começa com 1 ou 2
+    const devolucoesDeClientes: any[] = []; // Emitente != Grantel, mas CFOP do item começa com 1 ou 2 ou finNFe=4
     const remessasEretornos: any[] = []; // Emitente = Grantel, Destinatário = Grantel
 
     const itensMap = new Map<string, any[]>();
@@ -401,7 +400,6 @@ export function runReconciliation(
             cfop: findHeader(siengeData, ['cfop']),
             esp: findHeader(siengeData, ['esp']),
             cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
-            // Chaves para passes de reconciliação adicionais
             icmsOutras: findHeader(siengeData, ['icms outras', 'icmsoutras']),
             desconto: findHeader(siengeData, ['desconto']),
             frete: findHeader(siengeData, ['frete']),
@@ -443,6 +441,7 @@ export function runReconciliation(
         const reconciled: any[] = [];
         const siengeMatchedIndices = new Set<number>();
         const xmlMatchedIndices = new Set<number>();
+        const nfeHeaderMap = new Map((nfeEntradas || []).map(n => [n['Chave Unica'], n]));
 
         for (const pass of passes) {
             const siengeMap = new Map<string, {item: any, index: number}[]>();
@@ -475,9 +474,11 @@ export function runReconciliation(
                             const codigoCredor = codigoCredorMatch ? codigoCredorMatch[1] : null;
                             const costCenterKey = `${cleanAndToStr(numeroDocumento)}-${cleanAndToStr(codigoCredor)}`;
                             const costCenter = costCenterMap?.get(costCenterKey) || 'N/A';
+                            const nfeHeader = nfeHeaderMap.get(item['Chave Unica']);
                             
                             reconciled.push({
                                 ...item,
+                                Fornecedor: nfeHeader?.Fornecedor || 'N/A', // Add Fornecedor name
                                 'Sienge_CFOP': siengeMatch.item[h.cfop!],
                                 'Sienge_Esp': siengeMatch.item[h.esp!],
                                 'Centro de Custo': costCenter,
