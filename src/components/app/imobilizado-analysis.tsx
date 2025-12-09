@@ -230,7 +230,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             </div>
         );
     
-        const columnsToShow = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Alíq. ICMS (%)', 'Valor Unitário', 'Valor Total'];
+        const columnsToShow = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Valor Unitário', 'Valor Total'];
     
         const baseColumns = getColumnsWithCustomRender(
             imobilizadoItems,
@@ -269,9 +269,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 if ((id === 'Valor Total' || id === 'Valor Unitário') && typeof value === 'number') {
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
                 }
-                if (id === 'Alíq. ICMS (%)') {
-                    return <div className='text-center'>{typeof value === 'number' ? `${value.toFixed(2)}%` : 'N/A'}</div>;
-                }
 
                 const summarizedValue = typeof value === 'string' && value.length > 35 ? `${value.substring(0, 35)}...` : value;
     
@@ -286,27 +283,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 return <div className={cn("truncate max-w-xs", isBlockedCfop && "text-red-500")}>{String(value ?? '')}</div>;
             }
         );
-    
-        baseColumns.unshift({
-            id: 'select',
-            header: ({ table }) => (
-                <Checkbox
-                    checked={table.getIsAllPageRowsSelected()}
-                    onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
-                    aria-label="Selecionar todas"
-                />
-            ),
-            cell: ({ row }) => (
-                <Checkbox
-                    checked={row.getIsSelected()}
-                    onCheckedChange={(value) => row.toggleSelected(!!value)}
-                    aria-label="Selecionar linha"
-                    onClick={(e) => e.stopPropagation()}
-                />
-            ),
-            enableSorting: false,
-            enableHiding: false,
-        });
     
         if (activeTab === 'imobilizado') {
             baseColumns.push({
