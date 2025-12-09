@@ -301,7 +301,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const chavesValidasCte = notasValidas.filter(n => !n['destUF']).map(row => ({ // Apenas CT-e
         "Chave de acesso": cleanAndToStr(row["Chave de acesso"]), "Tipo": "CTE", "Fornecedor": row["Fornecedor"],
         "Emissão": String(row["Emissão"]).substring(0, 10), "Total": row['Valor da Prestação'] || 0,
-        "tomadorCNPJ": cleanAndToStr(row['CPF/CNPJ do Destinatário']), // Simplificando para tomador
+        "tomadorCNPJ": cleanAndToStr(row['tomadorCNPJ']), // Simplificando para tomador
         "recebCNPJ": cleanAndToStr(row.recebCNPJ),
         "recebUF": row.recebUF,
         "recebIE": row.recebIE
@@ -417,8 +417,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             const isDataRow = /^\d+$/.test(itemNumberCell) && creditorCell && documentCell;
 
             if (isDataRow) {
-                // Regex to find a CNPJ (formatted or unformatted) inside the creditor string
-                const cnpjMatch = creditorCell.match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/);
+                const cnpjMatch = creditorCell.match(/\d{14}/); // Find a sequence of 14 digits
                 const credorCnpj = cnpjMatch ? cnpjMatch[0] : null;
                 
                 if (credorCnpj) {
@@ -426,8 +425,8 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
                     
                     const debugInfo = { 
                         'Chave Gerada (Centro de Custo)': docKey, 
-                        'Documento Original': documentCell, 
-                        'Credor Original': creditorCell,
+                        'Documento Original': documentCell,
+                        'Credor (Centro de Custo)': creditorCell,
                         'CNPJ Extraído': credorCnpj,
                         'Centro de Custo': currentCostCenter
                     };
@@ -546,10 +545,6 @@ export function runReconciliation(
             return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
         };
 
-        let reconciled: any[] = [];
-        let remainingXmlItems = [...enrichedXmlItems];
-        let remainingSiengeItems = [...filteredSiengeData];
-
         const reconciliationPass = (
             siengeItems: any[],
             xmlItems: any[],
@@ -615,7 +610,7 @@ export function runReconciliation(
             (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
             "Valor Total"
         );
-        reconciled = result.matched;
+        let reconciled = result.matched;
         
         const devolucoesEP = (enrichedXmlItems || [])
             .filter(item => {
@@ -625,7 +620,6 @@ export function runReconciliation(
             })
             .map(item => {
                 const originalKeyClean = cleanAndToStr(item['refNFe'] || '');
-                // Since Sienge might have numeric or string document numbers, we clean both for comparison
                 const foundInSienge = siengeData.some(siengeRow => cleanAndToStr(siengeRow[h.numero!]) === originalKeyClean);
 
                 return {
