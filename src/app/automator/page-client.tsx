@@ -527,8 +527,13 @@ export function AutomatorClientPage() {
     };
 
     const handleDownloadDebugKeys = async () => {
-        if (!processedData || (!processedData.siengeDebugKeys?.length && !processedData.costCenterDebugKeys?.length && !processedData.costCenterHeaderRows?.length)) {
+        if (!processedData) {
             toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar' });
+            return;
+        }
+
+        if (!processedData.siengeDebugKeys?.length && !processedData.costCenterDebugKeys?.length && !processedData.costCenterHeaderRows?.length) {
+             toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar', description: 'Carregue a planilha Sienge e/ou Centro de Custo primeiro.' });
             return;
         }
     
