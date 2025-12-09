@@ -384,7 +384,6 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     let credorIndex = -1;
     let docIndex = -1;
 
-    // Encontrar dinamicamente os índices das colunas "Credor" e "Documento"
     for (let i = 0; i < Math.min(data.length, 20); i++) {
         const row = data[i];
         if (row && Array.isArray(row)) {
@@ -519,11 +518,10 @@ export function runReconciliation(
 
         const enrichedXmlItems = xmlItems.map(item => {
             const header = nfeHeaderMap.get(item['Chave Unica']);
-            const credorCodeMatch = header?.Fornecedor ? String(header.Fornecedor).match(/^(\d+)/) : null;
             return {
                 ...item,
                 Fornecedor: header?.Fornecedor || 'N/A',
-                credorCode: credorCodeMatch ? credorCodeMatch[1] : null,
+                credorCode: cleanAndToStr(item['CPF/CNPJ do Emitente']),
                 destUF: header?.destUF || '',
                 refNFe: header?.refNFe
             };
@@ -554,7 +552,7 @@ export function runReconciliation(
         const xmlMap = new Map<string, any[]>();
         
         enrichedXmlItems.forEach(item => {
-            const key = getComparisonKey(item['Número da Nota'], item['Fornecedor']);
+            const key = getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente']);
             if (key) {
                 if (!xmlMap.has(key)) xmlMap.set(key, []);
                 xmlMap.get(key)!.push(item);
