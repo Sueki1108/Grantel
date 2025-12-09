@@ -2,7 +2,6 @@
 "use client";
 
 import React, { useMemo, useEffect, useState } from 'react';
-import XLSX from 'xlsx';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUploadForm } from "@/components/app/file-upload-form";
@@ -17,7 +16,7 @@ import { SiengeTaxCheck } from './sienge-tax-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { CfopValidator } from './cfop-validator';
 import type { AllClassifications, DifalStatus } from '@/lib/types';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 
 interface ReconciliationAnalysisProps {
@@ -74,21 +73,29 @@ export function ReconciliationAnalysis({
 
      useEffect(() => {
         if (siengeFile) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
+            const processFile = async () => {
                 try {
-                    const data = e.target?.result;
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const sheetName = workbook.SheetNames[0];
-                    if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
-                    const worksheet = workbook.Sheets[sheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-                    setSiengeData(jsonData);
+                    const XLSX = await import('xlsx');
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const data = e.target?.result;
+                            const workbook = XLSX.read(data, { type: 'array' });
+                            const sheetName = workbook.SheetNames[0];
+                            if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
+                            const worksheet = workbook.Sheets[sheetName];
+                            const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+                            setSiengeData(jsonData);
+                        } catch(err: any) {
+                            toast({variant: 'destructive', title: 'Erro ao ler Sienge', description: err.message});
+                        }
+                    };
+                    reader.readAsArrayBuffer(siengeFile);
                 } catch(err: any) {
-                    toast({variant: 'destructive', title: 'Erro ao ler Sienge', description: err.message});
+                     toast({variant: 'destructive', title: 'Erro ao importar biblioteca XLSX', description: err.message});
                 }
             };
-            reader.readAsArrayBuffer(siengeFile);
+            processFile();
         } else {
             setSiengeData(null);
         }
@@ -96,21 +103,29 @@ export function ReconciliationAnalysis({
 
      useEffect(() => {
         if (costCenterFile) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
+            const processFile = async () => {
                 try {
-                    const data = e.target?.result;
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const sheetName = workbook.SheetNames[0];
-                    if (!sheetName) throw new Error("A planilha Centro de Custo não contém abas.");
-                    const worksheet = workbook.Sheets[sheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                    setCostCenterData(jsonData);
+                    const XLSX = await import('xlsx');
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const data = e.target?.result;
+                            const workbook = XLSX.read(data, { type: 'array' });
+                            const sheetName = workbook.SheetNames[0];
+                            if (!sheetName) throw new Error("A planilha Centro de Custo não contém abas.");
+                            const worksheet = workbook.Sheets[sheetName];
+                            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                            setCostCenterData(jsonData);
+                        } catch(err: any) {
+                            toast({variant: 'destructive', title: 'Erro ao ler Centro de Custo', description: err.message});
+                        }
+                    };
+                    reader.readAsArrayBuffer(costCenterFile);
                 } catch(err: any) {
-                    toast({variant: 'destructive', title: 'Erro ao ler Centro de Custo', description: err.message});
+                     toast({variant: 'destructive', title: 'Erro ao importar biblioteca XLSX', description: err.message});
                 }
             };
-            reader.readAsArrayBuffer(costCenterFile);
+            processFile();
         } else {
             setCostCenterData(null);
         }
@@ -154,11 +169,13 @@ export function ReconciliationAnalysis({
             toast({ title: "Nenhum dado para exportar", description: `Não há itens na aba "${title}".` });
             return;
         }
-        const worksheet = XLSX.utils.json_to_sheet(data);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, title);
-        const fileName = `Grantel - Conciliação ${title}.xlsx`;
-        XLSX.writeFile(workbook, fileName);
+        import('xlsx').then(XLSX => {
+            const worksheet = XLSX.utils.json_to_sheet(data);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, title);
+            const fileName = `Grantel - Conciliação ${title}.xlsx`;
+            XLSX.writeFile(workbook, fileName);
+        });
     };
 
     const handleDownloadDebugKeys = () => {
@@ -167,33 +184,35 @@ export function ReconciliationAnalysis({
             return;
         }
     
-        const wb = XLSX.utils.book_new();
-        let generated = false;
-    
-        if (processedData.costCenterDebugKeys && processedData.costCenterDebugKeys.length > 0) {
-            const ws = XLSX.utils.json_to_sheet(processedData.costCenterDebugKeys);
-            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Centro_Custo");
-            generated = true;
-        }
+        import('xlsx').then(XLSX => {
+            const wb = XLSX.utils.book_new();
+            let generated = false;
+        
+            if (processedData.costCenterDebugKeys && processedData.costCenterDebugKeys.length > 0) {
+                const ws = XLSX.utils.json_to_sheet(processedData.costCenterDebugKeys);
+                XLSX.utils.book_append_sheet(wb, ws, "Chaves_Centro_Custo");
+                generated = true;
+            }
 
-        if (processedData.costCenterHeaderRows && processedData.costCenterHeaderRows.length > 0) {
-            const ws = XLSX.utils.json_to_sheet(processedData.costCenterHeaderRows);
-            XLSX.utils.book_append_sheet(wb, ws, "Centros de Custo Encontrados");
-            generated = true;
-        }
-    
-        if (processedData.siengeDebugKeys && processedData.siengeDebugKeys.length > 0) {
-            const ws = XLSX.utils.json_to_sheet(processedData.siengeDebugKeys);
-            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
-            generated = true;
-        }
-    
-        if (generated) {
-            XLSX.writeFile(wb, "Grantel_Debug_Chaves_Conciliacao.xlsx");
-            toast({ title: 'Ficheiro de Depuração Gerado' });
-        } else {
-            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar' });
-        }
+            if (processedData.costCenterHeaderRows && processedData.costCenterHeaderRows.length > 0) {
+                const ws = XLSX.utils.json_to_sheet(processedData.costCenterHeaderRows);
+                XLSX.utils.book_append_sheet(wb, ws, "Centros de Custo Encontrados");
+                generated = true;
+            }
+        
+            if (processedData.siengeDebugKeys && processedData.siengeDebugKeys.length > 0) {
+                const ws = XLSX.utils.json_to_sheet(processedData.siengeDebugKeys);
+                XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
+                generated = true;
+            }
+        
+            if (generated) {
+                XLSX.writeFile(wb, "Grantel_Debug_Chaves_Conciliacao.xlsx");
+                toast({ title: 'Ficheiro de Depuração Gerado' });
+            } else {
+                toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar' });
+            }
+        });
     };
     
 
@@ -492,4 +511,6 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
         </Card>
     )
 }
+    
+
     
