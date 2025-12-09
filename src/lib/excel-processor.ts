@@ -518,10 +518,11 @@ export function runReconciliation(
 
         const enrichedXmlItems = xmlItems.map(item => {
             const header = nfeHeaderMap.get(item['Chave Unica']);
+            const credorCodeMatch = header?.Fornecedor ? String(header.Fornecedor).match(/^(\d+)/) : null;
             return {
                 ...item,
                 Fornecedor: header?.Fornecedor || 'N/A',
-                credorCode: cleanAndToStr(item['CPF/CNPJ do Emitente']),
+                credorCode: credorCodeMatch ? credorCodeMatch[1] : cleanAndToStr(item['CPF/CNPJ do Emitente']),
                 destUF: header?.destUF || '',
                 refNFe: header?.refNFe
             };
@@ -552,7 +553,7 @@ export function runReconciliation(
         const xmlMap = new Map<string, any[]>();
         
         enrichedXmlItems.forEach(item => {
-            const key = getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente']);
+            const key = getComparisonKey(item['Número da Nota'], item['Fornecedor']);
             if (key) {
                 if (!xmlMap.has(key)) xmlMap.set(key, []);
                 xmlMap.get(key)!.push(item);
