@@ -391,7 +391,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             const lowerCaseRow = row.map(cell => String(cell || '').toLowerCase());
             
             const credorIdx = lowerCaseRow.findIndex(cell => cell && (cell.includes('credor') || cell.includes('fornecedor')));
-            const docIdx = lowerCaseRow.findIndex(cell => cell && (cell.includes('documento') || cell.includes('nota')));
+            const docIdx = lowerCaseRow.findIndex(cell => cell && (cell.includes('documento') || cell.includes('titulo')));
 
             if (credorIdx !== -1 && docIdx !== -1) {
                 headerRowIndex = i;
@@ -403,7 +403,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     }
 
     if (headerRowIndex === -1) {
-        console.warn("Cabeçalho com 'Credor' e 'Documento' não encontrado na planilha de Centro de Custo.");
+        console.warn("Cabeçalho com 'Credor' e 'Documento'/'Título' não encontrado na planilha de Centro de Custo.");
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
 
@@ -437,27 +437,18 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             const cnpjRegex = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/;
             const cnpjMatch = String(credorCell).match(cnpjRegex);
             const cnpj = cnpjMatch ? cleanAndToStr(cnpjMatch[0]) : null;
-
-            const docRegex = /(?:NFSE|NFE)\s*\/?\s*(\d+)/i;
-            const docMatch = String(docCell).match(docRegex);
-            let docNumber = docMatch ? docMatch[1] : null;
-
-            if (!docNumber) {
-                const simpleNumMatch = String(docCell).match(/^\d+$/);
-                if (simpleNumMatch) {
-                    docNumber = simpleNumMatch[0];
-                }
-            }
+            
+            const docNumber = cleanAndToStr(docCell);
              
             if (docNumber && cnpj) {
-                const docKey = `${cleanAndToStr(docNumber)}-${cleanAndToStr(cnpj)}`;
+                const docKey = `${docNumber}-${cnpj}`;
                 if (!costCenterMap.has(docKey)) {
                     costCenterMap.set(docKey, currentCostCenter);
                 }
                 const debugInfo = {
                     'Chave Gerada (Centro de Custo)': docKey,
                     'Credor (Centro de Custo)': credorCell,
-                    'Documento Original': docCell,
+                    'Título Original': docCell,
                     'CNPJ Encontrado': cnpj,
                     'Centro de Custo': currentCostCenter,
                 };
@@ -479,7 +470,7 @@ export function generateSiengeDebugKeys(siengeData: any[]): any[] {
 
     const h = {
         cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
-        documento: findHeader(siengeData, ['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
+        documento: findHeader(siengeData, ['título', 'titulo', 'documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
         credor: findHeader(siengeData, ['credor', 'fornecedor', 'nome do fornecedor']),
     };
 
@@ -552,14 +543,15 @@ export function runReconciliation(
         const h = {
             cnpj: findHeader(filteredSiengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
             numero: findHeader(filteredSiengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
+            titulo: findHeader(filteredSiengeData, ['título', 'titulo']),
             valorTotal: findHeader(filteredSiengeData, ['valor total', 'valor', 'vlr total']),
             credor: findHeader(filteredSiengeData, ['credor', 'fornecedor', 'nome do fornecedor']),
             cfop: findHeader(siengeData, ['cfop']),
             esp: findHeader(siengeData, ['esp']),
         };
         
-        if (!h.cnpj || !h.numero || !h.valorTotal || !h.credor) {
-            throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Credor', 'Valor Total') na planilha Sienge.");
+        if (!h.cnpj || !h.numero || !h.valorTotal || !h.credor || !h.titulo) {
+            throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'Título', 'CPF/CNPJ', 'Credor', 'Valor Total') na planilha Sienge.");
         }
 
         const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
@@ -599,8 +591,8 @@ export function runReconciliation(
                         if (matchedXmlItems.length === 0) xmlMap.delete(key);
                         
                         let costCenter = 'N/A';
-                         if (costCenterMap && h.numero && h.cnpj) {
-                            const siengeDoc = siengeItem[h.numero!];
+                         if (costCenterMap && h.titulo && h.cnpj) {
+                            const siengeDoc = siengeItem[h.titulo!];
                             const siengeCnpj = siengeItem[h.cnpj!];
 
                             if (siengeDoc && siengeCnpj) {
@@ -669,5 +661,3 @@ export function runReconciliation(
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
-
-    
