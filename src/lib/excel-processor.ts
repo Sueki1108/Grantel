@@ -552,70 +552,72 @@ export function processCostCenterData(costCenterData: any[][]) {
     const allCostCenters = new Set<string>();
     const costCenterHeaderRows: any[] = [];
 
-    // Encontra dinamicamente a linha de cabeçalho
     let headerRowIndex = -1;
+    let docIndex = -1;
+    let credorIndex = -1;
+    let headers: any[] = [];
+
+    // Tenta encontrar a linha de cabeçalho dinamicamente
     for (let i = 0; i < costCenterData.length; i++) {
-        const firstCell = String(costCenterData[i]?.[0] || '').toLowerCase();
-        if (firstCell.includes('centro de custo')) {
+        const row = costCenterData[i] || [];
+        const normalizedRow = row.map(cell => normalizeKey(String(cell)));
+        const docIdx = normalizedRow.indexOf('numerododocumento');
+        const credorIdx = normalizedRow.indexOf('credor');
+
+        if (docIdx !== -1 && credorIdx !== -1) {
             headerRowIndex = i;
+            headers = row;
+            docIndex = docIdx;
+            credorIndex = credorIdx;
             break;
         }
     }
 
     if (headerRowIndex === -1) {
-        // Se não encontrar o cabeçalho, retorna vazio para não quebrar a aplicação
-        return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows };
+        return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
-
-    const headers = costCenterData[headerRowIndex];
-    const docIndex = headers.findIndex((h: string) => normalizeKey(h) === 'numerododocumento');
-    const credorIndex = headers.findIndex((h: string) => normalizeKey(h) === 'credor');
     
-    // O primeiro centro de custo começa depois da coluna "Credor"
     const costCenterStartIndex = credorIndex + 1;
 
-    if (docIndex > -1 && credorIndex > -1) {
-        for (let i = costCenterStartIndex; i < headers.length; i++) {
-            if (headers[i]) {
-                const centerName = String(headers[i]).trim();
-                if (centerName) {
-                    allCostCenters.add(centerName);
-                    costCenterHeaderRows.push({ "Centro de Custo Encontrado": centerName });
-                }
-            }
+    for (let i = costCenterStartIndex; i < headers.length; i++) {
+        const centerName = String(headers[i]).trim();
+        if (centerName) {
+            allCostCenters.add(centerName);
+            costCenterHeaderRows.push({ "Centro de Custo Encontrado": centerName });
         }
+    }
 
-        for (let i = headerRowIndex + 1; i < costCenterData.length; i++) {
-            const row = costCenterData[i];
-            const docNumber = row[docIndex];
-            const credor = row[credorIndex];
+    for (let i = headerRowIndex + 1; i < costCenterData.length; i++) {
+        const row = costCenterData[i];
+        if (!row || row.length === 0) continue;
+        
+        const docNumber = row[docIndex];
+        const credor = row[credorIndex];
 
-            if (docNumber && credor) {
-                const cnpjMatch = String(credor).match(/\s([\d./-]+)$/);
-                const cnpj = cnpjMatch ? cleanAndToStr(cnpjMatch[1]) : '';
-                const key = `${cleanAndToStr(docNumber)}-${cnpj}`;
-                
-                let foundCostCenter = false;
-                for (let j = costCenterStartIndex; j < row.length; j++) {
-                    const cellValue = row[j];
-                    if (cellValue && (cellValue > 0 || (typeof cellValue === 'string' && cellValue.trim() !== ''))) {
-                         const centerName = String(headers[j]).trim();
-                         if (centerName) {
-                             costCenterMap.set(key, centerName);
-                             foundCostCenter = true;
-                             break;
-                         }
+        if (docNumber && credor) {
+            const cnpjMatch = String(credor).match(/\s([\d./-]+)$/);
+            const cnpj = cnpjMatch ? cleanAndToStr(cnpjMatch[1]) : '';
+            const key = `${cleanAndToStr(docNumber)}-${cnpj}`;
+            
+            let foundCostCenter = false;
+            for (let j = costCenterStartIndex; j < row.length; j++) {
+                const cellValue = row[j];
+                if (cellValue && (cellValue > 0 || (typeof cellValue === 'string' && cellValue.trim() !== ''))) {
+                    const centerName = String(headers[j]).trim();
+                    if (centerName) {
+                        costCenterMap.set(key, centerName);
+                        foundCostCenter = true;
+                        break;
                     }
                 }
-
-                debugKeys.push({
-                    "Chave de Comparação (Centro Custo)": key,
-                    "Número Documento (Original)": docNumber,
-                    "Credor (Original)": credor,
-                    "CNPJ Extraído": cnpj,
-                    "Centro de Custo Encontrado": costCenterMap.get(key) || "NENHUM"
-                });
             }
+            debugKeys.push({
+                "Chave de Comparação (Centro Custo)": key,
+                "Número Documento (Original)": docNumber,
+                "Credor (Original)": credor,
+                "CNPJ Extraído": cnpj,
+                "Centro de Custo Encontrado": costCenterMap.get(key) || "NENHUM"
+            });
         }
     }
 
