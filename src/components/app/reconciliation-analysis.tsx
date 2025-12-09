@@ -115,7 +115,7 @@ export function ReconciliationAnalysis({
     };
 
     const handleDownloadDebugKeys = async () => {
-        if (!processedData || (!processedData.siengeDebugKeys && !processedData.costCenterDebugKeys)) {
+        if (!processedData || (!processedData.siengeDebugKeys?.length && !processedData.costCenterDebugKeys?.length)) {
             toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar' });
             return;
         }
