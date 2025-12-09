@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, type ChangeEvent, useCallback, useEffect } from "react";
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -229,7 +229,6 @@ export function AdvancedAnalyses({
                 initialKeyCheckResults={processedData?.keyCheckResults || null}
                 nfeEntradaData={processedData?.sheets['Notas Válidas'] || []}
                 cteData={processedData?.sheets['CTEs Válidos'] || []}
-                initialSpedDuplicates={processedData?.spedDuplicates || null}
             />
 
             {processedData?.spedDuplicates && processedData.spedDuplicates.length > 0 && (

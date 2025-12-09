@@ -1,6 +1,6 @@
 
 import { cfopDescriptions } from './cfop';
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx';
 import type { KeyCheckResult } from '@/components/app/key-checker';
 import type { AllClassifications } from '@/lib/types';
 import { normalizeKey, cleanAndToStr } from './utils';
@@ -470,7 +470,10 @@ export function runReconciliation(
                         if (siengeMatches.length > 0) {
                             const siengeMatch = siengeMatches.shift()!;
                             
-                            const costCenterKey = `${cleanAndToStr(siengeMatch.item[h.numero!])}-${cleanAndToStr(String(siengeMatch.item[h.credor!]).match(/^(\d+)/)?.[1])}`;
+                            const numeroDocumento = siengeMatch.item[h.numero!];
+                            const codigoCredorMatch = String(siengeMatch.item[h.credor!]).match(/^(\d+)/);
+                            const codigoCredor = codigoCredorMatch ? codigoCredorMatch[1] : null;
+                            const costCenterKey = `${cleanAndToStr(numeroDocumento)}-${cleanAndToStr(codigoCredor)}`;
                             const costCenter = costCenterMap?.get(costCenterKey) || 'N/A';
                             
                             reconciled.push({
@@ -525,4 +528,92 @@ export function runReconciliation(
         console.error("Reconciliation Error:", err);
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
+}
+
+
+export function generateSiengeDebugKeys(siengeData: any[]) {
+    const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
+        if (!data || data.length === 0 || !data[0]) return undefined;
+        const headers = Object.keys(data[0]);
+        return headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
+    };
+    const h = {
+        credor: findHeader(siengeData, ['credor', 'fornecedor']),
+        numero: findHeader(siengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
+        valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total']),
+    };
+    if (!h.credor || !h.numero || !h.valorTotal) return [];
+
+    return siengeData.map(item => {
+        const credorCodeMatch = String(item[h.credor!]).match(/^(\d+)/);
+        const credorCode = credorCodeMatch ? credorCodeMatch[1] : null;
+        const baseKey = `${cleanAndToStr(item[h.numero!])}-${cleanAndToStr(credorCode)}`;
+        const value = parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.'));
+        return { 
+            "Chave de Comparação Sienge (Base)": baseKey,
+            "Chave de Comparação Sienge (Final)": `${baseKey}-${value.toFixed(2)}`,
+            "Credor (Original)": item[h.credor!],
+            "Número (Original)": item[h.numero!],
+            "Valor (Original)": item[h.valorTotal!],
+        }
+    });
+}
+
+export function processCostCenterData(costCenterData: any[][]) {
+    const costCenterMap = new Map<string, string>();
+    const debugKeys: any[] = [];
+    const allCostCenters = new Set<string>();
+    const costCenterHeaderRows: any[] = [];
+
+
+    if (costCenterData.length > 5) {
+        const headers = costCenterData[4]; 
+        const docIndex = headers.findIndex((h: string) => normalizeKey(h) === 'numerododocumento');
+        const credorIndex = headers.findIndex((h: string) => normalizeKey(h) === 'credor');
+        
+        let costCenterStartIndex = headers.findIndex((h: string) => normalizeKey(h) === 'centrosdecusto');
+        if (costCenterStartIndex === -1) costCenterStartIndex = headers.findIndex((h: string) => normalizeKey(h).startsWith('centrosdecusto'));
+
+
+        if (docIndex > -1 && credorIndex > -1 && costCenterStartIndex > -1) {
+            
+            for (let i = costCenterStartIndex; i < headers.length; i++) {
+                if(headers[i]) costCenterHeaderRows.push({ "Centro de Custo Encontrado": headers[i] });
+            }
+
+
+            for (let i = 5; i < costCenterData.length; i++) {
+                const row = costCenterData[i];
+                const docNumber = row[docIndex];
+                const credor = row[credorIndex];
+
+                if (docNumber && credor) {
+                    const credorCodeMatch = String(credor).match(/^(\d+)/);
+                    const credorCode = credorCodeMatch ? credorCodeMatch[1] : null;
+                    const key = `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCode)}`;
+                    
+                    let foundCostCenter = false;
+                    for (let j = costCenterStartIndex; j < row.length; j++) {
+                        const cellValue = row[j];
+                        if (cellValue && (cellValue > 0 || (typeof cellValue === 'string' && cellValue.trim() !== ''))) {
+                             const centerName = headers[j] || `Coluna_${j}`;
+                             costCenterMap.set(key, centerName);
+                             allCostCenters.add(centerName);
+                             foundCostCenter = true;
+                             break;
+                        }
+                    }
+
+                    debugKeys.push({
+                        "Chave de Comparação (Centro Custo)": key,
+                        "Número Documento (Original)": docNumber,
+                        "Credor (Original)": credor,
+                        "Centro de Custo Encontrado": costCenterMap.get(key) || "NENHUM"
+                    });
+                }
+            }
+        }
+    }
+
+    return { costCenterMap, debugKeys, allCostCenters: Array.from(allCostCenters), costCenterHeaderRows };
 }

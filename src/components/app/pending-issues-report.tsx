@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ProcessedData } from '@/lib/excel-processor';
 import { ClipboardList, Download, FileQuestion, FileText, FileDown, FileSpreadsheet, Settings, ListFilter, RefreshCw, ChevronDown, ChevronRight, MinusCircle, RotateCw, HelpCircle } from 'lucide-react';
 import { DataTable } from '@/components/app/data-table';
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { AllClassifications } from './imobilizado-analysis';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';

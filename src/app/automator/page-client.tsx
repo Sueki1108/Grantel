@@ -13,7 +13,7 @@ import { ResultsDisplay } from "@/components/app/results-display";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx';
 import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
 import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult, processCostCenterData, generateSiengeDebugKeys } from "@/lib/excel-processor";
@@ -97,17 +97,7 @@ export function AutomatorClientPage() {
         // Load imobilizado classifications from localStorage
         try {
             const savedImobilizado = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
-            if (savedImobilizado) {
-                 const parsedData = JSON.parse(savedImobilizado);
-                 if (!parsedData.supplierCategories) {
-                     parsedData.supplierCategories = [
-                        { id: 'mat-construcao', name: 'Materiais de Construção', icon: 'BrickWall', blockedCfops: [] },
-                        { id: 'ferramentas', name: 'Ferramentas', icon: 'Wrench', blockedCfops: [] },
-                        { id: 'pecas-veiculos', name: 'Peças para Veículos', icon: 'Car', blockedCfops: ['1128', '2128'] },
-                    ]
-                 }
-                 setAllClassifications(parsedData);
-            }
+            if (savedImobilizado) setAllClassifications(JSON.parse(savedImobilizado));
         } catch (e) {
             console.error("Failed to load imobilizado classifications from localStorage", e);
         }
@@ -285,83 +275,12 @@ export function AutomatorClientPage() {
     };
     
     const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        setSiengeFile(file || null);
-    
-        if (file) {
-            setProcessing(true);
-            try {
-                const data = await file.arrayBuffer();
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
-    
-                const worksheet = workbook.Sheets[sheetName];
-                const siengeSheetData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-                const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
-    
-                setProcessedData(prev => ({
-                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
-                    siengeSheetData,
-                    siengeDebugKeys,
-                    reconciliationResults: null, // Reset reconciliation results on new file
-                }));
-                
-                toast({ title: 'Planilha Sienge Carregada', description: 'Os dados foram lidos e estão prontos para as análises.' });
-            } catch (err: any) {
-                toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
-                setSiengeFile(null);
-            } finally {
-                setProcessing(false);
-            }
-        } else {
-            // Clear Sienge data if file is removed
-            setProcessedData(prev => {
-                if (!prev) return null;
-                const { siengeSheetData, reconciliationResults, siengeDebugKeys, ...rest } = prev;
-                return { ...rest, siengeSheetData: null, siengeDebugKeys: [], reconciliationResults: null } as ProcessedData;
-            });
-        }
+        setSiengeFile(e.target.files?.[0] || null);
     };
     
     
     const handleCostCenterFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        setCostCenterFile(file || null);
-
-        if (file) {
-            setProcessing(true);
-            try {
-                const data = await file.arrayBuffer();
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
-                const worksheet = workbook.Sheets[sheetName];
-                const costCenterData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-                const { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows } = processCostCenterData(costCenterData);
-                
-                setProcessedData(prev => ({
-                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
-                    costCenterMap,
-                    costCenterDebugKeys: debugKeys,
-                    allCostCenters,
-                    costCenterHeaderRows,
-                }));
-                toast({ title: "Planilha de Centro de Custo Carregada", description: `${costCenterMap.size} mapeamentos e ${allCostCenters.length} centros de custo foram encontrados.` });
-            } catch (err: any) {
-                toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
-                setCostCenterFile(null);
-            } finally {
-                setProcessing(false);
-            }
-        } else {
-            setProcessedData(prev => {
-                if (!prev) return null;
-                const { costCenterMap, costCenterDebugKeys, allCostCenters, costCenterHeaderRows, ...rest } = prev;
-                 return { ...rest, costCenterMap: undefined, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] } as ProcessedData;
-            });
-        }
+        setCostCenterFile(e.target.files?.[0] || null);
     };
 
 
