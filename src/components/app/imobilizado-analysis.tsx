@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -22,6 +23,7 @@ import { SupplierCategoryDialog } from './supplier-category-dialog';
 import { cn, cleanAndToStr, normalizeKey } from '@/lib/utils';
 import type { AllClassifications, Classification, SupplierCategory, DifalStatus } from '@/lib/types';
 import { Input } from '../ui/input';
+import * as LucideIcons from 'lucide-react';
 
 
 interface ImobilizadoAnalysisProps {
@@ -288,24 +290,41 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 const isIncorrectCfop = supplierCategory && supplierCategory.allowedCfops.length > 0 && !supplierCategory.allowedCfops.includes(String(item.CFOP));
 
                 if (id === 'Fornecedor') {
+                    const LucideIcon = supplierCategory?.icon ? (LucideIcons[supplierCategory.icon as keyof typeof LucideIcons] as React.ElementType) : Tag;
                     return (
                         <div className={cn("flex items-center gap-2 group/row", isIncorrectCfop && "text-red-500")}>
-                            {supplierCategory && <TooltipProvider><Tooltip><TooltipTrigger><Factory className="h-4 w-4" /></TooltipTrigger><TooltipContent><p>{supplierCategory.name}</p></TooltipContent></Tooltip></TooltipProvider>}
-                            {renderCellWithCopy(value, value, 'Fornecedor')}
                             <Popover>
                                 <PopoverTrigger asChild>
-                                    <button onClick={(e) => e.stopPropagation()} className="opacity-0 group-hover/row:opacity-100 transition-opacity"><Tag className="h-4 w-4 text-muted-foreground" /></button>
+                                    <button onClick={(e) => e.stopPropagation()} className="transition-opacity">
+                                        <TooltipProvider>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <LucideIcon className={cn("h-4 w-4", supplierCategory ? "text-primary" : "text-muted-foreground")} />
+                                                </TooltipTrigger>
+                                                <TooltipContent><p>{supplierCategory?.name || "Sem categoria"}</p></TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                    </button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-56 p-2">
-                                     <div className="space-y-1">
-                                        {supplierCategories.map(cat => (
-                                            <Button key={cat.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleSupplierCategoryChange(supplierCnpj, cat.id)}>{cat.name}</Button>
-                                        ))}
-                                        <hr className="my-1"/>
-                                        <Button variant="destructive" size="sm" className="w-full justify-start" onClick={() => handleSupplierCategoryChange(supplierCnpj, null)}>Remover Classificação</Button>
+                                <PopoverContent className="w-56 p-2" onClick={(e) => e.stopPropagation()}>
+                                     <div className="grid grid-cols-5 gap-1">
+                                        {supplierCategories.map(cat => {
+                                            const CatIcon = LucideIcons[cat.icon as keyof typeof LucideIcons] || Tag;
+                                            return (
+                                                <TooltipProvider key={cat.id}><Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                         <Button variant={supplierClassificationId === cat.id ? "default" : "outline"} size="icon" className="h-9 w-9" onClick={() => handleSupplierCategoryChange(supplierCnpj, cat.id)}><CatIcon className="h-4 w-4" /></Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent><p>{cat.name}</p></TooltipContent>
+                                                </Tooltip></TooltipProvider>
+                                            )
+                                        })}
                                     </div>
+                                    <hr className="my-2"/>
+                                    <Button variant="ghost" size="sm" className="w-full justify-start text-red-500 hover:text-red-500 hover:bg-red-50" onClick={() => handleSupplierCategoryChange(supplierCnpj, null)}>Remover Classificação</Button>
                                 </PopoverContent>
                             </Popover>
+                            {renderCellWithCopy(value, value, 'Fornecedor')}
                         </div>
                     );
                 }
@@ -487,7 +506,5 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         </div>
     );
 }
-
-    
 
     

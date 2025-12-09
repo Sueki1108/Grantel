@@ -1,7 +1,8 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList, GitCompareArrows } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Building, History, Save, TicketPercent, ClipboardList, GitCompareArrows } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -115,9 +116,8 @@ export function AutomatorClientPage() {
                  const parsedData = JSON.parse(savedImobilizado);
                  if (!parsedData.supplierCategories) {
                      parsedData.supplierCategories = [
-                        { id: 'mat-construcao', name: 'Materiais de Construção', icon: 'BrickWall', allowedCfops: [] },
-                        { id: 'ferramentas', name: 'Ferramentas', icon: 'Wrench', allowedCfops: [] },
-                        { id: 'pecas-veiculos', name: 'Peças para Veículos', icon: 'Car', allowedCfops: [] },
+                        { id: 'uso-consumo', name: 'Uso e Consumo', icon: 'ShoppingCart', allowedCfops: [] },
+                        { id: 'utilizado-obra', name: 'Utilização em Obra', icon: 'HardHat', allowedCfops: [] },
                     ]
                  }
                  setAllClassifications(parsedData);
@@ -274,7 +274,9 @@ export function AutomatorClientPage() {
             const fileProcessor = async (file: File) => {
                  const fileData = await new Promise<ArrayBuffer>((resolve, reject) => {
                     const reader = new FileReader();
-                    reader.onload = (event) => resolve(event.target?.result as ArrayBuffer);
+                    reader.onload = async (event) => {
+                        resolve(event.target?.result as ArrayBuffer);
+                    };
                     reader.onerror = (error) => reject(error);
                     reader.readAsArrayBuffer(file);
                 });
@@ -307,8 +309,8 @@ export function AutomatorClientPage() {
         if (file) {
             setProcessing(true);
             try {
-                const XLSX = await import('xlsx');
                 const data = await file.arrayBuffer();
+                const XLSX = await import('xlsx');
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
                 if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
@@ -349,8 +351,8 @@ export function AutomatorClientPage() {
         if (file) {
             setProcessing(true);
             try {
-                const XLSX = await import('xlsx');
                 const data = await file.arrayBuffer();
+                const XLSX = await import('xlsx');
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
                 if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
@@ -1004,3 +1006,5 @@ export function AutomatorClientPage() {
         </div>
     );
 }
+
+    

@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -17,11 +18,17 @@ import { PlusCircle, Trash2, Settings2 } from "lucide-react";
 import type { SupplierCategory } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '../ui/scroll-area';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import * as LucideIcons from 'lucide-react';
 
 interface SupplierCategoryDialogProps {
   categories: SupplierCategory[];
   onSave: (newCategories: SupplierCategory[]) => void;
 }
+
+const availableIcons = [
+  'Wrench', 'HardHat', 'ShoppingCart', 'Building', 'Car', 'Truck', 'Train', 'Ship', 'Plane', 'Computer'
+] as const;
 
 export function SupplierCategoryDialog({ categories, onSave }: SupplierCategoryDialogProps) {
   const [localCategories, setLocalCategories] = useState<SupplierCategory[]>(categories);
@@ -92,12 +99,30 @@ export function SupplierCategoryDialog({ categories, onSave }: SupplierCategoryD
                             onChange={(e) => handleUpdate(category.id, 'name', e.target.value)}
                             placeholder="Nome da Categoria"
                         />
-                         <Input
-                            value={category.icon}
-                            onChange={(e) => handleUpdate(category.id, 'icon', e.target.value)}
-                            placeholder="Ex: Wrench"
-                            className='w-28'
-                        />
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" className='w-28 justify-start'>
+                                    {category.icon ? category.icon : "Selecione"}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className='w-auto p-2'>
+                                <div className='grid grid-cols-5 gap-1'>
+                                    {availableIcons.map(iconName => {
+                                        const Icon = LucideIcons[iconName as keyof typeof LucideIcons];
+                                        return (
+                                            <Button
+                                                key={iconName}
+                                                variant={category.icon === iconName ? "default" : "ghost"}
+                                                size="icon"
+                                                onClick={() => handleUpdate(category.id, 'icon', iconName)}
+                                            >
+                                                <Icon className="h-4 w-4" />
+                                            </Button>
+                                        )
+                                    })}
+                                </div>
+                            </PopoverContent>
+                        </Popover>
                      </div>
                 </div>
                  <div className='col-span-3'>
@@ -133,3 +158,5 @@ export function SupplierCategoryDialog({ categories, onSave }: SupplierCategoryD
     </Dialog>
   );
 }
+
+    
