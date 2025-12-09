@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import type { KeyCheckResult } from '@/components/app/key-checker';
 import type { AllClassifications } from '@/components/app/imobilizado-analysis';
 import { normalizeKey, cleanAndToStr } from './utils';
-import type { SpedDuplicate } from './types';
+import type { SpedDuplicate, SaidaItem } from './types';
 
 
 // Types
@@ -338,7 +338,8 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
         let cfopCodeStr = newRow['CFOP'];
     
         if (!cfopCodeStr && newRow['Chave Unica']) {
-            const relatedItem = itens.find(item => item['Chave Unica'] === newRow['Chave Unica'] && item['CFOP']);
+            const allItems = [...itens, ...itensSaidas];
+            const relatedItem = allItems.find(item => item['Chave Unica'] === newRow['Chave Unica'] && item['CFOP']);
             if (relatedItem) {
                 cfopCodeStr = relatedItem['CFOP'];
             }
@@ -389,6 +390,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         
         let isHeaderRow = false;
         
+        // Check for header row
         for (let i = 0; i < row.length; i++) {
             const cellValue = String(row[i] || '').trim();
             if (cellValue.toLowerCase().includes('centro de custo')) {
@@ -409,6 +411,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             }
         }
 
+        // Process as data row if not a header
         if (!isHeaderRow) {
             const itemNumberCell = String(row[0] || '').trim();
             const creditorCell = String(row[1] || '').trim();
@@ -417,17 +420,20 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             const isDataRow = /^\d+$/.test(itemNumberCell) && creditorCell && documentCell;
 
             if (isDataRow) {
-                const cnpjMatch = creditorCell.match(/\d{14}/); // Find a sequence of 14 digits
+                 // Flexible CNPJ extraction
+                const cnpjRegex = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/;
+                const cnpjMatch = creditorCell.match(cnpjRegex);
                 const credorCnpj = cnpjMatch ? cnpjMatch[0] : null;
                 
                 if (credorCnpj) {
-                    const docKey = `${cleanAndToStr(documentCell)}-${cleanAndToStr(credorCnpj)}`;
+                    const cleanCnpj = cleanAndToStr(credorCnpj);
+                    const docKey = `${cleanAndToStr(documentCell)}-${cleanCnpj}`;
                     
                     const debugInfo = { 
                         'Chave Gerada (Centro de Custo)': docKey, 
                         'Documento Original': documentCell,
                         'Credor (Centro de Custo)': creditorCell,
-                        'CNPJ Extraído': credorCnpj,
+                        'CNPJ Extraído': cleanCnpj,
                         'Centro de Custo': currentCostCenter
                     };
                     debugKeys.push(debugInfo);
@@ -603,6 +609,9 @@ export function runReconciliation(
             return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
         };
         
+        let remainingSiengeItems = [...filteredSiengeData];
+        let remainingXmlItems = [...enrichedXmlItems];
+
         const result = reconciliationPass(
             remainingSiengeItems,
             remainingXmlItems, 
@@ -616,12 +625,16 @@ export function runReconciliation(
             .filter(item => {
                 const cfop = cleanAndToStr(item.CFOP);
                 const natOp = (item['Natureza da Operação'] || '').toUpperCase();
-                return (cfop.startsWith('1') || cfop.startsWith('2')) && natOp.includes('DEVOLUCAO');
+                return (cfop.startsWith('5') || cfop.startsWith('6')) && natOp.includes('DEVOLUCAO');
             })
             .map(item => {
                 const originalKeyClean = cleanAndToStr(item['refNFe'] || '');
-                const foundInSienge = siengeData.some(siengeRow => cleanAndToStr(siengeRow[h.numero!]) === originalKeyClean);
-
+                const foundInSienge = siengeData.some(siengeRow => {
+                    const siengeDocNumber = cleanAndToStr(siengeRow[h.numero!]);
+                    const siengeCnpjClean = cleanAndToStr(siengeRow[h.cnpj!]);
+                    // A chave referenciada no XML de devolução é a chave de acesso completa, não o número da nota.
+                    return originalKeyClean === `${siengeDocNumber}${siengeCnpjClean}`;
+                });
                 return {
                     'Número da Nota de Devolução': item['Número da Nota'],
                     'Fornecedor': item.Fornecedor,
