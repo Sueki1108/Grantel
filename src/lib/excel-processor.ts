@@ -385,14 +385,13 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     let credorIndex = -1;
     let documentoIndex = -1;
 
-    // Find the header row dynamically by looking for 'credor'/'fornecedor' and 'documento'/'nota'
-    for (let i = 0; i < Math.min(data.length, 20); i++) { // Search in the first 20 rows
+    for (let i = 0; i < Math.min(data.length, 20); i++) {
         const row = data[i];
         if (row && Array.isArray(row)) {
             const lowerCaseRow = row.map(cell => String(cell || '').toLowerCase());
             
-            const credorIdx = lowerCaseRow.findIndex(cell => cell.includes('credor') || cell.includes('fornecedor'));
-            const docIdx = lowerCaseRow.findIndex(cell => cell.includes('documento') || cell.includes('nota'));
+            const credorIdx = lowerCaseRow.findIndex(cell => cell && (cell.includes('credor') || cell.includes('fornecedor')));
+            const docIdx = lowerCaseRow.findIndex(cell => cell && (cell.includes('documento') || cell.includes('nota')));
 
             if (credorIdx !== -1 && docIdx !== -1) {
                 headerRowIndex = i;
