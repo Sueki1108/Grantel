@@ -391,13 +391,13 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
 
         let isHeaderRow = false;
         const rowAsString = row.join(';').toLowerCase();
-
+        
         if (rowAsString.includes('centro de custo')) {
             for (let i = 0; i < row.length; i++) {
                 const cellValue = String(row[i] || '').trim();
-                if (cellValue.toLowerCase().includes('centro de custo')) {
+                if (cellValue.toLowerCase().startsWith('centro de custo')) {
                     const potentialName = cellValue.replace(/centro de custo/i, '').replace(/:/g, '').trim();
-                    if (potentialName && potentialName.length > 1) {
+                    if (potentialName) {
                         currentCostCenter = potentialName;
                         costCenterSet.add(currentCostCenter);
                         costCenterHeaderRows.push({
@@ -411,39 +411,56 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             }
         }
 
-        // Process as data row if not a header
         if (!isHeaderRow) {
-            const itemNumberCell = String(row[0] || '').trim();
-            const creditorCell = String(row[1] || '').trim();
-            const documentCell = String(row[2] || '').trim();
+            let docCell: string | null = null;
+            let creditorCell: string | null = null;
+            
+            for (const cell of row) {
+                const cellStr = String(cell || '').trim();
+                if (cellStr.match(/^(NFE|NFSE)\s*\/?\s*\d+/i)) {
+                    docCell = cellStr;
+                } else if (cellStr.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/) || cellStr.match(/\d{14}/)) {
+                    creditorCell = cellStr;
+                }
+            }
 
-            const isDataRow = /^\d+$/.test(itemNumberCell) && creditorCell && documentCell;
+            if (!docCell) { // Fallback if format is not NFSE/NUM
+                const potentialDocCell = String(row[2] || '').trim();
+                if (potentialDocCell.match(/^\d+$/)) {
+                     docCell = potentialDocCell;
+                }
+            }
 
-            if (isDataRow) {
-                // Flexible CNPJ extraction
+            if (!creditorCell) {
+                 creditorCell = String(row[1] || '').trim();
+            }
+
+
+            if (docCell && creditorCell) {
+                const docNumberMatch = docCell.match(/\d+/g);
+                const docNumber = docNumberMatch ? docNumberMatch.join('') : null;
+
                 const cnpjRegex = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/;
                 const cnpjMatch = creditorCell.match(cnpjRegex);
                 const credorCnpj = cnpjMatch ? cnpjMatch[0] : null;
 
-                const docNumberMatch = documentCell.match(/\d+/);
-                const docNumber = docNumberMatch ? docNumberMatch[0] : null;
-                
-                if (credorCnpj && docNumber) {
-                    const cleanCnpj = cleanAndToStr(credorCnpj);
+                if (docNumber && credorCnpj) {
                     const cleanDocNumber = cleanAndToStr(docNumber);
-                    const docKey = `${cleanDocNumber}-${cleanCnpj}`;
+                    const cleanCnpj = cleanAndToStr(credorCnpj);
                     
-                    const debugInfo = { 
-                        'Chave Gerada (Centro de Custo)': docKey, 
-                        'Documento Original': documentCell,
-                        'Credor (Centro de Custo)': creditorCell,
-                        'CNPJ Extraído': cleanCnpj,
-                        'Centro de Custo': currentCostCenter
-                    };
-                    debugKeys.push(debugInfo);
+                    if (cleanDocNumber && cleanCnpj) {
+                        const docKey = `${cleanDocNumber}-${cleanCnpj}`;
+                        
+                        if (!costCenterMap.has(docKey)) {
+                            costCenterMap.set(docKey, currentCostCenter);
+                        }
 
-                    if (!costCenterMap.has(docKey)) {
-                        costCenterMap.set(docKey, currentCostCenter);
+                        debugKeys.push({
+                            'Chave Gerada (Centro de Custo)': docKey,
+                            'Documento Original': docCell,
+                            'Credor Original (Centro de Custo)': creditorCell,
+                            'Centro de Custo': currentCostCenter,
+                        });
                     }
                 }
             }
