@@ -73,59 +73,45 @@ export function ReconciliationAnalysis({
 
      useEffect(() => {
         if (siengeFile) {
-            const processFile = async () => {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
                 try {
                     const XLSX = await import('xlsx');
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        try {
-                            const data = e.target?.result;
-                            const workbook = XLSX.read(data, { type: 'array' });
-                            const sheetName = workbook.SheetNames[0];
-                            if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
-                            const worksheet = workbook.Sheets[sheetName];
-                            const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-                            setSiengeData(jsonData);
-                        } catch(err: any) {
-                            toast({variant: 'destructive', title: 'Erro ao ler Sienge', description: err.message});
-                        }
-                    };
-                    reader.readAsArrayBuffer(siengeFile);
-                } catch(err: any) {
-                     toast({variant: 'destructive', title: 'Erro ao importar biblioteca XLSX', description: err.message});
+                    const data = e.target?.result;
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+                    setSiengeData(jsonData);
+                } catch (err: any) {
+                    toast({ variant: 'destructive', title: 'Erro ao ler Sienge', description: err.message });
                 }
             };
-            processFile();
+            reader.readAsArrayBuffer(siengeFile);
         } else {
             setSiengeData(null);
         }
     }, [siengeFile, toast]);
 
-     useEffect(() => {
+    useEffect(() => {
         if (costCenterFile) {
-            const processFile = async () => {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
                 try {
                     const XLSX = await import('xlsx');
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        try {
-                            const data = e.target?.result;
-                            const workbook = XLSX.read(data, { type: 'array' });
-                            const sheetName = workbook.SheetNames[0];
-                            if (!sheetName) throw new Error("A planilha Centro de Custo não contém abas.");
-                            const worksheet = workbook.Sheets[sheetName];
-                            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                            setCostCenterData(jsonData);
-                        } catch(err: any) {
-                            toast({variant: 'destructive', title: 'Erro ao ler Centro de Custo', description: err.message});
-                        }
-                    };
-                    reader.readAsArrayBuffer(costCenterFile);
-                } catch(err: any) {
-                     toast({variant: 'destructive', title: 'Erro ao importar biblioteca XLSX', description: err.message});
+                    const data = e.target?.result;
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    if (!sheetName) throw new Error("A planilha Centro de Custo não contém abas.");
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    setCostCenterData(jsonData);
+                } catch (err: any) {
+                    toast({ variant: 'destructive', title: 'Erro ao ler Centro de Custo', description: err.message });
                 }
             };
-            processFile();
+            reader.readAsArrayBuffer(costCenterFile);
         } else {
             setCostCenterData(null);
         }
@@ -511,6 +497,8 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
         </Card>
     )
 }
+    
+
     
 
     
