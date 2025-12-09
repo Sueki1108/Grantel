@@ -27,7 +27,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { KeyCheckResult } from "@/components/app/key-checker";
 import { cn } from "@/lib/utils";
 
-import type { AllClassifications } from "@/components/app/imobilizado-analysis";
+import type { AllClassifications } from "@/lib/types";
 import type { SessionData } from "@/components/app/history-analysis";
 
 import { Switch } from "@/components/ui/switch";
@@ -300,12 +300,83 @@ export function AutomatorClientPage() {
     };
     
     const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-        setSiengeFile(e.target.files?.[0] || null);
+        const file = e.target.files?.[0];
+        setSiengeFile(file || null);
+    
+        if (file) {
+            setProcessing(true);
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
+    
+                const worksheet = workbook.Sheets[sheetName];
+                const siengeSheetData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+                const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
+    
+                setProcessedData(prev => ({
+                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
+                    siengeSheetData,
+                    siengeDebugKeys,
+                    reconciliationResults: null, // Reset reconciliation results on new file
+                }));
+                
+                toast({ title: 'Planilha Sienge Carregada', description: 'Os dados foram lidos e estão prontos para as análises.' });
+            } catch (err: any) {
+                toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
+                setSiengeFile(null);
+            } finally {
+                setProcessing(false);
+            }
+        } else {
+            // Clear Sienge data if file is removed
+            setProcessedData(prev => {
+                if (!prev) return null;
+                const { siengeSheetData, reconciliationResults, siengeDebugKeys, ...rest } = prev;
+                return { ...rest, siengeSheetData: null, siengeDebugKeys: [], reconciliationResults: null } as ProcessedData;
+            });
+        }
     };
     
     
     const handleCostCenterFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-        setCostCenterFile(e.target.files?.[0] || null);
+        const file = e.target.files?.[0];
+        setCostCenterFile(file || null);
+
+        if (file) {
+            setProcessing(true);
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
+                const worksheet = workbook.Sheets[sheetName];
+                const costCenterData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                const { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows } = processCostCenterData(costCenterData);
+                
+                setProcessedData(prev => ({
+                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
+                    costCenterMap,
+                    costCenterDebugKeys: debugKeys,
+                    allCostCenters,
+                    costCenterHeaderRows,
+                }));
+                toast({ title: "Planilha de Centro de Custo Carregada", description: `${costCenterMap.size} mapeamentos e ${allCostCenters.length} centros de custo foram encontrados.` });
+            } catch (err: any) {
+                toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
+                setCostCenterFile(null);
+            } finally {
+                setProcessing(false);
+            }
+        } else {
+            setProcessedData(prev => {
+                if (!prev) return null;
+                const { costCenterMap, costCenterDebugKeys, allCostCenters, costCenterHeaderRows, ...rest } = prev;
+                 return { ...rest, costCenterMap: undefined, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] } as ProcessedData;
+            });
+        }
     };
 
 
@@ -633,11 +704,10 @@ export function AutomatorClientPage() {
     };
 
     const handleRunReconciliation = async () => {
-        if (!siengeFile) {
+        if (!processedData?.siengeSheetData) {
             toast({ variant: 'destructive', title: 'Ficheiro Sienge em falta', description: 'Por favor, carregue a planilha "Itens do Sienge".' });
             return;
         }
-
         if (!processedData || !processedData.sheets['Itens Válidos']) {
             toast({ variant: 'destructive', title: 'Dados XML em falta', description: 'Por favor, execute a "Validação de Documentos" primeiro.' });
             return;
@@ -645,19 +715,10 @@ export function AutomatorClientPage() {
     
         setProcessing(true);
         try {
-            const siengeData = await (async () => {
-                const data = await siengeFile.arrayBuffer();
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
-                const worksheet = workbook.Sheets[sheetName];
-                return XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-            })();
-    
             await new Promise(resolve => setTimeout(resolve, 50));
             
             const newReconciliationResults = runReconciliation(
-                siengeData,
+                processedData.siengeSheetData,
                 processedData.sheets['Itens Válidos'] || [],
                 processedData.sheets['Notas Válidas'] || [],
                 processedData.sheets['CTEs Válidos'] || [],
@@ -666,7 +727,6 @@ export function AutomatorClientPage() {
             
             setProcessedData(prev => ({
                 ...prev!,
-                siengeSheetData: siengeData,
                 reconciliationResults: newReconciliationResults,
             }));
             
