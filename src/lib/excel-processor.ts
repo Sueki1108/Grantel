@@ -417,11 +417,11 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             const isDataRow = /^\d+$/.test(itemNumberCell) && creditorCell && documentCell;
 
             if (isDataRow) {
-                const credorCodeMatch = creditorCell.match(/^(\d+)/);
-                const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
-
-                if (credorCode) {
-                    const docKey = `${cleanAndToStr(documentCell)}-${credorCode}`;
+                const credorCnpjMatch = creditorCell.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/);
+                const credorCnpj = credorCnpjMatch ? credorCnpjMatch[0] : '';
+                
+                if (credorCnpj) {
+                    const docKey = `${cleanAndToStr(documentCell)}-${cleanAndToStr(credorCnpj)}`;
                     
                     const debugInfo = { 
                         'Chave Gerada (Centro de Custo)': docKey, 
@@ -452,25 +452,24 @@ export function generateSiengeDebugKeys(siengeData: any[]): any[] {
     };
 
     const h = {
-        credor: findHeader(siengeData, ['credor', 'fornecedor', 'nome do fornecedor']),
+        cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
         documento: findHeader(siengeData, ['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
+        credor: findHeader(siengeData, ['credor', 'fornecedor', 'nome do fornecedor']),
     };
 
-    if (!h.credor || !h.documento) return [];
+    if (!h.cnpj || !h.documento) return [];
 
     return siengeData.map(item => {
-        const credorString = item[h.credor!];
+        const cnpj = item[h.cnpj!];
         const documento = item[h.documento!];
         
-        const credorCodeMatch = String(credorString).match(/^(\d+)/);
-        const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
-
-        const docKey = `${cleanAndToStr(documento)}-${credorCode}`;
+        const docKey = `${cleanAndToStr(documento)}-${cleanAndToStr(cnpj)}`;
         
         return {
             'Chave Gerada (Sienge)': docKey,
             'Documento Original': documento,
-            'Credor Original': credorString,
+            'Credor Original': item[h.credor!],
+            'CNPJ Original': cnpj,
         };
     });
 }
@@ -515,7 +514,7 @@ export function runReconciliation(
                 ...item,
                 Fornecedor: header?.Fornecedor || 'N/A',
                 destUF: header?.destUF || '',
-                'refNFe': header?.refNFe
+                refNFe: header?.refNFe
             };
         });
 
@@ -558,7 +557,7 @@ export function runReconciliation(
         ) => {
             const matchedInPass: any[] = [];
             const stillUnmatchedSienge: any[] = [];
-            const xmlMap = new Map<string, any,any>();
+            const xmlMap = new Map<string, any[]>();
 
             xmlItems.forEach(item => {
                 const key = getXmlKeyFn(item);
@@ -578,14 +577,12 @@ export function runReconciliation(
                         if (matchedXmlItems.length === 0) xmlMap.delete(key);
                         
                         let costCenter = 'N/A';
-                         if (costCenterMap && h.numero && h.credor) {
+                         if (costCenterMap && h.numero && h.cnpj) {
                             const siengeDoc = siengeItem[h.numero!];
-                            const siengeCredorString = siengeItem[h.credor!];
-                            const credorCodeMatch = String(siengeCredorString).match(/^(\d+)/);
-                            const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
+                            const siengeCnpj = siengeItem[h.cnpj!];
 
-                            if (siengeDoc && credorCode) {
-                                const docKey = `${cleanAndToStr(siengeDoc)}-${credorCode}`;
+                            if (siengeDoc && siengeCnpj) {
+                                const docKey = `${cleanAndToStr(siengeDoc)}-${cleanAndToStr(siengeCnpj)}`;
                                 if (costCenterMap.has(docKey)) {
                                     costCenter = costCenterMap.get(docKey)!;
                                 }
