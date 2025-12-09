@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -20,8 +19,8 @@ import { RowSelectionState, Table as ReactTable } from '@tanstack/react-table';
 import * as React from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { SupplierCategoryDialog } from './supplier-category-dialog';
-import { cn } from '@/lib/utils';
-import type { AllClassifications, Classification, SupplierCategory } from '@/lib/types';
+import { cn, cleanAndToStr, normalizeKey } from '@/lib/utils';
+import type { AllClassifications, Classification, SupplierCategory, DifalStatus } from '@/lib/types';
 import { Input } from '../ui/input';
 
 
@@ -87,7 +86,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
 
         const updatedData = { ...allPersistedData };
         if (!updatedData[competence]) {
-            updatedData[competence] = { classifications: {}, accountCodes: {}, supplierClassifications: {} };
+            updatedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {}}, supplierClassifications: {} };
         }
         if (!updatedData[competence].supplierClassifications) {
              updatedData[competence].supplierClassifications = {};
@@ -131,7 +130,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         if (!competence) return;
 
         const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
-        if (!updatedPersistedData[competence]) updatedPersistedData[competence] = { classifications: {}, accountCodes: {} };
+        if (!updatedPersistedData[competence]) updatedPersistedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {}}, supplierClassifications: {} };
         if (!updatedPersistedData[competence].accountCodes) updatedPersistedData[competence].accountCodes = {};
 
         updatedPersistedData[competence].accountCodes[itemLineId] = { accountCode: code };
@@ -142,21 +141,52 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
 
     const imobilizadoItems = useMemo(() => {
         if (!initialAllItems) return [];
-        const siengeItemMap = new Map();
-        if (siengeData) {
+    
+        const findSiengeHeader = (possibleNames: string[]): string | undefined => {
+            if (!siengeData || siengeData.length === 0 || !siengeData[0]) return undefined;
+            const headers = Object.keys(siengeData[0]);
+            return headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
+        };
+
+        const siengeHeaderNumero = findSiengeHeader(['número', 'numero', 'numero da nota', 'nota fiscal']);
+        const siengeHeaderCnpj = findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor']);
+        const siengeHeaderCfop = findSiengeHeader(['cfop']);
+
+        const siengeItemMap = new Map<string, any>();
+        if (siengeData && siengeHeaderNumero && siengeHeaderCnpj) {
             siengeData.forEach(sItem => {
-                const key = `${sItem['Chave de acesso']}-${sItem['Item']}`;
-                siengeItemMap.set(key, sItem);
+                const docNumber = sItem[siengeHeaderNumero!];
+                const credorCnpj = sItem[siengeHeaderCnpj!];
+                if (docNumber && credorCnpj) {
+                    const key = `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCnpj)}`;
+                    if (!siengeItemMap.has(key)) {
+                         siengeItemMap.set(key, []);
+                    }
+                    siengeItemMap.get(key)!.push(sItem);
+                }
             });
         }
         
         return initialAllItems.map(item => {
             const emitenteCnpj = item['CPF/CNPJ do Emitente'] || '';
             const codigoProduto = item['Código'] || '';
-            const key = `${item['Chave de acesso']}-${item['Item']}`;
-            const siengeItem = siengeItemMap.get(key);
+            const numeroNota = item['Número da Nota'] || '';
+
+            const comparisonKey = `${cleanAndToStr(numeroNota)}-${cleanAndToStr(emitenteCnpj)}`;
+            const siengeMatches = siengeItemMap.get(comparisonKey) || [];
+
+            let finalCfop = item.CFOP;
+            let siengeCfopValue = 'N/A';
+
+            if (siengeMatches.length > 0 && siengeHeaderCfop) {
+                // Find a match within the note based on value, if multiple items exist
+                const siengeMatch = siengeMatches.find(si => Math.abs((si['Valor Total'] || 0) - (item['Valor Total'] || 0)) < 0.01) || siengeMatches[0];
+                if (siengeMatch) {
+                    siengeCfopValue = siengeMatch[siengeHeaderCfop] || 'N/A';
+                    finalCfop = siengeCfopValue;
+                }
+            }
             
-            const finalCfop = siengeItem?.Sienge_CFOP || item.CFOP;
 
             return {
                 ...item,
@@ -165,7 +195,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 Fornecedor: item.Fornecedor || 'N/A',
                 'CPF/CNPJ do Emitente': emitenteCnpj,
                 CFOP: finalCfop, 
-                Sienge_CFOP: siengeItem?.Sienge_CFOP || 'N/A',
+                Sienge_CFOP: siengeCfopValue,
             };
         });
     }, [initialAllItems, siengeData]);
@@ -456,5 +486,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         </div>
     );
 }
+
+    
 
     
