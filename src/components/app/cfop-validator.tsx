@@ -513,6 +513,8 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                             {allCfopsForStatus.map(cfop => {
                                                 const currentFilters = tabFilters[cfop];
                                                 const allItemsForCfop = itemsByStatus[status]?.[cfop] || [];
+                                                
+                                                if(allItemsForCfop.length === 0) return null;
 
                                                 const filteredCount = !currentFilters ? allItemsForCfop.length : allItemsForCfop.filter(item => {
                                                     const cfopCode = item.CFOP;
@@ -531,8 +533,6 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                                                     return cstFilter && picmsFilter && cfopFilter;
                                                 }).length;
                                                 
-                                                if (filteredCount === 0 && allItemsForCfop.length > 0) return null;
-
                                                 return <TabsTrigger key={`${status}-${cfop}`} value={cfop} disabled={filteredCount === 0}>{cfop} ({filteredCount})</TabsTrigger>
                                             })}
                                         </TabsList>
@@ -585,4 +585,5 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         </div>
     );
 }
+
 
