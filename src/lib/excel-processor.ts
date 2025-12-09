@@ -281,7 +281,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
                 Fornecedor: header?.Fornecedor || 'N/A',
                 'CPF/CNPJ do Emitente': emitenteCnpj,
                 destUF: header?.destUF || '',
-                'Alíq. ICMS (%)': item['Alíq. ICMS (%)'] === undefined ? null : item['Alíq. ICMS (%)']
+                'Alíq. ICMS (%)': item['pICMS'] === undefined ? null : item['pICMS']
             };
         });
     log(`- ${imobilizados.length} itens com valor unitário > R$ 1.200 encontrados para análise de imobilizado.`);
@@ -386,82 +386,88 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
 
-    data.forEach(row => {
-        if (!row || !Array.isArray(row)) return;
+    let headerRowIndex = -1;
+    let credorIndex = -1;
+    let documentoIndex = -1;
 
-        let isHeaderRow = false;
+    // Encontra a linha de cabeçalho e os índices das colunas
+    for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        if (row && Array.isArray(row)) {
+            const lowerCaseRow = row.map(cell => String(cell || '').toLowerCase());
+            const credorIdx = lowerCaseRow.findIndex(cell => cell.includes('credor'));
+            const docIdx = lowerCaseRow.findIndex(cell => cell.includes('documento'));
+
+            if (credorIdx !== -1 && docIdx !== -1) {
+                headerRowIndex = i;
+                credorIndex = credorIdx;
+                documentoIndex = docIdx;
+                break;
+            }
+        }
+    }
+
+    if (headerRowIndex === -1) {
+        // Fallback or error if headers are not found
+        return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
+    }
+
+
+    for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        if (!row || !Array.isArray(row) || row.every(cell => cell === null || cell === '')) continue;
+
         const rowAsString = row.join(';').toLowerCase();
         
+        // Verifica se é uma linha que define um centro de custo
         if (rowAsString.includes('centro de custo')) {
-            for (let i = 0; i < row.length; i++) {
-                const cellValue = String(row[i] || '').trim();
-                if (cellValue.toLowerCase().startsWith('centro de custo')) {
-                    const potentialName = cellValue.replace(/centro de custo/i, '').replace(/:/g, '').trim();
-                    if (potentialName) {
-                        currentCostCenter = potentialName;
-                        costCenterSet.add(currentCostCenter);
-                        costCenterHeaderRows.push({
-                            'Linha Original': row.join('; '),
-                            'Centro de Custo Identificado': currentCostCenter
-                        });
-                        isHeaderRow = true;
-                        break; 
-                    }
-                }
-            }
-        }
-
-        if (!isHeaderRow) {
-            let docNumber: string | null = null;
-            let credorCnpj: string | null = null;
-            let credorName: string | null = null;
-
-            for (const cell of row) {
-                const cellStr = String(cell || '').trim();
-                
-                // Procurar por número de documento (NFE/NFSE/NUM)
-                const docMatch = cellStr.match(/(?:NFE|NFSE)\s*\/?\s*(\d+)/i);
-                if (docMatch && docMatch[1]) {
-                    docNumber = docMatch[1];
-                }
-
-                // Procurar por CNPJ
-                const cnpjRegex = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/;
-                const cnpjMatch = cellStr.match(cnpjRegex);
-                if (cnpjMatch) {
-                    credorCnpj = cnpjMatch[0];
-                    credorName = cellStr;
-                }
-            }
-            
-            // Se o documento não foi encontrado no formato NFSE/NUM, tenta um fallback numérico
-            if (!docNumber && row.length > 2) {
-                 const potentialDocCell = String(row[2] || '').trim();
-                 if (potentialDocCell.match(/^\d+$/)) {
-                     docNumber = potentialDocCell;
-                 }
-            }
-
-            if (docNumber && credorCnpj && credorName) {
-                const docKey = `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCnpj)}`;
-                
-                if (!costCenterMap.has(docKey)) {
-                    costCenterMap.set(docKey, currentCostCenter);
-                }
-
-                debugKeys.push({
-                    'Chave Gerada (Centro de Custo)': docKey,
-                    'Documento Original': docNumber,
-                    'Credor (Centro de Custo)': credorName,
-                    'CNPJ Original': credorCnpj,
-                    'Centro de Custo': currentCostCenter,
+            const match = rowAsString.match(/centro de custo\s*;\s*;\s*([\d\s\w-]+)/);
+            if (match && match[1]) {
+                currentCostCenter = match[1].trim();
+                costCenterSet.add(currentCostCenter);
+                costCenterHeaderRows.push({
+                    'Linha Original': row.join('; '),
+                    'Centro de Custo Identificado': currentCostCenter
                 });
+                continue; // Pula para a próxima linha após identificar o cabeçalho
             }
         }
-    });
+        
+        // Pula as linhas até encontrar a tabela de dados real
+        if (i <= headerRowIndex) continue;
+
+        const credorCell = row[credorIndex];
+        const docCell = row[documentoIndex];
+
+        if (credorCell && docCell) {
+             const cnpjRegex = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/;
+             const cnpjMatch = String(credorCell).match(cnpjRegex);
+             const cnpj = cnpjMatch ? cnpjMatch[0] : null;
+
+             const docRegex = /(?:NFE|NFSE)\s*\/?\s*(\d+)/i;
+             const docMatch = String(docCell).match(docRegex);
+             const docNumber = docMatch ? docMatch[1] : (String(docCell).match(/^\d+$/) ? String(docCell) : null);
+             
+             if (docNumber && cnpj) {
+                const docKey = `${cleanAndToStr(docNumber)}-${cleanAndToStr(cnpj)}`;
+                 if (!costCenterMap.has(docKey)) {
+                     costCenterMap.set(docKey, currentCostCenter);
+                 }
+                 const debugInfo = {
+                     'Chave Gerada (Centro de Custo)': docKey,
+                     'Documento Original': docCell,
+                     'Credor (Centro de Custo)': credorCell,
+                     'CNPJ Original': cnpj,
+                     'Centro de Custo': currentCostCenter,
+                 };
+                 debugKeys.push(debugInfo);
+             }
+        }
+    }
     
     return { costCenterMap, debugKeys, allCostCenters: Array.from(costCenterSet), costCenterHeaderRows };
 }
+
 
 
 export function generateSiengeDebugKeys(siengeData: any[]): any[] {
