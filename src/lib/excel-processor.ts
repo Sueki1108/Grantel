@@ -562,34 +562,31 @@ export function processCostCenterData(costCenterData: any[][]): {
 
     let headerRowIndex = -1;
     let docIndex = -1;
-    let credorIndex = -1;
     let credorCnpjIndex = -1;
     let headers: any[] = [];
     
-    // Find the header row dynamically by looking for key column names
+    // Find the header row dynamically
     for (let i = 0; i < costCenterData.length; i++) {
         const row = costCenterData[i] || [];
         const normalizedRow = row.map(cell => normalizeKey(String(cell)));
         const docIdx = normalizedRow.indexOf('numerododocumento');
-        const credorIdx = normalizedRow.indexOf('credor');
-        const credorCnpjIdx = normalizedRow.findIndex(h => h === 'cpfcnpj' || h === 'cpfcnpjfornecedor');
+        const credorCnpjIdx = normalizedRow.indexOf('cpfcnpj');
 
-        if (docIdx !== -1 && (credorIdx !== -1 || credorCnpjIdx !== -1)) {
+        if (docIdx !== -1 && credorCnpjIdx !== -1) {
             headerRowIndex = i;
             headers = row;
             docIndex = docIdx;
-            credorIndex = credorIdx;
             credorCnpjIndex = credorCnpjIdx;
             break;
         }
     }
     
     if (headerRowIndex === -1) {
-        console.warn("Cost Center: Header row with 'Número do Documento' and ('Credor' or 'CPF/CNPJ') not found.");
+        console.warn("Cost Center: Header row with 'Número do Documento' and 'CPF/CNPJ' not found.");
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
     
-    const costCenterStartIndex = Math.max(docIndex, credorIndex, credorCnpjIndex) + 1;
+    const costCenterStartIndex = Math.max(docIndex, credorCnpjIndex) + 1;
 
     for (let i = costCenterStartIndex; i < headers.length; i++) {
         const centerName = String(headers[i]).trim();
@@ -599,21 +596,12 @@ export function processCostCenterData(costCenterData: any[][]): {
     }
     costCenterHeaderRows = Array.from(allCostCenters).map(cc => ({ "Centro de Custo Encontrado": cc }));
 
-
     for (let i = headerRowIndex + 1; i < costCenterData.length; i++) {
         const row = costCenterData[i];
         if (!row || row.length === 0) continue;
         
         const docNumber = row[docIndex];
-        let credorCnpj = credorCnpjIndex !== -1 ? row[credorCnpjIndex] : null;
-
-        if (!credorCnpj && credorIndex !== -1) {
-             const credorString = String(row[credorIndex] || '');
-             const cnpjMatch = credorString.match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/);
-             if (cnpjMatch) {
-                 credorCnpj = cnpjMatch[1];
-             }
-        }
+        const credorCnpj = row[credorCnpjIndex];
         
         if (docNumber && credorCnpj) {
             const key = `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCnpj)}`;
@@ -631,7 +619,7 @@ export function processCostCenterData(costCenterData: any[][]): {
              debugKeys.push({
                 "Chave de Comparação (Centro Custo)": key,
                 "Número Documento (Original)": docNumber,
-                "CNPJ Credor (Extraído)": credorCnpj,
+                "CNPJ Credor (Original)": credorCnpj,
                 "Centro de Custo Encontrado": costCenterMap.get(key) || "NENHUM"
             });
         }
