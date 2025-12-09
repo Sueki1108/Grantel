@@ -417,8 +417,8 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             const isDataRow = /^\d+$/.test(itemNumberCell) && creditorCell && documentCell;
 
             if (isDataRow) {
-                // Corrected logic to extract CNPJ reliably
-                const cnpjMatch = creditorCell.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/) || creditorCell.match(/\d{14}/);
+                // Regex to find a CNPJ (formatted or unformatted) inside the creditor string
+                const cnpjMatch = creditorCell.match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/);
                 const credorCnpj = cnpjMatch ? cnpjMatch[0] : null;
                 
                 if (credorCnpj) {
@@ -540,7 +540,7 @@ export function runReconciliation(
 
         const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
             const cleanNumero = cleanAndToStr(numero);
-            const cleanCnpj = String(cnpj).replace(/\D/g, '');
+            const cleanCnpj = cleanAndToStr(cnpj); // Standardize cleaning
             const cleanValor = parseFloat(String(valor || '0').replace(',', '.')).toFixed(2);
             if (!cleanNumero || !cleanCnpj || cleanValor === 'NaN') return null;
             return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
@@ -615,7 +615,7 @@ export function runReconciliation(
             (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
             "Valor Total"
         );
-        reconciled.push(...result.matched);
+        reconciled = result.matched;
         
         const devolucoesEP = (enrichedXmlItems || [])
             .filter(item => {
@@ -624,14 +624,16 @@ export function runReconciliation(
                 return (cfop.startsWith('1') || cfop.startsWith('2')) && natOp.includes('DEVOLUCAO');
             })
             .map(item => {
-                const originalKey = cleanAndToStr(item['refNFe'] || '');
-                const foundInSienge = siengeData.some(siengeRow => cleanAndToStr(siengeRow[h.numero!]) === originalKey);
+                const originalKeyClean = cleanAndToStr(item['refNFe'] || '');
+                // Since Sienge might have numeric or string document numbers, we clean both for comparison
+                const foundInSienge = siengeData.some(siengeRow => cleanAndToStr(siengeRow[h.numero!]) === originalKeyClean);
+
                 return {
                     'Número da Nota de Devolução': item['Número da Nota'],
                     'Fornecedor': item.Fornecedor,
                     'Valor': item['Valor Total'],
                     'Data Emissão': item.Emissão,
-                    'Chave da Nota Original': originalKey || 'Não encontrada no XML',
+                    'Chave da Nota Original': originalKeyClean || 'Não encontrada no XML',
                     'Encontrada no Sienge': foundInSienge ? 'Sim' : 'Não'
                 };
             });
