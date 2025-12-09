@@ -557,9 +557,10 @@ export function processCostCenterData(costCenterData: any[][]) {
 
     let headerRowIndex = -1;
     let docIndex = -1;
-    let credorCnpjIndex = -1;
+    let credorCnpjIndex = -1; 
     let headers: any[] = [];
     
+    // Find the header row dynamically
     for (let i = 0; i < costCenterData.length; i++) {
         const row = costCenterData[i] || [];
         const normalizedRow = row.map(cell => normalizeKey(String(cell)));
@@ -574,9 +575,9 @@ export function processCostCenterData(costCenterData: any[][]) {
             break;
         }
     }
-
+    
     if (headerRowIndex === -1) {
-        console.warn("Cost Center: Header row not found. Searched for 'Número do Documento' and 'CPF/CNPJ'.");
+        console.warn("Cost Center: Header row with 'Número do Documento' and 'CPF/CNPJ' not found.");
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
     
@@ -596,7 +597,7 @@ export function processCostCenterData(costCenterData: any[][]) {
         
         const docNumber = row[docIndex];
         const credorCnpj = row[credorCnpjIndex];
-
+        
         if (docNumber && credorCnpj) {
             const key = `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCnpj)}`;
             
@@ -606,7 +607,7 @@ export function processCostCenterData(costCenterData: any[][]) {
                     const centerName = String(headers[j]).trim();
                     if (centerName) {
                         costCenterMap.set(key, centerName);
-                        break;
+                        break; // Found the cost center for this row
                     }
                 }
             }
