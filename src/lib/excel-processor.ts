@@ -2,7 +2,7 @@
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import type { KeyCheckResult } from '@/components/app/key-checker';
-import type { AllClassifications } from '@/components/app/imobilizado-analysis';
+import type { AllClassifications } from '@/lib/types';
 import { normalizeKey, cleanAndToStr } from './utils';
 import type { SpedDuplicate, SaidaItem } from './types';
 
@@ -385,7 +385,6 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     let docIndex = -1;
     let headerRowIndex = -1;
 
-    // Find header row and indexes
     for (let i = 0; i < Math.min(data.length, 20); i++) {
         const row = data[i];
         if (row && Array.isArray(row)) {
@@ -426,7 +425,6 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             continue;
         }
 
-        // Only process rows after the header
         if (i <= headerRowIndex) continue;
 
         const credorCell = row[credorIndex];
@@ -517,40 +515,32 @@ export function runReconciliation(
             return headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
         };
 
-        const hSienge = {
-            credor: findHeader(siengeData, ['credor', 'fornecedor']),
-            documento: findHeader(siengeData, ['documento', 'número', 'numero', 'notafiscal']),
-            valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlrtotal']),
+        const h = {
+            cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
+            numero: findHeader(siengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
+            valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total']),
             cfop: findHeader(siengeData, ['cfop']),
             esp: findHeader(siengeData, ['esp']),
         };
 
-        if (!hSienge.documento || !hSienge.credor || !hSienge.valorTotal) {
-            throw new Error("Não foi possível encontrar as colunas essenciais ('Documento', 'Credor', 'Valor Total') na planilha Sienge.");
+        if (!h.numero || !h.cnpj || !h.valorTotal) {
+            throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge.");
         }
         
         const nfeHeaderMap = new Map((nfeEntradas || []).map(n => [n['Chave Unica'], n]));
 
-        const getSiengeComparisonKey = (siengeItem: any): string | null => {
-            const docNumber = siengeItem[hSienge.documento!];
-            const credorCell = siengeItem[hSienge.credor!];
-            const credorCodeMatch = String(credorCell).match(/^(\d+)/);
-            const credorCode = credorCodeMatch ? credorCodeMatch[1] : null;
-            if (!docNumber || !credorCode) return null;
-            return `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCode)}`;
-        };
-        
         const getXmlComparisonKey = (xmlItem: any): string | null => {
             const docNumber = xmlItem['Número da Nota'];
-            const nfeHeader = nfeHeaderMap.get(xmlItem['Chave Unica']);
-            if (!nfeHeader) return null; // Only reconcile items with a valid header
-            
-            const credorCell = nfeHeader['Fornecedor'];
-            const credorCodeMatch = String(credorCell).match(/^(\d+)/);
-            const credorCode = credorCodeMatch ? credorCodeMatch[1] : null;
-
-            if (!docNumber || !credorCode) return null;
-            return `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCode)}`;
+            const credorCnpj = xmlItem['CPF/CNPJ do Emitente'];
+            if (!docNumber || !credorCnpj) return null;
+            return `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCnpj)}`;
+        };
+        
+        const getSiengeComparisonKey = (siengeItem: any): string | null => {
+            const docNumber = siengeItem[h.numero!];
+            const credorCnpj = siengeItem[h.cnpj!];
+             if (!docNumber || !credorCnpj) return null;
+            return `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCnpj)}`;
         };
 
 
@@ -570,7 +560,7 @@ export function runReconciliation(
             const key = getSiengeComparisonKey(siengeItem);
             if (key && xmlMap.has(key)) {
                 const matchedXmlItems = xmlMap.get(key)!;
-                const siengeValor = parseFloat(String(siengeItem[hSienge.valorTotal!] || '0').replace(',', '.'));
+                const siengeValor = parseFloat(String(siengeItem[h.valorTotal!] || '0').replace(',', '.'));
                 
                 const exactMatchIndex = matchedXmlItems.findIndex(xmlItem => 
                     Math.abs((xmlItem['Valor Total'] || 0) - siengeValor) < 0.01
@@ -579,19 +569,19 @@ export function runReconciliation(
                 if (exactMatchIndex !== -1) {
                     const matchedXmlItem = matchedXmlItems.splice(exactMatchIndex, 1)[0];
                     
-                    const costCenter = costCenterMap?.get(key) || 'N/A';
+                    const costCenterKey = `${cleanAndToStr(siengeItem[h.numero!])}-${cleanAndToStr(siengeItem[h.cnpj!])}`;
+                    const costCenter = costCenterMap?.get(costCenterKey) || 'N/A';
+
                     reconciled.push({ 
                         ...matchedXmlItem, 
-                        Sienge_CFOP: siengeItem[hSienge.cfop!],
-                        Sienge_Esp: siengeItem[hSienge.esp!],
+                        Sienge_CFOP: siengeItem[h.cfop!],
+                        Sienge_Esp: siengeItem[h.esp!],
                         'Centro de Custo': costCenter,
                         'Observações': `Conciliado` 
                     });
                     
-                    // Since it's matched, remove it from the set of unmatched Sienge items
                     unmatchedSiengeItems.delete(siengeItem);
 
-                    // If a group of XML items is now empty, remove it from the map
                     if (matchedXmlItems.length === 0) {
                         xmlMap.delete(key);
                     }
@@ -612,10 +602,11 @@ export function runReconciliation(
             .map(item => {
                 const originalKeyClean = cleanAndToStr(item['refNFe'] || '');
                 const foundInSienge = siengeData.some(siengeRow => {
-                    const siengeDocNumber = cleanAndToStr(siengeRow[hSienge.documento!]);
-                    const credorCodeMatch = String(siengeRow[hSienge.credor!]).match(/^(\d+)/);
+                    const siengeDocNumber = cleanAndToStr(siengeRow[h.documento!]);
+                    const credorCodeMatch = String(siengeRow[h.credor!]).match(/^(\d+)/);
                     const siengeCredorCode = credorCodeMatch ? credorCodeMatch[1] : null;
-                    return originalKeyClean === `${siengeDocNumber}${siengeCredorCode}`;
+                    const siengeKey = `${siengeDocNumber}${siengeCredorCode}`;
+                    return originalKeyClean === siengeKey;
                 });
                 return {
                     'Número da Nota de Devolução': item['Número da Nota'],
