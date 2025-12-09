@@ -5,36 +5,48 @@ import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loa
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import dynamic from 'next/dynamic';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUploadForm } from "@/components/app/file-upload-form";
-import { ResultsDisplay } from "@/components/app/results-display";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
 import XLSX from 'xlsx';
-import { LogDisplay } from "@/components/app/log-display";
+
 import { ThemeToggle } from "@/components/app/theme-toggle";
 import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult, processCostCenterData, generateSiengeDebugKeys } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AdvancedAnalyses } from "@/components/app/advanced-analyses";
+
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { SaidasAnalysis } from "@/components/app/saidas-analysis";
-import { NfseAnalysis } from "@/components/app/nfse-analysis";
+
 import type { KeyCheckResult } from "@/components/app/key-checker";
 import { cn } from "@/lib/utils";
-import { ImobilizadoAnalysis, type AllClassifications } from "@/components/app/imobilizado-analysis";
-import { HistoryAnalysis, type SessionData } from "@/components/app/history-analysis";
-import { PendingIssuesReport } from "@/components/app/pending-issues-report";
+
+import type { AllClassifications } from "@/components/app/imobilizado-analysis";
+import type { SessionData } from "@/components/app/history-analysis";
+
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { ReconciliationAnalysis } from "@/components/app/reconciliation-analysis";
+
 import type { SpedDuplicate } from "@/lib/types";
-import { DifalAnalysis } from "@/components/app/difal-analysis";
+
+// Dynamic Imports for heavy components
+const ResultsDisplay = dynamic(() => import('@/components/app/results-display').then(mod => mod.ResultsDisplay), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const LogDisplay = dynamic(() => import('@/components/app/log-display').then(mod => mod.LogDisplay), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const ReconciliationAnalysis = dynamic(() => import('@/components/app/reconciliation-analysis').then(mod => mod.ReconciliationAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const SaidasAnalysis = dynamic(() => import('@/components/app/saidas-analysis').then(mod => mod.SaidasAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const NfseAnalysis = dynamic(() => import('@/components/app/nfse-analysis').then(mod => mod.NfseAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const ImobilizadoAnalysis = dynamic(() => import('@/components/app/imobilizado-analysis').then(mod => mod.ImobilizadoAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const AdvancedAnalyses = dynamic(() => import('@/components/app/advanced-analyses').then(mod => mod.AdvancedAnalyses), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const PendingIssuesReport = dynamic(() => import('@/components/app/pending-issues-report').then(mod => mod.PendingIssuesReport), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const HistoryAnalysis = dynamic(() => import('@/components/app/history-analysis').then(mod => mod.HistoryAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const DifalAnalysis = dynamic(() => import('@/components/app/difal-analysis').then(mod => mod.DifalAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -608,10 +620,11 @@ export function AutomatorClientPage() {
     };
 
     const handleRunReconciliation = async () => {
-        if (!processedData?.siengeSheetData) {
+        if (!siengeFile) {
             toast({ variant: 'destructive', title: 'Ficheiro Sienge em falta', description: 'Por favor, carregue a planilha "Itens do Sienge".' });
             return;
         }
+
         if (!processedData || !processedData.sheets['Itens Válidos']) {
             toast({ variant: 'destructive', title: 'Dados XML em falta', description: 'Por favor, execute a "Validação de Documentos" primeiro.' });
             return;
@@ -619,10 +632,19 @@ export function AutomatorClientPage() {
     
         setProcessing(true);
         try {
+            const siengeData = await (async () => {
+                const data = await siengeFile.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
+                const worksheet = workbook.Sheets[sheetName];
+                return XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+            })();
+    
             await new Promise(resolve => setTimeout(resolve, 50));
             
             const newReconciliationResults = runReconciliation(
-                processedData.siengeSheetData,
+                siengeData,
                 processedData.sheets['Itens Válidos'] || [],
                 processedData.sheets['Notas Válidas'] || [],
                 processedData.sheets['CTEs Válidos'] || [],
@@ -631,6 +653,7 @@ export function AutomatorClientPage() {
             
             setProcessedData(prev => ({
                 ...prev!,
+                siengeSheetData: siengeData,
                 reconciliationResults: newReconciliationResults,
             }));
             
