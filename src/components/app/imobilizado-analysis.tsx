@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
+import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Settings, EyeOff, Copy, HelpCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
@@ -358,7 +358,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
                 }
                 if (id === 'Alíq. ICMS (%)') {
-                    return <div className="text-center">{typeof value === 'number' ? `${value.toFixed(2)}%` : (value === null ? 'N/A' : 'N/A')}</div>;
+                    return <div className="text-center">{typeof value === 'number' ? `${value.toFixed(2)}%` : 'N/A'}</div>;
                 }
                 
                 const summarizedValue = typeof value === 'string' && value.length > 35 ? `${value.substring(0, 35)}...` : value;

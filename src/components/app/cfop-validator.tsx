@@ -218,46 +218,38 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
     const [bulkActionState, setBulkActionState] = useState<BulkActionState>({ classification: null, isDifal: null });
 
-    const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
-
-    const updateAndPersistValidations = (newValidations: Record<string, CfopClassification>) => {
-        if (!competence) return;
-
-        const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
-        if (!updatedPersistedData[competence]) {
-            updatedPersistedData[competence] = {};
-        }
-        if (!updatedPersistedData[competence].cfopValidations) {
-            updatedPersistedData[competence].cfopValidations = {};
-        }
-        updatedPersistedData[competence].cfopValidations.classifications = newValidations;
-        
-        onPersistData(updatedPersistedData);
-    };
-
     const handleValidationChange = (
         itemsToUpdate: any[],
         newClassification: 'correct' | 'incorrect' | 'verify' | 'unvalidated'
     ) => {
-        const newValidations = { ...cfopValidations };
+        if (!competence) return;
+
+        const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
+        if (!updatedPersistedData[competence]) updatedPersistedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }};
+        if (!updatedPersistedData[competence].cfopValidations) updatedPersistedData[competence].cfopValidations = { classifications: {} };
+        
         itemsToUpdate.forEach(item => {
             const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
-            newValidations[uniqueKey] = {
-                ...(newValidations[uniqueKey] || { isDifal: false }),
-                classification: newClassification,
-            };
+            const current = updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] || { isDifal: false };
+            updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] = { ...current, classification: newClassification };
         });
-        updateAndPersistValidations(newValidations);
+        
+        onPersistData(updatedPersistedData);
     };
 
     const handleDifalChange = (itemsToUpdate: any[]) => {
-        const newValidations = { ...cfopValidations };
+        if (!competence) return;
+        const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
+        if (!updatedPersistedData[competence]) updatedPersistedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }};
+        if (!updatedPersistedData[competence].cfopValidations) updatedPersistedData[competence].cfopValidations = { classifications: {} };
+
         itemsToUpdate.forEach(item => {
             const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
-            const current = newValidations[uniqueKey] || { classification: 'unvalidated', isDifal: false };
-            newValidations[uniqueKey] = { ...current, isDifal: !current.isDifal };
+            const current = updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] || { classification: 'unvalidated', isDifal: false };
+            updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] = { ...current, isDifal: !current.isDifal };
         });
-        updateAndPersistValidations(newValidations);
+        
+        onPersistData(updatedPersistedData);
     };
     
     const handleBulkAction = () => {
@@ -272,7 +264,12 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         }).filter(Boolean);
 
         let changedCount = 0;
-        const newValidations = { ...cfopValidations };
+        
+        if (!competence) return;
+        const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
+        if (!updatedPersistedData[competence]) updatedPersistedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }};
+        if (!updatedPersistedData[competence].cfopValidations) updatedPersistedData[competence].cfopValidations = { classifications: {} };
+        const newValidations = updatedPersistedData[competence].cfopValidations.classifications;
 
         selectedItems.forEach(item => {
             if (!item) return;
@@ -300,7 +297,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         });
 
         if (changedCount > 0) {
-            updateAndPersistValidations(newValidations);
+            onPersistData(updatedPersistedData);
         }
         
         setBulkActionState({ classification: null, isDifal: null });
@@ -337,6 +334,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
         items.forEach(item => Object.keys(item).forEach(key => allKeys.add(key)));
 
         const columnsToShow: (keyof any)[] = ['Número da Nota', 'Fornecedor', 'Descrição', 'Centro de Custo', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
+        const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
         
         return getColumnsWithCustomRender(
             items,
@@ -425,9 +423,10 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                 }
             },
         ]);
-    }, [items, cfopValidations, toast, handleValidationChange, handleDifalChange]);
+    }, [items, allPersistedData, competence, toast]);
     
     const itemsByStatus = useMemo(() => {
+        const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
         const result: Record<ValidationStatus, Record<string, any[]>> = {
             all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}
         };
@@ -447,7 +446,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
             result[classification][cfop].push(itemWithKey);
         });
         return result;
-    }, [items, cfopValidations]);
+    }, [items, competence, allPersistedData]);
 
     const numSelected = Object.keys(rowSelection).length;
     
@@ -475,7 +474,7 @@ export function CfopValidator({ items, competence, onPersistData, allPersistedDa
                         <div className="flex gap-1">
                              <Button size="sm" className={cn('bg-secondary', bulkActionState.classification === 'correct' && "bg-green-600 hover:bg-green-700 text-white")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'correct'}))}><Check className="mr-2 h-4 w-4" /> Correto</Button>
                             <Button size="sm" variant={bulkActionState.classification === 'incorrect' ? "destructive" : "secondary"} onClick={() => setBulkActionState(prev => ({...prev, classification: 'incorrect'}))}><X className="mr-2 h-4 w-4" /> Incorreto</Button>
-                            <Button size="sm" variant="secondary" onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
+                            <Button size="sm" variant="secondary" className={cn(bulkActionState.classification === 'verify' && 'bg-yellow-500 hover:bg-yellow-600 text-white')} onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
                             <Button size="sm" variant="outline" onClick={() => setBulkActionState(prev => ({...prev, classification: 'unvalidated'}))}><RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
                             <Button size="sm" variant={bulkActionState.isDifal ? 'default' : 'outline'} onClick={() => setBulkActionState(prev => ({...prev, isDifal: prev.isDifal === null ? true : !prev.isDifal}))}><Ticket className="mr-2 h-4 w-4" /> DIFAL</Button>
                         </div>
