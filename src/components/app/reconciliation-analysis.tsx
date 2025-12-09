@@ -274,6 +274,7 @@ export function ReconciliationAnalysis({
                     <TabsContent value="cfop_validation" className="mt-4">
                         <CfopValidator 
                             items={reconciliationResults?.reconciled || []}
+                            originalXmlItems={processedData?.sheets['Itens Válidos'] || []}
                             allPersistedData={allClassifications}
                             onPersistData={onPersistClassifications}
                             competence={competence}
@@ -446,9 +447,3 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
         </Card>
     )
 }
-    
-
-    
-
-    
-

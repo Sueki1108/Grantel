@@ -478,7 +478,7 @@ export function runReconciliation(
                             
                             reconciled.push({
                                 ...item,
-                                Fornecedor: nfeHeader?.Fornecedor || 'N/A', // Add Fornecedor name
+                                Fornecedor: nfeHeader?.Fornecedor || 'N/A',
                                 'Sienge_CFOP': siengeMatch.item[h.cfop!],
                                 'Sienge_Esp': siengeMatch.item[h.esp!],
                                 'Centro de Custo': costCenter,
