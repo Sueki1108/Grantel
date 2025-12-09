@@ -101,55 +101,53 @@ export function ReconciliationAnalysis({
         toast({ title: 'Classificação DIFAL atualizada!'});
     };
     
-    const handleDownload = (data: any[], title: string) => {
+    const handleDownload = async (data: any[], title: string) => {
         if (!data || data.length === 0) {
             toast({ title: "Nenhum dado para exportar", description: `Não há itens na aba "${title}".` });
             return;
         }
-        import('xlsx').then(XLSX => {
-            const worksheet = XLSX.utils.json_to_sheet(data);
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, title);
-            const fileName = `Grantel - Conciliação ${title}.xlsx`;
-            XLSX.writeFile(workbook, fileName);
-        });
+        const XLSX = await import('xlsx');
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, title);
+        const fileName = `Grantel - Conciliação ${title}.xlsx`;
+        XLSX.writeFile(workbook, fileName);
     };
 
-    const handleDownloadDebugKeys = () => {
+    const handleDownloadDebugKeys = async () => {
         if (!processedData || (!processedData.siengeDebugKeys && !processedData.costCenterDebugKeys)) {
             toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar' });
             return;
         }
     
-        import('xlsx').then(XLSX => {
-            const wb = XLSX.utils.book_new();
-            let generated = false;
-        
-            if (processedData.costCenterDebugKeys && processedData.costCenterDebugKeys.length > 0) {
-                const ws = XLSX.utils.json_to_sheet(processedData.costCenterDebugKeys);
-                XLSX.utils.book_append_sheet(wb, ws, "Chaves_Centro_Custo");
-                generated = true;
-            }
+        const XLSX = await import('xlsx');
+        const wb = XLSX.utils.book_new();
+        let generated = false;
+    
+        if (processedData.costCenterDebugKeys && processedData.costCenterDebugKeys.length > 0) {
+            const ws = XLSX.utils.json_to_sheet(processedData.costCenterDebugKeys);
+            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Centro_Custo");
+            generated = true;
+        }
 
-            if (processedData.costCenterHeaderRows && processedData.costCenterHeaderRows.length > 0) {
-                const ws = XLSX.utils.json_to_sheet(processedData.costCenterHeaderRows);
-                XLSX.utils.book_append_sheet(wb, ws, "Centros de Custo Encontrados");
-                generated = true;
-            }
-        
-            if (processedData.siengeDebugKeys && processedData.siengeDebugKeys.length > 0) {
-                const ws = XLSX.utils.json_to_sheet(processedData.siengeDebugKeys);
-                XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
-                generated = true;
-            }
-        
-            if (generated) {
-                XLSX.writeFile(wb, "Grantel_Debug_Chaves_Conciliacao.xlsx");
-                toast({ title: 'Ficheiro de Depuração Gerado' });
-            } else {
-                toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar' });
-            }
-        });
+        if (processedData.costCenterHeaderRows && processedData.costCenterHeaderRows.length > 0) {
+            const ws = XLSX.utils.json_to_sheet(processedData.costCenterHeaderRows);
+            XLSX.utils.book_append_sheet(wb, ws, "Centros de Custo Encontrados");
+            generated = true;
+        }
+    
+        if (processedData.siengeDebugKeys && processedData.siengeDebugKeys.length > 0) {
+            const ws = XLSX.utils.json_to_sheet(processedData.siengeDebugKeys);
+            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
+            generated = true;
+        }
+    
+        if (generated) {
+            XLSX.writeFile(wb, "Grantel_Debug_Chaves_Conciliacao.xlsx");
+            toast({ title: 'Ficheiro de Depuração Gerado' });
+        } else {
+            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar' });
+        }
     };
     
 
@@ -453,3 +451,4 @@ function DifalItemsAnalysis({ items, allClassifications, competence, onClassific
     
 
     
+

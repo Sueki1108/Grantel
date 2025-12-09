@@ -13,7 +13,7 @@ import { FileUploadForm } from "@/components/app/file-upload-form";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
-import XLSX from 'xlsx';
+
 
 import { ThemeToggle } from "@/components/app/theme-toggle";
 import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult, processCostCenterData, generateSiengeDebugKeys } from "@/lib/excel-processor";
@@ -270,6 +270,7 @@ export function AutomatorClientPage() {
         setError(null);
         
         try {
+            const XLSX = await import('xlsx');
             const fileProcessor = async (file: File) => {
                  const fileData = await new Promise<ArrayBuffer>((resolve, reject) => {
                     const reader = new FileReader();
@@ -306,6 +307,7 @@ export function AutomatorClientPage() {
         if (file) {
             setProcessing(true);
             try {
+                const XLSX = await import('xlsx');
                 const data = await file.arrayBuffer();
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
@@ -347,6 +349,7 @@ export function AutomatorClientPage() {
         if (file) {
             setProcessing(true);
             try {
+                const XLSX = await import('xlsx');
                 const data = await file.arrayBuffer();
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
@@ -466,12 +469,13 @@ export function AutomatorClientPage() {
         toast({ title: "Dados limpos", description: "Todos os arquivos e resultados foram removidos." });
     };
 
-     const handleDownloadExcel = () => {
+     const handleDownloadExcel = async () => {
         if (!processedData?.sheets) {
             toast({ variant: "destructive", title: "Nenhum dado para baixar", description: "Processe os arquivos primeiro." });
             return;
         }
 
+        const XLSX = await import('xlsx');
         const workbook = XLSX.utils.book_new();
         const displayOrder = [
             "Notas Válidas", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
