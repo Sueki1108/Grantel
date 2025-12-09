@@ -128,7 +128,7 @@ export function SupplierCategoryDialog({ categories, onSave }: SupplierCategoryD
                  <div className='col-span-3'>
                     <Label>CFOPs Permitidos (separados por vírgula)</Label>
                     <Input
-                        value={category.allowedCfops.join(', ')}
+                        value={(category.allowedCfops || []).join(', ')}
                         onChange={(e) => handleAllowedCfopsChange(category.id, e.target.value)}
                         placeholder="Ex: 1551, 2551"
                     />
