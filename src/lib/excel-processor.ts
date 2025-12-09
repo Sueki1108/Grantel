@@ -417,10 +417,11 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             const isDataRow = /^\d+$/.test(itemNumberCell) && creditorCell && documentCell;
 
             if (isDataRow) {
-                const creditorCodeMatch = creditorCell.match(/^(\d+)/);
-                const creditorCode = creditorCodeMatch ? creditorCodeMatch[1] : '';
+                const credorCodeMatch = creditorCell.match(/(\d+)/);
+                const credorCode = credorCodeMatch ? credorCodeMatch[0] : '';
 
-                if (creditorCode) {
+
+                if (credorCode) {
                     const docKey = `${cleanAndToStr(documentCell)}-${credorCode}`;
                     
                     const debugInfo = { 
@@ -439,7 +440,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
         }
     });
     
-    return { costCenterMap, debugKeys, allCostCenters: Array.from(costCenterSet), costCenterHeaderRows: [] };
+    return { costCenterMap, debugKeys, allCostCenters: Array.from(costCenterSet), costCenterHeaderRows };
 }
 
 
@@ -646,3 +647,4 @@ export function runReconciliation(
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
+
