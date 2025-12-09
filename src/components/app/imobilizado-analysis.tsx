@@ -21,7 +21,9 @@ import * as React from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { SupplierCategoryDialog } from './supplier-category-dialog';
 import { cn } from '@/lib/utils';
-import type { AllClassifications, Classification, SupplierCategory, DifalStatus } from '@/lib/types';
+import type { AllClassifications, Classification, SupplierCategory } from '@/lib/types';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '../ui/input';
 
 
 interface ImobilizadoAnalysisProps {

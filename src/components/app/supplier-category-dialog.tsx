@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PlusCircle, Trash2, Settings2 } from "lucide-react";
-import { SupplierCategory } from '@/lib/types';
+import type { SupplierCategory } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '../ui/scroll-area';
 
@@ -134,6 +134,3 @@ export function SupplierCategoryDialog({ categories, onSave }: SupplierCategoryD
     </Dialog>
   );
 }
-
-
-    
