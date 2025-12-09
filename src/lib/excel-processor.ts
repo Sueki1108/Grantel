@@ -1,5 +1,4 @@
 
-
 import { cfopDescriptions } from './cfop';
 import * as XLSX from 'xlsx';
 import type { KeyCheckResult } from '@/components/app/key-checker';
@@ -281,7 +280,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
                 Fornecedor: header?.Fornecedor || 'N/A',
                 'CPF/CNPJ do Emitente': emitenteCnpj,
                 destUF: header?.destUF || '',
-                'Alíq. ICMS (%)': item['pICMS'] === undefined ? null : item['pICMS']
+                'Alíq. ICMS (%)': item['Alíq. ICMS (%)'] === undefined ? null : item['Alíq. ICMS (%)']
             };
         });
     log(`- ${imobilizados.length} itens com valor unitário > R$ 1.200 encontrados para análise de imobilizado.`);
@@ -390,13 +389,13 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     let credorIndex = -1;
     let documentoIndex = -1;
 
-    // Encontra a linha de cabeçalho e os índices das colunas
+    // Encontra a linha de cabeçalho e os índices das colunas de forma flexível
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
         if (row && Array.isArray(row)) {
             const lowerCaseRow = row.map(cell => String(cell || '').toLowerCase());
-            const credorIdx = lowerCaseRow.findIndex(cell => cell.includes('credor'));
-            const docIdx = lowerCaseRow.findIndex(cell => cell.includes('documento'));
+            const credorIdx = lowerCaseRow.findIndex(cell => cell.includes('credor') || cell.includes('fornecedor'));
+            const docIdx = lowerCaseRow.findIndex(cell => cell.includes('documento') || cell.includes('nota fiscal'));
 
             if (credorIdx !== -1 && docIdx !== -1) {
                 headerRowIndex = i;
@@ -408,7 +407,6 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
     }
 
     if (headerRowIndex === -1) {
-        // Fallback or error if headers are not found
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
 
@@ -419,7 +417,6 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
 
         const rowAsString = row.join(';').toLowerCase();
         
-        // Verifica se é uma linha que define um centro de custo
         if (rowAsString.includes('centro de custo')) {
             const match = rowAsString.match(/centro de custo\s*;\s*;\s*([\d\s\w-]+)/);
             if (match && match[1]) {
@@ -429,16 +426,15 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
                     'Linha Original': row.join('; '),
                     'Centro de Custo Identificado': currentCostCenter
                 });
-                continue; // Pula para a próxima linha após identificar o cabeçalho
+                continue;
             }
         }
         
-        // Pula as linhas até encontrar a tabela de dados real
         if (i <= headerRowIndex) continue;
 
         const credorCell = row[credorIndex];
         const docCell = row[documentoIndex];
-
+        
         if (credorCell && docCell) {
              const cnpjRegex = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/;
              const cnpjMatch = String(credorCell).match(cnpjRegex);
@@ -457,7 +453,7 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
                      'Chave Gerada (Centro de Custo)': docKey,
                      'Documento Original': docCell,
                      'Credor (Centro de Custo)': credorCell,
-                     'CNPJ Original': cnpj,
+                     'CNPJ Encontrado': cnpj,
                      'Centro de Custo': currentCostCenter,
                  };
                  debugKeys.push(debugInfo);
