@@ -526,7 +526,7 @@ export function AutomatorClientPage() {
     };
 
     const handleDownloadDebugKeys = async () => {
-        if (!processedData || (!processedData.siengeDebugKeys?.length && !processedData.costCenterDebugKeys?.length)) {
+        if (!processedData || (!processedData.siengeDebugKeys?.length && !processedData.costCenterDebugKeys?.length && !processedData.costCenterHeaderRows?.length)) {
             toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar' });
             return;
         }
