@@ -516,33 +516,36 @@ export function runReconciliation(
         };
 
         const h = {
-            cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
+            credor: findHeader(siengeData, ['credor', 'fornecedor']),
             numero: findHeader(siengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
             valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total']),
             cfop: findHeader(siengeData, ['cfop']),
             esp: findHeader(siengeData, ['esp']),
         };
 
-        if (!h.numero || !h.cnpj || !h.valorTotal) {
-            throw new Error("Não foi possível encontrar as colunas essenciais ('Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge.");
+        if (!h.credor || !h.numero || !h.valorTotal) {
+            throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Número', 'Valor Total') na planilha Sienge.");
         }
         
         const nfeHeaderMap = new Map((nfeEntradas || []).map(n => [n['Chave Unica'], n]));
 
         const getXmlComparisonKey = (xmlItem: any): string | null => {
             const docNumber = xmlItem['Número da Nota'];
-            const credorCnpj = xmlItem['CPF/CNPJ do Emitente'];
-            if (!docNumber || !credorCnpj) return null;
-            return `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCnpj)}`;
+            const header = nfeHeaderMap.get(xmlItem['Chave Unica']);
+            if (!header) return null;
+            const credorCodeMatch = String(header.Fornecedor).match(/^(\d+)/);
+            const credorCode = credorCodeMatch ? credorCodeMatch[1] : null;
+            if (!docNumber || !credorCode) return null;
+            return `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCode)}`;
         };
         
         const getSiengeComparisonKey = (siengeItem: any): string | null => {
             const docNumber = siengeItem[h.numero!];
-            const credorCnpj = siengeItem[h.cnpj!];
-             if (!docNumber || !credorCnpj) return null;
-            return `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCnpj)}`;
+            const credorCodeMatch = String(siengeItem[h.credor!]).match(/^(\d+)/);
+            const credorCode = credorCodeMatch ? credorCodeMatch[1] : null;
+             if (!docNumber || !credorCode) return null;
+            return `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCode)}`;
         };
-
 
         const xmlMap = new Map<string, any[]>();
         xmlItems.forEach(item => {
@@ -569,7 +572,10 @@ export function runReconciliation(
                 if (exactMatchIndex !== -1) {
                     const matchedXmlItem = matchedXmlItems.splice(exactMatchIndex, 1)[0];
                     
-                    const costCenterKey = `${cleanAndToStr(siengeItem[h.numero!])}-${cleanAndToStr(siengeItem[h.cnpj!])}`;
+                    const credorCodeMatch = String(siengeItem[h.credor!]).match(/^(\d+)/);
+                    const credorCode = credorCodeMatch ? credorCodeMatch[1] : null;
+                    const docNumber = siengeItem[h.numero!];
+                    const costCenterKey = `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCode)}`;
                     const costCenter = costCenterMap?.get(costCenterKey) || 'N/A';
 
                     reconciled.push({ 
@@ -591,7 +597,6 @@ export function runReconciliation(
 
         const remainingXml = Array.from(xmlMap.values()).flat();
         const onlyInSienge = Array.from(unmatchedSiengeItems);
-
 
         const devolucoesEP = xmlItems
             .filter(item => {
