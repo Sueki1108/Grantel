@@ -280,7 +280,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
                 Fornecedor: header?.Fornecedor || 'N/A',
                 'CPF/CNPJ do Emitente': emitenteCnpj,
                 destUF: header?.destUF || '',
-                'Alíq. ICMS (%)': item['Alíq. ICMS (%)'] === undefined ? null : item['Alíq. ICMS (%)']
+                'Alíq. ICMS (%)': item['pICMS'] === undefined ? null : item['pICMS']
             };
         });
     log(`- ${imobilizados.length} itens com valor unitário > R$ 1.200 encontrados para análise de imobilizado.`);
@@ -417,9 +417,8 @@ export function processCostCenterData(data: any[][]): { costCenterMap: Map<strin
             const isDataRow = /^\d+$/.test(itemNumberCell) && creditorCell && documentCell;
 
             if (isDataRow) {
-                const credorCodeMatch = creditorCell.match(/(\d+)/);
-                const credorCode = credorCodeMatch ? credorCodeMatch[0] : '';
-
+                const credorCodeMatch = creditorCell.match(/^(\d+)/);
+                const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
 
                 if (credorCode) {
                     const docKey = `${cleanAndToStr(documentCell)}-${credorCode}`;
@@ -525,7 +524,6 @@ export function runReconciliation(
             return espValue === 'NFE' || espValue === 'NFSR' || espValue === 'CTE';
         });
 
-
         const h = {
             cnpj: findHeader(filteredSiengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
             numero: findHeader(filteredSiengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
@@ -583,7 +581,6 @@ export function runReconciliation(
                          if (costCenterMap && h.numero && h.credor) {
                             const siengeDoc = siengeItem[h.numero!];
                             const siengeCredorString = siengeItem[h.credor!];
-                            
                             const credorCodeMatch = String(siengeCredorString).match(/^(\d+)/);
                             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
 
@@ -612,7 +609,7 @@ export function runReconciliation(
             return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
         };
         
-        let result = reconciliationPass(
+        result = reconciliationPass(
             remainingSiengeItems,
             remainingXmlItems, 
             (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]),
@@ -621,12 +618,11 @@ export function runReconciliation(
         );
         reconciled.push(...result.matched);
         
-        // Devoluções EP
         const devolucoesEP = (enrichedXmlItems || [])
             .filter(item => {
                 const cfop = cleanAndToStr(item.CFOP);
                 const natOp = (item['Natureza da Operação'] || '').toUpperCase();
-                return natOp.includes('DEVOLUCAO') && (cfop.startsWith('1') || cfop.startsWith('2'))
+                return (cfop.startsWith('1') || cfop.startsWith('2')) && natOp.includes('DEVOLUCAO');
             })
             .map(item => {
                 const originalKey = cleanAndToStr(item['refNFe'] || '');
@@ -647,4 +643,3 @@ export function runReconciliation(
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
-
