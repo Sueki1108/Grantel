@@ -1,10 +1,11 @@
+
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, X, HelpCircle, RotateCw, ListFilter, Copy, Download, Factory, Wrench, HardHat, EyeOff, Settings, Ticket, Tag, RefreshCw } from "lucide-react";
+import { Check, X, HelpCircle, RotateCw, ListFilter, Copy, Download, Factory, Wrench, HardHat, EyeOff, Settings, Ticket, Tag, RefreshCw, ChevronDown, ChevronRight, MinusCircle } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import type { AllClassifications, SupplierCategory } from '@/lib/types';
 import {
@@ -421,16 +422,16 @@ export function CfopValidator({ items: initialItems, originalXmlItems, competenc
                     const category = supplierCategories.find(c => c.id === supplierClassificationId);
                     
                     const LucideIcon = category?.icon ? (LucideIcons[category.icon as keyof typeof LucideIcons] as React.ElementType) : Tag;
-                    const isAllowedCfop = category?.allowedCfops.length === 0 || category?.allowedCfops.includes(String(item.CFOP));
+                    const isAllowedCfop = !category || category.allowedCfops.length === 0 || category.allowedCfops.includes(String(item.CFOP));
 
                     return (
-                         <div className={cn("flex items-center gap-2 group/row", !isAllowedCfop && "text-red-500 font-bold")}>
+                         <div className="flex items-center gap-2 group/row">
                            <TooltipProvider>
                             <Popover>
                                 <PopoverTrigger asChild>
                                     <button onClick={(e) => e.stopPropagation()} className="transition-opacity">
                                         <Tooltip><TooltipTrigger asChild>
-                                            <LucideIcon className={cn("h-4 w-4", category ? "text-primary" : "text-muted-foreground")} />
+                                            <LucideIcon className={cn("h-4 w-4", !isAllowedCfop && "text-red-500", category && isAllowedCfop ? "text-primary" : "text-muted-foreground")} />
                                         </TooltipTrigger><TooltipContent><p>{category?.name || "Sem categoria"}</p></TooltipContent></Tooltip>
                                     </button>
                                 </PopoverTrigger>
@@ -703,3 +704,4 @@ export function CfopValidator({ items: initialItems, originalXmlItems, competenc
         </div>
     );
 }
+
