@@ -194,6 +194,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
         if (isSaida && i === 0) {
             notaFiscal['CFOP'] = item['CFOP'];
             notaFiscal['Alíq. ICMS (%)'] = item['Alíq. ICMS (%)'] ?? null;
+            notaFiscal['CST do ICMS'] = item['CST do ICMS'] ?? null;
         }
 
         itens.push(item);

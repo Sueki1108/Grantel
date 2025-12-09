@@ -105,6 +105,7 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                     'CFOP': existingNote['CFOP'],
                     'Base ICMS': existingNote['Base ICMS'],
                     'Alíq. ICMS (%)': existingNote['Alíq. ICMS (%)'],
+                    'CST do ICMS': existingNote['CST do ICMS'],
                     'Valor ICMS': existingNote['Valor ICMS'],
                     'Total': existingNote['Total'],
                 });
@@ -239,7 +240,7 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
 
     const columns: ColumnDef<SaidaItem>[] = getColumnsWithCustomRender(
         analysisResults.sequence,
-        ['numero', 'status', 'Destinatário', 'Emissão', 'CFOP', 'Base ICMS', 'Alíq. ICMS (%)', 'Valor ICMS', 'Total', 'actions'],
+        ['numero', 'status', 'Destinatário', 'Emissão', 'CFOP', 'CST do ICMS', 'Base ICMS', 'Alíq. ICMS (%)', 'Valor ICMS', 'Total', 'actions'],
         (row, id) => {
             const item = row.original;
             if (id === 'status') {
@@ -253,12 +254,14 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
              if (id === 'Destinatário') return <span>{item.data?.['Destinatário'] || '---'}</span>;
              if (id === 'Emissão') return <span>{item.data?.['Emissão'] ? format(parseISO(item.data['Emissão']), 'dd/MM/yyyy') : '---'}</span>;
              if (id === 'CFOP') return <span>{item.data?.['CFOP'] || '---'}</span>
+             if (id === 'CST do ICMS') return <span>{item.data?.['CST do ICMS'] || '---'}</span>
              if (id === 'Base ICMS') return <div className="text-right">{typeof item.data?.['Base ICMS'] === 'number' ? item.data['Base ICMS'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}</div>
              if (id === 'Alíq. ICMS (%)') return <div className="text-center">{typeof item.data?.['Alíq. ICMS (%)'] === 'number' ? `${item.data['Alíq. ICMS (%)'].toFixed(2)}%` : '---'}</div>
              if (id === 'Valor ICMS') return <div className="text-right">{typeof item.data?.['Valor ICMS'] === 'number' ? item.data['Valor ICMS'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}</div>
              if (id === 'Total') return <div className="text-right">{typeof item.data?.['Total'] === 'number' ? item.data['Total'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}</div>
              if (id === 'actions') return (
                  <div className="flex items-center justify-center gap-1">
+                    <TooltipProvider>
                     {item.status !== 'cancelada' && (
                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(item.numero, 'cancelada')}><XCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar Cancelada</p></TooltipContent></Tooltip>
                     )}
@@ -268,6 +271,7 @@ export function SaidasAnalysis({ saidasData, statusMap, onStatusChange, lastPeri
                     {item.status !== 'emitida' && !item.isGap && (
                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStatusChange(item.numero, 'emitida')}><RotateCcw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Reverter para Emitida</p></TooltipContent></Tooltip>
                     )}
+                    </TooltipProvider>
                 </div>
             );
             return <span>{item[id as keyof SaidaItem] as any || ''}</span>
