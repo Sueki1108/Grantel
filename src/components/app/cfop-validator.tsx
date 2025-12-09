@@ -18,9 +18,9 @@ import { cfopDescriptions } from '@/lib/cfop';
 import { getCstDescription } from '@/lib/cst';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '../ui/label';
+import { ScrollArea } from '../ui/scroll-area';
+import { Checkbox } from '../ui/checkbox';
 import * as XLSX from 'xlsx';
 import { Card } from '../ui/card';
 import type { RowSelectionState } from '@tanstack/react-table';
@@ -422,7 +422,7 @@ export function CfopValidator({ items: initialItems, originalXmlItems, competenc
                     const category = supplierCategories.find(c => c.id === supplierClassificationId);
                     
                     const LucideIcon = category?.icon ? (LucideIcons[category.icon as keyof typeof LucideIcons] as React.ElementType) : Tag;
-                    const isAllowedCfop = !category || category.allowedCfops.length === 0 || category.allowedCfops.includes(String(item.CFOP));
+                    const isAllowedCfop = !category || !category.allowedCfops || !Array.isArray(category.allowedCfops) || category.allowedCfops.length === 0 || category.allowedCfops.includes(String(item.CFOP));
 
                     return (
                          <div className="flex items-center gap-2 group/row">
@@ -705,3 +705,5 @@ export function CfopValidator({ items: initialItems, originalXmlItems, competenc
     );
 }
 
+
+    
