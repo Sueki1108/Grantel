@@ -457,7 +457,9 @@ export function runReconciliation(
                             const siengeMatch = siengeMatches.shift()!;
                             const nfeHeader = nfeHeaderMap.get(item['Chave Unica']);
                             
-                            const costCenterKey = `${cleanAndToStr(siengeMatch.item[h.numero!])}-${cleanAndToStr(siengeMatch.item[h.cnpj!])}`;
+                            const docNumber = siengeMatch.item[h.numero!];
+                            const credorCnpj = siengeMatch.item[h.cnpj!];
+                            const costCenterKey = `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCnpj)}`;
                             
                             reconciled.push({
                                 ...item,
@@ -549,12 +551,16 @@ export function processCostCenterData(costCenterData: any[][]) {
     const allCostCenters = new Set<string>();
     const costCenterHeaderRows: any[] = [];
 
+    if (!costCenterData || costCenterData.length < 1) {
+        return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
+    }
+
     let headerRowIndex = -1;
     let docIndex = -1;
     let credorIndex = -1;
     let headers: any[] = [];
     
-    // Tenta encontrar a linha de cabeçalho dinamicamente
+    // Dynamically find the header row
     for (let i = 0; i < costCenterData.length; i++) {
         const row = costCenterData[i] || [];
         const normalizedRow = row.map(cell => normalizeKey(String(cell)));

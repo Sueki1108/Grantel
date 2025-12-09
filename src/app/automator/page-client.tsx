@@ -368,6 +368,7 @@ export function AutomatorClientPage() {
                     allCostCenters,
                     costCenterHeaderRows,
                 }));
+
                 toast({ title: "Planilha de Centro de Custo Carregada", description: `${costCenterMap.size} mapeamentos e ${allCostCenters.length} centros de custo foram encontrados.` });
             } catch (err: any) {
                 toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
@@ -1042,3 +1043,4 @@ export function AutomatorClientPage() {
         </div>
     );
 }
+
