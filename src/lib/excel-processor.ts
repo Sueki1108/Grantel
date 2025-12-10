@@ -559,49 +559,65 @@ export function processCostCenterData(
     const debugKeys: any[] = [];
     let allCostCenters = new Set<string>();
     let costCenterHeaderRows: any[] = [];
+    let headers: any[] = [];
+    let headerRowIndex = -1;
 
     if (!costCenterSheetData || costCenterSheetData.length === 0) {
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
-
-    const headers = costCenterSheetData[0];
-    if (!headers || !Array.isArray(headers)) {
-        throw new Error("Não foi possível detetar o cabeçalho na planilha de Centro de Custo. Verifique se a linha 9 contém os títulos.");
+    
+    // Find the real header row, which should contain both mapped columns
+    for (let i = 0; i < costCenterSheetData.length; i++) {
+        const row = costCenterSheetData[i];
+        if (Array.isArray(row) && row.includes(docNumberHeader) && row.includes(cnpjHeader)) {
+            headers = row;
+            headerRowIndex = i;
+            break;
+        }
     }
+    
+    if (headerRowIndex === -1) {
+        throw new Error("Não foi possível encontrar a linha de cabeçalho com as colunas mapeadas na planilha de Centro de Custo.");
+    }
+
     const docIndex = headers.findIndex(h => h === docNumberHeader);
     const cnpjIndex = headers.findIndex(h => h === cnpjHeader);
 
     if (docIndex === -1 || cnpjIndex === -1) {
-        throw new Error("As colunas mapeadas não foram encontradas na planilha de Centro de Custo.");
+        throw new Error("As colunas mapeadas não foram encontradas na linha de cabeçalho identificada.");
     }
 
     const costCenterStartIndex = Math.max(docIndex, cnpjIndex) + 1;
-
+    
     for (let i = costCenterStartIndex; i < headers.length; i++) {
-        const centerName = String(headers[i]).trim();
+        const centerName = String(headers[i] || '').trim();
         if (centerName) {
             allCostCenters.add(centerName);
         }
     }
     costCenterHeaderRows = Array.from(allCostCenters).map(cc => ({ "Centro de Custo Encontrado": cc }));
 
-    for (let i = 1; i < costCenterSheetData.length; i++) {
+    for (let i = headerRowIndex + 1; i < costCenterSheetData.length; i++) {
         const row = costCenterSheetData[i];
-         if (!row || !Array.isArray(row) || row.length === 0) continue;
-
-        const docNumber = row[docIndex];
+         if (!row || !Array.isArray(row) || row.length === 0 || String(row[0]).trim().toUpperCase().startsWith('TOTAL')) {
+            // Stop if it's a total row or empty
+            continue;
+        }
+        
+        const docNumberRaw = row[docIndex];
         const credorCnpjRaw = row[cnpjIndex];
 
-        if (!docNumber || !credorCnpjRaw) continue;
-
+        if (!docNumberRaw || !credorCnpjRaw) continue;
+        
+        // Improved CNPJ extraction
         const cnpjMatches = String(credorCnpjRaw).match(/(\d{4,}-\d{2})$/);
         const credorCnpj = cnpjMatches ? cnpjMatches[1] : null;
 
         if(!credorCnpj) continue;
 
-        const docNumberClean = String(docNumber).split('/')[1] || String(docNumber);
-        
+        const docNumberClean = String(docNumberRaw).split('/')[1] || String(docNumberRaw);
         const key = `${cleanAndToStr(docNumberClean)}-${cleanAndToStr(credorCnpj)}`;
+        
         let foundCostCenter = false;
         
         for (let j = costCenterStartIndex; j < row.length; j++) {
@@ -615,9 +631,10 @@ export function processCostCenterData(
                 }
             }
         }
-         debugKeys.push({
+
+        debugKeys.push({
             "Chave de Comparação (Centro Custo)": key,
-            "Número Documento (Original)": docNumber,
+            "Número Documento (Original)": docNumberRaw,
             "Credor (Original com CNPJ)": credorCnpjRaw,
             "CNPJ Credor (Extraído)": credorCnpj,
             "Centro de Custo Encontrado": foundCostCenter ? costCenterMap.get(key) : "NENHUM"
