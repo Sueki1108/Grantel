@@ -3,8 +3,6 @@
 
 import React, { useEffect } from 'react';
 import { FileUploadForm } from './file-upload-form';
-import { useToast } from '@/hooks/use-toast';
-import * as XLSX from 'xlsx';
 
 interface CostCenterAnalysisProps {
     costCenterFile: File | null;
@@ -17,8 +15,7 @@ export function CostCenterAnalysis({
     onCostCenterFileChange,
     onClearCostCenterFile,
 }: CostCenterAnalysisProps) {
-    const { toast } = useToast();
-
+    
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         onCostCenterFileChange(e);
     };
@@ -38,6 +35,3 @@ export function CostCenterAnalysis({
         </div>
     );
 }
-
-
-

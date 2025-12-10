@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Database } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
@@ -24,6 +24,8 @@ interface ReconciliationAnalysisProps {
     siengeFile: File | null;
     onSiengeFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
+    onRunReconciliation: () => void;
+    isReconciliationRunning: boolean;
     costCenterFile: File | null;
     onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearCostCenterFile: () => void;
@@ -49,6 +51,8 @@ export function ReconciliationAnalysis({
     siengeFile, 
     onSiengeFileChange, 
     onClearSiengeFile,
+    onRunReconciliation,
+    isReconciliationRunning,
     costCenterFile,
     onCostCenterFileChange,
     onClearCostCenterFile,
@@ -65,25 +69,6 @@ export function ReconciliationAnalysis({
             devolucoesEP: processedData?.reconciliationResults?.devolucoesEP,
         };
     }, [processedData]);
-
-    const handleDownloadDebugSheets = () => {
-        const siengeKeys = processedData?.siengeDebugKeys;
-
-        if ((!siengeKeys || siengeKeys.length === 0)) {
-            toast({ variant: 'destructive', title: "Nenhum dado de depuração para baixar", description: "Carregue e processe a planilha do Sienge primeiro." });
-            return;
-        }
-
-        const workbook = XLSX.utils.book_new();
-
-        if (siengeKeys && siengeKeys.length > 0) {
-            const siengeWorksheet = XLSX.utils.json_to_sheet(siengeKeys);
-            XLSX.utils.book_append_sheet(workbook, siengeWorksheet, "Debug_Sienge");
-        }
-
-        XLSX.writeFile(workbook, "Grantel_Depuracao_Sienge.xlsx");
-        toast({ title: 'Planilha de Depuração Gerada' });
-    };
     
     const handleDownload = async (data: any[], title: string) => {
         if (!data || data.length === 0) {
@@ -108,9 +93,6 @@ export function ReconciliationAnalysis({
                             <CardDescription>Carregue as planilhas Sienge e de Centro de Custo para cruzar informações com os XMLs processados.</CardDescription>
                         </div>
                     </div>
-                     <Button onClick={handleDownloadDebugSheets} variant="secondary" size="sm" disabled={!processedData?.siengeDebugKeys}>
-                        <Database className="mr-2 h-4 w-4" /> Planilha de Depuração (Sienge)
-                    </Button>
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -132,6 +114,12 @@ export function ReconciliationAnalysis({
                     />
                 </div>
                 
+                 <div className="flex flex-col sm:flex-row gap-2 pt-4">
+                     <Button onClick={onRunReconciliation} disabled={isReconciliationRunning || !siengeFile || !processedData?.sheets['Itens Válidos']}>
+                        {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Conciliando...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
+                    </Button>
+                </div>
+                
                 <Tabs defaultValue="reconciliation">
                     <TabsList className="grid w-full grid-cols-4">
                         <TabsTrigger value="reconciliation" disabled={!reconciliationResults}>Conciliação de Itens</TabsTrigger>
@@ -139,7 +127,7 @@ export function ReconciliationAnalysis({
                             Devoluções - EP
                         </TabsTrigger>
                         <TabsTrigger value="tax_check" disabled={!siengeDataForTaxCheck}>Conferência de Impostos</TabsTrigger>
-                        <TabsTrigger value="cfop_validation" disabled={!reconciliationResults}><BarChart className='h-4 w-4 mr-2'/>Validação CFOP</TabsTrigger>
+                        <TabsTrigger value="cfop_validation" disabled={!reconciliationResults}>Validação CFOP</TabsTrigger>
                     </TabsList>
                     <TabsContent value="reconciliation" className="mt-4">
                          {!processedData?.sheets['Itens Válidos'] && (
@@ -230,6 +218,4 @@ export function ReconciliationAnalysis({
          </Card>
     );
 }
-
-
 
