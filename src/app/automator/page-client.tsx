@@ -31,15 +31,14 @@ import type { SpedDuplicate } from "@/lib/types";
 // Dynamic Imports for heavy components
 const ResultsDisplay = dynamic(() => import('@/components/app/results-display').then(mod => mod.ResultsDisplay), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const LogDisplay = dynamic(() => import('@/components/app/log-display').then(mod => mod.LogDisplay), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
-const ReconciliationAnalysis = dynamic(() => import('@/components/app/reconciliation-analysis').then(mod => mod.ReconciliationAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const SaidasAnalysis = dynamic(() => import('@/components/app/saidas-analysis').then(mod => mod.SaidasAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const NfseAnalysis = dynamic(() => import('@/components/app/nfse-analysis').then(mod => mod.NfseAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
-const ImobilizadoAnalysis = dynamic(() => import('@/components/app/imobilizado-analysis').then(mod => mod.ImobilizadoAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const ReconciliationAnalysis = dynamic(() => import('@/components/app/reconciliation-analysis').then(mod => mod.ReconciliationAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const AdvancedAnalyses = dynamic(() => import('@/components/app/advanced-analyses').then(mod => mod.AdvancedAnalyses), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const ImobilizadoAnalysis = dynamic(() => import('@/components/app/imobilizado-analysis').then(mod => mod.ImobilizadoAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const PendingIssuesReport = dynamic(() => import('@/components/app/pending-issues-report').then(mod => mod.PendingIssuesReport), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const HistoryAnalysis = dynamic(() => import('@/components/app/history-analysis').then(mod => mod.HistoryAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const DifalAnalysis = dynamic(() => import('@/components/app/difal-analysis').then(mod => mod.DifalAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
-const CostCenterAnalysis = dynamic(() => import('@/components/app/cost-center-analysis').then(mod => mod.CostCenterAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -89,14 +88,12 @@ export function AutomatorClientPage() {
     
     const [activeMainTab, setActiveMainTab] = useState("history");
     const [isWideMode, setIsWideMode] = useState(false);
-    const [isClient, setIsClient] = useState(false);
 
 
     // =================================================================
     // UI SETTINGS & PERSISTENCE
     // =================================================================
     useEffect(() => {
-        setIsClient(true);
         // Load UI settings from localStorage on initial load
         const wideMode = localStorage.getItem('ui-widemode') === 'true';
         setIsWideMode(wideMode);
@@ -104,16 +101,7 @@ export function AutomatorClientPage() {
         // Load imobilizado classifications from localStorage
         try {
             const savedImobilizado = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
-            if (savedImobilizado) {
-                 const parsedData = JSON.parse(savedImobilizado);
-                 if (!parsedData.supplierCategories) {
-                     parsedData.supplierCategories = [
-                        { id: 'uso-consumo', name: 'Uso e Consumo', icon: 'ShoppingCart', allowedCfops: [] },
-                        { id: 'utilizado-obra', name: 'Utilização em Obra', icon: 'HardHat', allowedCfops: [] },
-                    ]
-                 }
-                 setAllClassifications(parsedData);
-            }
+            if (savedImobilizado) setAllClassifications(JSON.parse(savedImobilizado));
         } catch (e) {
             console.error("Failed to load imobilizado classifications from localStorage", e);
         }
@@ -132,14 +120,13 @@ export function AutomatorClientPage() {
 
     // Save disregarded NFS-e notes to localStorage whenever they change
     useEffect(() => {
-        if (!isClient) return;
         try {
             const notesArray = Array.from(disregardedNfseNotes);
             localStorage.setItem(DISREGARDED_NFSE_STORAGE_KEY, JSON.stringify(notesArray));
         } catch (e) {
             console.error("Failed to save disregarded NFS-e notes to localStorage", e);
         }
-    }, [disregardedNfseNotes, isClient]);
+    }, [disregardedNfseNotes]);
 
     const handleWideModeChange = (checked: boolean) => {
         setIsWideMode(checked);
@@ -262,13 +249,10 @@ export function AutomatorClientPage() {
         setError(null);
         
         try {
-            const XLSX = await import('xlsx');
             const fileProcessor = async (file: File) => {
                  const fileData = await new Promise<ArrayBuffer>((resolve, reject) => {
                     const reader = new FileReader();
-                    reader.onload = async (event) => {
-                        resolve(event.target?.result as ArrayBuffer);
-                    };
+                    reader.onload = (event) => resolve(event.target?.result as ArrayBuffer);
                     reader.onerror = (error) => reject(error);
                     reader.readAsArrayBuffer(file);
                 });
@@ -302,7 +286,6 @@ export function AutomatorClientPage() {
             setProcessing(true);
             try {
                 const data = await file.arrayBuffer();
-                const XLSX = await import('xlsx');
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
                 if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
@@ -338,84 +321,40 @@ export function AutomatorClientPage() {
     
     const handleCostCenterFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file) {
-            setCostCenterFile(null);
+        setCostCenterFile(file || null);
+
+        if (file) {
+            setProcessing(true);
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
+                const worksheet = workbook.Sheets[sheetName];
+                const costCenterData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                const { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows } = processCostCenterData(costCenterData);
+                
+                setProcessedData(prev => ({
+                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
+                    costCenterMap,
+                    costCenterDebugKeys: debugKeys,
+                    allCostCenters,
+                    costCenterHeaderRows,
+                }));
+                toast({ title: "Planilha de Centro de Custo Carregada", description: `${costCenterMap.size} mapeamentos e ${allCostCenters.length} centros de custo foram encontrados.` });
+            } catch (err: any) {
+                toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
+                setCostCenterFile(null);
+            } finally {
+                setProcessing(false);
+            }
+        } else {
             setProcessedData(prev => {
                 if (!prev) return null;
                 const { costCenterMap, costCenterDebugKeys, allCostCenters, costCenterHeaderRows, ...rest } = prev;
                  return { ...rest, costCenterMap: undefined, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] } as ProcessedData;
             });
-            return;
-        }
-
-        setCostCenterFile(file);
-        
-        // This will be handled by the CostCenterAnalysis component now
-    };
-
-    const handleProcessCostCenterData = async (file: File, docCol: string, cnpjCol: string) => {
-        if (!file) return;
-        setProcessing(true);
-        try {
-            const data = await file.arrayBuffer();
-            const XLSX = await import('xlsx');
-            const workbook = XLSX.read(data, { type: 'array' });
-            const sheetName = workbook.SheetNames[0];
-            if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
-            const worksheet = XLSX.read(data, { type: 'array', sheet: sheetName, cellDates: true, sheets: [sheetName] }).Sheets[sheetName];
-            const costCenterSheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 8 });
-
-
-            const { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows } = processCostCenterData(
-                costCenterSheetData,
-                docCol,
-                cnpjCol
-            );
-            
-            setProcessedData(prev => ({
-                ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
-                costCenterMap,
-                costCenterDebugKeys: debugKeys,
-                allCostCenters,
-                costCenterHeaderRows,
-            }));
-            toast({ title: "Planilha de Centro de Custo Processada", description: `${costCenterMap.size} mapeamentos e ${allCostCenters.length} centros de custo foram encontrados.` });
-        } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
-            setCostCenterFile(null);
-        } finally {
-            setProcessing(false);
-        }
-    };
-
-
-    const handleDownloadCostCenterDebug = async () => {
-        if (!processedData?.costCenterDebugKeys || !processedData?.costCenterHeaderRows) {
-            toast({
-                variant: "destructive",
-                title: "Dados Insuficientes",
-                description: "Processe a planilha de Centro de Custo para gerar a depuração."
-            });
-            return;
-        }
-
-        const XLSX = await import('xlsx');
-        const workbook = XLSX.utils.book_new();
-
-        if (processedData.costCenterDebugKeys.length > 0) {
-            const debugSheet = XLSX.utils.json_to_sheet(processedData.costCenterDebugKeys);
-            XLSX.utils.book_append_sheet(workbook, debugSheet, "Chaves_Centro_Custo");
-        }
-        if (processedData.costCenterHeaderRows.length > 0) {
-            const headersSheet = XLSX.utils.json_to_sheet(processedData.costCenterHeaderRows);
-            XLSX.utils.book_append_sheet(workbook, headersSheet, "Centros de Custo Encontrados");
-        }
-        
-        if (workbook.SheetNames.length > 0) {
-            XLSX.writeFile(workbook, "Debug_Centro_de_Custo.xlsx");
-            toast({ title: "Ficheiro de Depuração Gerado" });
-        } else {
-             toast({ variant: 'destructive', title: "Nenhum dado de depuração para exportar." });
         }
     };
 
@@ -506,13 +445,12 @@ export function AutomatorClientPage() {
         toast({ title: "Dados limpos", description: "Todos os arquivos e resultados foram removidos." });
     };
 
-     const handleDownloadExcel = async () => {
+     const handleDownloadExcel = () => {
         if (!processedData?.sheets) {
             toast({ variant: "destructive", title: "Nenhum dado para baixar", description: "Processe os arquivos primeiro." });
             return;
         }
 
-        const XLSX = await import('xlsx');
         const workbook = XLSX.utils.book_new();
         const displayOrder = [
             "Notas Válidas", "Itens Válidos", "Chaves Válidas", "Saídas", "Itens Válidos Saídas",
@@ -559,6 +497,7 @@ export function AutomatorClientPage() {
         const fileName = `Grantel - Validação de Documentos.xlsx`;
         XLSX.writeFile(workbook, fileName);
     };
+
 
     // =================================================================
     // MAIN PROCESSING & CHILD CALLBACKS
@@ -807,14 +746,6 @@ export function AutomatorClientPage() {
     const analysisTabDisabled = !processedData?.sheets['Chaves Válidas'] || processedData.sheets['Chaves Válidas'].length === 0;
     const imobilizadoTabDisabled = !processedData?.sheets['Imobilizados'] || processedData.sheets['Imobilizados'].length === 0;
     
-    if (!isClient) {
-        return (
-            <div className="flex h-screen w-screen items-center justify-center">
-                <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            </div>
-        );
-    }
-    
     return (
         <div className="min-h-screen bg-background text-foreground">
             <header className="sticky top-0 z-20 w-full border-b bg-background/80 backdrop-blur-sm">
@@ -940,13 +871,11 @@ export function AutomatorClientPage() {
                                 costCenterFile={costCenterFile}
                                 onCostCenterFileChange={handleCostCenterFileChange}
                                 onClearCostCenterFile={() => setCostCenterFile(null)}
-                                onProcessCostCenterData={handleProcessCostCenterData}
                                 onRunReconciliation={handleRunReconciliation}
                                 isReconciliationRunning={processing}
                                 allClassifications={allClassifications}
                                 onPersistClassifications={handlePersistClassifications}
                                 competence={competence}
-                                onDownloadCostCenterDebug={handleDownloadCostCenterDebug}
                             /> 
                             : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a conciliação.</p></CardContent></Card>
                         }
