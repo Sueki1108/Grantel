@@ -591,61 +591,69 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
     const costCenterMap = new Map<string, string>();
     const debugKeys: any[] = [];
     const allCostCenters = new Set<string>();
+    const costCenterHeaderRows: any[] = [];
 
     if (!costCenterSheetData || costCenterSheetData.length === 0) {
-        return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
+        return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows };
     }
 
     let currentCostCenter = 'N/A';
 
     costCenterSheetData.forEach((row, rowIndex) => {
-        if (!Array.isArray(row) || row.length < 4) return;
+        if (!Array.isArray(row) || row.length === 0) return;
 
         const firstCell = String(row[0] || '').trim();
         
-        const debugEntry: any = {
-            "Linha": rowIndex + 1,
-            "Coluna A": firstCell,
-            "Coluna B (Credor)": row[1] ?? 'Vazio',
-            "Coluna D (Documento)": row[3] ?? 'Vazio',
-            "Coluna K (Observação/Chave)": row[10] ?? 'Vazio',
-            "Centro de Custo Ativo": 'N/A',
-            "Status": "Ignorado",
-        };
-
-        if (firstCell.toLowerCase() === 'centro de custo') {
-            currentCostCenter = String(row[1] || 'N/A').trim(); // Get name from adjacent cell
+        // Check for Cost Center header
+        if (firstCell.toLowerCase().startsWith('centro de custo')) {
+            // The cost center name is in the next cell (column B)
+            currentCostCenter = String(row[1] || `Desconhecido (Linha ${rowIndex + 1})`).trim();
             allCostCenters.add(currentCostCenter);
-            debugEntry.Status = "Info - Cabeçalho de Centro de Custo";
-        } else {
-            debugEntry["Centro de Custo Ativo"] = currentCostCenter;
-            const docNumber = row[3]; // Coluna D
-            const supplierInfo = row[1]; // Coluna B
-            const observation = row[10]; // Coluna K
+            return; // Skip to next line after processing header
+        }
+
+        // Identify data rows by checking for a numeric value in the first column (Item)
+        const isDataRow = !isNaN(parseInt(firstCell, 10));
+
+        if (isDataRow) {
+            const supplierInfo = row[1]; // Column B
+            const docNumber = row[3];    // Column D
+            const observation = row[10]; // Column K
 
             const docNumberClean = docNumber ? cleanAndToStr(docNumber) : null;
             
+            // Extract CNPJ from the Credor column
             const supplierCnpjMatch = supplierInfo ? String(supplierInfo).match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{11}|\d{14})/) : null;
             const supplierCnpjClean = supplierCnpjMatch ? supplierCnpjMatch[0].replace(/\D/g, '') : null;
 
+            // Extract the 44-digit access key from the observation column
             const accessKeyMatch = observation ? String(observation).match(/\b(\d{44})\b/) : null;
             const accessKey = accessKeyMatch ? accessKeyMatch[1] : null;
 
+            const debugEntry: any = {
+                "Linha": rowIndex + 1,
+                "Centro de Custo Ativo": currentCostCenter,
+                "Documento (Col D)": docNumber || 'Vazio',
+                "Credor (Col B)": supplierInfo || 'Vazio',
+                "Observação (Col K)": observation || 'Vazio',
+                "Status": "Ignorado",
+            };
+            
             if (docNumberClean && supplierCnpjClean) {
                 debugEntry["Chave de Comparação (Doc-CNPJ)"] = `${docNumberClean}-${supplierCnpjClean}`;
             }
 
             if (accessKey) {
                 costCenterMap.set(accessKey, currentCostCenter);
-                debugEntry.Status = "Sucesso - Chave Encontrada";
+                debugEntry.Status = "Sucesso - Chave de Acesso encontrada e mapeada.";
                 debugEntry["Chave de Acesso Extraída"] = accessKey;
             } else {
-                debugEntry.Status = "Aviso - Chave de Acesso não encontrada na Observação";
+                debugEntry.Status = "Aviso - Chave de Acesso não encontrada na coluna K.";
             }
+
+            debugKeys.push(debugEntry);
         }
-        
-        debugKeys.push(debugEntry);
     });
 
-    return { costCenterMap, debugKeys, allCostCenters: Array.from(allCostCenters), costCenterHeaderRows: [] };
+    return { costCenterMap, debugKeys, allCostCenters: Array.from(allCostCenters), costCenterHeaderRows };
 }

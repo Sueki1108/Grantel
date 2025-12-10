@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Database } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
@@ -116,12 +116,17 @@ export function ReconciliationAnalysis({
     return (
          <Card>
             <CardHeader>
-                <div className="flex items-center gap-3">
-                    <GitCompareArrows className="h-8 w-8 text-primary" />
-                    <div>
-                        <CardTitle className="font-headline text-2xl">XML VS Sienge</CardTitle>
-                        <CardDescription>Carregue as planilhas Sienge e de Centro de Custo para cruzar informações com os XMLs processados.</CardDescription>
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <GitCompareArrows className="h-8 w-8 text-primary" />
+                        <div>
+                            <CardTitle className="font-headline text-2xl">XML VS Sienge</CardTitle>
+                            <CardDescription>Carregue as planilhas Sienge e de Centro de Custo para cruzar informações com os XMLs processados.</CardDescription>
+                        </div>
                     </div>
+                     <Button onClick={handleDownloadDebugSheets} variant="secondary" size="sm" disabled={(!processedData?.siengeDebugKeys || processedData.siengeDebugKeys.length === 0) && (!processedData?.costCenterDebugKeys || processedData.costCenterDebugKeys.length === 0)}>
+                        <Database className="mr-2 h-4 w-4" /> Planilhas de Depuração
+                    </Button>
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -140,15 +145,11 @@ export function ReconciliationAnalysis({
                         costCenterFile={costCenterFile}
                         onCostCenterFileChange={onCostCenterFileChange}
                         onClearCostCenterFile={onClearCostCenterFile}
-                        processedData={processedData}
                     />
                 </div>
                 <div className='flex flex-col sm:flex-row gap-2 pt-4'>
                     <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full">
                         {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
-                    </Button>
-                    <Button onClick={handleDownloadDebugSheets} variant="secondary" className="w-full sm:w-auto" disabled={(!processedData?.siengeDebugKeys || processedData.siengeDebugKeys.length === 0) && (!processedData?.costCenterDebugKeys || processedData.costCenterDebugKeys.length === 0)}>
-                        <Download className="mr-2 h-4 w-4" /> Baixar Planilhas de Depuração
                     </Button>
                 </div>
                 
