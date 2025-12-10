@@ -490,24 +490,37 @@ export function runReconciliation(
                 stillUnmatchedSienge.push(siengeItem);
             });
             
-            const matchedXmlIndicesThisPass = new Set(matchedInPass.map(r => xmlItems.findIndex(x => x.id === r.id && x['Valor Total'] === r['Valor Total'])));
-            const stillUnmatchedXml = xmlItems.filter((_, index) => !matchedXmlIndicesThisPass.has(index));
-
+            const matchedXmlIndices = new Set(matchedInPass.map(r => r.xmlIndex));
+            const stillUnmatchedXml = xmlItems.filter((_, index) => !matchedXmlIndices.has(index));
+            
             return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
         };
 
         const passes = [
             { name: "Valor Total", getSiengeKey: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]), getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
             { name: "Preço Unitário", getSiengeKey: (item: any) => h.precoUnitario ? getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.precoUnitario!]) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Unitário']) },
+            { name: "ICMS Outras", getSiengeKey: (item: any) => h.icmsOutras ? getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.icmsOutras!]) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
+            { name: "Valor Total + Desconto", getSiengeKey: (item: any) => h.desconto ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto!] || '0').replace(',', '.'))) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
+            { name: "Valor Total - Frete", getSiengeKey: (item: any) => h.frete ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.frete!] || '0').replace(',', '.'))) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
+            { name: "Valor Total - IPI/ICMS ST", getSiengeKey: (item: any) => (h.ipiDespesas || h.icmsSt) ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0) - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
+            { name: "Valor Total - Frete/IPI", getSiengeKey: (item: any) => (h.frete || h.ipiDespesas) ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0)) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
+            { name: "Valor Total + Desc - Frete", getSiengeKey: (item: any) => (h.desconto || h.frete) ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + (h.desconto ? parseFloat(String(item[h.desconto] || '0').replace(',', '.')) : 0) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0)) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
+            { name: "Valor Total - Desp. Acess.", getSiengeKey: (item: any) => h.despesasAcessorias ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.despesasAcessorias!] || '0').replace(',', '.'))) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
         ];
+        
+        let xmlItemsForPasses = [...remainingXmlItems];
 
         for (const pass of passes) {
-             if (remainingSiengeItems.length === 0 || remainingXmlItems.length === 0) break;
-             const result = reconciliationPass(remainingSiengeItems, remainingXmlItems, pass.getSiengeKey, pass.getXmlKey, pass.name);
-             reconciled.push(...result.matched);
-             remainingSiengeItems = result.remainingSienge;
-             remainingXmlItems = result.remainingXml;
+             if (remainingSiengeItems.length === 0 || xmlItemsForPasses.length === 0) break;
+             const passResult = reconciliationPass(remainingSiengeItems, xmlItemsForPasses, pass.getSiengeKey, pass.getXmlKey, pass.name);
+             if (passResult.matched.length > 0) {
+                 reconciled.push(...passResult.matched);
+                 remainingSiengeItems = passResult.remainingSienge;
+                 xmlItemsForPasses = passResult.remainingXml;
+             }
         }
+        remainingXmlItems = xmlItemsForPasses;
+
         
         const devolucoesEP = xmlItems
             .filter(item => {
@@ -579,18 +592,12 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
     let isDataSection = false;
 
     costCenterSheetData.forEach((row, rowIndex) => {
-        if (!Array.isArray(row) || row.length === 0) {
-            isDataSection = false;
-            return;
-        }
+        if (!Array.isArray(row) || row.length < 6) return;
 
         const firstCell = String(row[0] || '').trim();
         const debugEntry: any = {
-            "Linha": rowIndex + 1,
-            "Coluna A": row[0] ?? 'Vazio',
-            "Coluna F": row[5] ?? 'Vazio',
-            "Centro de Custo Ativo": currentCostCenter,
-            "Status": "Ignorado",
+            "Linha": rowIndex + 1, "Coluna A": row[0] ?? 'Vazio', "Coluna F": row[5] ?? 'Vazio',
+            "Centro de Custo Ativo": currentCostCenter, "Status": "Ignorado",
             "Motivo": "Linha não corresponde a um cabeçalho ou a uma linha de dados válida.",
         };
 
@@ -600,7 +607,7 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
             isDataSection = false;
             debugEntry.Status = "Info";
             debugEntry.Motivo = "Linha identificada como um novo centro de custo.";
-        } else if (firstCell.toLowerCase() === 'item') {
+        } else if (normalizeKey(firstCell) === 'item') {
             isDataSection = true;
             costCenterHeaderRows.push({ center: currentCostCenter, headers: row });
             debugEntry.Status = "Info";
@@ -620,7 +627,7 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
                 debugEntry.Motivo = "Coluna de Observação (F) não continha uma chave de 44 dígitos.";
             }
         }
-
+        
         debugKeys.push(debugEntry);
     });
 
