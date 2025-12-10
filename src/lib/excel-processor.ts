@@ -1,3 +1,4 @@
+
 import { cfopDescriptions } from './cfop';
 import type { KeyCheckResult } from '@/components/app/key-checker';
 import type { AllClassifications } from '@/lib/types';
@@ -564,6 +565,9 @@ export function processCostCenterData(
     }
 
     const headers = costCenterSheetData[0];
+    if (!headers || !Array.isArray(headers)) {
+        throw new Error("Não foi possível detetar o cabeçalho na planilha de Centro de Custo. Verifique se a linha 9 contém os títulos.");
+    }
     const docIndex = headers.findIndex(h => h === docNumberHeader);
     const cnpjIndex = headers.findIndex(h => h === cnpjHeader);
 
@@ -588,38 +592,37 @@ export function processCostCenterData(
         const docNumber = row[docIndex];
         const credorCnpjRaw = row[cnpjIndex];
 
-        if (docNumber && credorCnpjRaw) {
-             const credorCnpjMatch = String(credorCnpjRaw).match(/(\d{4,}-\d{2})/);
-             const credorCnpj = credorCnpjMatch ? credorCnpjMatch[1] : null;
-             
-             if(!credorCnpj) continue;
+        if (!docNumber || !credorCnpjRaw) continue;
 
-            const docNumberClean = String(docNumber).split('/')[1] || String(docNumber);
-            
-            const key = `${cleanAndToStr(docNumberClean)}-${cleanAndToStr(credorCnpj)}`;
-            let foundCostCenter = false;
-            
-            for (let j = costCenterStartIndex; j < row.length; j++) {
-                const cellValue = row[j];
-                if (cellValue && (typeof cellValue === 'number' && cellValue > 0 || (typeof cellValue === 'string' && parseFloat(cellValue.replace(',', '.')) > 0))) {
-                    const centerName = String(headers[j]).trim();
-                    if (centerName) {
-                        costCenterMap.set(key, centerName);
-                        foundCostCenter = true;
-                        break;
-                    }
+        const cnpjMatches = String(credorCnpjRaw).match(/(\d{4,}-\d{2})$/);
+        const credorCnpj = cnpjMatches ? cnpjMatches[1] : null;
+
+        if(!credorCnpj) continue;
+
+        const docNumberClean = String(docNumber).split('/')[1] || String(docNumber);
+        
+        const key = `${cleanAndToStr(docNumberClean)}-${cleanAndToStr(credorCnpj)}`;
+        let foundCostCenter = false;
+        
+        for (let j = costCenterStartIndex; j < row.length; j++) {
+            const cellValue = row[j];
+            if (cellValue && (typeof cellValue === 'number' && cellValue > 0 || (typeof cellValue === 'string' && parseFloat(cellValue.replace(',', '.')) > 0))) {
+                const centerName = String(headers[j]).trim();
+                if (centerName) {
+                    costCenterMap.set(key, centerName);
+                    foundCostCenter = true;
+                    break;
                 }
             }
-             debugKeys.push({
-                "Chave de Comparação (Centro Custo)": key,
-                "Número Documento (Original)": docNumber,
-                "Credor (Original com CNPJ)": credorCnpjRaw,
-                "CNPJ Credor (Extraído)": credorCnpj,
-                "Centro de Custo Encontrado": foundCostCenter ? costCenterMap.get(key) : "NENHUM"
-            });
         }
+         debugKeys.push({
+            "Chave de Comparação (Centro Custo)": key,
+            "Número Documento (Original)": docNumber,
+            "Credor (Original com CNPJ)": credorCnpjRaw,
+            "CNPJ Credor (Extraído)": credorCnpj,
+            "Centro de Custo Encontrado": foundCostCenter ? costCenterMap.get(key) : "NENHUM"
+        });
     }
 
     return { costCenterMap, debugKeys, allCostCenters: Array.from(allCostCenters), costCenterHeaderRows };
 }
-```
