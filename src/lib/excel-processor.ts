@@ -589,8 +589,10 @@ export function processCostCenterData(
         const credorCnpjRaw = row[cnpjIndex];
 
         if (docNumber && credorCnpjRaw) {
-             const credorCnpjMatch = String(credorCnpjRaw).match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/);
-             const credorCnpj = credorCnpjMatch ? credorCnpjMatch[0] : String(credorCnpjRaw);
+             const credorCnpjMatch = String(credorCnpjRaw).match(/(\d{4,}-\d{2})/);
+             const credorCnpj = credorCnpjMatch ? credorCnpjMatch[1] : null;
+             
+             if(!credorCnpj) continue;
 
             const docNumberClean = String(docNumber).split('/')[1] || String(docNumber);
             
@@ -620,3 +622,4 @@ export function processCostCenterData(
 
     return { costCenterMap, debugKeys, allCostCenters: Array.from(allCostCenters), costCenterHeaderRows };
 }
+```
