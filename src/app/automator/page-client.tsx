@@ -321,39 +321,36 @@ export function AutomatorClientPage() {
     };
     
     
-    const handleCostCenterFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const handleCostCenterFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         setCostCenterFile(file || null);
 
         if (file) {
             setProcessing(true);
-            (async () => {
-                try {
-                    const data = await file.arrayBuffer();
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const sheetName = workbook.SheetNames[0];
-                    if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
-                    const worksheet = workbook.Sheets[sheetName];
-                    const costCenterData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
+                const worksheet = workbook.Sheets[sheetName];
+                const costCenterData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-                    const { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows } = processCostCenterData(costCenterData);
-                    
-                    setProcessedData(prev => ({
-                        ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
-                        costCenterMap,
-                        costCenterDebugKeys: debugKeys,
-                        allCostCenters,
-                        costCenterHeaderRows,
-                    }));
-
-                    toast({ title: "Planilha de Centro de Custo Processada", description: `${costCenterMap.size} mapeamentos e ${allCostCenters.length} centros de custo foram encontrados.` });
-                } catch (err: any) {
-                    toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
-                    setCostCenterFile(null); // Clear file on error
-                } finally {
-                    setProcessing(false);
-                }
-            })();
+                const { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows } = processCostCenterData(costCenterData);
+                
+                setProcessedData(prev => ({
+                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
+                    costCenterMap,
+                    costCenterDebugKeys: debugKeys,
+                    allCostCenters,
+                    costCenterHeaderRows,
+                }));
+                toast({ title: "Planilha de Centro de Custo Carregada", description: `${costCenterMap.size} mapeamentos e ${allCostCenters.length} centros de custo foram encontrados.` });
+            } catch (err: any) {
+                toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
+                setCostCenterFile(null);
+            } finally {
+                setProcessing(false);
+            }
         } else {
             setProcessedData(prev => {
                 if (!prev) return null;
@@ -708,12 +705,11 @@ export function AutomatorClientPage() {
             const siengeSheetName = siengeWorkbook.SheetNames[0];
             if (!siengeSheetName) throw new Error("A planilha Sienge não contém abas.");
             const siengeWorksheet = siengeWorkbook.Sheets[siengeSheetName];
-            const siengeSheetData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-            const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
-
+            const siengeSheetData = XLSX.utils.sheet_to_json(siengeWorksheet, { range: 8, defval: null });
+            
             // Re-process Cost Center file if it exists
-            let costCenterMap: Map<string, string> | undefined = undefined;
-            if (costCenterFile) {
+            let costCenterMap: Map<string, string> | undefined = processedData.costCenterMap;
+            if (costCenterFile && !costCenterMap) { // Process only if not already processed
                 const costCenterDataBuffer = await costCenterFile.arrayBuffer();
                 const costCenterWorkbook = XLSX.read(costCenterDataBuffer, { type: 'array' });
                 const costCenterSheetName = costCenterWorkbook.SheetNames[0];
@@ -729,14 +725,13 @@ export function AutomatorClientPage() {
                 processedData.sheets['Itens Válidos'] || [],
                 processedData.sheets['Notas Válidas'] || [],
                 processedData.sheets['CTEs Válidos'] || [],
-                costCenterMap || processedData.costCenterMap
+                costCenterMap
             );
             
             setProcessedData(prev => ({
                 ...prev!,
-                siengeSheetData, // Update with freshly processed data
-                siengeDebugKeys,
-                costCenterMap, // Update with freshly processed data
+                siengeSheetData, // Always update with fresh data
+                costCenterMap,
                 reconciliationResults: newReconciliationResults,
             }));
             
@@ -832,7 +827,7 @@ export function AutomatorClientPage() {
                                 {processedData?.sheets['Imobilizados'] && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                              <TabsTrigger value="difal" className="flex items-center gap-2">
-                                <TicketPercent className="h-5 w-5" /> 6. Guia DIFAL
+                                6. Guia DIFAL
                             </TabsTrigger>
                             <TabsTrigger value="analyses" disabled={analysisTabDisabled} className="flex items-center gap-2">
                                 7. SPED Fiscal
@@ -1008,4 +1003,3 @@ export function AutomatorClientPage() {
         </div>
     );
 }
-
