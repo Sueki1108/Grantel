@@ -605,7 +605,7 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
         
         const debugEntry: any = {
             "Linha": rowIndex + 1,
-            "Coluna A (Centro de Custo)": firstCell,
+            "Coluna A": firstCell,
             "Coluna B (Credor)": row[1] ?? 'Vazio',
             "Coluna D (Documento)": row[3] ?? 'Vazio',
             "Coluna K (Observação/Chave)": row[10] ?? 'Vazio',
@@ -613,8 +613,8 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
             "Status": "Ignorado",
         };
 
-        if (firstCell.toLowerCase().startsWith('centro de custo:')) {
-            currentCostCenter = firstCell;
+        if (firstCell.toLowerCase() === 'centro de custo') {
+            currentCostCenter = String(row[1] || 'N/A').trim(); // Get name from adjacent cell
             allCostCenters.add(currentCostCenter);
             debugEntry.Status = "Info - Cabeçalho de Centro de Custo";
         } else {
