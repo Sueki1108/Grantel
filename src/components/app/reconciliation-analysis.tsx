@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useMemo, useEffect, useState } from 'react';
@@ -10,7 +11,7 @@ import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, Ba
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns } from "@/components/app/data-table-columns";
+import { getColumns } from "@/lib/columns-helper";
 import { SiengeTaxCheck } from './sienge-tax-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { CfopValidator } from './cfop-validator';
@@ -22,6 +23,9 @@ interface ReconciliationAnalysisProps {
     siengeFile: File | null;
     onSiengeFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
+    costCenterFile: File | null;
+    onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onClearCostCenterFile: () => void;
     onRunReconciliation: () => void;
     isReconciliationRunning: boolean;
     allClassifications: AllClassifications;
@@ -54,6 +58,9 @@ export function ReconciliationAnalysis({
     siengeFile, 
     onSiengeFileChange, 
     onClearSiengeFile,
+    costCenterFile,
+    onCostCenterFileChange,
+    onClearCostCenterFile,
     onRunReconciliation,
     isReconciliationRunning,
     allClassifications,
@@ -115,18 +122,25 @@ export function ReconciliationAnalysis({
                     <GitCompareArrows className="h-8 w-8 text-primary" />
                     <div>
                         <CardTitle className="font-headline text-2xl">XML VS Sienge</CardTitle>
-                        <CardDescription>Carregue a planilha Sienge para cruzar informações com os XMLs processados.</CardDescription>
+                        <CardDescription>Carregue as planilhas Sienge e de Centro de Custo para cruzar informações com os XMLs processados.</CardDescription>
                     </div>
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
-                 <div className='grid grid-cols-1 gap-6 items-end'>
+                 <div className='grid grid-cols-1 md:grid-cols-2 gap-6 items-end'>
                     <FileUploadForm
                         displayName="Itens do Sienge"
                         formId="sienge-for-reconciliation"
                         files={{ 'sienge-for-reconciliation': !!siengeFile }}
                         onFileChange={onSiengeFileChange}
                         onClearFile={onClearSiengeFile}
+                    />
+                     <FileUploadForm
+                        displayName="Centro de Custo"
+                        formId="cost-center"
+                        files={{ 'cost-center': !!costCenterFile }}
+                        onFileChange={onCostCenterFileChange}
+                        onClearFile={onClearCostCenterFile}
                     />
                 </div>
                 <div className='flex flex-col sm:flex-row gap-2 pt-4'>
