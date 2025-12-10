@@ -1,7 +1,8 @@
+
 "use client";
 
 import { useState, useMemo, type ChangeEvent } from 'react';
-import XLSX from 'xlsx';
+import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -302,4 +303,3 @@ export function DifalAnalysis() {
         </div>
     );
 }
-    

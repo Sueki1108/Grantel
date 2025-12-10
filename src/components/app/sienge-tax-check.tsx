@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { AlertTriangle, Download } from "lucide-react";
-import XLSX from 'xlsx';
+import * as XLSX from 'xlsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
 import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
