@@ -555,7 +555,10 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
         valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total']),
         cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
     };
-    if (!h.numero || !h.valorTotal || !h.cnpj) return [];
+    
+    if (!h.numero || !h.valorTotal || !h.cnpj) {
+        return [];
+    }
 
     return siengeData.map(item => {
         const numNota = cleanAndToStr(item[h.numero!]);
@@ -588,10 +591,9 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
     }
 
     let currentCostCenter = 'N/A';
-    let isDataSection = false;
 
     costCenterSheetData.forEach((row, rowIndex) => {
-        if (!Array.isArray(row) || row.length < 6) return;
+        if (!Array.isArray(row) || row.length < 4) return;
 
         const firstCell = String(row[0] || '').trim();
         const debugEntry: any = {
@@ -599,40 +601,33 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
             "Centro de Custo Ativo": currentCostCenter, "Status": "Ignorado",
             "Motivo": "Linha não corresponde a um cabeçalho de centro de custo ou a uma linha de dados válida.",
         };
-
+        
         if (firstCell.toLowerCase().startsWith('centro de custo')) {
             currentCostCenter = firstCell;
             allCostCenters.add(currentCostCenter);
-            isDataSection = false; // Reset data section flag
             debugEntry.Status = "Info";
-            debugEntry.Motivo = "Linha identificada como um novo cabeçalho de centro de custo.";
-        } else if (isDataSection && typeof row[0] === 'number') { // Assuming 'Item' is a number
+            debugEntry.Motivo = `Linha identificada como um novo cabeçalho de centro de custo: ${currentCostCenter}`;
+        } else if (typeof row[0] === 'number') { 
             const credor = row[1];
-            const documento = row[3];
-            
-            if (credor && documento) {
+            const observacao = row[10]; 
+
+            if (credor && observacao) {
                 const cnpjMatch = String(credor).match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{11})/);
-                const docMatch = String(documento).match(/NFSE\/(\d+)|NFE\s*\/(\d+)/i);
+                const chaveAcessoMatch = String(observacao).match(/\b\d{44}\b/);
 
                 const cnpj = cnpjMatch ? cnpjMatch[0].replace(/\D/g, '') : null;
-                const docNumber = docMatch ? (docMatch[1] || docMatch[2]) : null;
+                const chaveAcesso = chaveAcessoMatch ? chaveAcessoMatch[0] : null;
 
-                if (cnpj && docNumber) {
-                     const key = `${cleanAndToStr(docNumber)}-${cleanAndToStr(cnpj)}`;
-                     costCenterMap.set(key, currentCostCenter);
+                if (chaveAcesso) {
+                     costCenterMap.set(chaveAcesso, currentCostCenter);
                       debugEntry.Status = "Sucesso";
-                      debugEntry.Motivo = `Chave de dados '${key}' mapeada para o centro de custo ${currentCostCenter}.`;
-                      debugEntry["Chave Gerada"] = key;
+                      debugEntry.Motivo = `Chave de acesso '${chaveAcesso}' mapeada para o centro de custo '${currentCostCenter}'.`;
+                      debugEntry["Chave Gerada"] = chaveAcesso;
                 } else {
                      debugEntry.Status = "Falha";
-                     debugEntry.Motivo = "Não foi possível extrair CNPJ ou Número do Documento das colunas B e D.";
+                     debugEntry.Motivo = "Não foi possível extrair a Chave de Acesso (44 dígitos) da coluna de observação.";
                 }
             }
-        } else if (normalizeKey(firstCell) === 'item') {
-            isDataSection = true;
-            costCenterHeaderRows.push({ center: currentCostCenter, headers: row });
-            debugEntry.Status = "Info";
-            debugEntry.Motivo = "Linha identificada como cabeçalho de dados, iniciando a leitura de dados.";
         }
         
         debugKeys.push(debugEntry);
