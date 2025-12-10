@@ -4,7 +4,7 @@
 import React, { useMemo, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { type ProcessedData } from '@/lib/excel-processor';
+import { type ProcessedData, processCostCenterData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
@@ -27,7 +27,6 @@ interface ReconciliationAnalysisProps {
     costCenterFile: File | null;
     onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearCostCenterFile: () => void;
-    onProcessCostCenterData: (file: File) => void; // Nova prop
     onRunReconciliation: () => void;
     isReconciliationRunning: boolean;
     allClassifications: AllClassifications;
@@ -56,7 +55,6 @@ export function ReconciliationAnalysis({
     costCenterFile,
     onCostCenterFileChange,
     onClearCostCenterFile,
-    onProcessCostCenterData,
     onRunReconciliation,
     isReconciliationRunning,
     allClassifications,
@@ -120,11 +118,10 @@ export function ReconciliationAnalysis({
                             <Cpu className="mr-2 h-4 w-4" /> Gerar Chaves de Depuração (Sienge)
                         </Button>
                     </div>
-                     <CostCenterAnalysis
+                    <CostCenterAnalysis
                         costCenterFile={costCenterFile}
                         onCostCenterFileChange={onCostCenterFileChange}
                         onClearCostCenterFile={onClearCostCenterFile}
-                        onProcessCostCenterData={onProcessCostCenterData}
                         onDownloadCostCenterDebug={onDownloadCostCenterDebug}
                         processedData={processedData}
                     />
@@ -233,3 +230,6 @@ export function ReconciliationAnalysis({
          </Card>
     );
 }
+
+
+    

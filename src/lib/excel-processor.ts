@@ -558,7 +558,7 @@ export function processCostCenterData(
     const costCenterMap = new Map<string, string>();
     const debugKeys: any[] = [];
     const allCostCenters = new Set<string>();
-    
+
     if (!costCenterSheetData || costCenterSheetData.length === 0) {
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
@@ -566,49 +566,45 @@ export function processCostCenterData(
     let currentHeaders: string[] = [];
     let docIndex = -1;
     let cnpjIndex = -1;
-    let costCenterStartIndex = -1;
-
+    
     for (let i = 0; i < costCenterSheetData.length; i++) {
         const row = costCenterSheetData[i];
-        if (!row || !Array.isArray(row)) continue;
+        if (!row || !Array.isArray(row) || row.length === 0) continue;
 
         const firstCell = String(row[0] || '').trim().toLowerCase();
-        
-        // Detectar nova seção de centro de custo
+
+        // Detectar o início de uma nova seção de centro de custo
         if (firstCell.startsWith('centro de custo')) {
-            // A próxima linha não vazia deve ser o cabeçalho
+            // A próxima linha que contém "Item" e "Credor" é o cabeçalho
             let headerRowIndex = i + 1;
-            while(headerRowIndex < costCenterSheetData.length && (!costCenterSheetData[headerRowIndex] || costCenterSheetData[headerRowIndex].length === 0)) {
+            while(headerRowIndex < costCenterSheetData.length) {
+                const potentialHeaderRow = costCenterSheetData[headerRowIndex];
+                if (potentialHeaderRow && potentialHeaderRow.some(h => String(h).trim().toLowerCase() === 'item') && potentialHeaderRow.some(h => String(h).trim().toLowerCase() === 'credor')) {
+                    currentHeaders = (potentialHeaderRow || []).map(h => String(h || '').trim());
+                    docIndex = currentHeaders.findIndex(h => normalizeKey(h) === normalizeKey(docNumberHeader));
+                    cnpjIndex = currentHeaders.findIndex(h => normalizeKey(h) === normalizeKey(cnpjHeader));
+                    
+                    if (docIndex !== -1 && cnpjIndex !== -1) {
+                        currentHeaders.forEach(header => {
+                            if (header && !isNaN(Number(header))) {
+                                allCostCenters.add(header);
+                            }
+                        });
+                    }
+                    i = headerRowIndex; // Pular para a linha após o cabeçalho
+                    break;
+                }
                 headerRowIndex++;
             }
-
-            if (headerRowIndex < costCenterSheetData.length) {
-                currentHeaders = (costCenterSheetData[headerRowIndex] || []).map(h => String(h || '').trim());
-                docIndex = currentHeaders.findIndex(h => normalizeKey(h) === normalizeKey(docNumberHeader));
-                cnpjIndex = currentHeaders.findIndex(h => normalizeKey(h) === normalizeKey(cnpjHeader));
-                
-                if (docIndex !== -1 && cnpjIndex !== -1) {
-                    costCenterStartIndex = 0; 
-                    currentHeaders.forEach(header => {
-                        if (header) allCostCenters.add(header);
-                    });
-                } else {
-                    // Reset if headers are not found
-                    currentHeaders = [];
-                    docIndex = -1;
-                    cnpjIndex = -1;
-                }
-                i = headerRowIndex; // Pular para a linha após o cabeçalho
-            }
             continue;
         }
 
-        // Ignorar linhas de cabeçalho ou rodapé
-        if (firstCell.startsWith('item') || firstCell.startsWith('total') || firstCell.startsWith('ciente') || firstCell.startsWith('dif1') || firstCell === '') {
+        // Ignorar linhas de cabeçalho, rodapé ou vazias
+        if (firstCell.startsWith('item') || firstCell.startsWith('total') || firstCell.startsWith('ciente') || firstCell.startsWith('dif') || firstCell === '') {
             continue;
         }
         
-        // Processar linha de dados se estivermos em uma seção válida
+        // Processar linha de dados
         if (currentHeaders.length > 0 && docIndex !== -1 && cnpjIndex !== -1) {
             const docNumberRaw = row[docIndex];
             const credorCnpjRaw = row[cnpjIndex];
@@ -629,12 +625,11 @@ export function processCostCenterData(
                 continue;
             }
 
-            // Expressão regular para encontrar o padrão 000X-XX no final da string
             const cnpjMatches = String(credorCnpjRaw).match(/(\d{4}-\d{2})$/);
             const credorCnpj = cnpjMatches ? cnpjMatches[1] : null;
 
             if (!credorCnpj) {
-                debugEntry.Motivo = "Não foi possível extrair um CNPJ válido do campo Credor (padrão XXXX-XX).";
+                debugEntry.Motivo = "CNPJ não encontrado no formato esperado (XXXX-XX).";
                 debugKeys.push(debugEntry);
                 continue;
             }
@@ -645,22 +640,18 @@ export function processCostCenterData(
 
             let foundCostCenter = false;
             for (let j = 0; j < row.length; j++) {
-                // Verificar se o cabeçalho é um centro de custo e se a célula tem valor
                 const headerName = currentHeaders[j];
                 const cellValue = row[j];
                 if (headerName && allCostCenters.has(headerName) && cellValue && (typeof cellValue === 'number' || parseFloat(String(cellValue).replace(',', '.')) > 0)) {
                     costCenterMap.set(key, headerName);
                     debugEntry["Centro de Custo Encontrado"] = headerName;
                     foundCostCenter = true;
-                    break; 
+                    break;
                 }
             }
-
-            if (foundCostCenter) {
-                debugEntry.Status = "Sucesso";
-            } else {
-                debugEntry.Motivo = "Nenhum valor de rateio encontrado para esta linha.";
-            }
+            
+            debugEntry.Status = foundCostCenter ? "Sucesso" : "Falha";
+            debugEntry.Motivo = foundCostCenter ? "" : "Nenhum valor de rateio encontrado para esta linha.";
             debugKeys.push(debugEntry);
         }
     }
