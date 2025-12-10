@@ -569,8 +569,8 @@ export function processCostCenterData(costCenterData: any[][]): {
     for (let i = 0; i < costCenterData.length; i++) {
         const row = costCenterData[i] || [];
         const normalizedRow = row.map(cell => normalizeKey(String(cell)));
-        const docIdx = normalizedRow.indexOf('numerododocumento');
-        const credorCnpjIdx = normalizedRow.indexOf('cpfcnpj');
+        const docIdx = normalizedRow.findIndex(h => h === 'numerododocumento');
+        const credorCnpjIdx = normalizedRow.findIndex(h => h === 'cpfcnpj');
 
         if (docIdx !== -1 && credorCnpjIdx !== -1) {
             headerRowIndex = i;
