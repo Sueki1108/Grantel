@@ -546,9 +546,7 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
 }
 
 export function processCostCenterData(
-    costCenterSheetData: any[][],
-    docNumberHeader: string,
-    cnpjHeader: string
+    costCenterSheetData: any[][]
 ): {
     costCenterMap: Map<string, string>;
     debugKeys: any[];
@@ -568,45 +566,47 @@ export function processCostCenterData(
     let cnpjIndex = -1;
     let inDataSection = false;
 
+    // First pass to find all possible cost center headers
+    costCenterSheetData.forEach(row => {
+        if (Array.isArray(row) && String(row[0] || '').trim().toLowerCase() === 'item') {
+            const tempHeaders = row.map(h => String(h || '').trim());
+            tempHeaders.forEach(header => {
+                if (header && !isNaN(Number(header))) {
+                    allCostCenters.add(header);
+                }
+            });
+        }
+    });
+
+
     for (let i = 0; i < costCenterSheetData.length; i++) {
         const row = costCenterSheetData[i];
-        if (!row || !Array.isArray(row) || row.length === 0) {
-            inDataSection = false; // Reset when encountering an empty line
+        if (!row || !Array.isArray(row) || row.length === 0 || !row[0]) {
+            inDataSection = false;
             continue;
         }
 
         const firstCell = String(row[0] || '').trim().toLowerCase();
-
-        // Detect a header row
-        if (firstCell === 'item' && row.some(h => normalizeKey(String(h)) === normalizeKey(docNumberHeader)) && row.some(h => normalizeKey(String(h)) === normalizeKey(cnpjHeader))) {
+        
+        if (firstCell === 'item') {
             currentHeaders = row.map(h => String(h || '').trim());
-            docIndex = currentHeaders.findIndex(h => normalizeKey(h) === normalizeKey(docNumberHeader));
-            cnpjIndex = currentHeaders.findIndex(h => normalizeKey(h) === normalizeKey(cnpjHeader));
-            
-            if (docIndex !== -1 && cnpjIndex !== -1) {
-                currentHeaders.forEach(header => {
-                    if (header && !isNaN(Number(header))) {
-                        allCostCenters.add(header);
-                    }
-                });
-            }
-            inDataSection = true;
+            docIndex = currentHeaders.findIndex(h => normalizeKey(h) === 'documento');
+            cnpjIndex = currentHeaders.findIndex(h => normalizeKey(h) === 'credor');
+            inDataSection = docIndex !== -1 && cnpjIndex !== -1;
             continue;
         }
-        
-        // Stop processing data for a section when a total line is found
+
         if (firstCell.startsWith('total')) {
             inDataSection = false;
             continue;
         }
         
-        // Process data row
-        if (inDataSection && currentHeaders.length > 0 && docIndex !== -1 && cnpjIndex !== -1) {
+        if (inDataSection) {
             const docNumberRaw = row[docIndex];
             const credorCnpjRaw = row[cnpjIndex];
 
             const debugEntry: any = {
-                "Linha": i + 9, // Assuming data starts around line 9
+                "Linha": i + 1,
                 "Credor (Original)": credorCnpjRaw ?? 'N/A',
                 "Documento (Original)": docNumberRaw ?? 'N/A',
                 "Status": "Falha",
@@ -616,7 +616,7 @@ export function processCostCenterData(
             };
 
             if (!docNumberRaw || !credorCnpjRaw) {
-                debugEntry.Motivo = "Número do documento ou credor em falta.";
+                debugEntry.Motivo = "Número do documento ou credor em falta na linha.";
                 debugKeys.push(debugEntry);
                 continue;
             }
@@ -625,7 +625,7 @@ export function processCostCenterData(
             const credorCnpj = cnpjMatches ? cnpjMatches[1] : null;
 
             if (!credorCnpj) {
-                debugEntry.Motivo = `CNPJ não encontrado no formato esperado (XXXX-XX) no valor: "${credorCnpjRaw}"`;
+                debugEntry.Motivo = `CNPJ no formato XXXX-XX não encontrado no valor: "${credorCnpjRaw}"`;
                 debugKeys.push(debugEntry);
                 continue;
             }
@@ -638,7 +638,7 @@ export function processCostCenterData(
             for (let j = 0; j < row.length; j++) {
                 const headerName = currentHeaders[j];
                 const cellValue = row[j];
-                if (headerName && allCostCenters.has(headerName) && cellValue && (typeof cellValue === 'number' || parseFloat(String(cellValue).replace(',', '.')) > 0)) {
+                if (headerName && allCostCenters.has(headerName) && cellValue && parseFloat(String(cellValue).replace(',', '.')) > 0) {
                     costCenterMap.set(key, headerName);
                     debugEntry["Centro de Custo Encontrado"] = headerName;
                     foundCostCenter = true;

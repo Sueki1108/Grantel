@@ -25,14 +25,13 @@ interface ReconciliationAnalysisProps {
     onSiengeFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
     costCenterFile: File | null;
-    onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement> | File) => void;
+    onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearCostCenterFile: () => void;
     onRunReconciliation: () => void;
     isReconciliationRunning: boolean;
     allClassifications: AllClassifications;
     onPersistClassifications: (allData: AllClassifications) => void;
     competence: string | null;
-    onProcessCostCenterData: (docNumberHeader: string, cnpjHeader: string) => void;
 }
 
 const getColumnsForDivergentTabs = (data: any[]) => {
@@ -60,7 +59,6 @@ export function ReconciliationAnalysis({
     allClassifications,
     onPersistClassifications,
     competence,
-    onProcessCostCenterData,
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
@@ -140,9 +138,8 @@ export function ReconciliationAnalysis({
                     </div>
                     <CostCenterAnalysis
                         costCenterFile={costCenterFile}
-                        onCostCenterFileChange={onCostCenterFileChange as (e: React.ChangeEvent<HTMLInputElement>) => void}
+                        onCostCenterFileChange={onCostCenterFileChange}
                         onClearCostCenterFile={onClearCostCenterFile}
-                        onProcessCostCenterData={onProcessCostCenterData}
                         processedData={processedData}
                     />
                 </div>
@@ -150,7 +147,7 @@ export function ReconciliationAnalysis({
                     <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full">
                         {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
                     </Button>
-                    <Button onClick={handleDownloadDebugSheets} variant="secondary" className="w-full sm:w-auto" disabled={!processedData?.siengeDebugKeys && !processedData?.costCenterDebugKeys}>
+                    <Button onClick={handleDownloadDebugSheets} variant="secondary" className="w-full sm:w-auto" disabled={(!processedData?.siengeDebugKeys || processedData.siengeDebugKeys.length === 0) && (!processedData?.costCenterDebugKeys || processedData.costCenterDebugKeys.length === 0)}>
                         <Download className="mr-2 h-4 w-4" /> Baixar Planilhas de Depuração
                     </Button>
                 </div>
@@ -256,3 +253,4 @@ export function ReconciliationAnalysis({
 
 
     
+
