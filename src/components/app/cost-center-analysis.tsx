@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -16,7 +17,7 @@ interface CostCenterAnalysisProps {
     costCenterFile: File | null;
     onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearCostCenterFile: () => void;
-    onDataProcessed: (map: Map<string, string>, debugKeys: any[], headers: any[]) => void;
+    onDataProcessed: (map: Map<string, string>, debugKeys: any[], allCostCenters: string[], headers: any[]) => void;
     onDownloadCostCenterDebug: () => void;
     isProcessing: boolean;
 }
@@ -36,12 +37,6 @@ export function CostCenterAnalysis({
     const [mappedCnpj, setMappedCnpj] = useState<string>('');
     const [sheetData, setSheetData] = useState<any[][] | null>(null);
 
-    useEffect(() => {
-        if (costCenterFile) {
-            handleFileLoad(costCenterFile);
-        }
-    }, [costCenterFile]);
-
     const handleFileLoad = async (file: File) => {
         try {
             const XLSX = await import('xlsx');
@@ -50,15 +45,14 @@ export function CostCenterAnalysis({
             const sheetName = workbook.SheetNames[0];
             if (!sheetName) throw new Error("A planilha não contém abas.");
             const worksheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
             
             if (jsonData.length === 0) throw new Error("A planilha está vazia.");
 
-            // Heurística para encontrar o cabeçalho
             let headerRowIndex = jsonData.findIndex(row => 
-                Array.isArray(row) && row.some(cell => typeof cell === 'string' && /credor|fornecedor|documento/i.test(cell))
+                Array.isArray(row) && row.some(cell => typeof cell === 'string' && /credor|fornecedor|documento|cnpj/i.test(cell))
             );
-            if (headerRowIndex === -1) headerRowIndex = 0; // Se não encontrar, assume a primeira linha
+            if (headerRowIndex === -1) headerRowIndex = 0;
 
             const headers = (jsonData[headerRowIndex] as string[]).filter(Boolean);
             const dataRows = jsonData.slice(headerRowIndex + 1);
@@ -72,6 +66,13 @@ export function CostCenterAnalysis({
             onClearCostCenterFile();
         }
     };
+    
+    useEffect(() => {
+        if (costCenterFile) {
+            handleFileLoad(costCenterFile);
+        }
+    }, [costCenterFile]);
+
 
     const handleProcessMapping = () => {
         if (!mappedDocNumber || !mappedCnpj) {
@@ -79,7 +80,7 @@ export function CostCenterAnalysis({
             return;
         }
 
-        if (!sheetData) {
+        if (!sheetData || !sheetHeaders) {
             toast({ variant: 'destructive', title: 'Dados não encontrados', description: 'Não foi possível ler os dados da planilha.' });
             return;
         }
@@ -92,7 +93,7 @@ export function CostCenterAnalysis({
                 mappedCnpj
             );
 
-            onDataProcessed(costCenterMap, debugKeys, costCenterHeaderRows);
+            onDataProcessed(costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows);
 
             toast({ title: 'Planilha de Centro de Custo Processada!', description: `${costCenterMap.size} mapeamentos encontrados.` });
             setIsMappingModalOpen(false);
@@ -178,7 +179,7 @@ export function CostCenterAnalysis({
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setIsMappingModalOpen(false)}>Cancelar</Button>
+                        <Button type="button" variant="outline" onClick={() => { setIsMappingModalOpen(false); onClearCostCenterFile(); }}>Cancelar</Button>
                         <Button type="button" onClick={handleProcessMapping}>Processar</Button>
                     </DialogFooter>
                 </DialogContent>

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -334,44 +335,55 @@ export function AutomatorClientPage() {
     };
     
     
-    const handleCostCenterFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const handleCostCenterFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        setCostCenterFile(file || null);
-    
         if (file) {
-            setProcessing(true);
-            try {
-                const data = await file.arrayBuffer();
-                const XLSX = await import('xlsx');
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
-                const worksheet = workbook.Sheets[sheetName];
-                const costCenterData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            setCostCenterFile(file);
+        }
+    };
     
-                const { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows } = await processCostCenterData(costCenterData);
-                
-                setProcessedData(prev => ({
-                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
-                    costCenterMap,
-                    costCenterDebugKeys: debugKeys,
-                    allCostCenters,
-                    costCenterHeaderRows,
-                }));
+    const onCostCenterDataProcessed = (
+        map: Map<string, string>,
+        debugKeys: any[],
+        allCostCenters: string[],
+        costCenterHeaderRows: any[]
+    ) => {
+        setProcessedData(prev => ({
+            ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
+            costCenterMap: map,
+            costCenterDebugKeys: debugKeys,
+            allCostCenters,
+            costCenterHeaderRows,
+        }));
+    };
 
-                toast({ title: "Planilha de Centro de Custo Carregada", description: `${costCenterMap.size} mapeamentos e ${allCostCenters.length} centros de custo foram encontrados.` });
-            } catch (err: any) {
-                toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
-                setCostCenterFile(null);
-            } finally {
-                setProcessing(false);
-            }
-        } else {
-            setProcessedData(prev => {
-                if (!prev) return null;
-                const { costCenterMap, costCenterDebugKeys, allCostCenters, costCenterHeaderRows, ...rest } = prev;
-                 return { ...rest, costCenterMap: undefined, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] } as ProcessedData;
+    const handleDownloadCostCenterDebug = async () => {
+        if (!processedData?.costCenterDebugKeys || !processedData?.costCenterHeaderRows) {
+            toast({
+                variant: "destructive",
+                title: "Dados Insuficientes",
+                description: "Processe a planilha de Centro de Custo para gerar a depuração."
             });
+            return;
+        }
+
+        const XLSX = await import('xlsx');
+        const workbook = XLSX.utils.book_new();
+
+        if (processedData.costCenterDebugKeys.length > 0) {
+            const debugSheet = XLSX.utils.json_to_sheet(processedData.costCenterDebugKeys);
+            XLSX.utils.book_append_sheet(workbook, debugSheet, "Chaves_Centro_Custo");
+        }
+        if (processedData.costCenterHeaderRows.length > 0) {
+            const headersSheet = XLSX.utils.json_to_sheet(processedData.costCenterHeaderRows);
+            XLSX.utils.book_append_sheet(workbook, headersSheet, "Centros de Custo Encontrados");
+        }
+        
+        if (workbook.SheetNames.length > 0) {
+            XLSX.writeFile(workbook, "Debug_Centro_de_Custo.xlsx");
+            toast({ title: "Ficheiro de Depuração Gerado" });
+        } else {
+             toast({ variant: 'destructive', title: "Nenhum dado de depuração para exportar." });
         }
     };
 
@@ -901,6 +913,8 @@ export function AutomatorClientPage() {
                                 allClassifications={allClassifications}
                                 onPersistClassifications={handlePersistClassifications}
                                 competence={competence}
+                                onDataProcessed={onCostCenterDataProcessed}
+                                onDownloadCostCenterDebug={handleDownloadCostCenterDebug}
                             /> 
                             : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a conciliação.</p></CardContent></Card>
                         }

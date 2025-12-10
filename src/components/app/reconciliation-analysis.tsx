@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { type ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, X, RotateCw, HelpCircle, FileDown, Database, Undo2 } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, Undo2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
@@ -15,7 +15,8 @@ import { getColumns, getColumnsWithCustomRender } from "@/lib/columns-helper";
 import { SiengeTaxCheck } from './sienge-tax-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { CfopValidator } from './cfop-validator';
-import type { AllClassifications, DifalStatus } from '@/lib/types';
+import type { AllClassifications } from '@/lib/types';
+import { CostCenterAnalysis } from './cost-center-analysis';
 
 
 interface ReconciliationAnalysisProps {
@@ -31,6 +32,8 @@ interface ReconciliationAnalysisProps {
     allClassifications: AllClassifications;
     onPersistClassifications: (allData: AllClassifications) => void;
     competence: string | null;
+    onDataProcessed: (map: Map<string, string>, debugKeys: any[], allCostCenters: string[], headers: any[]) => void;
+    onDownloadCostCenterDebug: () => void;
 }
 
 const getColumnsForDivergentTabs = (data: any[]): ColumnDef<any>[] => {
@@ -64,7 +67,9 @@ export function ReconciliationAnalysis({
     isReconciliationRunning,
     allClassifications,
     onPersistClassifications,
-    competence
+    competence,
+    onDataProcessed,
+    onDownloadCostCenterDebug,
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
@@ -75,30 +80,6 @@ export function ReconciliationAnalysis({
             devolucoesEP: processedData?.reconciliationResults?.devolucoesEP,
         };
     }, [processedData]);
-
-    const difalItems = useMemo(() => {
-        const cfopValidations = (competence && allClassifications[competence]?.cfopValidations?.classifications) || {};
-        return (processedData?.reconciliationResults?.reconciled || []).filter(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
-            return cfopValidations[uniqueKey]?.isDifal === true;
-        });
-    }, [processedData?.reconciliationResults?.reconciled, competence, allClassifications]);
-    
-    const handleDifalStatusChange = (itemsToUpdate: any[], newStatus: DifalStatus) => {
-        if (!competence) return;
-
-        const newClassifications = { ...allClassifications };
-        if (!newClassifications[competence]) newClassifications[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {}}, supplierClassifications: {} };
-        if (!newClassifications[competence].difalValidations) newClassifications[competence].difalValidations = { classifications: {} };
-        
-        itemsToUpdate.forEach(item => {
-            const itemKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
-            newClassifications[competence].difalValidations!.classifications[itemKey] = { status: newStatus };
-        });
-
-        onPersistClassifications(newClassifications);
-        toast({ title: 'Classificação DIFAL atualizada!'});
-    };
     
     const handleDownload = async (data: any[], title: string) => {
         if (!data || data.length === 0) {
@@ -148,13 +129,14 @@ export function ReconciliationAnalysis({
                 </div>
                 
                 <Tabs defaultValue="reconciliation">
-                    <TabsList className="grid w-full grid-cols-4">
+                    <TabsList className="grid w-full grid-cols-5">
                         <TabsTrigger value="reconciliation" disabled={!reconciliationResults}>Conciliação de Itens</TabsTrigger>
                         <TabsTrigger value="devolucoes-ep" disabled={!devolucoesEP || devolucoesEP.length === 0}>
                             <Undo2 className="h-4 w-4 mr-2"/>Devoluções - EP
                         </TabsTrigger>
                         <TabsTrigger value="tax_check" disabled={!siengeDataForTaxCheck}>Conferência de Impostos</TabsTrigger>
                         <TabsTrigger value="cfop_validation" disabled={!reconciliationResults}><BarChart className='h-4 w-4 mr-2'/>Validação CFOP</TabsTrigger>
+                        <TabsTrigger value="cost_center" disabled={!costCenterFile}>Centro de Custo</TabsTrigger>
                     </TabsList>
                     <TabsContent value="reconciliation" className="mt-4">
                          {!processedData?.sheets['Itens Válidos'] && (
@@ -240,16 +222,19 @@ export function ReconciliationAnalysis({
                             competence={competence}
                         />
                     </TabsContent>
+
+                    <TabsContent value="cost_center" className="mt-4">
+                         <CostCenterAnalysis 
+                             costCenterFile={costCenterFile}
+                             onCostCenterFileChange={onCostCenterFileChange}
+                             onClearCostCenterFile={onClearCostCenterFile}
+                             onDataProcessed={onDataProcessed}
+                             onDownloadCostCenterDebug={onDownloadCostCenterDebug}
+                             isProcessing={isReconciliationRunning}
+                         />
+                    </TabsContent>
                 </Tabs>
             </CardContent>
          </Card>
     );
-}
-
-// Sub-component for DIFAL Analysis
-interface DifalItemsAnalysisProps {
-    items: any[];
-    allClassifications: AllClassifications;
-    competence: string | null;
-    onClassificationChange: (items: any[], newStatus: DifalStatus) => void;
 }
