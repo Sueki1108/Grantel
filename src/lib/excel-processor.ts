@@ -432,8 +432,10 @@ export function runReconciliation(
         
         let remainingXmlItems = xmlItems.map(item => {
             const header = nfeHeaderMap.get(item['Chave Unica']);
+            const chaveAcesso = header ? header['Chave de acesso'] : item['Chave de acesso'];
             return {
                 ...item,
+                'Chave de acesso': chaveAcesso,
                 Fornecedor: header?.Fornecedor || 'N/A',
             };
         });
@@ -498,7 +500,7 @@ export function runReconciliation(
             
             return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
         };
-
+        
         const passes = [
             { name: "Valor Total", getSiengeKey: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]), getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
             { name: "Preço Unitário", getSiengeKey: (item: any) => h.precoUnitario ? getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.precoUnitario!]) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Unitário']) },
@@ -513,6 +515,8 @@ export function runReconciliation(
         
         for (const pass of passes) {
              if (remainingSiengeItems.length === 0 || remainingXmlItems.length === 0) break;
+             if(pass.getSiengeKey({ [h.numero!]: '1', [h.cnpj!]: '1', [h.valorTotal!]: '1' }) === null) continue;
+
              const passResult = reconciliationPass(remainingSiengeItems, remainingXmlItems, pass.getSiengeKey, pass.getXmlKey, pass.name);
              if (passResult.matched.length > 0) {
                  reconciled.push(...passResult.matched);
@@ -548,14 +552,19 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
     const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
         if (!data || data.length === 0 || !data[0]) return undefined;
         const headers = Object.keys(data[0]);
-        return headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
+        const header = headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
+        if (!header) {
+            console.warn(`Could not find any of these headers: ${possibleNames.join(', ')}`);
+        }
+        return header;
     };
+
     const h = {
         numero: findHeader(siengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
         valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total']),
         cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
     };
-    
+
     if (!h.numero || !h.valorTotal || !h.cnpj) {
         return [];
     }
@@ -574,6 +583,7 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
         }
     });
 }
+
 
 export function processCostCenterData(costCenterSheetData: any[][]): {
     costCenterMap: Map<string, string>;
@@ -597,36 +607,39 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
 
         const firstCell = String(row[0] || '').trim();
         const debugEntry: any = {
-            "Linha": rowIndex + 1, "Coluna A": row[0] ?? 'Vazio', "Coluna B": row[1] ?? 'Vazio', "Coluna D": row[3] ?? 'Vazio',
-            "Centro de Custo Ativo": currentCostCenter, "Status": "Ignorado",
-            "Motivo": "Linha não corresponde a um cabeçalho de centro de custo ou a uma linha de dados válida.",
+            "Linha": rowIndex + 1,
+            "Coluna A": row[0] ?? 'Vazio',
+            "Coluna B": row[1] ?? 'Vazio',
+            "Coluna D": row[3] ?? 'Vazio',
+            "Coluna K": row[10] ?? 'Vazio',
+            "Centro de Custo Ativo": currentCostCenter,
+            "Status": "Ignorado",
         };
         
         if (firstCell.toLowerCase().startsWith('centro de custo')) {
             currentCostCenter = firstCell;
             allCostCenters.add(currentCostCenter);
-            debugEntry.Status = "Info";
-            debugEntry.Motivo = `Linha identificada como um novo cabeçalho de centro de custo: ${currentCostCenter}`;
-        } else if (typeof row[0] === 'number') { 
-            const credor = row[1];
-            const observacao = row[10]; 
+            debugEntry.Status = "Info - Cabeçalho de Centro de Custo";
+        } else {
+            const docNumber = row[3]; // Coluna D
+            const supplierInfo = row[1]; // Coluna B
+            const observation = row[10]; // Coluna K
 
-            if (credor && observacao) {
-                const cnpjMatch = String(credor).match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{11})/);
-                const chaveAcessoMatch = String(observacao).match(/\b\d{44}\b/);
+            const docNumberClean = docNumber ? cleanAndToStr(docNumber) : null;
+            const supplierCnpjMatch = supplierInfo ? String(supplierInfo).match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{11}|\d{14})/) : null;
+            const supplierCnpjClean = supplierCnpjMatch ? supplierCnpjMatch[0].replace(/\D/g, '') : null;
+            const accessKeyMatch = observation ? String(observation).match(/\b(\d{44})\b/) : null;
+            const accessKey = accessKeyMatch ? accessKeyMatch[1] : null;
 
-                const cnpj = cnpjMatch ? cnpjMatch[0].replace(/\D/g, '') : null;
-                const chaveAcesso = chaveAcessoMatch ? chaveAcessoMatch[0] : null;
+            if (docNumberClean && supplierCnpjClean) {
+                const comparisonKey = `${docNumberClean}-${supplierCnpjClean}`;
+                debugEntry["Chave de Comparação (Doc-CNPJ)"] = comparisonKey;
+            }
 
-                if (chaveAcesso) {
-                     costCenterMap.set(chaveAcesso, currentCostCenter);
-                      debugEntry.Status = "Sucesso";
-                      debugEntry.Motivo = `Chave de acesso '${chaveAcesso}' mapeada para o centro de custo '${currentCostCenter}'.`;
-                      debugEntry["Chave Gerada"] = chaveAcesso;
-                } else {
-                     debugEntry.Status = "Falha";
-                     debugEntry.Motivo = "Não foi possível extrair a Chave de Acesso (44 dígitos) da coluna de observação.";
-                }
+            if (accessKey) {
+                costCenterMap.set(accessKey, currentCostCenter);
+                debugEntry.Status = "Sucesso";
+                debugEntry["Chave de Acesso Extraída"] = accessKey;
             }
         }
         
