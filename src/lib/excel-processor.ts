@@ -1,4 +1,3 @@
-
 import { cfopDescriptions } from './cfop';
 import type { KeyCheckResult } from '@/components/app/key-checker';
 import type { AllClassifications } from '@/lib/types';
@@ -584,13 +583,18 @@ export function processCostCenterData(
 
     for (let i = 1; i < costCenterSheetData.length; i++) {
         const row = costCenterSheetData[i];
-        if (!row || !Array.isArray(row) || row.length === 0) continue;
+         if (!row || !Array.isArray(row) || row.length === 0) continue;
 
         const docNumber = row[docIndex];
-        const credorCnpj = row[cnpjIndex];
+        const credorCnpjRaw = row[cnpjIndex];
 
-        if (docNumber && credorCnpj) {
-            const key = `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCnpj)}`;
+        if (docNumber && credorCnpjRaw) {
+             const credorCnpjMatch = String(credorCnpjRaw).match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})|(\d{14})/);
+             const credorCnpj = credorCnpjMatch ? credorCnpjMatch[0] : String(credorCnpjRaw);
+
+            const docNumberClean = String(docNumber).split('/')[1] || String(docNumber);
+            
+            const key = `${cleanAndToStr(docNumberClean)}-${cleanAndToStr(credorCnpj)}`;
             let foundCostCenter = false;
             
             for (let j = costCenterStartIndex; j < row.length; j++) {
@@ -607,7 +611,8 @@ export function processCostCenterData(
              debugKeys.push({
                 "Chave de Comparação (Centro Custo)": key,
                 "Número Documento (Original)": docNumber,
-                "CNPJ Credor (Original)": credorCnpj,
+                "Credor (Original com CNPJ)": credorCnpjRaw,
+                "CNPJ Credor (Extraído)": credorCnpj,
                 "Centro de Custo Encontrado": foundCostCenter ? costCenterMap.get(key) : "NENHUM"
             });
         }
