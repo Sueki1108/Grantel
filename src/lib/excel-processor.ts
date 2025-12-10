@@ -562,16 +562,16 @@ export function processCostCenterData(costCenterData: any[][]): {
 
     let headerRowIndex = -1;
     let docIndex = -1;
-    let credorCnpjIndex = -1;
+    let credorCnpjIndex = -1; // Vamos usar o CNPJ do fornecedor
     let headers: any[] = [];
-    
-    // Find the header row dynamically
+
+    // Encontra a linha de cabeçalho dinamicamente
     for (let i = 0; i < costCenterData.length; i++) {
         const row = costCenterData[i] || [];
         const normalizedRow = row.map(cell => normalizeKey(String(cell)));
-        const docIdx = normalizedRow.findIndex(h => h === 'numerododocumento');
-        const credorCnpjIdx = normalizedRow.findIndex(h => h === 'cpfcnpj');
-
+        const docIdx = normalizedRow.findIndex(h => h.includes('numerododocumento'));
+        const credorCnpjIdx = normalizedRow.findIndex(h => h.includes('cpf/cnpjfornecedor'));
+        
         if (docIdx !== -1 && credorCnpjIdx !== -1) {
             headerRowIndex = i;
             headers = row;
@@ -582,7 +582,7 @@ export function processCostCenterData(costCenterData: any[][]): {
     }
     
     if (headerRowIndex === -1) {
-        console.warn("Cost Center: Header row with 'Número do Documento' and 'CPF/CNPJ' not found.");
+        console.warn("Cost Center: Linha de cabeçalho com 'Número do Documento' e 'CPF/CNPJ do Fornecedor' não encontrada.");
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
     
@@ -608,7 +608,7 @@ export function processCostCenterData(costCenterData: any[][]): {
             
             for (let j = costCenterStartIndex; j < row.length; j++) {
                 const cellValue = row[j];
-                if (cellValue && (typeof cellValue === 'number' && cellValue > 0 || (typeof cellValue === 'string' && cellValue.trim() !== ''))) {
+                if (cellValue && (typeof cellValue === 'number' && cellValue > 0 || (typeof cellValue === 'string' && parseFloat(cellValue.replace(',', '.')) > 0))) {
                     const centerName = String(headers[j]).trim();
                     if (centerName) {
                         costCenterMap.set(key, centerName);
