@@ -72,10 +72,9 @@ export function ReconciliationAnalysis({
 
     const handleDownloadDebugSheets = () => {
         const siengeKeys = processedData?.siengeDebugKeys;
-        const costCenterKeys = processedData?.costCenterDebugKeys;
 
-        if ((!siengeKeys || siengeKeys.length === 0) && (!costCenterKeys || costCenterKeys.length === 0)) {
-            toast({ variant: 'destructive', title: "Nenhum dado de depuração para baixar", description: "Carregue e processe uma das planilhas primeiro." });
+        if ((!siengeKeys || siengeKeys.length === 0)) {
+            toast({ variant: 'destructive', title: "Nenhum dado de depuração para baixar", description: "Carregue e processe a planilha do Sienge primeiro." });
             return;
         }
 
@@ -85,19 +84,8 @@ export function ReconciliationAnalysis({
             const siengeWorksheet = XLSX.utils.json_to_sheet(siengeKeys);
             XLSX.utils.book_append_sheet(workbook, siengeWorksheet, "Debug_Sienge");
         }
-        
-        if (costCenterKeys && costCenterKeys.length > 0) {
-            const costCenterWorksheet = XLSX.utils.json_to_sheet(costCenterKeys);
-            XLSX.utils.book_append_sheet(workbook, costCenterWorksheet, "Debug_Centro_Custo");
-            
-            const costCenterHeaders = processedData?.allCostCenters || [];
-             if(costCenterHeaders.length > 0) {
-                 const headersWorksheet = XLSX.utils.json_to_sheet(costCenterHeaders.map(h => ({ "Centros de Custo Encontrados": h })));
-                 XLSX.utils.book_append_sheet(workbook, headersWorksheet, "Centros de Custo Encontrados");
-             }
-        }
 
-        XLSX.writeFile(workbook, "Grantel_Depuracao_Sienge_CC.xlsx");
+        XLSX.writeFile(workbook, "Grantel_Depuracao_Sienge.xlsx");
         toast({ title: 'Planilha de Depuração Gerada' });
     };
     
@@ -124,8 +112,8 @@ export function ReconciliationAnalysis({
                             <CardDescription>Carregue as planilhas Sienge e de Centro de Custo para cruzar informações com os XMLs processados.</CardDescription>
                         </div>
                     </div>
-                     <Button onClick={handleDownloadDebugSheets} variant="secondary" size="sm" disabled={(!processedData?.siengeDebugKeys || processedData.siengeDebugKeys.length === 0) && (!processedData?.costCenterDebugKeys || processedData.costCenterDebugKeys.length === 0)}>
-                        <Database className="mr-2 h-4 w-4" /> Planilhas de Depuração
+                     <Button onClick={handleDownloadDebugSheets} variant="secondary" size="sm" disabled={!processedData?.siengeDebugKeys}>
+                        <Database className="mr-2 h-4 w-4" /> Planilha de Depuração (Sienge)
                     </Button>
                 </div>
             </CardHeader>
@@ -146,11 +134,6 @@ export function ReconciliationAnalysis({
                         onCostCenterFileChange={onCostCenterFileChange}
                         onClearCostCenterFile={onClearCostCenterFile}
                     />
-                </div>
-                <div className='flex flex-col sm:flex-row gap-2 pt-4'>
-                    <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full">
-                        {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
-                    </Button>
                 </div>
                 
                 <Tabs defaultValue="reconciliation">
@@ -251,3 +234,5 @@ export function ReconciliationAnalysis({
          </Card>
     );
 }
+
+

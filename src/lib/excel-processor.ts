@@ -51,7 +51,6 @@ export interface ReconciliationResults {
     devolucoesEP: any[];
     otherSiengeItems: { [esp: string]: any[] };
     debug: {
-        costCenterKeys: any[];
         siengeKeys: any[];
     }
 }
@@ -69,7 +68,6 @@ export interface ProcessedData {
     spedCorrections?: SpedCorrectionResult[] | null;
     spedDuplicates?: SpedDuplicate[] | null;
     costCenterMap?: Map<string, string>;
-    costCenterDebugKeys?: any[];
     siengeDebugKeys?: any[];
     allCostCenters?: string[];
     costCenterHeaderRows?: any[];
@@ -135,7 +133,7 @@ const renameChaveColumn = (df: DataFrame): DataFrame => {
 // MAIN PROCESSING FUNCTION
 // =================================================================
 
-export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap' | 'costCenterDebugKeys' | 'siengeDebugKeys' | 'allCostCenters' | 'costCenterHeaderRows'> {
+export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap' | 'siengeDebugKeys' | 'allCostCenters' | 'costCenterHeaderRows'> {
     
     log("Iniciando preparação dos dados no navegador...");
     const GRANTEL_CNPJ = "81732042000119";
@@ -379,7 +377,7 @@ export function runReconciliation(
     cteData: any[],
     costCenterMap?: Map<string, string> | null
 ): ReconciliationResults {
-    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], devolucoesEP: [], otherSiengeItems: {}, debug: { costCenterKeys: [], siengeKeys: [] } };
+    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], devolucoesEP: [], otherSiengeItems: {}, debug: { siengeKeys: [] } };
 
     if (!siengeData || !xmlItems) {
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems || [] };
@@ -397,14 +395,6 @@ export function runReconciliation(
             numero: findHeader(siengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
             valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total']),
             esp: findHeader(siengeData, ['esp']),
-            icmsOutras: findHeader(siengeData, ['icms outras', 'icmsoutras']),
-            desconto: findHeader(siengeData, ['desconto']),
-            frete: findHeader(siengeData, ['frete']),
-            ipiDespesas: findHeader(siengeData, ['ipi despesas', 'ipidespesas']),
-            icmsSt: findHeader(siengeData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
-            despesasAcessorias: findHeader(siengeData, ['despesas acessórias', 'despesasacessorias', 'voutro']),
-            precoUnitario: findHeader(siengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
-            produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
             cfop: findHeader(siengeData, ['cfop']),
         };
 
@@ -429,101 +419,55 @@ export function runReconciliation(
 
         
         const nfeHeaderMap = new Map((nfeEntradas || []).map(n => [n['Chave Unica'], n]));
+        const cteHeaderMap = new Map((cteData || []).map(c => [c['Chave Unica'], c]));
         
-        let remainingXmlItems = xmlItems.map(item => {
-            const header = nfeHeaderMap.get(item['Chave Unica']);
-            const chaveAcesso = header ? header['Chave de acesso'] : item['Chave de acesso'];
-            return {
-                ...item,
-                'Chave de acesso': chaveAcesso,
-                Fornecedor: header?.Fornecedor || 'N/A',
-            };
+        const xmlItemMap = new Map<string, { item: any; index: number }[]>();
+        xmlItems.forEach((item, index) => {
+            const key = `${cleanAndToStr(item['Número da Nota'])}-${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${parseFloat(String(item['Valor Total'] || '0').replace(',', '.')).toFixed(2)}`;
+            if (!xmlItemMap.has(key)) xmlItemMap.set(key, []);
+            xmlItemMap.get(key)!.push({ item, index });
         });
-        
-        let remainingSiengeItems = [...filteredSiengeData];
+
         const reconciled: any[] = [];
+        let remainingSiengeItems: any[] = [];
+        const matchedXmlIndices = new Set<number>();
+        const siengeDebugKeys: any[] = [];
 
-        const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
-            const cleanNumero = cleanAndToStr(numero);
-            const cleanCnpj = String(cnpj).replace(/\D/g, '');
-            const cleanValor = parseFloat(String(valor || '0').replace(',', '.')).toFixed(2);
-            if (!cleanNumero || !cleanCnpj || cleanValor === 'NaN') return null;
-            return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
-        };
+        filteredSiengeData.forEach(siengeItem => {
+            const siengeNumero = cleanAndToStr(siengeItem[h.numero!]);
+            const siengeCnpj = cleanAndToStr(siengeItem[h.cnpj!]);
+            const siengeValor = parseFloat(String(siengeItem[h.valorTotal!] || '0').replace(',', '.')).toFixed(2);
+            const key = `${siengeNumero}-${siengeCnpj}-${siengeValor}`;
 
-        const reconciliationPass = (
-            siengeItems: any[],
-            xmlItems: any[],
-            getSiengeKey: (item: any) => string | null,
-            getXmlKey: (item: any) => string | null,
-            passName: string
-        ) => {
-            const matchedInPass: any[] = [];
-            const stillUnmatchedSienge: any[] = [];
-            const xmlMap = new Map<string, {item: any; index: number}[]>();
+            const debugInfo = { 'Chave de Comparação Sienge': key, 'Número': siengeNumero, 'CNPJ': siengeCnpj, 'Valor': siengeValor };
+            siengeDebugKeys.push(debugInfo);
 
-            xmlItems.forEach((item, index) => {
-                const key = getXmlKey(item);
-                if (key) {
-                    if (!xmlMap.has(key)) xmlMap.set(key, []);
-                    xmlMap.get(key)!.push({ item, index });
+            if (xmlItemMap.has(key)) {
+                const matches = xmlItemMap.get(key)!;
+                if (matches.length > 0) {
+                    const match = matches.shift()!;
+                    const xmlChaveUnica = match.item['Chave Unica'];
+                    const header = nfeHeaderMap.get(xmlChaveUnica) || cteHeaderMap.get(xmlChaveUnica);
+                    const chaveAcesso = header ? header['Chave de acesso'] : match.item['Chave de acesso'];
+                    
+                    reconciled.push({
+                        ...match.item,
+                        Fornecedor: header?.Fornecedor || match.item.Fornecedor || 'N/A',
+                        'Chave de acesso': chaveAcesso,
+                        'Sienge_CFOP': siengeItem[h.cfop!] || 'N/A',
+                        'Sienge_Esp': siengeItem[h.esp!],
+                        'Centro de Custo': costCenterMap?.get(chaveAcesso) || 'N/A',
+                        'Observações': `Conciliado via Valor Total`,
+                    });
+                    
+                    matchedXmlIndices.add(match.index);
+                    return;
                 }
-            });
+            }
+            remainingSiengeItems.push(siengeItem);
+        });
 
-            const matchedXmlIndices = new Set<number>();
-
-            siengeItems.forEach(siengeItem => {
-                const key = getSiengeKey(siengeItem);
-                if (key && xmlMap.has(key)) {
-                    const matches = xmlMap.get(key)!;
-                    if (matches.length > 0) {
-                        const match = matches.shift()!;
-                        const chaveAcesso = match.item['Chave de acesso'];
-                        
-                        matchedInPass.push({
-                            ...match.item,
-                            'Sienge_CFOP': siengeItem[h.cfop!] || 'N/A',
-                            'Sienge_Esp': siengeItem[h.esp!],
-                            'Centro de Custo': costCenterMap?.get(chaveAcesso) || 'N/A',
-                            'Observações': `Conciliado via ${passName}`,
-                            xmlIndex: match.index
-                        });
-                        
-                        matchedXmlIndices.add(match.index);
-                        return;
-                    }
-                }
-                stillUnmatchedSienge.push(siengeItem);
-            });
-            
-            const stillUnmatchedXml = xmlItems.filter((_, index) => !matchedXmlIndices.has(index));
-            
-            return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
-        };
-        
-        const passes = [
-            { name: "Valor Total", getSiengeKey: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]), getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
-            { name: "Preço Unitário", getSiengeKey: (item: any) => h.precoUnitario ? getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.precoUnitario!]) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Unitário']) },
-            { name: "ICMS Outras", getSiengeKey: (item: any) => h.icmsOutras ? getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.icmsOutras!]) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
-            { name: "Valor Total + Desconto", getSiengeKey: (item: any) => h.desconto ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto!] || '0').replace(',', '.'))) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
-            { name: "Valor Total - Frete", getSiengeKey: (item: any) => h.frete ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.frete!] || '0').replace(',', '.'))) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
-            { name: "Valor Total - IPI/ICMS ST", getSiengeKey: (item: any) => (h.ipiDespesas || h.icmsSt) ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0) - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
-            { name: "Valor Total - Frete/IPI", getSiengeKey: (item: any) => (h.frete || h.ipiDespesas) ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0)) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
-            { name: "Valor Total + Desc - Frete", getSiengeKey: (item: any) => (h.desconto || h.frete) ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + (h.desconto ? parseFloat(String(item[h.desconto] || '0').replace(',', '.')) : 0) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0)) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
-            { name: "Valor Total - Desp. Acess.", getSiengeKey: (item: any) => h.despesasAcessorias ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.despesasAcessorias!] || '0').replace(',', '.'))) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
-        ];
-        
-        for (const pass of passes) {
-             if (remainingSiengeItems.length === 0 || remainingXmlItems.length === 0) break;
-             if(pass.getSiengeKey({ [h.numero!]: '1', [h.cnpj!]: '1', [h.valorTotal!]: '1' }) === null) continue;
-
-             const passResult = reconciliationPass(remainingSiengeItems, remainingXmlItems, pass.getSiengeKey, pass.getXmlKey, pass.name);
-             if (passResult.matched.length > 0) {
-                 reconciled.push(...passResult.matched);
-                 remainingSiengeItems = passResult.remainingSienge;
-                 remainingXmlItems = passResult.remainingXml;
-             }
-        }
+        const remainingXmlItems = xmlItems.filter((_, index) => !matchedXmlIndices.has(index));
         
         const devolucoesEP = xmlItems
             .filter(item => {
@@ -539,14 +483,13 @@ export function runReconciliation(
                 'Chave da Nota Original': cleanAndToStr(item['refNFe']) || 'Não encontrada no XML',
             }));
 
-        return { reconciled, onlyInSienge: remainingSiengeItems, onlyInXml: remainingXmlItems, devolucoesEP, otherSiengeItems, debug: emptyResult.debug };
+        return { reconciled, onlyInSienge: remainingSiengeItems, onlyInXml: remainingXmlItems, devolucoesEP, otherSiengeItems, debug: {siengeKeys: siengeDebugKeys} };
 
     } catch (err: any) {
         console.error("Reconciliation Error:", err);
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
-
 
 export function generateSiengeDebugKeys(siengeData: any[]) {
     const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
@@ -584,76 +527,41 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
 
 export function processCostCenterData(costCenterSheetData: any[][]): {
     costCenterMap: Map<string, string>;
-    debugKeys: any[];
-    allCostCenters: string[];
-    costCenterHeaderRows: any[];
 } {
     const costCenterMap = new Map<string, string>();
-    const debugKeys: any[] = [];
-    const allCostCenters = new Set<string>();
-    const costCenterHeaderRows: any[] = [];
 
     if (!costCenterSheetData || costCenterSheetData.length === 0) {
-        return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows };
+        return { costCenterMap };
     }
 
     let currentCostCenter = 'N/A';
 
-    costCenterSheetData.forEach((row, rowIndex) => {
-        if (!Array.isArray(row) || row.length === 0) return;
+    costCenterSheetData.forEach((row) => {
+        if (!Array.isArray(row) || row.length < 4) return;
 
-        const firstCell = String(row[0] || '').trim();
-        
-        // Check for Cost Center header
-        if (firstCell.toLowerCase().startsWith('centro de custo')) {
-            // The cost center name is in the next cell (column B)
-            currentCostCenter = String(row[1] || `Desconhecido (Linha ${rowIndex + 1})`).trim();
-            allCostCenters.add(currentCostCenter);
-            return; // Skip to next line after processing header
+        const colA = String(row[0] || '').trim();
+        const colB = String(row[1] || '').trim();
+        const colC = String(row[2] || '').trim();
+        const colD = String(row[3] || '').trim();
+        const colK = String(row[10] || '').trim();
+
+        // Identifica linha de cabeçalho do Centro de Custo
+        if (colA.toLowerCase() === 'centro de custo') {
+            currentCostCenter = colC; // O nome está na Coluna C
+            return;
         }
 
-        // Identify data rows by checking for a numeric value in the first column (Item)
-        const isDataRow = !isNaN(parseInt(firstCell, 10));
-
-        if (isDataRow) {
-            const supplierInfo = row[1]; // Column B
-            const docNumber = row[3];    // Column D
-            const observation = row[10]; // Column K
-
-            const docNumberClean = docNumber ? cleanAndToStr(docNumber) : null;
-            
-            // Extract CNPJ from the Credor column
-            const supplierCnpjMatch = supplierInfo ? String(supplierInfo).match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{11}|\d{14})/) : null;
-            const supplierCnpjClean = supplierCnpjMatch ? supplierCnpjMatch[0].replace(/\D/g, '') : null;
-
-            // Extract the 44-digit access key from the observation column
-            const accessKeyMatch = observation ? String(observation).match(/\b(\d{44})\b/) : null;
-            const accessKey = accessKeyMatch ? accessKeyMatch[1] : null;
-
-            const debugEntry: any = {
-                "Linha": rowIndex + 1,
-                "Centro de Custo Ativo": currentCostCenter,
-                "Documento (Col D)": docNumber || 'Vazio',
-                "Credor (Col B)": supplierInfo || 'Vazio',
-                "Observação (Col K)": observation || 'Vazio',
-                "Status": "Ignorado",
-            };
-            
-            if (docNumberClean && supplierCnpjClean) {
-                debugEntry["Chave de Comparação (Doc-CNPJ)"] = `${docNumberClean}-${supplierCnpjClean}`;
-            }
-
-            if (accessKey) {
+        // Identifica linha de dados (se a primeira coluna for um número)
+        if (!isNaN(parseInt(colA, 10))) {
+            const accessKeyMatch = colK.match(/\b(\d{44})\b/);
+            if (accessKeyMatch) {
+                const accessKey = accessKeyMatch[1];
                 costCenterMap.set(accessKey, currentCostCenter);
-                debugEntry.Status = "Sucesso - Chave de Acesso encontrada e mapeada.";
-                debugEntry["Chave de Acesso Extraída"] = accessKey;
-            } else {
-                debugEntry.Status = "Aviso - Chave de Acesso não encontrada na coluna K.";
             }
-
-            debugKeys.push(debugEntry);
         }
     });
 
-    return { costCenterMap, debugKeys, allCostCenters: Array.from(allCostCenters), costCenterHeaderRows };
+    return { costCenterMap };
 }
+
+
