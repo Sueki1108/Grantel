@@ -553,9 +553,6 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
         if (!data || data.length === 0 || !data[0]) return undefined;
         const headers = Object.keys(data[0]);
         const header = headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
-        if (!header) {
-            console.warn(`Could not find any of these headers: ${possibleNames.join(', ')}`);
-        }
         return header;
     };
 
@@ -594,7 +591,6 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
     const costCenterMap = new Map<string, string>();
     const debugKeys: any[] = [];
     const allCostCenters = new Set<string>();
-    const costCenterHeaderRows: any[] = [];
 
     if (!costCenterSheetData || costCenterSheetData.length === 0) {
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
@@ -606,45 +602,50 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
         if (!Array.isArray(row) || row.length < 4) return;
 
         const firstCell = String(row[0] || '').trim();
+        
         const debugEntry: any = {
             "Linha": rowIndex + 1,
-            "Coluna A": row[0] ?? 'Vazio',
-            "Coluna B": row[1] ?? 'Vazio',
-            "Coluna D": row[3] ?? 'Vazio',
-            "Coluna K": row[10] ?? 'Vazio',
-            "Centro de Custo Ativo": currentCostCenter,
+            "Coluna A (Centro de Custo)": firstCell,
+            "Coluna B (Credor)": row[1] ?? 'Vazio',
+            "Coluna D (Documento)": row[3] ?? 'Vazio',
+            "Coluna K (Observação/Chave)": row[10] ?? 'Vazio',
+            "Centro de Custo Ativo": 'N/A',
             "Status": "Ignorado",
         };
-        
-        if (firstCell.toLowerCase().startsWith('centro de custo')) {
+
+        if (firstCell.toLowerCase().startsWith('centro de custo:')) {
             currentCostCenter = firstCell;
             allCostCenters.add(currentCostCenter);
             debugEntry.Status = "Info - Cabeçalho de Centro de Custo";
         } else {
+            debugEntry["Centro de Custo Ativo"] = currentCostCenter;
             const docNumber = row[3]; // Coluna D
             const supplierInfo = row[1]; // Coluna B
             const observation = row[10]; // Coluna K
 
             const docNumberClean = docNumber ? cleanAndToStr(docNumber) : null;
+            
             const supplierCnpjMatch = supplierInfo ? String(supplierInfo).match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{11}|\d{14})/) : null;
             const supplierCnpjClean = supplierCnpjMatch ? supplierCnpjMatch[0].replace(/\D/g, '') : null;
+
             const accessKeyMatch = observation ? String(observation).match(/\b(\d{44})\b/) : null;
             const accessKey = accessKeyMatch ? accessKeyMatch[1] : null;
 
             if (docNumberClean && supplierCnpjClean) {
-                const comparisonKey = `${docNumberClean}-${supplierCnpjClean}`;
-                debugEntry["Chave de Comparação (Doc-CNPJ)"] = comparisonKey;
+                debugEntry["Chave de Comparação (Doc-CNPJ)"] = `${docNumberClean}-${supplierCnpjClean}`;
             }
 
             if (accessKey) {
                 costCenterMap.set(accessKey, currentCostCenter);
-                debugEntry.Status = "Sucesso";
+                debugEntry.Status = "Sucesso - Chave Encontrada";
                 debugEntry["Chave de Acesso Extraída"] = accessKey;
+            } else {
+                debugEntry.Status = "Aviso - Chave de Acesso não encontrada na Observação";
             }
         }
         
         debugKeys.push(debugEntry);
     });
 
-    return { costCenterMap, debugKeys, allCostCenters: Array.from(allCostCenters), costCenterHeaderRows };
+    return { costCenterMap, debugKeys, allCostCenters: Array.from(allCostCenters), costCenterHeaderRows: [] };
 }
