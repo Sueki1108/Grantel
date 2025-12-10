@@ -1,21 +1,22 @@
+
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Undo2, Database } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
 import { getColumns } from "@/lib/columns-helper";
 import { SiengeTaxCheck } from './sienge-tax-check';
-import { ColumnDef } from '@tanstack/react-table';
 import { CfopValidator } from './cfop-validator';
 import type { AllClassifications } from '@/lib/types';
 import { FileUploadForm } from './file-upload-form';
 import * as XLSX from 'xlsx';
+import { CostCenterAnalysis } from './cost-center-analysis';
 
 
 interface ReconciliationAnalysisProps {
@@ -26,6 +27,7 @@ interface ReconciliationAnalysisProps {
     costCenterFile: File | null;
     onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearCostCenterFile: () => void;
+    onProcessCostCenterData: (file: File) => void; // Nova prop
     onRunReconciliation: () => void;
     isReconciliationRunning: boolean;
     allClassifications: AllClassifications;
@@ -34,21 +36,14 @@ interface ReconciliationAnalysisProps {
     onDownloadCostCenterDebug: () => void;
 }
 
-const getColumnsForDivergentTabs = (data: any[]): ColumnDef<any>[] => {
+const getColumnsForDivergentTabs = (data: any[]) => {
     if (!data || data.length === 0) return [];
-
-    const hasKeyColumn = data[0] && 'Chave de Comparação' in data[0];
-    
     let allColumns = getColumns(data);
-
-    if (hasKeyColumn) {
-        const keyColumn = allColumns.find(col => col.id === 'Chave de Comparação');
-        const otherColumns = allColumns.filter(col => col.id !== 'Chave de Comparação');
-        if (keyColumn) {
-            return [keyColumn, ...otherColumns];
-        }
+    const keyColumn = allColumns.find(col => col.id === 'Chave de Comparação');
+    const otherColumns = allColumns.filter(col => col.id !== 'Chave de Comparação');
+    if (keyColumn) {
+        return [keyColumn, ...otherColumns];
     }
-    
     return allColumns;
 };
 
@@ -61,6 +56,7 @@ export function ReconciliationAnalysis({
     costCenterFile,
     onCostCenterFileChange,
     onClearCostCenterFile,
+    onProcessCostCenterData,
     onRunReconciliation,
     isReconciliationRunning,
     allClassifications,
@@ -124,19 +120,14 @@ export function ReconciliationAnalysis({
                             <Cpu className="mr-2 h-4 w-4" /> Gerar Chaves de Depuração (Sienge)
                         </Button>
                     </div>
-                    <div className='space-y-2'>
-                        <h3 className='font-medium'>Planilha de Rateio</h3>
-                         <FileUploadForm
-                            displayName="Centro de Custo"
-                            formId="cost-center"
-                            files={{ 'cost-center': !!costCenterFile }}
-                            onFileChange={onCostCenterFileChange}
-                            onClearFile={onClearCostCenterFile}
-                        />
-                         <Button onClick={onDownloadCostCenterDebug} variant="secondary" size="sm" className="w-full" disabled={!processedData?.costCenterDebugKeys}>
-                            <Cpu className="mr-2 h-4 w-4" /> Gerar Chaves de Depuração (Centro de Custo)
-                        </Button>
-                    </div>
+                     <CostCenterAnalysis
+                        costCenterFile={costCenterFile}
+                        onCostCenterFileChange={onCostCenterFileChange}
+                        onClearCostCenterFile={onClearCostCenterFile}
+                        onProcessCostCenterData={onProcessCostCenterData}
+                        onDownloadCostCenterDebug={onDownloadCostCenterDebug}
+                        processedData={processedData}
+                    />
                 </div>
                 <div className='flex flex-col sm:flex-row gap-2 pt-4'>
                     <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full">
@@ -148,7 +139,7 @@ export function ReconciliationAnalysis({
                     <TabsList className="grid w-full grid-cols-4">
                         <TabsTrigger value="reconciliation" disabled={!reconciliationResults}>Conciliação de Itens</TabsTrigger>
                         <TabsTrigger value="devolucoes-ep" disabled={!devolucoesEP || devolucoesEP.length === 0}>
-                            <Undo2 className="h-4 w-4 mr-2"/>Devoluções - EP
+                            Devoluções - EP
                         </TabsTrigger>
                         <TabsTrigger value="tax_check" disabled={!siengeDataForTaxCheck}>Conferência de Impostos</TabsTrigger>
                         <TabsTrigger value="cfop_validation" disabled={!reconciliationResults}><BarChart className='h-4 w-4 mr-2'/>Validação CFOP</TabsTrigger>

@@ -545,7 +545,11 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
     });
 }
 
-export function processCostCenterData(costCenterData: any[][]): {
+export function processCostCenterData(
+    costCenterSheetData: any[][],
+    docNumberHeader: string,
+    cnpjHeader: string
+): {
     costCenterMap: Map<string, string>;
     debugKeys: any[];
     allCostCenters: string[];
@@ -556,38 +560,19 @@ export function processCostCenterData(costCenterData: any[][]): {
     let allCostCenters = new Set<string>();
     let costCenterHeaderRows: any[] = [];
 
-    if (!costCenterData || costCenterData.length < 1) {
+    if (!costCenterSheetData || costCenterSheetData.length === 0) {
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
 
-    let headerRowIndex = -1;
-    let docIndex = -1;
-    let credorCnpjIndex = -1;
-    let headers: any[] = [];
+    const headers = costCenterSheetData[0];
+    const docIndex = headers.findIndex(h => h === docNumberHeader);
+    const cnpjIndex = headers.findIndex(h => h === cnpjHeader);
 
-    // Encontra a linha de cabeçalho dinamicamente e de forma mais robusta
-    for (let i = 0; i < costCenterData.length; i++) {
-        const row = costCenterData[i];
-        if (!row || !Array.isArray(row)) continue;
+    if (docIndex === -1 || cnpjIndex === -1) {
+        throw new Error("As colunas mapeadas não foram encontradas na planilha de Centro de Custo.");
+    }
 
-        const normalizedRow = row.map(cell => normalizeKey(String(cell)));
-        const docIdx = normalizedRow.findIndex(h => h.includes('numerododocumento'));
-        const credorCnpjIdx = normalizedRow.findIndex(h => h.includes('cpf/cnpj'));
-        
-        if (docIdx !== -1 && credorCnpjIdx !== -1) {
-            headerRowIndex = i;
-            headers = row;
-            docIndex = docIdx;
-            credorCnpjIndex = credorCnpjIdx;
-            break;
-        }
-    }
-    
-    if (headerRowIndex === -1) {
-        throw new Error("Não foi possível encontrar a linha de cabeçalho. Verifique se as colunas 'Número do Documento' e 'CPF/CNPJ' existem na planilha de Centro de Custo.");
-    }
-    
-    const costCenterStartIndex = Math.max(docIndex, credorCnpjIndex) + 1;
+    const costCenterStartIndex = Math.max(docIndex, cnpjIndex) + 1;
 
     for (let i = costCenterStartIndex; i < headers.length; i++) {
         const centerName = String(headers[i]).trim();
@@ -597,15 +582,16 @@ export function processCostCenterData(costCenterData: any[][]): {
     }
     costCenterHeaderRows = Array.from(allCostCenters).map(cc => ({ "Centro de Custo Encontrado": cc }));
 
-    for (let i = headerRowIndex + 1; i < costCenterData.length; i++) {
-        const row = costCenterData[i];
+    for (let i = 1; i < costCenterSheetData.length; i++) {
+        const row = costCenterSheetData[i];
         if (!row || !Array.isArray(row) || row.length === 0) continue;
-        
+
         const docNumber = row[docIndex];
-        const credorCnpj = row[credorCnpjIndex];
-        
+        const credorCnpj = row[cnpjIndex];
+
         if (docNumber && credorCnpj) {
             const key = `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCnpj)}`;
+            let foundCostCenter = false;
             
             for (let j = costCenterStartIndex; j < row.length; j++) {
                 const cellValue = row[j];
@@ -613,7 +599,8 @@ export function processCostCenterData(costCenterData: any[][]): {
                     const centerName = String(headers[j]).trim();
                     if (centerName) {
                         costCenterMap.set(key, centerName);
-                        break; 
+                        foundCostCenter = true;
+                        break;
                     }
                 }
             }
@@ -621,7 +608,7 @@ export function processCostCenterData(costCenterData: any[][]): {
                 "Chave de Comparação (Centro Custo)": key,
                 "Número Documento (Original)": docNumber,
                 "CNPJ Credor (Original)": credorCnpj,
-                "Centro de Custo Encontrado": costCenterMap.get(key) || "NENHUM"
+                "Centro de Custo Encontrado": foundCostCenter ? costCenterMap.get(key) : "NENHUM"
             });
         }
     }
