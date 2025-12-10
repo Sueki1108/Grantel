@@ -201,11 +201,10 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     log(`- Total de ${chavesExcecao.size} chaves de exceção coletadas.`);
     log("Filtrando notas e itens válidos com base nas regras de negócio...");
 
-    // 1. Separar notas com base no emitente e CFOP dos itens
     const notasValidas: any[] = [];
-    const devolucoesDeCompra: any[] = []; // Emitente = Grantel, Destinatário != Grantel
-    const devolucoesDeClientes: any[] = []; // Emitente != Grantel, mas CFOP do item começa com 1 ou 2 ou finNFe=4
-    const remessasEretornos: any[] = []; // Emitente = Grantel, Destinatário = Grantel
+    const devolucoesDeCompra: any[] = []; 
+    const devolucoesDeClientes: any[] = []; 
+    const remessasEretornos: any[] = []; 
 
     const itensMap = new Map<string, any[]>();
     itens.forEach(item => {
@@ -400,87 +399,67 @@ export function runReconciliation(
             cfop: findHeader(siengeData, ['cfop']),
             esp: findHeader(siengeData, ['esp']),
             cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
-            icmsOutras: findHeader(siengeData, ['icms outras', 'icmsoutras']),
-            desconto: findHeader(siengeData, ['desconto']),
-            frete: findHeader(siengeData, ['frete']),
-            ipiDespesas: findHeader(siengeData, ['ipi despesas', 'ipidespesas']),
-            icmsSt: findHeader(siengeData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
-            despesasAcessorias: findHeader(siengeData, ['despesas acessórias', 'despesasacessorias', 'voutro']),
-            precoUnitario: findHeader(siengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
         };
         
-        if (!h.credor || !h.numero || !h.cnpj) {
-            throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Número', 'CPF/CNPJ') na planilha Sienge.");
+        if (!h.credor || !h.numero || !h.valorTotal || !h.cnpj) {
+            throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Número', 'CPF/CNPJ', 'Valor Total') na planilha Sienge.");
         }
 
-        const getXmlComparisonKey = (xmlItem: any): string | null => {
-            const cnpj = cleanAndToStr(xmlItem['CPF/CNPJ do Emitente']);
-            if (!xmlItem['Número da Nota'] || !cnpj) return null;
-            return `${cleanAndToStr(xmlItem['Número da Nota'])}-${cnpj}`;
-        };
-        
-        const passes = [
-            { name: "Valor Total", valueFunc: (item: any, isSienge: boolean) => parseFloat(String(item[isSienge ? h.valorTotal! : 'Valor Total'] || '0').replace(',', '.')) },
-            { name: "Preço Unitário", valueFunc: (item: any, isSienge: boolean) => isSienge && h.precoUnitario ? parseFloat(String(item[h.precoUnitario] || '0').replace(',', '.')) : parseFloat(String(item['Valor Unitário'] || '0').replace(',', '.')) },
-            { name: "ICMS Outras", valueFunc: (item: any, isSienge: boolean) => isSienge && h.icmsOutras ? parseFloat(String(item[h.icmsOutras] || '0').replace(',', '.')) : parseFloat(String(item['Valor Total'] || '0').replace(',', '.')) },
-            { name: "Valor Total + Desconto", valueFunc: (item: any, isSienge: boolean) => isSienge && h.desconto ? (parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto] || '0').replace(',', '.'))) : parseFloat(String(item['Valor Total'] || '0').replace(',', '.')) },
-            { name: "Valor Total - Frete", valueFunc: (item: any, isSienge: boolean) => isSienge && h.frete ? (parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.frete] || '0').replace(',', '.'))) : parseFloat(String(item['Valor Total'] || '0').replace(',', '.')) },
-        ];
-        
+        const xmlMap = new Map<string, {item: any, index: number}[]>();
+        xmlItems.forEach((item, index) => {
+            const numNota = cleanAndToStr(item['Número da Nota']);
+            const cnpjEmitente = cleanAndToStr(item['CPF/CNPJ do Emitente']);
+            const valorTotal = parseFloat(String(item['Valor Total'] || '0').replace(',', '.')).toFixed(2);
+
+            if (numNota && cnpjEmitente) {
+                const key = `${numNota}-${cnpjEmitente}-${valorTotal}`;
+                if (!xmlMap.has(key)) xmlMap.set(key, []);
+                xmlMap.get(key)!.push({ item, index });
+            }
+        });
+
         const reconciled: any[] = [];
         const siengeMatchedIndices = new Set<number>();
-        const xmlMatchedIndices = new Set<number>();
         const nfeHeaderMap = new Map((nfeEntradas || []).map(n => [n['Chave Unica'], n]));
 
-        for (const pass of passes) {
-            const siengeMap = new Map<string, {item: any, index: number}[]>();
-            siengeData.forEach((item, index) => {
-                if (siengeMatchedIndices.has(index)) return;
-                const baseKey = `${cleanAndToStr(item[h.numero!])}-${cleanAndToStr(item[h.cnpj!])}`;
-                const value = pass.valueFunc(item, true);
-                if (baseKey) {
-                    const key = `${baseKey}-${value.toFixed(2)}`;
-                    if (!siengeMap.has(key)) siengeMap.set(key, []);
-                    siengeMap.get(key)!.push({ item, index });
-                }
-            });
+        siengeData.forEach((siengeItem, siengeIndex) => {
+            const numNota = cleanAndToStr(siengeItem[h.numero!]);
+            const cnpj = cleanAndToStr(siengeItem[h.cnpj!]);
+            const valorTotal = parseFloat(String(siengeItem[h.valorTotal!] || '0').replace(',', '.')).toFixed(2);
 
-            xmlItems.forEach((item, index) => {
-                if (xmlMatchedIndices.has(index)) return;
-                const baseKey = getXmlComparisonKey(item);
-                const value = pass.valueFunc(item, false);
-                if (baseKey) {
-                    const key = `${baseKey}-${value.toFixed(2)}`;
-                    if (siengeMap.has(key)) {
-                        const siengeMatches = siengeMap.get(key)!;
-                        if (siengeMatches.length > 0) {
-                            const siengeMatch = siengeMatches.shift()!;
-                            const nfeHeader = nfeHeaderMap.get(item['Chave Unica']);
-                            
-                            const chaveAcesso = item['Chave de acesso'];
-                            
-                            reconciled.push({
-                                ...item,
-                                Fornecedor: nfeHeader?.Fornecedor || 'N/A',
-                                'Sienge_CFOP': siengeMatch.item[h.cfop!],
-                                'Sienge_Esp': siengeMatch.item[h.esp!],
-                                'Centro de Custo': costCenterMap?.get(chaveAcesso) || 'N/A',
-                                'Observações': `Conciliado via ${pass.name}`
-                            });
-                            siengeMatchedIndices.add(siengeMatch.index);
-                            xmlMatchedIndices.add(index);
-                        }
-                    }
+            if (numNota && cnpj) {
+                const key = `${numNota}-${cnpj}-${valorTotal}`;
+                const xmlMatches = xmlMap.get(key);
+
+                if (xmlMatches && xmlMatches.length > 0) {
+                    const xmlMatch = xmlMatches.shift()!; 
+                    const xmlItem = xmlMatch.item;
+                    
+                    siengeMatchedIndices.add(siengeIndex);
+                    
+                    const nfeHeader = nfeHeaderMap.get(xmlItem['Chave Unica']);
+                    const chaveAcesso = xmlItem['Chave de acesso'];
+
+                    reconciled.push({
+                        ...xmlItem,
+                        Fornecedor: nfeHeader?.Fornecedor || 'N/A',
+                        'Sienge_CFOP': siengeItem[h.cfop!],
+                        'Sienge_Esp': siengeItem[h.esp!],
+                        'Centro de Custo': costCenterMap?.get(chaveAcesso) || 'N/A',
+                        'Observações': `Conciliado via Valor Total`
+                    });
                 }
-            });
-        }
+            }
+        });
         
-        const remainingSienge = siengeData.filter((_, index) => !siengeMatchedIndices.has(index));
-        const onlyInSienge = remainingSienge.filter(item => {
+        const onlyInSiengeRaw = siengeData.filter((_, index) => !siengeMatchedIndices.has(index));
+        
+        const onlyInSienge = onlyInSiengeRaw.filter(item => {
             const esp = item[h.esp!] || '';
             return esp.toUpperCase() === 'NFE' || esp.toUpperCase() === 'NFSR';
         });
-        const otherSiengeItems = remainingSienge.filter(item => {
+
+        const otherSiengeItems = onlyInSiengeRaw.filter(item => {
             const esp = item[h.esp!] || '';
             return esp.toUpperCase() !== 'NFE' && esp.toUpperCase() !== 'NFSR';
         }).reduce((acc, item) => {
@@ -489,10 +468,10 @@ export function runReconciliation(
             acc[esp].push(item);
             return acc;
         }, {} as {[esp: string]: any[]});
-
-
-        const onlyInXml = xmlItems.filter((_, index) => !xmlMatchedIndices.has(index));
         
+        const allMatchedXmlIndices = reconciled.map(r => xmlItems.findIndex(x => x.id === r.id)).filter(i => i !== -1);
+        const onlyInXml = xmlItems.filter((_, index) => !allMatchedXmlIndices.includes(index));
+
         const devolucoesEP = xmlItems
             .filter(item => {
                 const cfop = cleanAndToStr(item.CFOP);
@@ -522,23 +501,23 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
         return headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
     };
     const h = {
-        credor: findHeader(siengeData, ['credor', 'fornecedor']),
         numero: findHeader(siengeData, ['número', 'numero', 'numero da nota', 'nota fiscal']),
         valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total']),
         cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
     };
-    if (!h.credor || !h.numero || !h.valorTotal || !h.cnpj) return [];
+    if (!h.numero || !h.valorTotal || !h.cnpj) return [];
 
     return siengeData.map(item => {
-        const baseKey = `${cleanAndToStr(item[h.numero!])}-${cleanAndToStr(item[h.cnpj!])}`;
-        const value = parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.'));
+        const numNota = cleanAndToStr(item[h.numero!]);
+        const cnpj = cleanAndToStr(item[h.cnpj!]);
+        const valorTotal = parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')).toFixed(2);
+        const key = `${numNota}-${cnpj}-${valorTotal}`;
+        
         return { 
-            "Chave de Comparação Sienge (Base)": baseKey,
-            "Chave de Comparação Sienge (Final)": `${baseKey}-${value.toFixed(2)}`,
-            "Credor (Original)": item[h.credor!],
+            "Chave de Comparação Sienge": key,
             "Número (Original)": item[h.numero!],
-            "Valor (Original)": item[h.valorTotal!],
-            "CNPJ (Original)": item[h.cnpj!]
+            "CNPJ (Original)": item[h.cnpj!],
+            "Valor (Original)": item[h.valorTotal!]
         }
     });
 }
@@ -551,7 +530,7 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
 } {
     const costCenterMap = new Map<string, string>();
     const debugKeys: any[] = [];
-    const allCostCenters = new Set<string>();
+    let allCostCenters = new Set<string>();
     const costCenterHeaderRows: any[] = [];
 
     if (!costCenterSheetData || costCenterSheetData.length === 0) {
@@ -563,58 +542,50 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
 
     costCenterSheetData.forEach((row, rowIndex) => {
         if (!Array.isArray(row) || row.length === 0) {
-            isDataSection = false; // Reset on empty rows
+            isDataSection = false;
             return;
         }
 
         const firstCell = String(row[0] || '').trim();
+        const debugEntry: any = {
+            "Linha": rowIndex + 1,
+            "Conteúdo Coluna A": row[0] ?? 'Vazio',
+            "Conteúdo Coluna C": row[2] ?? 'Vazio',
+            "Conteúdo Coluna E": row[4] ?? 'Vazio',
+            "Conteúdo Coluna F": row[5] ?? 'Vazio',
+            "Centro de Custo Ativo": currentCostCenter,
+            "Status": "Ignorado",
+            "Motivo": "Linha não corresponde a um cabeçalho ou a uma linha de dados válida.",
+        };
 
         if (firstCell.toLowerCase().startsWith('centro de custo')) {
             currentCostCenter = firstCell;
             allCostCenters.add(currentCostCenter);
-            isDataSection = false; // Reset when a new cost center is found
-            return;
-        }
-
-        if (firstCell.toLowerCase() === 'item') {
+            isDataSection = false;
+            debugEntry.Status = "Info";
+            debugEntry.Motivo = "Linha identificada como um novo centro de custo.";
+        } else if (firstCell.toLowerCase() === 'item') {
             isDataSection = true;
             costCenterHeaderRows.push({ center: currentCostCenter, headers: row });
-            return;
-        }
+            debugEntry.Status = "Info";
+            debugEntry.Motivo = "Linha identificada como cabeçalho de dados.";
+        } else if (isDataSection && typeof row[0] === 'number') {
+            const obsRaw = row[5]; 
+            const chaveAcessoMatch = String(obsRaw || '').match(/(\d{44})/);
 
-        if (isDataSection && typeof row[0] === 'number') {
-            const credorRaw = row[1]; // Coluna B
-            const docNumberRaw = row[2]; // Coluna C
-            const obsRaw = row[5]; // Coluna F (Observação para chave de acesso)
-
-            const debugEntry: any = {
-                "Linha": rowIndex + 1,
-                "Credor (Coluna B)": credorRaw ?? 'N/A',
-                "Documento (Coluna C)": docNumberRaw ?? 'N/A',
-                "Observação (Coluna F)": obsRaw ?? 'N/A',
-                "Centro de Custo": currentCostCenter,
-                "Status": "Falha",
-                "Motivo": "",
-                "Chave de Acesso Extraída": "N/A",
-            };
-
-            if (obsRaw) {
-                const chaveAcessoMatch = String(obsRaw).match(/(\d{44})/);
-                if (chaveAcessoMatch) {
-                    const chaveAcesso = chaveAcessoMatch[1];
-                    costCenterMap.set(chaveAcesso, currentCostCenter);
-                    debugEntry.Status = "Sucesso";
-                    debugEntry.Motivo = "Chave de acesso encontrada na observação e mapeada.";
-                    debugEntry["Chave de Acesso Extraída"] = chaveAcesso;
-                } else {
-                    debugEntry.Motivo = "Coluna de Observação (F) não continha uma chave de 44 dígitos.";
-                }
+            if (chaveAcessoMatch) {
+                const chaveAcesso = chaveAcessoMatch[1];
+                costCenterMap.set(chaveAcesso, currentCostCenter);
+                debugEntry.Status = "Sucesso";
+                debugEntry.Motivo = `Chave de acesso ${chaveAcesso} mapeada para o centro de custo ${currentCostCenter}.`;
+                debugEntry["Chave de Acesso Extraída"] = chaveAcesso;
             } else {
-                debugEntry.Motivo = "Coluna de Observação (F) está vazia.";
+                debugEntry.Status = "Falha";
+                debugEntry.Motivo = "Coluna de Observação (F) não continha uma chave de 44 dígitos.";
             }
-            
-            debugKeys.push(debugEntry);
         }
+
+        debugKeys.push(debugEntry);
     });
 
     return { costCenterMap, debugKeys, allCostCenters: Array.from(allCostCenters), costCenterHeaderRows };
