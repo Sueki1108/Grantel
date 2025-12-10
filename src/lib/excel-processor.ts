@@ -562,13 +562,13 @@ export function processCostCenterData(costCenterData: any[][]): {
 
     let headerRowIndex = -1;
     let docIndex = -1;
-    let credorCnpjIndex = -1; // Vamos usar o CNPJ do fornecedor
+    let credorCnpjIndex = -1;
     let headers: any[] = [];
 
     // Encontra a linha de cabeçalho dinamicamente e de forma mais robusta
     for (let i = 0; i < costCenterData.length; i++) {
         const row = costCenterData[i];
-        if (!row || !Array.isArray(row)) continue; // Adiciona verificação de segurança
+        if (!row || !Array.isArray(row)) continue;
 
         const normalizedRow = row.map(cell => normalizeKey(String(cell)));
         const docIdx = normalizedRow.findIndex(h => h.includes('numerododocumento'));
