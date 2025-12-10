@@ -565,12 +565,14 @@ export function processCostCenterData(costCenterData: any[][]): {
     let credorCnpjIndex = -1; // Vamos usar o CNPJ do fornecedor
     let headers: any[] = [];
 
-    // Encontra a linha de cabeçalho dinamicamente
+    // Encontra a linha de cabeçalho dinamicamente e de forma mais robusta
     for (let i = 0; i < costCenterData.length; i++) {
-        const row = costCenterData[i] || [];
+        const row = costCenterData[i];
+        if (!row || !Array.isArray(row)) continue; // Adiciona verificação de segurança
+
         const normalizedRow = row.map(cell => normalizeKey(String(cell)));
         const docIdx = normalizedRow.findIndex(h => h.includes('numerododocumento'));
-        const credorCnpjIdx = normalizedRow.findIndex(h => h.includes('cpf/cnpjfornecedor'));
+        const credorCnpjIdx = normalizedRow.findIndex(h => h.includes('cpf/cnpj'));
         
         if (docIdx !== -1 && credorCnpjIdx !== -1) {
             headerRowIndex = i;
@@ -582,8 +584,7 @@ export function processCostCenterData(costCenterData: any[][]): {
     }
     
     if (headerRowIndex === -1) {
-        console.warn("Cost Center: Linha de cabeçalho com 'Número do Documento' e 'CPF/CNPJ do Fornecedor' não encontrada.");
-        return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
+        throw new Error("Não foi possível encontrar a linha de cabeçalho. Verifique se as colunas 'Número do Documento' e 'CPF/CNPJ' existem na planilha de Centro de Custo.");
     }
     
     const costCenterStartIndex = Math.max(docIndex, credorCnpjIndex) + 1;
@@ -598,7 +599,7 @@ export function processCostCenterData(costCenterData: any[][]): {
 
     for (let i = headerRowIndex + 1; i < costCenterData.length; i++) {
         const row = costCenterData[i];
-        if (!row || row.length === 0) continue;
+        if (!row || !Array.isArray(row) || row.length === 0) continue;
         
         const docNumber = row[docIndex];
         const credorCnpj = row[credorCnpjIndex];
