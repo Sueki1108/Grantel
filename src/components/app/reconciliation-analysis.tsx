@@ -1,22 +1,21 @@
-
 "use client";
 
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileUploadForm } from "@/components/app/file-upload-form";
 import { type ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, Undo2 } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, Undo2, Database } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns, getColumnsWithCustomRender } from "@/lib/columns-helper";
+import { getColumns } from "@/lib/columns-helper";
 import { SiengeTaxCheck } from './sienge-tax-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { CfopValidator } from './cfop-validator';
 import type { AllClassifications } from '@/lib/types';
-import { CostCenterAnalysis } from './cost-center-analysis';
+import { FileUploadForm } from './file-upload-form';
+import * as XLSX from 'xlsx';
 
 
 interface ReconciliationAnalysisProps {
@@ -32,8 +31,6 @@ interface ReconciliationAnalysisProps {
     allClassifications: AllClassifications;
     onPersistClassifications: (allData: AllClassifications) => void;
     competence: string | null;
-    onDataProcessed: (map: Map<string, string>, debugKeys: any[], allCostCenters: string[], headers: any[]) => void;
-    onDownloadCostCenterDebug: () => void;
 }
 
 const getColumnsForDivergentTabs = (data: any[]): ColumnDef<any>[] => {
@@ -68,8 +65,6 @@ export function ReconciliationAnalysis({
     allClassifications,
     onPersistClassifications,
     competence,
-    onDataProcessed,
-    onDownloadCostCenterDebug,
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
@@ -80,13 +75,45 @@ export function ReconciliationAnalysis({
             devolucoesEP: processedData?.reconciliationResults?.devolucoesEP,
         };
     }, [processedData]);
+
+    const handleDownloadSiengeDebugKeys = () => {
+        if (!processedData?.siengeDebugKeys || processedData.siengeDebugKeys.length === 0) {
+             toast({ variant: 'destructive', title: "Nenhum dado para baixar", description: "Processe a planilha Sienge primeiro." });
+            return;
+        }
+        handleDownload(processedData.siengeDebugKeys, 'Debug_Sienge');
+    }
+    
+    const handleDownloadCostCenterDebugKeys = () => {
+        if (!processedData?.costCenterDebugKeys || processedData.costCenterDebugKeys.length === 0) {
+             toast({ variant: 'destructive', title: "Nenhum dado para baixar", description: "Processe a planilha de Centro de Custo primeiro." });
+            return;
+        }
+
+        const workbook = XLSX.utils.book_new();
+
+        if (processedData.costCenterDebugKeys.length > 0) {
+            const debugSheet = XLSX.utils.json_to_sheet(processedData.costCenterDebugKeys);
+            XLSX.utils.book_append_sheet(workbook, debugSheet, "Chaves_Centro_Custo");
+        }
+        if (processedData.costCenterHeaderRows && processedData.costCenterHeaderRows.length > 0) {
+            const headersSheet = XLSX.utils.json_to_sheet(processedData.costCenterHeaderRows);
+            XLSX.utils.book_append_sheet(workbook, headersSheet, "Centros de Custo Encontrados");
+        }
+        
+        if (workbook.SheetNames.length > 0) {
+            XLSX.writeFile(workbook, "Debug_Centro_de_Custo.xlsx");
+            toast({ title: "Ficheiro de Depuração Gerado" });
+        } else {
+             toast({ variant: 'destructive', title: "Nenhum dado de depuração para exportar." });
+        }
+    }
     
     const handleDownload = async (data: any[], title: string) => {
         if (!data || data.length === 0) {
             toast({ title: "Nenhum dado para exportar", description: `Não há itens na aba "${title}".` });
             return;
         }
-        const XLSX = await import('xlsx');
         const worksheet = XLSX.utils.json_to_sheet(data);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, title);
@@ -106,21 +133,33 @@ export function ReconciliationAnalysis({
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
-                 <div className='grid grid-cols-1 md:grid-cols-2 gap-6 items-end'>
-                    <FileUploadForm
-                        displayName="Itens do Sienge"
-                        formId="sienge-for-reconciliation"
-                        files={{ 'sienge-for-reconciliation': !!siengeFile }}
-                        onFileChange={onSiengeFileChange}
-                        onClearFile={onClearSiengeFile}
-                    />
-                     <FileUploadForm
-                        displayName="Centro de Custo"
-                        formId="cost-center"
-                        files={{ 'cost-center': !!costCenterFile }}
-                        onFileChange={onCostCenterFileChange}
-                        onClearFile={onClearCostCenterFile}
-                    />
+                 <div className='grid grid-cols-1 md:grid-cols-2 gap-6 items-start'>
+                    <div className='space-y-2'>
+                        <h3 className='font-medium'>Planilha do Sienge</h3>
+                        <FileUploadForm
+                            displayName="Itens do Sienge"
+                            formId="sienge-for-reconciliation"
+                            files={{ 'sienge-for-reconciliation': !!siengeFile }}
+                            onFileChange={onSiengeFileChange}
+                            onClearFile={onClearSiengeFile}
+                        />
+                         <Button onClick={handleDownloadSiengeDebugKeys} variant="secondary" size="sm" className="w-full" disabled={!processedData?.siengeDebugKeys}>
+                            <Cpu className="mr-2 h-4 w-4" /> Gerar Chaves de Depuração (Sienge)
+                        </Button>
+                    </div>
+                    <div className='space-y-2'>
+                        <h3 className='font-medium'>Planilha de Rateio</h3>
+                         <FileUploadForm
+                            displayName="Centro de Custo"
+                            formId="cost-center"
+                            files={{ 'cost-center': !!costCenterFile }}
+                            onFileChange={onCostCenterFileChange}
+                            onClearFile={onClearCostCenterFile}
+                        />
+                         <Button onClick={handleDownloadCostCenterDebugKeys} variant="secondary" size="sm" className="w-full" disabled={!processedData?.costCenterDebugKeys}>
+                            <Cpu className="mr-2 h-4 w-4" /> Gerar Chaves de Depuração (Centro de Custo)
+                        </Button>
+                    </div>
                 </div>
                 <div className='flex flex-col sm:flex-row gap-2 pt-4'>
                     <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full">
@@ -129,14 +168,13 @@ export function ReconciliationAnalysis({
                 </div>
                 
                 <Tabs defaultValue="reconciliation">
-                    <TabsList className="grid w-full grid-cols-5">
+                    <TabsList className="grid w-full grid-cols-4">
                         <TabsTrigger value="reconciliation" disabled={!reconciliationResults}>Conciliação de Itens</TabsTrigger>
                         <TabsTrigger value="devolucoes-ep" disabled={!devolucoesEP || devolucoesEP.length === 0}>
                             <Undo2 className="h-4 w-4 mr-2"/>Devoluções - EP
                         </TabsTrigger>
                         <TabsTrigger value="tax_check" disabled={!siengeDataForTaxCheck}>Conferência de Impostos</TabsTrigger>
                         <TabsTrigger value="cfop_validation" disabled={!reconciliationResults}><BarChart className='h-4 w-4 mr-2'/>Validação CFOP</TabsTrigger>
-                        <TabsTrigger value="cost_center" disabled={!costCenterFile}>Centro de Custo</TabsTrigger>
                     </TabsList>
                     <TabsContent value="reconciliation" className="mt-4">
                          {!processedData?.sheets['Itens Válidos'] && (
@@ -221,17 +259,6 @@ export function ReconciliationAnalysis({
                             onPersistData={onPersistClassifications}
                             competence={competence}
                         />
-                    </TabsContent>
-
-                    <TabsContent value="cost_center" className="mt-4">
-                         <CostCenterAnalysis 
-                             costCenterFile={costCenterFile}
-                             onCostCenterFileChange={onCostCenterFileChange}
-                             onClearCostCenterFile={onClearCostCenterFile}
-                             onDataProcessed={onDataProcessed}
-                             onDownloadCostCenterDebug={onDownloadCostCenterDebug}
-                             isProcessing={isReconciliationRunning}
-                         />
                     </TabsContent>
                 </Tabs>
             </CardContent>

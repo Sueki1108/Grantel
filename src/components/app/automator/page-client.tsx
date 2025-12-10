@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Building, History, Save, TicketPercent, ClipboardList, GitCompareArrows } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList, GitCompareArrows } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -97,17 +97,7 @@ export function AutomatorClientPage() {
         // Load imobilizado classifications from localStorage
         try {
             const savedImobilizado = localStorage.getItem(IMOBILIZADO_STORAGE_KEY);
-            if (savedImobilizado) {
-                 const parsedData = JSON.parse(savedImobilizado);
-                 if (!parsedData.supplierCategories) {
-                     parsedData.supplierCategories = [
-                        { id: 'mat-construcao', name: 'Materiais de Construção', icon: 'BrickWall', blockedCfops: [] },
-                        { id: 'ferramentas', name: 'Ferramentas', icon: 'Wrench', blockedCfops: [] },
-                        { id: 'pecas-veiculos', name: 'Peças para Veículos', icon: 'Car', blockedCfops: ['1128', '2128'] },
-                    ]
-                 }
-                 setAllClassifications(parsedData);
-            }
+            if (savedImobilizado) setAllClassifications(JSON.parse(savedImobilizado));
         } catch (e) {
             console.error("Failed to load imobilizado classifications from localStorage", e);
         }
@@ -872,10 +862,10 @@ export function AutomatorClientPage() {
                             <ReconciliationAnalysis 
                                 processedData={processedData} 
                                 siengeFile={siengeFile} 
-                                costCenterFile={costCenterFile}
                                 onSiengeFileChange={handleSiengeFileChange}
-                                onCostCenterFileChange={handleCostCenterFileChange}
                                 onClearSiengeFile={() => setSiengeFile(null)}
+                                costCenterFile={costCenterFile}
+                                onCostCenterFileChange={handleCostCenterFileChange}
                                 onClearCostCenterFile={() => setCostCenterFile(null)}
                                 onRunReconciliation={handleRunReconciliation}
                                 isReconciliationRunning={processing}
