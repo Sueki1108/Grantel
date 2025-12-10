@@ -116,7 +116,7 @@ export function ReconciliationAnalysis({
                             onFileChange={onSiengeFileChange}
                             onClearFile={onClearSiengeFile}
                         />
-                         <Button onClick={handleDownloadSiengeDebugKeys} variant="secondary" size="sm" className="w-full" disabled={!processedData?.siengeDebugKeys}>
+                         <Button onClick={handleDownloadSiengeDebugKeys} variant="secondary" size="sm" className="w-full" disabled={!processedData?.siengeDebugKeys || processedData.siengeDebugKeys.length === 0}>
                             <Cpu className="mr-2 h-4 w-4" /> Gerar Chaves de Depuração (Sienge)
                         </Button>
                     </div>
