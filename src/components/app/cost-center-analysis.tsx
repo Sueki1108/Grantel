@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { FileUploadForm } from './file-upload-form';
 
 interface CostCenterAnalysisProps {
@@ -16,10 +16,6 @@ export function CostCenterAnalysis({
     onClearCostCenterFile,
 }: CostCenterAnalysisProps) {
     
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        onCostCenterFileChange(e);
-    };
-
     return (
         <div className="space-y-4">
             <div className='space-y-2'>
@@ -28,7 +24,7 @@ export function CostCenterAnalysis({
                     displayName="Centro de Custo"
                     formId="cost-center"
                     files={{ 'cost-center': !!costCenterFile }}
-                    onFileChange={handleFileChange}
+                    onFileChange={onCostCenterFileChange}
                     onClearFile={onClearCostCenterFile}
                 />
             </div>

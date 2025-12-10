@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -292,8 +291,10 @@ export function AutomatorClientPage() {
                 const sheetName = workbook.SheetNames[0];
                 if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
     
-                const worksheet = workbook.Sheets[sheetName];
-                const siengeSheetData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+                const siengeWorksheet = workbook.Sheets[sheetName];
+                if(!siengeWorksheet) throw new Error("Aba da planilha não encontrada.");
+
+                const siengeSheetData = XLSX.utils.sheet_to_json(siengeWorksheet, { range: 8, defval: null });
                 const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
     
                 setProcessedData(prev => ({
@@ -500,6 +501,32 @@ export function AutomatorClientPage() {
         XLSX.writeFile(workbook, fileName);
     };
 
+    const handleDownloadDebugSheet = () => {
+        if (!processedData || (!processedData.siengeDebugKeys && !processedData.costCenterDebugKeys)) {
+            toast({ variant: "destructive", title: "Nenhum dado de depuração para baixar" });
+            return;
+        }
+        const workbook = XLSX.utils.book_new();
+
+        if (processedData.siengeDebugKeys && processedData.siengeDebugKeys.length > 0) {
+            const siengeWs = XLSX.utils.json_to_sheet(processedData.siengeDebugKeys);
+            XLSX.utils.book_append_sheet(workbook, siengeWs, "Debug_Sienge");
+        }
+
+        if (processedData.costCenterDebugKeys && processedData.costCenterDebugKeys.length > 0) {
+            const costCenterWs = XLSX.utils.json_to_sheet(processedData.costCenterDebugKeys);
+            XLSX.utils.book_append_sheet(workbook, costCenterWs, "Debug_Centro_Custo");
+        }
+        
+        if (workbook.SheetNames.length === 0) {
+             toast({ variant: "destructive", title: "Nenhum dado de depuração para baixar" });
+            return;
+        }
+
+        XLSX.writeFile(workbook, `Grantel - Depuração Conciliação.xlsx`);
+        toast({ title: "Planilha de Depuração Gerada" });
+    };
+
 
     // =================================================================
     // MAIN PROCESSING & CHILD CALLBACKS
@@ -685,53 +712,29 @@ export function AutomatorClientPage() {
     };
 
     const handleRunReconciliation = async () => {
-        if (!siengeFile) {
+        if (!processedData?.siengeSheetData) {
             toast({ variant: 'destructive', title: 'Ficheiro Sienge em falta', description: 'Por favor, carregue a planilha "Itens do Sienge".' });
             return;
         }
-
         if (!processedData || !processedData.sheets['Itens Válidos']) {
             toast({ variant: 'destructive', title: 'Dados XML em falta', description: 'Por favor, execute a "Validação de Documentos" primeiro.' });
             return;
         }
-
+    
         setProcessing(true);
         try {
-            await new Promise(resolve => setTimeout(resolve, 50)); // Allow UI to update
-            
-            // Re-process Sienge file to ensure data is fresh
-            const siengeDataBuffer = await siengeFile.arrayBuffer();
-            const siengeWorkbook = XLSX.read(siengeDataBuffer, { type: 'array' });
-            const siengeSheetName = siengeWorkbook.SheetNames[0];
-            if (!siengeSheetName) throw new Error("A planilha Sienge não contém abas.");
-            const siengeWorksheet = siengeWorkbook.Sheets[siengeSheetName];
-            const siengeSheetData = XLSX.utils.sheet_to_json(siengeWorksheet, { range: 8, defval: null });
-            
-            // Re-process Cost Center file if it exists
-            let costCenterMap: Map<string, string> | undefined = processedData.costCenterMap;
-            if (costCenterFile && !costCenterMap) { // Process only if not already processed
-                const costCenterDataBuffer = await costCenterFile.arrayBuffer();
-                const costCenterWorkbook = XLSX.read(costCenterDataBuffer, { type: 'array' });
-                const costCenterSheetName = costCenterWorkbook.SheetNames[0];
-                if (!costCenterSheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
-                const costCenterWorksheet = costCenterWorkbook.Sheets[costCenterSheetName];
-                const costCenterData = XLSX.utils.sheet_to_json(costCenterWorksheet, { header: 1 });
-                const processedCC = processCostCenterData(costCenterData);
-                costCenterMap = processedCC.costCenterMap;
-            }
+            await new Promise(resolve => setTimeout(resolve, 50));
             
             const newReconciliationResults = runReconciliation(
-                siengeSheetData,
+                processedData.siengeSheetData,
                 processedData.sheets['Itens Válidos'] || [],
                 processedData.sheets['Notas Válidas'] || [],
                 processedData.sheets['CTEs Válidos'] || [],
-                costCenterMap
+                processedData.costCenterMap
             );
             
             setProcessedData(prev => ({
                 ...prev!,
-                siengeSheetData, // Always update with fresh data
-                costCenterMap,
                 reconciliationResults: newReconciliationResults,
             }));
             
@@ -908,6 +911,7 @@ export function AutomatorClientPage() {
                                 allClassifications={allClassifications}
                                 onPersistClassifications={handlePersistClassifications}
                                 competence={competence}
+                                onDownloadDebugSheet={handleDownloadDebugSheet}
                             /> 
                             : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a conciliação.</p></CardContent></Card>
                         }

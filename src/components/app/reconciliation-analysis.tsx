@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, FileCog } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
@@ -32,6 +32,7 @@ interface ReconciliationAnalysisProps {
     allClassifications: AllClassifications;
     onPersistClassifications: (allData: AllClassifications) => void;
     competence: string | null;
+    onDownloadDebugSheet: () => void;
 }
 
 const getColumnsForDivergentTabs = (data: any[]) => {
@@ -59,6 +60,7 @@ export function ReconciliationAnalysis({
     allClassifications,
     onPersistClassifications,
     competence,
+    onDownloadDebugSheet,
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
@@ -117,6 +119,13 @@ export function ReconciliationAnalysis({
                  <div className="flex flex-col sm:flex-row gap-2 pt-4">
                      <Button onClick={onRunReconciliation} disabled={isReconciliationRunning || !siengeFile || !processedData?.sheets['Itens Válidos']}>
                         {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Conciliando...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
+                    </Button>
+                    <Button
+                        onClick={onDownloadDebugSheet}
+                        variant="outline"
+                        disabled={!processedData || (!processedData.siengeDebugKeys && !processedData.costCenterDebugKeys)}
+                    >
+                        <FileCog className="mr-2 h-4 w-4"/>Gerar Planilha de Depuração
                     </Button>
                 </div>
                 
@@ -218,4 +227,3 @@ export function ReconciliationAnalysis({
          </Card>
     );
 }
-
