@@ -450,13 +450,15 @@ export function runReconciliation(
                     const header = nfeHeaderMap.get(xmlChaveUnica) || cteHeaderMap.get(xmlChaveUnica);
                     const chaveAcesso = header ? header['Chave de acesso'] : match.item['Chave de acesso'];
                     
+                    const costCenterKey = `${siengeNumero}-${siengeCnpj}`;
+
                     reconciled.push({
                         ...match.item,
                         Fornecedor: header?.Fornecedor || match.item.Fornecedor || 'N/A',
                         'Chave de acesso': chaveAcesso,
                         'Sienge_CFOP': siengeItem[h.cfop!] || 'N/A',
                         'Sienge_Esp': siengeItem[h.esp!],
-                        'Centro de Custo': costCenterMap?.get(chaveAcesso) || 'N/A',
+                        'Centro de Custo': costCenterMap?.get(costCenterKey) || 'N/A',
                         'Observações': `Conciliado via Valor Total`,
                     });
                     
@@ -527,41 +529,55 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
 
 export function processCostCenterData(costCenterSheetData: any[][]): {
     costCenterMap: Map<string, string>;
+    debugKeys: any[];
+    allCostCenters: string[];
+    costCenterHeaderRows: any[][];
 } {
     const costCenterMap = new Map<string, string>();
+    const debugKeys: any[] = [];
+    const allCostCenters: string[] = [];
+    const costCenterHeaderRows: any[][] = [];
 
     if (!costCenterSheetData || costCenterSheetData.length === 0) {
-        return { costCenterMap };
+        return { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows };
     }
 
     let currentCostCenter = 'N/A';
 
     costCenterSheetData.forEach((row) => {
-        if (!Array.isArray(row) || row.length < 4) return;
+        if (!row || !Array.isArray(row)) return;
 
         const colA = String(row[0] || '').trim();
-        const colB = String(row[1] || '').trim();
-        const colC = String(row[2] || '').trim();
-        const colD = String(row[3] || '').trim();
-        const colK = String(row[10] || '').trim();
 
-        // Identifica linha de cabeçalho do Centro de Custo
         if (colA.toLowerCase() === 'centro de custo') {
-            currentCostCenter = colC; // O nome está na Coluna C
+            currentCostCenter = String(row[2] || 'N/A').trim();
+            if(currentCostCenter !== 'N/A' && !allCostCenters.includes(currentCostCenter)) {
+                allCostCenters.push(currentCostCenter);
+            }
+            costCenterHeaderRows.push(row);
             return;
         }
 
-        // Identifica linha de dados (se a primeira coluna for um número)
-        if (!isNaN(parseInt(colA, 10))) {
-            const accessKeyMatch = colK.match(/\b(\d{44})\b/);
+        if (row.length > 3 && !isNaN(parseInt(colA, 10))) {
+            const docNumber = cleanAndToStr(row[3]); 
+            const credor = cleanAndToStr(row[1]);
+            const key = `${docNumber}-${credor}`;
+            
+            const accessKeyMatch = String(row[10] || '').match(/\b(\d{44})\b/);
             if (accessKeyMatch) {
                 const accessKey = accessKeyMatch[1];
                 costCenterMap.set(accessKey, currentCostCenter);
             }
+
+            debugKeys.push({
+                'Chave de Comparação (Doc-CNPJ)': key,
+                'Centro de Custo': currentCostCenter,
+                'Nº Documento': docNumber,
+                'Credor': credor,
+                'Observação (Coluna K)': row[10] || 'N/A',
+            });
         }
     });
 
-    return { costCenterMap };
+    return { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows };
 }
-
-
