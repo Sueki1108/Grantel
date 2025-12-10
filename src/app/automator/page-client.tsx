@@ -1,8 +1,7 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Building, History, Save, TicketPercent, ClipboardList, GitCompareArrows } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList, GitCompareArrows } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -335,26 +334,46 @@ export function AutomatorClientPage() {
     };
     
     
-    const handleCostCenterFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const handleCostCenterFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            setCostCenterFile(file);
-        }
-    };
+        setCostCenterFile(file || null);
     
-    const onCostCenterDataProcessed = (
-        map: Map<string, string>,
-        debugKeys: any[],
-        allCostCenters: string[],
-        costCenterHeaderRows: any[]
-    ) => {
-        setProcessedData(prev => ({
-            ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
-            costCenterMap: map,
-            costCenterDebugKeys: debugKeys,
-            allCostCenters,
-            costCenterHeaderRows,
-        }));
+        if (file) {
+            setProcessing(true);
+            try {
+                const data = await file.arrayBuffer();
+                const XLSX = await import('xlsx');
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
+    
+                const worksheet = workbook.Sheets[sheetName];
+                const costCenterSheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    
+                const { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows } = processCostCenterData(costCenterSheetData);
+    
+                setProcessedData(prev => ({
+                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
+                    costCenterMap,
+                    costCenterDebugKeys: debugKeys,
+                    allCostCenters,
+                    costCenterHeaderRows,
+                }));
+    
+                toast({ title: "Planilha de Centro de Custo Carregada", description: `${costCenterMap.size} mapeamentos e ${allCostCenters.length} centros de custo foram encontrados.` });
+            } catch (err: any) {
+                toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
+                setCostCenterFile(null);
+            } finally {
+                setProcessing(false);
+            }
+        } else {
+            setProcessedData(prev => {
+                if (!prev) return null;
+                const { costCenterMap, costCenterDebugKeys, allCostCenters, costCenterHeaderRows, ...rest } = prev;
+                return { ...rest, costCenterMap: undefined, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] } as ProcessedData;
+            });
+        }
     };
 
     const handleDownloadCostCenterDebug = async () => {
@@ -913,7 +932,6 @@ export function AutomatorClientPage() {
                                 allClassifications={allClassifications}
                                 onPersistClassifications={handlePersistClassifications}
                                 competence={competence}
-                                onDataProcessed={onCostCenterDataProcessed}
                                 onDownloadCostCenterDebug={handleDownloadCostCenterDebug}
                             /> 
                             : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a conciliação.</p></CardContent></Card>

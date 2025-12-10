@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Ticket, Undo2, Database } from 'lucide-react';
+import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart, Undo2, Database } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
@@ -31,6 +31,7 @@ interface ReconciliationAnalysisProps {
     allClassifications: AllClassifications;
     onPersistClassifications: (allData: AllClassifications) => void;
     competence: string | null;
+    onDownloadCostCenterDebug: () => void;
 }
 
 const getColumnsForDivergentTabs = (data: any[]): ColumnDef<any>[] => {
@@ -65,6 +66,7 @@ export function ReconciliationAnalysis({
     allClassifications,
     onPersistClassifications,
     competence,
+    onDownloadCostCenterDebug,
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
@@ -82,31 +84,6 @@ export function ReconciliationAnalysis({
             return;
         }
         handleDownload(processedData.siengeDebugKeys, 'Debug_Sienge');
-    }
-    
-    const handleDownloadCostCenterDebugKeys = () => {
-        if (!processedData?.costCenterDebugKeys || processedData.costCenterDebugKeys.length === 0) {
-             toast({ variant: 'destructive', title: "Nenhum dado para baixar", description: "Processe a planilha de Centro de Custo primeiro." });
-            return;
-        }
-
-        const workbook = XLSX.utils.book_new();
-
-        if (processedData.costCenterDebugKeys.length > 0) {
-            const debugSheet = XLSX.utils.json_to_sheet(processedData.costCenterDebugKeys);
-            XLSX.utils.book_append_sheet(workbook, debugSheet, "Chaves_Centro_Custo");
-        }
-        if (processedData.costCenterHeaderRows && processedData.costCenterHeaderRows.length > 0) {
-            const headersSheet = XLSX.utils.json_to_sheet(processedData.costCenterHeaderRows);
-            XLSX.utils.book_append_sheet(workbook, headersSheet, "Centros de Custo Encontrados");
-        }
-        
-        if (workbook.SheetNames.length > 0) {
-            XLSX.writeFile(workbook, "Debug_Centro_de_Custo.xlsx");
-            toast({ title: "Ficheiro de Depuração Gerado" });
-        } else {
-             toast({ variant: 'destructive', title: "Nenhum dado de depuração para exportar." });
-        }
     }
     
     const handleDownload = async (data: any[], title: string) => {
@@ -156,7 +133,7 @@ export function ReconciliationAnalysis({
                             onFileChange={onCostCenterFileChange}
                             onClearFile={onClearCostCenterFile}
                         />
-                         <Button onClick={handleDownloadCostCenterDebugKeys} variant="secondary" size="sm" className="w-full" disabled={!processedData?.costCenterDebugKeys}>
+                         <Button onClick={onDownloadCostCenterDebug} variant="secondary" size="sm" className="w-full" disabled={!processedData?.costCenterDebugKeys}>
                             <Cpu className="mr-2 h-4 w-4" /> Gerar Chaves de Depuração (Centro de Custo)
                         </Button>
                     </div>
