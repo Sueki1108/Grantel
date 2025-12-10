@@ -29,27 +29,6 @@ export function CostCenterAnalysis({
 }: CostCenterAnalysisProps) {
     const { toast } = useToast();
 
-    const handleDownloadCostCenterDebug = () => {
-        const costCenterKeys = processedData?.costCenterDebugKeys;
-        if (!costCenterKeys || costCenterKeys.length === 0) {
-            toast({ variant: 'destructive', title: "Nenhum dado de depuração para baixar" });
-            return;
-        }
-
-        const workbook = XLSX.utils.book_new();
-        const costCenterWorksheet = XLSX.utils.json_to_sheet(costCenterKeys);
-        XLSX.utils.book_append_sheet(workbook, costCenterWorksheet, "Debug_Centro_Custo");
-
-        const costCenterHeaders = processedData?.allCostCenters || [];
-        if (costCenterHeaders.length > 0) {
-            const headersWorksheet = XLSX.utils.json_to_sheet(costCenterHeaders.map(h => ({ "Centros de Custo Encontrados": h })));
-            XLSX.utils.book_append_sheet(workbook, headersWorksheet, "Centros de Custo Encontrados");
-        }
-
-        XLSX.writeFile(workbook, "Grantel_Depuracao_Centro_Custo.xlsx");
-        toast({ title: 'Planilha de Depuração Gerada' });
-    };
-
     return (
         <div className="space-y-4">
             <div className='space-y-2'>
@@ -62,9 +41,6 @@ export function CostCenterAnalysis({
                     onClearFile={onClearCostCenterFile}
                 />
             </div>
-             <Button onClick={handleDownloadCostCenterDebug} variant="secondary" size="sm" className="w-full" disabled={!processedData?.costCenterDebugKeys || processedData.costCenterDebugKeys.length === 0}>
-                <Download className="mr-2 h-4 w-4" /> Gerar Chaves de Depuração (Centro de Custo)
-            </Button>
         </div>
     );
 }

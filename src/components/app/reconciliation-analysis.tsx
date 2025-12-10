@@ -140,6 +140,7 @@ export function ReconciliationAnalysis({
                         costCenterFile={costCenterFile}
                         onCostCenterFileChange={onCostCenterFileChange}
                         onClearCostCenterFile={onClearCostCenterFile}
+                        processedData={processedData}
                     />
                 </div>
                 <div className='flex flex-col sm:flex-row gap-2 pt-4'>
