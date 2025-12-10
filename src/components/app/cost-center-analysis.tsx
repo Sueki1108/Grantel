@@ -10,23 +10,17 @@ interface CostCenterAnalysisProps {
     costCenterFile: File | null;
     onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearCostCenterFile: () => void;
-    onProcessCostCenterData: (file: File) => Promise<void>;
 }
 
 export function CostCenterAnalysis({
     costCenterFile,
     onCostCenterFileChange,
     onClearCostCenterFile,
-    onProcessCostCenterData,
 }: CostCenterAnalysisProps) {
     const { toast } = useToast();
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         onCostCenterFileChange(e);
-        const file = e.target.files?.[0];
-        if (file) {
-            onProcessCostCenterData(file);
-        }
     };
 
     return (
@@ -44,5 +38,6 @@ export function CostCenterAnalysis({
         </div>
     );
 }
+
 
 

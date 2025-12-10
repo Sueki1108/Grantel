@@ -27,8 +27,6 @@ interface ReconciliationAnalysisProps {
     costCenterFile: File | null;
     onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearCostCenterFile: () => void;
-    onRunReconciliation: () => void;
-    isReconciliationRunning: boolean;
     allClassifications: AllClassifications;
     onPersistClassifications: (allData: AllClassifications) => void;
     competence: string | null;
@@ -54,8 +52,6 @@ export function ReconciliationAnalysis({
     costCenterFile,
     onCostCenterFileChange,
     onClearCostCenterFile,
-    onRunReconciliation,
-    isReconciliationRunning,
     allClassifications,
     onPersistClassifications,
     competence,
@@ -234,5 +230,6 @@ export function ReconciliationAnalysis({
          </Card>
     );
 }
+
 
 
