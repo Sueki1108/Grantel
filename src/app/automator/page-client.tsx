@@ -1,8 +1,7 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Building, History, Save, TicketPercent, ClipboardList, GitCompareArrows } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Building, History, Save, TicketPercent, ClipboardList, GitCompareArrows, Database } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -14,26 +13,19 @@ import { FileUploadForm } from "@/components/app/file-upload-form";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
-
-
 import { ThemeToggle } from "@/components/app/theme-toggle";
 import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult, processCostCenterData, generateSiengeDebugKeys } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
 import type { KeyCheckResult } from "@/components/app/key-checker";
 import { cn } from "@/lib/utils";
-
 import type { AllClassifications } from "@/lib/types";
 import type { SessionData } from "@/components/app/history-analysis";
-
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-
 import type { SpedDuplicate } from "@/lib/types";
 
 // Dynamic Imports for heavy components
@@ -47,8 +39,7 @@ const AdvancedAnalyses = dynamic(() => import('@/components/app/advanced-analyse
 const PendingIssuesReport = dynamic(() => import('@/components/app/pending-issues-report').then(mod => mod.PendingIssuesReport), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const HistoryAnalysis = dynamic(() => import('@/components/app/history-analysis').then(mod => mod.HistoryAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const DifalAnalysis = dynamic(() => import('@/components/app/difal-analysis').then(mod => mod.DifalAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
-
-
+const CostCenterAnalysis = dynamic(() => import('@/components/app/cost-center-analysis').then(mod => mod.CostCenterAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 
 // This should be defined outside the component to avoid re-declaration
 const fileMapping: { [key: string]: string } = {
@@ -526,9 +517,25 @@ export function AutomatorClientPage() {
         XLSX.writeFile(workbook, fileName);
     };
 
-    const handleDownloadDebugKeys = async () => {
-        if (!processedData || (!processedData.siengeDebugKeys?.length && !processedData.costCenterDebugKeys?.length && !processedData.costCenterHeaderRows?.length)) {
-             toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar', description: 'Carregue a planilha Sienge e/ou Centro de Custo primeiro.' });
+    const handleDownloadSiengeDebugKeys = async () => {
+        if (!processedData?.siengeDebugKeys || processedData.siengeDebugKeys.length === 0) {
+            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar', description: 'Carregue a planilha Sienge e processe a conciliação primeiro.' });
+            return;
+        }
+
+        const XLSX = await import('xlsx');
+        const wb = XLSX.utils.book_new();
+        
+        const ws = XLSX.utils.json_to_sheet(processedData.siengeDebugKeys);
+        XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
+        
+        XLSX.writeFile(wb, "Grantel_Debug_Chaves_Sienge.xlsx");
+        toast({ title: 'Ficheiro de Depuração Gerado' });
+    };
+
+    const handleDownloadCostCenterDebug = async () => {
+         if (!processedData || (!processedData.costCenterDebugKeys?.length && !processedData.costCenterHeaderRows?.length)) {
+            toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar', description: 'Carregue a planilha de Centro de Custo primeiro.' });
             return;
         }
     
@@ -548,19 +555,14 @@ export function AutomatorClientPage() {
             generated = true;
         }
     
-        if (processedData.siengeDebugKeys && processedData.siengeDebugKeys.length > 0) {
-            const ws = XLSX.utils.json_to_sheet(processedData.siengeDebugKeys);
-            XLSX.utils.book_append_sheet(wb, ws, "Chaves_Sienge");
-            generated = true;
-        }
-    
         if (generated) {
-            XLSX.writeFile(wb, "Grantel_Debug_Chaves_Conciliacao.xlsx");
+            XLSX.writeFile(wb, "Grantel_Debug_Centro_Custo.xlsx");
             toast({ title: 'Ficheiro de Depuração Gerado' });
         } else {
             toast({ variant: 'destructive', title: 'Nenhum dado de depuração para exportar' });
         }
-    };
+    }
+
 
     // =================================================================
     // MAIN PROCESSING & CHILD CALLBACKS
@@ -859,27 +861,31 @@ export function AutomatorClientPage() {
                                 2. XML VS Sienge
                                 {processedData?.reconciliationResults && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
+                            <TabsTrigger value="cost-center" className="flex items-center gap-2">
+                                3. Centro de Custo
+                                {processedData?.costCenterMap && <CheckCircle className="h-5 w-5 text-green-600" />}
+                            </TabsTrigger>
                             <TabsTrigger value="saidas-nfe" disabled={saidasNfeTabDisabled} className="flex items-center gap-2">
-                                3. Análise Saídas
+                                4. Análise Saídas
                                 {processedData?.sheets['Saídas'] && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                             <TabsTrigger value="nfse" disabled={nfseTabDisabled} className="flex items-center gap-2">
-                                4. Análise NFS-e
+                                5. Análise NFS-e
                                 {(!nfseTabDisabled) && <FilePieChart className="h-5 w-5 text-primary" />}
                             </TabsTrigger>
                             <TabsTrigger value="imobilizado" disabled={imobilizadoTabDisabled}>
-                                5. Imobilizado
+                                6. Imobilizado
                                 {processedData?.sheets['Imobilizados'] && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                              <TabsTrigger value="difal" className="flex items-center gap-2">
-                                6. Guia DIFAL
+                                7. Guia DIFAL
                             </TabsTrigger>
                             <TabsTrigger value="analyses" disabled={analysisTabDisabled} className="flex items-center gap-2">
-                                7. SPED Fiscal
+                                8. SPED Fiscal
                                 {processedData?.keyCheckResults && <CheckCircle className="h-5 w-5 text-green-600" />}
                             </TabsTrigger>
                              <TabsTrigger value="pending" className="flex items-center gap-2">
-                                8. Pendências
+                                9. Pendências
                             </TabsTrigger>
                         </TabsList>
                         
@@ -937,20 +943,27 @@ export function AutomatorClientPage() {
                             <ReconciliationAnalysis 
                                 processedData={processedData} 
                                 siengeFile={siengeFile} 
-                                costCenterFile={costCenterFile}
                                 onSiengeFileChange={handleSiengeFileChange}
-                                onCostCenterFileChange={handleCostCenterFileChange}
                                 onClearSiengeFile={() => setSiengeFile(null)}
-                                onClearCostCenterFile={() => setCostCenterFile(null)}
                                 onRunReconciliation={handleRunReconciliation}
                                 isReconciliationRunning={processing}
                                 allClassifications={allClassifications}
                                 onPersistClassifications={handlePersistClassifications}
-                                onDownloadDebugKeys={handleDownloadDebugKeys}
                                 competence={competence}
+                                onDownloadSiengeDebugKeys={handleDownloadSiengeDebugKeys}
                             /> 
                             : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a conciliação.</p></CardContent></Card>
                         }
+                        </TabsContent>
+
+                        <TabsContent value="cost-center" className="mt-6">
+                            <CostCenterAnalysis 
+                                costCenterFile={costCenterFile}
+                                onCostCenterFileChange={handleCostCenterFileChange}
+                                onClearCostCenterFile={() => setCostCenterFile(null)}
+                                onDownloadCostCenterDebug={handleDownloadCostCenterDebug}
+                                isProcessing={processing}
+                            />
                         </TabsContent>
 
                         <TabsContent value="saidas-nfe" className="mt-6">

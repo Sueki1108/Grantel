@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useMemo, useEffect, useState } from 'react';
@@ -11,7 +10,7 @@ import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, Ba
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
+import { getColumns } from "@/components/app/data-table-columns";
 import { SiengeTaxCheck } from './sienge-tax-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { CfopValidator } from './cfop-validator';
@@ -21,16 +20,13 @@ import type { AllClassifications, DifalStatus } from '@/lib/types';
 interface ReconciliationAnalysisProps {
     processedData: ProcessedData | null;
     siengeFile: File | null;
-    costCenterFile: File | null;
     onSiengeFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
-    onClearCostCenterFile: () => void;
     onRunReconciliation: () => void;
     isReconciliationRunning: boolean;
     allClassifications: AllClassifications;
     onPersistClassifications: (allData: AllClassifications) => void;
-    onDownloadDebugKeys: () => void;
+    onDownloadSiengeDebugKeys: () => void;
     competence: string | null;
 }
 
@@ -56,16 +52,13 @@ const getColumnsForDivergentTabs = (data: any[]): ColumnDef<any>[] => {
 export function ReconciliationAnalysis({ 
     processedData, 
     siengeFile, 
-    costCenterFile,
     onSiengeFileChange, 
-    onCostCenterFileChange,
     onClearSiengeFile,
-    onClearCostCenterFile,
     onRunReconciliation,
     isReconciliationRunning,
     allClassifications,
     onPersistClassifications,
-    onDownloadDebugKeys,
+    onDownloadSiengeDebugKeys,
     competence
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
@@ -122,12 +115,12 @@ export function ReconciliationAnalysis({
                     <GitCompareArrows className="h-8 w-8 text-primary" />
                     <div>
                         <CardTitle className="font-headline text-2xl">XML VS Sienge</CardTitle>
-                        <CardDescription>Carregue as planilhas para cruzar informações com os XMLs processados.</CardDescription>
+                        <CardDescription>Carregue a planilha Sienge para cruzar informações com os XMLs processados.</CardDescription>
                     </div>
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
-                 <div className='grid grid-cols-1 md:grid-cols-2 gap-6 items-end'>
+                 <div className='grid grid-cols-1 gap-6 items-end'>
                     <FileUploadForm
                         displayName="Itens do Sienge"
                         formId="sienge-for-reconciliation"
@@ -135,32 +128,24 @@ export function ReconciliationAnalysis({
                         onFileChange={onSiengeFileChange}
                         onClearFile={onClearSiengeFile}
                     />
-                     <FileUploadForm
-                        displayName="Centro de Custo"
-                        formId="cost-center"
-                        files={{ 'cost-center': !!costCenterFile }}
-                        onFileChange={onCostCenterFileChange}
-                        onClearFile={onClearCostCenterFile}
-                    />
                 </div>
                 <div className='flex flex-col sm:flex-row gap-2 pt-4'>
                     <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full">
                         {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
                     </Button>
-                    <Button onClick={onDownloadDebugKeys} disabled={!siengeFile && !costCenterFile} variant="outline" className="w-full sm:w-auto">
-                        <Database className="mr-2 h-4 w-4"/>Gerar Chaves de Depuração
+                    <Button onClick={onDownloadSiengeDebugKeys} disabled={!siengeFile} variant="outline" className="w-full sm:w-auto">
+                        <Database className="mr-2 h-4 w-4"/>Gerar Chaves de Depuração (Sienge)
                     </Button>
                 </div>
                 
                 <Tabs defaultValue="reconciliation">
-                    <TabsList className="grid w-full grid-cols-5">
+                    <TabsList className="grid w-full grid-cols-4">
                         <TabsTrigger value="reconciliation" disabled={!reconciliationResults}>Conciliação de Itens</TabsTrigger>
                         <TabsTrigger value="devolucoes-ep" disabled={!devolucoesEP || devolucoesEP.length === 0}>
                             <Undo2 className="h-4 w-4 mr-2"/>Devoluções - EP
                         </TabsTrigger>
                         <TabsTrigger value="tax_check" disabled={!siengeDataForTaxCheck}>Conferência de Impostos</TabsTrigger>
                         <TabsTrigger value="cfop_validation" disabled={!reconciliationResults}><BarChart className='h-4 w-4 mr-2'/>Validação CFOP</TabsTrigger>
-                        <TabsTrigger value="difal" disabled={difalItems.length === 0}><Ticket className='h-4 w-4 mr-2'/>DIFAL ({difalItems.length})</TabsTrigger>
                     </TabsList>
                     <TabsContent value="reconciliation" className="mt-4">
                          {!processedData?.sheets['Itens Válidos'] && (
@@ -246,15 +231,6 @@ export function ReconciliationAnalysis({
                             competence={competence}
                         />
                     </TabsContent>
-
-                    <TabsContent value="difal" className="mt-4">
-                        <DifalItemsAnalysis 
-                            items={difalItems} 
-                            allClassifications={allClassifications} 
-                            competence={competence} 
-                            onClassificationChange={handleDifalStatusChange}
-                        />
-                    </TabsContent>
                 </Tabs>
             </CardContent>
          </Card>
@@ -267,149 +243,4 @@ interface DifalItemsAnalysisProps {
     allClassifications: AllClassifications;
     competence: string | null;
     onClassificationChange: (items: any[], newStatus: DifalStatus) => void;
-}
-
-const getDifalColumns = (
-    items: any[],
-    competence: string | null,
-    allClassifications: AllClassifications,
-    onClassificationChange: (items: any[], newStatus: DifalStatus) => void
-): ColumnDef<any>[] => {
-    
-    const currencyCellRenderer = (row: any, id: string) => (
-        <div className='text-right'>{Number(row.original[id] || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
-    );
-    const leftAlignedCellRenderer = (row: any, id: string) => (
-        <div>{row.original[id]}</div>
-    );
-
-    const columns: ColumnDef<any>[] = getColumnsWithCustomRender(
-        items, 
-        ['Fornecedor', 'Número da Nota', 'Descrição', 'Centro de Custo', 'NCM', 'CFOP', 'Valor Total'],
-        (row, id) => {
-            if (id === 'Valor Total') return currencyCellRenderer(row, id);
-            return leftAlignedCellRenderer(row, id);
-        }
-    );
-
-    columns.push({
-        id: 'actions',
-        header: 'Ações',
-        cell: ({row}) => {
-             const itemKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
-             const status = (competence && allClassifications[competence]?.difalValidations?.classifications[itemKey]?.status) || 'subject-to-difal';
-
-            return (
-                <div className="flex gap-1 justify-center">
-                    <TooltipProvider>
-                        {status !== 'disregard' && (
-                             <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onClassificationChange([row.original], 'disregard')}><X className="h-4 w-4 text-red-600"/></Button></TooltipTrigger><TooltipContent><p>Desconsiderar</p></TooltipContent></Tooltip>
-                        )}
-                        {status === 'disregard' && (
-                            <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onClassificationChange([row.original], 'subject-to-difal')}><RotateCw className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent><p>Reverter para Sujeito ao DIFAL</p></TooltipContent></Tooltip>
-                        )}
-                    </TooltipProvider>
-                </div>
-            )
-        }
-    });
-
-    return columns;
-};
-
-
-function DifalItemsAnalysis({ items, allClassifications, competence, onClassificationChange }: DifalItemsAnalysisProps) {
-    
-    const { subject, disregarded } = useMemo(() => {
-        const difalValidations = (competence && allClassifications[competence]?.difalValidations?.classifications) || {};
-        const subject: any[] = [];
-        const disregarded: any[] = [];
-
-        items.forEach(item => {
-            const itemKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
-            const status = difalValidations[itemKey]?.status || 'subject-to-difal';
-
-            if (status === 'disregard') {
-                disregarded.push(item);
-            } else {
-                subject.push(item);
-            }
-        });
-
-        return { subject, disregarded };
-    }, [items, allClassifications, competence]);
-
-    const difalColumns = useMemo(
-        () => getDifalColumns(items, competence, allClassifications, onClassificationChange),
-        [items, competence, allClassifications, onClassificationChange]
-    );
-
-
-    if (items.length === 0) {
-        return (
-            <Card>
-                <CardHeader>
-                    <CardTitle>Análise de Itens para DIFAL</CardTitle>
-                </CardHeader>
-                <CardContent className="text-muted-foreground text-center p-4">
-                    Nenhum item foi marcado como "DIFAL" na aba de Validação de CFOP.
-                </CardContent>
-            </Card>
-        );
-    }
-    
-    const itemsByCfop = (data: any[]) => data.reduce((acc, item) => {
-        const cfop = item.Sienge_CFOP || 'N/A';
-        if (!acc[cfop]) acc[cfop] = [];
-        acc[cfop].push(item);
-        return acc;
-    }, {} as Record<string, any[]>);
-
-    const subjectByCfop = itemsByCfop(subject);
-    const disregardedByCfop = itemsByCfop(disregarded);
-
-
-    const RenderCfopTabs = ({dataByCfop}: {dataByCfop: Record<string, any[]>}) => {
-        const cfops = Object.keys(dataByCfop);
-        if (cfops.length === 0) return <p className="text-muted-foreground text-center p-4">Nenhum item nesta categoria.</p>;
-
-        return (
-             <Tabs defaultValue={cfops[0]} className="w-full">
-                <TabsList>
-                    {cfops.map(cfop => (
-                        <TabsTrigger key={cfop} value={cfop}>CFOP {cfop} ({dataByCfop[cfop].length})</TabsTrigger>
-                    ))}
-                </TabsList>
-                {cfops.map(cfop => (
-                    <TabsContent key={cfop} value={cfop} className='mt-4'>
-                        <DataTable columns={difalColumns} data={dataByCfop[cfop]} />
-                    </TabsContent>
-                ))}
-            </Tabs>
-        )
-    };
-
-
-    return (
-         <Card>
-            <CardHeader>
-                <CardTitle>Análise de Itens para DIFAL</CardTitle>
-                <CardDescription>Classifique os itens que foram pré-selecionados para análise de DIFAL.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Tabs defaultValue="subject">
-                    <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="subject">Sujeito ao DIFAL ({subject.length})</TabsTrigger>
-                        <TabsTrigger value="disregarded">Desconsiderados ({disregarded.length})</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="subject" className="mt-4">
-                        <RenderCfopTabs dataByCfop={subjectByCfop} />
-                    </TabsContent>
-                    <TabsContent value="disregarded" className="mt-4">
-                        <RenderCfopTabs dataByCfop={disregardedByCfop} />
-                    </TabsContent>
-                </Tabs>
-            </CardContent>
-        </Card>
-    )
 }
