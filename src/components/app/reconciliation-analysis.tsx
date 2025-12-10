@@ -11,7 +11,7 @@ import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, Ba
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns } from "@/lib/columns-helper";
+import { getColumns, getColumnsWithCustomRender } from "@/lib/columns-helper";
 import { SiengeTaxCheck } from './sienge-tax-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { CfopValidator } from './cfop-validator';
@@ -30,7 +30,6 @@ interface ReconciliationAnalysisProps {
     isReconciliationRunning: boolean;
     allClassifications: AllClassifications;
     onPersistClassifications: (allData: AllClassifications) => void;
-    onDownloadSiengeDebugKeys: () => void;
     competence: string | null;
 }
 
@@ -65,7 +64,6 @@ export function ReconciliationAnalysis({
     isReconciliationRunning,
     allClassifications,
     onPersistClassifications,
-    onDownloadSiengeDebugKeys,
     competence
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
@@ -146,9 +144,6 @@ export function ReconciliationAnalysis({
                 <div className='flex flex-col sm:flex-row gap-2 pt-4'>
                     <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full">
                         {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
-                    </Button>
-                    <Button onClick={onDownloadSiengeDebugKeys} disabled={!siengeFile} variant="outline" className="w-full sm:w-auto">
-                        <Database className="mr-2 h-4 w-4"/>Gerar Chaves de Depuração (Sienge)
                     </Button>
                 </div>
                 
