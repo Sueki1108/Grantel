@@ -457,16 +457,14 @@ export function runReconciliation(
                             const siengeMatch = siengeMatches.shift()!;
                             const nfeHeader = nfeHeaderMap.get(item['Chave Unica']);
                             
-                            const docNumber = siengeMatch.item[h.numero!];
-                            const credorCnpj = siengeMatch.item[h.cnpj!];
-                            const costCenterKey = `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCnpj)}`;
+                            const chaveAcesso = item['Chave de acesso'];
                             
                             reconciled.push({
                                 ...item,
                                 Fornecedor: nfeHeader?.Fornecedor || 'N/A',
                                 'Sienge_CFOP': siengeMatch.item[h.cfop!],
                                 'Sienge_Esp': siengeMatch.item[h.esp!],
-                                'Centro de Custo': costCenterMap?.get(costCenterKey) || 'N/A',
+                                'Centro de Custo': costCenterMap?.get(chaveAcesso) || 'N/A',
                                 'Observações': `Conciliado via ${pass.name}`
                             });
                             siengeMatchedIndices.add(siengeMatch.index);
@@ -545,9 +543,7 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
     });
 }
 
-export function processCostCenterData(
-    costCenterSheetData: any[][]
-): {
+export function processCostCenterData(costCenterSheetData: any[][]): {
     costCenterMap: Map<string, string>;
     debugKeys: any[];
     allCostCenters: string[];
@@ -555,63 +551,71 @@ export function processCostCenterData(
 } {
     const costCenterMap = new Map<string, string>();
     const debugKeys: any[] = [];
-    let currentCostCenter = 'N/A';
+    const allCostCenters = new Set<string>();
+    const costCenterHeaderRows: any[] = [];
 
     if (!costCenterSheetData || costCenterSheetData.length === 0) {
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
 
-    costCenterSheetData.forEach((row, rowIndex) => {
-        if (!Array.isArray(row)) return;
+    let currentCostCenter = 'N/A';
+    let isDataSection = false;
 
-        // Identifica uma linha de cabeçalho de centro de custo
-        const firstCell = String(row[0] || '').trim();
-        if (firstCell.toLowerCase().startsWith('centro de custo')) {
-            currentCostCenter = firstCell;
+    costCenterSheetData.forEach((row, rowIndex) => {
+        if (!Array.isArray(row) || row.length === 0) {
+            isDataSection = false; // Reset on empty rows
             return;
         }
 
-        // Identifica uma linha de dados (se a primeira coluna for um número)
-        if (typeof row[0] === 'number') {
-            const docNumberRaw = row[3]; // Coluna D
-            const credorRaw = row[1];    // Coluna B
+        const firstCell = String(row[0] || '').trim();
+
+        if (firstCell.toLowerCase().startsWith('centro de custo')) {
+            currentCostCenter = firstCell;
+            allCostCenters.add(currentCostCenter);
+            isDataSection = false; // Reset when a new cost center is found
+            return;
+        }
+
+        if (firstCell.toLowerCase() === 'item') {
+            isDataSection = true;
+            costCenterHeaderRows.push({ center: currentCostCenter, headers: row });
+            return;
+        }
+
+        if (isDataSection && typeof row[0] === 'number') {
+            const credorRaw = row[1]; // Coluna B
+            const docNumberRaw = row[2]; // Coluna C
+            const obsRaw = row[5]; // Coluna F (Observação para chave de acesso)
 
             const debugEntry: any = {
                 "Linha": rowIndex + 1,
                 "Credor (Coluna B)": credorRaw ?? 'N/A',
-                "Documento (Coluna D)": docNumberRaw ?? 'N/A',
+                "Documento (Coluna C)": docNumberRaw ?? 'N/A',
+                "Observação (Coluna F)": obsRaw ?? 'N/A',
                 "Centro de Custo": currentCostCenter,
                 "Status": "Falha",
                 "Motivo": "",
-                "Chave de Comparação": "N/A",
+                "Chave de Acesso Extraída": "N/A",
             };
 
-            if (!docNumberRaw || !credorRaw) {
-                debugEntry.Motivo = "Coluna de Documento (D) ou Credor (B) em falta.";
-                debugKeys.push(debugEntry);
-                return;
+            if (obsRaw) {
+                const chaveAcessoMatch = String(obsRaw).match(/(\d{44})/);
+                if (chaveAcessoMatch) {
+                    const chaveAcesso = chaveAcessoMatch[1];
+                    costCenterMap.set(chaveAcesso, currentCostCenter);
+                    debugEntry.Status = "Sucesso";
+                    debugEntry.Motivo = "Chave de acesso encontrada na observação e mapeada.";
+                    debugEntry["Chave de Acesso Extraída"] = chaveAcesso;
+                } else {
+                    debugEntry.Motivo = "Coluna de Observação (F) não continha uma chave de 44 dígitos.";
+                }
+            } else {
+                debugEntry.Motivo = "Coluna de Observação (F) está vazia.";
             }
-
-            const cnpjMatches = String(credorRaw).match(/(\d{4}-\d{2})$/);
-            const credorCnpj = cnpjMatches ? cnpjMatches[1] : null;
-
-            if (!credorCnpj) {
-                debugEntry.Motivo = `CNPJ no formato XXXX-XX não encontrado no valor: "${credorRaw}"`;
-                debugKeys.push(debugEntry);
-                return;
-            }
-
-            const docNumberClean = String(docNumberRaw).split('/').pop()?.trim() || '';
-            const key = `${cleanAndToStr(docNumberClean)}-${cleanAndToStr(credorCnpj)}`;
             
-            costCenterMap.set(key, currentCostCenter);
-
-            debugEntry.Status = "Sucesso";
-            debugEntry.Motivo = "Chave gerada com sucesso.";
-            debugEntry["Chave de Comparação"] = key;
             debugKeys.push(debugEntry);
         }
     });
 
-    return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
+    return { costCenterMap, debugKeys, allCostCenters: Array.from(allCostCenters), costCenterHeaderRows };
 }

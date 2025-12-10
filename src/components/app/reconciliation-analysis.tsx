@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, ChangeEvent } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ProcessedData } from '@/lib/excel-processor';
@@ -140,7 +140,6 @@ export function ReconciliationAnalysis({
                         costCenterFile={costCenterFile}
                         onCostCenterFileChange={onCostCenterFileChange}
                         onClearCostCenterFile={onClearCostCenterFile}
-                        processedData={processedData}
                     />
                 </div>
                 <div className='flex flex-col sm:flex-row gap-2 pt-4'>
@@ -253,4 +252,5 @@ export function ReconciliationAnalysis({
 
 
     
+
 
