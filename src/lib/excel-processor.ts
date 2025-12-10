@@ -557,55 +557,66 @@ export function processCostCenterData(
 } {
     const costCenterMap = new Map<string, string>();
     const debugKeys: any[] = [];
-    let allCostCenters = new Set<string>();
-    let costCenterHeaderRows: any[] = [];
+    const allCostCenters = new Set<string>();
     
     if (!costCenterSheetData || costCenterSheetData.length === 0) {
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
 
     let currentHeaders: string[] = [];
-    let headerRowIndex = -1;
     let docIndex = -1;
     let cnpjIndex = -1;
     let costCenterStartIndex = -1;
 
     for (let i = 0; i < costCenterSheetData.length; i++) {
         const row = costCenterSheetData[i];
+        if (!row || !Array.isArray(row)) continue;
 
-        // Se a linha for o início de uma nova secção de Centro de Custo
-        if (Array.isArray(row) && String(row[0]).trim().toLowerCase().startsWith('centro de custo')) {
-            // A linha seguinte deve ser o cabeçalho
-            headerRowIndex = i + 1;
-            if (headerRowIndex < costCenterSheetData.length) {
-                currentHeaders = costCenterSheetData[headerRowIndex].map(h => String(h || '').trim());
-                docIndex = currentHeaders.findIndex(h => h === docNumberHeader);
-                cnpjIndex = currentHeaders.findIndex(h => h === cnpjHeader);
-
-                if (docIndex !== -1 && cnpjIndex !== -1) {
-                    costCenterStartIndex = Math.max(docIndex, cnpjIndex) + 1;
-                    for (let j = costCenterStartIndex; j < currentHeaders.length; j++) {
-                        const centerName = currentHeaders[j];
-                        if (centerName) {
-                            allCostCenters.add(centerName);
-                        }
-                    }
-                }
+        const firstCell = String(row[0] || '').trim().toLowerCase();
+        
+        // Detectar nova seção de centro de custo
+        if (firstCell.startsWith('centro de custo')) {
+            // A próxima linha não vazia deve ser o cabeçalho
+            let headerRowIndex = i + 1;
+            while(headerRowIndex < costCenterSheetData.length && (!costCenterSheetData[headerRowIndex] || costCenterSheetData[headerRowIndex].length === 0)) {
+                headerRowIndex++;
             }
-            // Avança o loop para depois da nova linha de cabeçalho
-            i = headerRowIndex;
+
+            if (headerRowIndex < costCenterSheetData.length) {
+                currentHeaders = (costCenterSheetData[headerRowIndex] || []).map(h => String(h || '').trim());
+                docIndex = currentHeaders.findIndex(h => normalizeKey(h) === normalizeKey(docNumberHeader));
+                cnpjIndex = currentHeaders.findIndex(h => normalizeKey(h) === normalizeKey(cnpjHeader));
+                
+                if (docIndex !== -1 && cnpjIndex !== -1) {
+                    costCenterStartIndex = 0; 
+                    currentHeaders.forEach(header => {
+                        if (header) allCostCenters.add(header);
+                    });
+                } else {
+                    // Reset if headers are not found
+                    currentHeaders = [];
+                    docIndex = -1;
+                    cnpjIndex = -1;
+                }
+                i = headerRowIndex; // Pular para a linha após o cabeçalho
+            }
             continue;
         }
 
-        // Se estamos dentro de uma secção válida (cabeçalhos encontrados)
-        if (headerRowIndex !== -1 && Array.isArray(row) && row.length > costCenterStartIndex) {
+        // Ignorar linhas de cabeçalho ou rodapé
+        if (firstCell.startsWith('item') || firstCell.startsWith('total') || firstCell.startsWith('ciente') || firstCell.startsWith('dif1') || firstCell === '') {
+            continue;
+        }
+        
+        // Processar linha de dados se estivermos em uma seção válida
+        if (currentHeaders.length > 0 && docIndex !== -1 && cnpjIndex !== -1) {
             const docNumberRaw = row[docIndex];
             const credorCnpjRaw = row[cnpjIndex];
 
             const debugEntry: any = {
-                "Linha": i + 9, // +9 porque o range começa em 8 e a leitura é 0-indexed
-                "Credor (Original)": credorCnpjRaw,
-                "Documento (Original)": docNumberRaw,
+                "Linha": i + 9, // Assumindo que a leitura começa na linha 9 (range: 8)
+                "Credor (Original)": credorCnpjRaw ?? 'N/A',
+                "Documento (Original)": docNumberRaw ?? 'N/A',
                 "Status": "Falha",
                 "Motivo": "",
                 "Chave de Comparação": "N/A",
@@ -613,49 +624,49 @@ export function processCostCenterData(
             };
 
             if (!docNumberRaw || !credorCnpjRaw) {
-                debugEntry["Motivo"] = "Número do documento ou credor em falta.";
+                debugEntry.Motivo = "Número do documento ou credor em falta.";
                 debugKeys.push(debugEntry);
                 continue;
             }
 
-            const cnpjMatches = String(credorCnpjRaw).match(/(\d{4,}-\d{2})$/);
+            // Expressão regular para encontrar o padrão 000X-XX no final da string
+            const cnpjMatches = String(credorCnpjRaw).match(/(\d{4}-\d{2})$/);
             const credorCnpj = cnpjMatches ? cnpjMatches[1] : null;
 
             if (!credorCnpj) {
-                debugEntry["Motivo"] = "Não foi possível extrair um CNPJ válido do campo Credor.";
+                debugEntry.Motivo = "Não foi possível extrair um CNPJ válido do campo Credor (padrão XXXX-XX).";
                 debugKeys.push(debugEntry);
                 continue;
             }
-            
-            const docNumberClean = String(docNumberRaw).split('/')[0] === 'NFE' || String(docNumberRaw).split('/')[0] === 'NFSE' ? String(docNumberRaw).split('/')[1] : String(docNumberRaw);
+
+            const docNumberClean = String(docNumberRaw).split('/').pop() || '';
             const key = `${cleanAndToStr(docNumberClean)}-${cleanAndToStr(credorCnpj)}`;
-            
             debugEntry["Chave de Comparação"] = key;
 
             let foundCostCenter = false;
-            for (let j = costCenterStartIndex; j < row.length; j++) {
+            for (let j = 0; j < row.length; j++) {
+                // Verificar se o cabeçalho é um centro de custo e se a célula tem valor
+                const headerName = currentHeaders[j];
                 const cellValue = row[j];
-                if (cellValue && (typeof cellValue === 'number' && cellValue > 0 || (typeof cellValue === 'string' && parseFloat(cellValue.replace(',', '.')) > 0))) {
-                    const centerName = String(currentHeaders[j]).trim();
-                    if (centerName) {
-                        costCenterMap.set(key, centerName);
-                        debugEntry["Centro de Custo Encontrado"] = centerName;
-                        foundCostCenter = true;
-                        break;
-                    }
+                if (headerName && allCostCenters.has(headerName) && cellValue && (typeof cellValue === 'number' || parseFloat(String(cellValue).replace(',', '.')) > 0)) {
+                    costCenterMap.set(key, headerName);
+                    debugEntry["Centro de Custo Encontrado"] = headerName;
+                    foundCostCenter = true;
+                    break; 
                 }
             }
-            
+
             if (foundCostCenter) {
-                debugEntry["Status"] = "Sucesso";
+                debugEntry.Status = "Sucesso";
             } else {
-                debugEntry["Motivo"] = "Nenhum valor de rateio encontrado para esta linha.";
+                debugEntry.Motivo = "Nenhum valor de rateio encontrado para esta linha.";
             }
             debugKeys.push(debugEntry);
         }
     }
-    
-    costCenterHeaderRows = Array.from(allCostCenters).map(cc => ({ "Centro de Custo Encontrado": cc }));
 
+    const costCenterHeaderRows = Array.from(allCostCenters).map(cc => ({ "Centro de Custo Encontrado": cc }));
     return { costCenterMap, debugKeys, allCostCenters: Array.from(allCostCenters), costCenterHeaderRows };
 }
+
+    
