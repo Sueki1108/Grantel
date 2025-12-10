@@ -468,29 +468,32 @@ export function runReconciliation(
                 }
             });
 
+            const matchedXmlIndices = new Set<number>();
+
             siengeItems.forEach(siengeItem => {
                 const key = getSiengeKey(siengeItem);
                 if (key && xmlMap.has(key)) {
                     const matches = xmlMap.get(key)!;
                     if (matches.length > 0) {
                         const match = matches.shift()!;
-                        const nfeHeader = nfeHeaderMap.get(match.item['Chave Unica']);
                         const chaveAcesso = match.item['Chave de acesso'];
-
+                        
                         matchedInPass.push({
                             ...match.item,
                             'Sienge_CFOP': siengeItem[h.cfop!] || 'N/A',
                             'Sienge_Esp': siengeItem[h.esp!],
                             'Centro de Custo': costCenterMap?.get(chaveAcesso) || 'N/A',
-                            'Observações': `Conciliado via ${passName}`
+                            'Observações': `Conciliado via ${passName}`,
+                            xmlIndex: match.index
                         });
-                        return; // Sienge item is matched, move to next
+                        
+                        matchedXmlIndices.add(match.index);
+                        return;
                     }
                 }
                 stillUnmatchedSienge.push(siengeItem);
             });
             
-            const matchedXmlIndices = new Set(matchedInPass.map(r => r.xmlIndex));
             const stillUnmatchedXml = xmlItems.filter((_, index) => !matchedXmlIndices.has(index));
             
             return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
@@ -508,19 +511,15 @@ export function runReconciliation(
             { name: "Valor Total - Desp. Acess.", getSiengeKey: (item: any) => h.despesasAcessorias ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) - parseFloat(String(item[h.despesasAcessorias!] || '0').replace(',', '.'))) : null, getXmlKey: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']) },
         ];
         
-        let xmlItemsForPasses = [...remainingXmlItems];
-
         for (const pass of passes) {
-             if (remainingSiengeItems.length === 0 || xmlItemsForPasses.length === 0) break;
-             const passResult = reconciliationPass(remainingSiengeItems, xmlItemsForPasses, pass.getSiengeKey, pass.getXmlKey, pass.name);
+             if (remainingSiengeItems.length === 0 || remainingXmlItems.length === 0) break;
+             const passResult = reconciliationPass(remainingSiengeItems, remainingXmlItems, pass.getSiengeKey, pass.getXmlKey, pass.name);
              if (passResult.matched.length > 0) {
                  reconciled.push(...passResult.matched);
                  remainingSiengeItems = passResult.remainingSienge;
-                 xmlItemsForPasses = passResult.remainingXml;
+                 remainingXmlItems = passResult.remainingXml;
              }
         }
-        remainingXmlItems = xmlItemsForPasses;
-
         
         const devolucoesEP = xmlItems
             .filter(item => {
@@ -581,7 +580,7 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
 } {
     const costCenterMap = new Map<string, string>();
     const debugKeys: any[] = [];
-    let allCostCenters = new Set<string>();
+    const allCostCenters = new Set<string>();
     const costCenterHeaderRows: any[] = [];
 
     if (!costCenterSheetData || costCenterSheetData.length === 0) {
@@ -596,36 +595,44 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
 
         const firstCell = String(row[0] || '').trim();
         const debugEntry: any = {
-            "Linha": rowIndex + 1, "Coluna A": row[0] ?? 'Vazio', "Coluna F": row[5] ?? 'Vazio',
+            "Linha": rowIndex + 1, "Coluna A": row[0] ?? 'Vazio', "Coluna B": row[1] ?? 'Vazio', "Coluna D": row[3] ?? 'Vazio',
             "Centro de Custo Ativo": currentCostCenter, "Status": "Ignorado",
-            "Motivo": "Linha não corresponde a um cabeçalho ou a uma linha de dados válida.",
+            "Motivo": "Linha não corresponde a um cabeçalho de centro de custo ou a uma linha de dados válida.",
         };
 
         if (firstCell.toLowerCase().startsWith('centro de custo')) {
             currentCostCenter = firstCell;
             allCostCenters.add(currentCostCenter);
-            isDataSection = false;
+            isDataSection = false; // Reset data section flag
             debugEntry.Status = "Info";
-            debugEntry.Motivo = "Linha identificada como um novo centro de custo.";
+            debugEntry.Motivo = "Linha identificada como um novo cabeçalho de centro de custo.";
+        } else if (isDataSection && typeof row[0] === 'number') { // Assuming 'Item' is a number
+            const credor = row[1];
+            const documento = row[3];
+            
+            if (credor && documento) {
+                const cnpjMatch = String(credor).match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{11})/);
+                const docMatch = String(documento).match(/NFSE\/(\d+)|NFE\s*\/(\d+)/i);
+
+                const cnpj = cnpjMatch ? cnpjMatch[0].replace(/\D/g, '') : null;
+                const docNumber = docMatch ? (docMatch[1] || docMatch[2]) : null;
+
+                if (cnpj && docNumber) {
+                     const key = `${cleanAndToStr(docNumber)}-${cleanAndToStr(cnpj)}`;
+                     costCenterMap.set(key, currentCostCenter);
+                      debugEntry.Status = "Sucesso";
+                      debugEntry.Motivo = `Chave de dados '${key}' mapeada para o centro de custo ${currentCostCenter}.`;
+                      debugEntry["Chave Gerada"] = key;
+                } else {
+                     debugEntry.Status = "Falha";
+                     debugEntry.Motivo = "Não foi possível extrair CNPJ ou Número do Documento das colunas B e D.";
+                }
+            }
         } else if (normalizeKey(firstCell) === 'item') {
             isDataSection = true;
             costCenterHeaderRows.push({ center: currentCostCenter, headers: row });
             debugEntry.Status = "Info";
-            debugEntry.Motivo = "Linha identificada como cabeçalho de dados.";
-        } else if (isDataSection && typeof row[0] === 'number') {
-            const obsRaw = row[5]; 
-            const chaveAcessoMatch = String(obsRaw || '').match(/(\d{44})/);
-
-            if (chaveAcessoMatch) {
-                const chaveAcesso = chaveAcessoMatch[1];
-                costCenterMap.set(chaveAcesso, currentCostCenter);
-                debugEntry.Status = "Sucesso";
-                debugEntry.Motivo = `Chave de acesso ${chaveAcesso} mapeada para o centro de custo ${currentCostCenter}.`;
-                debugEntry["Chave de Acesso Extraída"] = chaveAcesso;
-            } else {
-                debugEntry.Status = "Falha";
-                debugEntry.Motivo = "Coluna de Observação (F) não continha uma chave de 44 dígitos.";
-            }
+            debugEntry.Motivo = "Linha identificada como cabeçalho de dados, iniciando a leitura de dados.";
         }
         
         debugKeys.push(debugEntry);
