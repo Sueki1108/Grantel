@@ -555,103 +555,63 @@ export function processCostCenterData(
 } {
     const costCenterMap = new Map<string, string>();
     const debugKeys: any[] = [];
-    const allCostCenters = new Set<string>();
+    let currentCostCenter = 'N/A';
 
     if (!costCenterSheetData || costCenterSheetData.length === 0) {
         return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
     }
 
-    let currentHeaders: string[] = [];
-    let docIndex = -1;
-    let cnpjIndex = -1;
-    let inDataSection = false;
+    costCenterSheetData.forEach((row, rowIndex) => {
+        if (!Array.isArray(row)) return;
 
-    // First pass to find all possible cost center headers
-    costCenterSheetData.forEach(row => {
-        if (Array.isArray(row) && String(row[0] || '').trim().toLowerCase() === 'item') {
-            const tempHeaders = row.map(h => String(h || '').trim());
-            tempHeaders.forEach(header => {
-                if (header && !isNaN(Number(header))) {
-                    allCostCenters.add(header);
-                }
-            });
-        }
-    });
-
-
-    for (let i = 0; i < costCenterSheetData.length; i++) {
-        const row = costCenterSheetData[i];
-        if (!row || !Array.isArray(row) || row.length === 0 || !row[0]) {
-            inDataSection = false;
-            continue;
+        // Identifica uma linha de cabeçalho de centro de custo
+        const firstCell = String(row[0] || '').trim();
+        if (firstCell.toLowerCase().startsWith('centro de custo')) {
+            currentCostCenter = firstCell;
+            return;
         }
 
-        const firstCell = String(row[0] || '').trim().toLowerCase();
-        
-        if (firstCell === 'item') {
-            currentHeaders = row.map(h => String(h || '').trim());
-            docIndex = currentHeaders.findIndex(h => normalizeKey(h) === 'documento');
-            cnpjIndex = currentHeaders.findIndex(h => normalizeKey(h) === 'credor');
-            inDataSection = docIndex !== -1 && cnpjIndex !== -1;
-            continue;
-        }
-
-        if (firstCell.startsWith('total')) {
-            inDataSection = false;
-            continue;
-        }
-        
-        if (inDataSection) {
-            const docNumberRaw = row[docIndex];
-            const credorCnpjRaw = row[cnpjIndex];
+        // Identifica uma linha de dados (se a primeira coluna for um número)
+        if (typeof row[0] === 'number') {
+            const docNumberRaw = row[3]; // Coluna D
+            const credorRaw = row[1];    // Coluna B
 
             const debugEntry: any = {
-                "Linha": i + 1,
-                "Credor (Original)": credorCnpjRaw ?? 'N/A',
-                "Documento (Original)": docNumberRaw ?? 'N/A',
+                "Linha": rowIndex + 1,
+                "Credor (Coluna B)": credorRaw ?? 'N/A',
+                "Documento (Coluna D)": docNumberRaw ?? 'N/A',
+                "Centro de Custo": currentCostCenter,
                 "Status": "Falha",
                 "Motivo": "",
                 "Chave de Comparação": "N/A",
-                "Centro de Custo Encontrado": "N/A",
             };
 
-            if (!docNumberRaw || !credorCnpjRaw) {
-                debugEntry.Motivo = "Número do documento ou credor em falta na linha.";
+            if (!docNumberRaw || !credorRaw) {
+                debugEntry.Motivo = "Coluna de Documento (D) ou Credor (B) em falta.";
                 debugKeys.push(debugEntry);
-                continue;
+                return;
             }
 
-            const cnpjMatches = String(credorCnpjRaw).match(/(\d{4}-\d{2})$/);
+            const cnpjMatches = String(credorRaw).match(/(\d{4}-\d{2})$/);
             const credorCnpj = cnpjMatches ? cnpjMatches[1] : null;
 
             if (!credorCnpj) {
-                debugEntry.Motivo = `CNPJ no formato XXXX-XX não encontrado no valor: "${credorCnpjRaw}"`;
+                debugEntry.Motivo = `CNPJ no formato XXXX-XX não encontrado no valor: "${credorRaw}"`;
                 debugKeys.push(debugEntry);
-                continue;
+                return;
             }
 
-            const docNumberClean = String(docNumberRaw).split('/').pop() || '';
+            const docNumberClean = String(docNumberRaw).split('/').pop()?.trim() || '';
             const key = `${cleanAndToStr(docNumberClean)}-${cleanAndToStr(credorCnpj)}`;
-            debugEntry["Chave de Comparação"] = key;
-
-            let foundCostCenter = false;
-            for (let j = 0; j < row.length; j++) {
-                const headerName = currentHeaders[j];
-                const cellValue = row[j];
-                if (headerName && allCostCenters.has(headerName) && cellValue && parseFloat(String(cellValue).replace(',', '.')) > 0) {
-                    costCenterMap.set(key, headerName);
-                    debugEntry["Centro de Custo Encontrado"] = headerName;
-                    foundCostCenter = true;
-                    break;
-                }
-            }
             
-            debugEntry.Status = foundCostCenter ? "Sucesso" : "Falha";
-            debugEntry.Motivo = foundCostCenter ? "" : "Nenhum valor de rateio encontrado para esta linha.";
+            costCenterMap.set(key, currentCostCenter);
+
+            debugEntry.Status = "Sucesso";
+            debugEntry.Motivo = "Chave gerada com sucesso.";
+            debugEntry["Chave de Comparação"] = key;
             debugKeys.push(debugEntry);
         }
-    }
+    });
 
-    const costCenterHeaderRows = Array.from(allCostCenters).map(cc => ({ "Centro de Custo Encontrado": cc }));
-    return { costCenterMap, debugKeys, allCostCenters: Array.from(allCostCenters), costCenterHeaderRows };
+    return { costCenterMap, debugKeys, allCostCenters: [], costCenterHeaderRows: [] };
 }
