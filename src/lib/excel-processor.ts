@@ -566,51 +566,47 @@ export function processCostCenterData(
     let currentHeaders: string[] = [];
     let docIndex = -1;
     let cnpjIndex = -1;
-    
+    let inDataSection = false;
+
     for (let i = 0; i < costCenterSheetData.length; i++) {
         const row = costCenterSheetData[i];
-        if (!row || !Array.isArray(row) || row.length === 0) continue;
+        if (!row || !Array.isArray(row) || row.length === 0) {
+            inDataSection = false; // Reset when encountering an empty line
+            continue;
+        }
 
         const firstCell = String(row[0] || '').trim().toLowerCase();
 
-        // Detectar o início de uma nova seção de centro de custo
-        if (firstCell.startsWith('centro de custo')) {
-            // A próxima linha que contém "Item" e "Credor" é o cabeçalho
-            let headerRowIndex = i + 1;
-            while(headerRowIndex < costCenterSheetData.length) {
-                const potentialHeaderRow = costCenterSheetData[headerRowIndex];
-                if (potentialHeaderRow && potentialHeaderRow.some(h => String(h).trim().toLowerCase() === 'item') && potentialHeaderRow.some(h => String(h).trim().toLowerCase() === 'credor')) {
-                    currentHeaders = (potentialHeaderRow || []).map(h => String(h || '').trim());
-                    docIndex = currentHeaders.findIndex(h => normalizeKey(h) === normalizeKey(docNumberHeader));
-                    cnpjIndex = currentHeaders.findIndex(h => normalizeKey(h) === normalizeKey(cnpjHeader));
-                    
-                    if (docIndex !== -1 && cnpjIndex !== -1) {
-                        currentHeaders.forEach(header => {
-                            if (header && !isNaN(Number(header))) {
-                                allCostCenters.add(header);
-                            }
-                        });
+        // Detect a header row
+        if (firstCell === 'item' && row.some(h => normalizeKey(String(h)) === normalizeKey(docNumberHeader)) && row.some(h => normalizeKey(String(h)) === normalizeKey(cnpjHeader))) {
+            currentHeaders = row.map(h => String(h || '').trim());
+            docIndex = currentHeaders.findIndex(h => normalizeKey(h) === normalizeKey(docNumberHeader));
+            cnpjIndex = currentHeaders.findIndex(h => normalizeKey(h) === normalizeKey(cnpjHeader));
+            
+            if (docIndex !== -1 && cnpjIndex !== -1) {
+                currentHeaders.forEach(header => {
+                    if (header && !isNaN(Number(header))) {
+                        allCostCenters.add(header);
                     }
-                    i = headerRowIndex; // Pular para a linha após o cabeçalho
-                    break;
-                }
-                headerRowIndex++;
+                });
             }
-            continue;
-        }
-
-        // Ignorar linhas de cabeçalho, rodapé ou vazias
-        if (firstCell.startsWith('item') || firstCell.startsWith('total') || firstCell.startsWith('ciente') || firstCell.startsWith('dif') || firstCell === '') {
+            inDataSection = true;
             continue;
         }
         
-        // Processar linha de dados
-        if (currentHeaders.length > 0 && docIndex !== -1 && cnpjIndex !== -1) {
+        // Stop processing data for a section when a total line is found
+        if (firstCell.startsWith('total')) {
+            inDataSection = false;
+            continue;
+        }
+        
+        // Process data row
+        if (inDataSection && currentHeaders.length > 0 && docIndex !== -1 && cnpjIndex !== -1) {
             const docNumberRaw = row[docIndex];
             const credorCnpjRaw = row[cnpjIndex];
 
             const debugEntry: any = {
-                "Linha": i + 9, // Assumindo que a leitura começa na linha 9 (range: 8)
+                "Linha": i + 9, // Assuming data starts around line 9
                 "Credor (Original)": credorCnpjRaw ?? 'N/A',
                 "Documento (Original)": docNumberRaw ?? 'N/A',
                 "Status": "Falha",
@@ -629,7 +625,7 @@ export function processCostCenterData(
             const credorCnpj = cnpjMatches ? cnpjMatches[1] : null;
 
             if (!credorCnpj) {
-                debugEntry.Motivo = "CNPJ não encontrado no formato esperado (XXXX-XX).";
+                debugEntry.Motivo = `CNPJ não encontrado no formato esperado (XXXX-XX) no valor: "${credorCnpjRaw}"`;
                 debugKeys.push(debugEntry);
                 continue;
             }
@@ -659,5 +655,3 @@ export function processCostCenterData(
     const costCenterHeaderRows = Array.from(allCostCenters).map(cc => ({ "Centro de Custo Encontrado": cc }));
     return { costCenterMap, debugKeys, allCostCenters: Array.from(allCostCenters), costCenterHeaderRows };
 }
-
-    

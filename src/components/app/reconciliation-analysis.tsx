@@ -4,7 +4,7 @@
 import React, { useMemo, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { type ProcessedData, processCostCenterData } from '@/lib/excel-processor';
+import { type ProcessedData } from '@/lib/excel-processor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, BarChart } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
@@ -25,14 +25,14 @@ interface ReconciliationAnalysisProps {
     onSiengeFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
     costCenterFile: File | null;
-    onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement> | File) => void;
     onClearCostCenterFile: () => void;
     onRunReconciliation: () => void;
     isReconciliationRunning: boolean;
     allClassifications: AllClassifications;
     onPersistClassifications: (allData: AllClassifications) => void;
     competence: string | null;
-    onDownloadCostCenterDebug: () => void;
+    onProcessCostCenterData: (docNumberHeader: string, cnpjHeader: string) => void;
 }
 
 const getColumnsForDivergentTabs = (data: any[]) => {
@@ -60,7 +60,7 @@ export function ReconciliationAnalysis({
     allClassifications,
     onPersistClassifications,
     competence,
-    onDownloadCostCenterDebug,
+    onProcessCostCenterData,
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
@@ -72,13 +72,36 @@ export function ReconciliationAnalysis({
         };
     }, [processedData]);
 
-    const handleDownloadSiengeDebugKeys = () => {
-        if (!processedData?.siengeDebugKeys || processedData.siengeDebugKeys.length === 0) {
-             toast({ variant: 'destructive', title: "Nenhum dado para baixar", description: "Processe a planilha Sienge primeiro." });
+    const handleDownloadDebugSheets = () => {
+        const siengeKeys = processedData?.siengeDebugKeys;
+        const costCenterKeys = processedData?.costCenterDebugKeys;
+
+        if ((!siengeKeys || siengeKeys.length === 0) && (!costCenterKeys || costCenterKeys.length === 0)) {
+            toast({ variant: 'destructive', title: "Nenhum dado de depuração para baixar", description: "Carregue e processe uma das planilhas primeiro." });
             return;
         }
-        handleDownload(processedData.siengeDebugKeys, 'Debug_Sienge');
-    }
+
+        const workbook = XLSX.utils.book_new();
+
+        if (siengeKeys && siengeKeys.length > 0) {
+            const siengeWorksheet = XLSX.utils.json_to_sheet(siengeKeys);
+            XLSX.utils.book_append_sheet(workbook, siengeWorksheet, "Debug_Sienge");
+        }
+        
+        if (costCenterKeys && costCenterKeys.length > 0) {
+            const costCenterWorksheet = XLSX.utils.json_to_sheet(costCenterKeys);
+            XLSX.utils.book_append_sheet(workbook, costCenterWorksheet, "Debug_Centro_Custo");
+            
+            const costCenterHeaders = processedData?.allCostCenters || [];
+             if(costCenterHeaders.length > 0) {
+                 const headersWorksheet = XLSX.utils.json_to_sheet(costCenterHeaders.map(h => ({ "Centros de Custo Encontrados": h })));
+                 XLSX.utils.book_append_sheet(workbook, headersWorksheet, "Centros de Custo Encontrados");
+             }
+        }
+
+        XLSX.writeFile(workbook, "Grantel_Depuracao_Sienge_CC.xlsx");
+        toast({ title: 'Planilha de Depuração Gerada' });
+    };
     
     const handleDownload = async (data: any[], title: string) => {
         if (!data || data.length === 0) {
@@ -114,21 +137,21 @@ export function ReconciliationAnalysis({
                             onFileChange={onSiengeFileChange}
                             onClearFile={onClearSiengeFile}
                         />
-                         <Button onClick={handleDownloadSiengeDebugKeys} variant="secondary" size="sm" className="w-full" disabled={!processedData?.siengeDebugKeys || processedData.siengeDebugKeys.length === 0}>
-                            <Cpu className="mr-2 h-4 w-4" /> Gerar Chaves de Depuração (Sienge)
-                        </Button>
                     </div>
                     <CostCenterAnalysis
                         costCenterFile={costCenterFile}
-                        onCostCenterFileChange={onCostCenterFileChange}
+                        onCostCenterFileChange={onCostCenterFileChange as (e: React.ChangeEvent<HTMLInputElement>) => void}
                         onClearCostCenterFile={onClearCostCenterFile}
-                        onDownloadCostCenterDebug={onDownloadCostCenterDebug}
+                        onProcessCostCenterData={onProcessCostCenterData}
                         processedData={processedData}
                     />
                 </div>
                 <div className='flex flex-col sm:flex-row gap-2 pt-4'>
                     <Button onClick={onRunReconciliation} disabled={!siengeFile || !processedData || isReconciliationRunning} className="w-full">
                         {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
+                    </Button>
+                    <Button onClick={handleDownloadDebugSheets} variant="secondary" className="w-full sm:w-auto" disabled={!processedData?.siengeDebugKeys && !processedData?.costCenterDebugKeys}>
+                        <Download className="mr-2 h-4 w-4" /> Baixar Planilhas de Depuração
                     </Button>
                 </div>
                 
