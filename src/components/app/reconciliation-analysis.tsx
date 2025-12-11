@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useMemo, useState, ChangeEvent } from 'react';
@@ -37,9 +36,11 @@ interface ReconciliationAnalysisProps {
 
 const getColumnsForDivergentTabs = (data: any[]) => {
     if (!data || data.length === 0) return [];
-    let allColumns = getColumns(data);
+    
+    const allColumns = getColumns(data);
     const keyColumn = allColumns.find(col => col.id === 'Chave de Comparação');
     const otherColumns = allColumns.filter(col => col.id !== 'Chave de Comparação');
+
     if (keyColumn) {
         return [keyColumn, ...otherColumns];
     }
