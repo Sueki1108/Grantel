@@ -392,8 +392,8 @@ export function runReconciliation(
         };
 
         const h = {
-            cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'credor']),
-            numero: findHeader(siengeData, ['número', 'numero', 'numero da nota', 'nota fiscal', 'documento']),
+            cnpj: findHeader(siengeData, ['credor', 'cpf/cnpj', 'cpf/cnpj do fornecedor']),
+            numero: findHeader(siengeData, ['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
             valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total']),
             esp: findHeader(siengeData, ['esp']),
             cfop: findHeader(siengeData, ['cfop']),
@@ -447,13 +447,13 @@ export function runReconciliation(
         ) => {
             const matchedInPass: any[] = [];
             const stillUnmatchedSienge: any[] = [];
-            const xmlMap = new Map<string, { item: any, index: number }[]>();
+            const xmlMap = new Map<string, any[]>();
 
-            xmlItems.forEach((item, index) => {
+            xmlItems.forEach(item => {
                 const key = getXmlKey(item);
                 if (key) {
                     if (!xmlMap.has(key)) xmlMap.set(key, []);
-                    xmlMap.get(key)!.push({ item, index });
+                    xmlMap.get(key)!.push(item);
                 }
             });
 
@@ -462,18 +462,19 @@ export function runReconciliation(
                 if (key && xmlMap.has(key)) {
                     const matchedXmlItems = xmlMap.get(key)!;
                     if (matchedXmlItems.length > 0) {
-                        const match = matchedXmlItems.shift()!; // Take one match
-                        if (matchedXmlItems.length === 0) {
-                            xmlMap.delete(key);
-                        }
+                        const matchedXmlItem = matchedXmlItems.shift()!;
+                        if (matchedXmlItems.length === 0) xmlMap.delete(key);
                         
-                        const costCenterLookupKey = `${cleanAndToStr(siengeItem[h.numero!])}-${cleanAndToStr(String(siengeItem[h.cnpj!]).split('-')[0])}`;
+                        // Cost Center Logic (separate key)
+                        const docNumberForCostCenter = siengeItem[h.numero!];
+                        const credorForCostCenter = siengeItem[h.cnpj!];
+                        const costCenterKey = `${cleanAndToStr(docNumberForCostCenter)}-${cleanAndToStr(String(credorForCostCenter).split('-')[0])}`;
                         
                         matchedInPass.push({ 
-                            ...match.item, 
+                            ...matchedXmlItem, 
                             ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 
                             'Observações': `Conciliado via ${passName}`,
-                            'Centro de Custo': costCenterMap?.get(costCenterLookupKey) || 'N/A',
+                            'Centro de Custo': costCenterMap?.get(costCenterKey) || 'N/A',
                         });
                         return;
                     }
@@ -481,13 +482,22 @@ export function runReconciliation(
                 stillUnmatchedSienge.push(siengeItem);
             });
             
-            const stillUnmatchedXml = Array.from(xmlMap.values()).flat().map(i => i.item);
+            const stillUnmatchedXml = Array.from(xmlMap.values()).flat();
             return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
         };
 
-        // All the reconciliation passes
+        // Pass 1: Valor Total
+        let result = reconciliationPass(remainingSiengeItems, remainingXmlItems, 
+            (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]),
+            (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
+            "Valor Total"
+        );
+        reconciled.push(...result.matched);
+        remainingSiengeItems = result.remainingSienge;
+        remainingXmlItems = result.remainingXml;
+
+        // All other passes
         const passes = [
-            { name: "Valor Total", getKey: (item: any, isXml: boolean) => getComparisonKey(isXml ? item['Número da Nota'] : item[h.numero!], isXml ? item['CPF/CNPJ do Emitente'] : item[h.cnpj!], isXml ? item['Valor Total'] : item[h.valorTotal!]) },
             { name: "ICMS Outras", getKey: (item: any, isXml: boolean) => getComparisonKey(isXml ? item['Número da Nota'] : item[h.numero!], isXml ? item['CPF/CNPJ do Emitente'] : item[h.cnpj!], isXml ? item['Valor Total'] : (h.icmsOutras ? item[h.icmsOutras!] : null)) },
             { name: "Valor Total + Desconto", getKey: (item: any, isXml: boolean) => getComparisonKey(isXml ? item['Número da Nota'] : item[h.numero!], isXml ? item['CPF/CNPJ do Emitente'] : item[h.cnpj!], isXml ? item['Valor Total'] : (h.valorTotal && h.desconto ? parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto!] || '0').replace(',', '.')) : null)) },
             { name: "Preço Unitário", getKey: (item: any, isXml: boolean) => getComparisonKey(isXml ? item['Número da Nota'] : item[h.numero!], isXml ? item['CPF/CNPJ do Emitente'] : item[h.cnpj!], isXml ? item['Valor Unitário'] : (h.precoUnitario ? item[h.precoUnitario!] : null)) }
@@ -495,16 +505,16 @@ export function runReconciliation(
 
         for (const pass of passes) {
             if (remainingSiengeItems.length === 0 || remainingXmlItems.length === 0) break;
-            const result = reconciliationPass(
+            const passResult = reconciliationPass(
                 remainingSiengeItems,
                 remainingXmlItems,
                 (item) => pass.getKey(item, false),
                 (item) => pass.getKey(item, true),
                 pass.name
             );
-            reconciled.push(...result.matched);
-            remainingSiengeItems = result.remainingSienge;
-            remainingXmlItems = result.remainingXml;
+            reconciled.push(...passResult.matched);
+            remainingSiengeItems = passResult.remainingSienge;
+            remainingXmlItems = passResult.remainingXml;
         }
 
         const devolucoesEP = xmlItems
@@ -582,34 +592,32 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
         if (!row || !Array.isArray(row)) return;
 
         const colA = String(row[0] || '').trim();
-        const colC = String(row[2] || '').trim();
-        const colB = String(row[1] || '').trim();
-        const colD = String(row[3] || '').trim();
+        const colC = String(row[2] || '').trim(); // Onde o nome do centro de custo está
+        const colB_credor = String(row[1] || '').trim();
+        const colD_documento = String(row[3] || '').trim();
 
-        // Check for "Centro de custo" in column A
         if (colA.toLowerCase() === 'centro de custo') {
             currentCostCenter = colC;
             if (currentCostCenter && !allCostCenters.includes(currentCostCenter)) {
                 allCostCenters.push(currentCostCenter);
             }
             costCenterHeaderRows.push(row);
-            return; // Move to the next line after finding a header
+            return; 
         }
 
-        // Process data rows (assuming they have values in columns B and D)
-        if (colB && colD) {
-            const docNumber = cleanAndToStr(colD);
-            const credorCode = cleanAndToStr(colB.split('-')[0]);
+        if (colB_credor && colD_documento) {
+            const docNumber = cleanAndToStr(colD_documento);
+            const credorCode = cleanAndToStr(colB_credor.split('-')[0]);
             
             if (docNumber && credorCode) {
                  const key = `${docNumber}-${credorCode}`;
                  costCenterMap.set(key, currentCostCenter);
 
                 debugKeys.push({
-                    'Chave de Comparação (Doc-Credor)': key,
+                    'Chave de Comparação (Doc-CNPJ)': key,
                     'Centro de Custo': currentCostCenter,
                     'Documento (Coluna D)': docNumber,
-                    'Credor (Coluna B)': colB,
+                    'Credor (Coluna B)': colB_credor,
                     'Linha na Planilha': rowIndex + 1,
                 });
             }
