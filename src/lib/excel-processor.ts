@@ -413,13 +413,14 @@ export function runReconciliation(
         
         const getComparisonKey = (item: any, headers: typeof h, valueField: string | undefined): string | null => {
             const numero = cleanAndToStr(item[headers.numero!]);
-            const cnpj = String(item[headers.cnpj!] || '').replace(/\D/g, '');
+            const cnpj = String(item[headers.cnpj!] || '').replace(/\D/g, ''); // Keep as string to preserve leading zeros
             
             let valor = 'NaN';
             if (valueField && item[valueField] !== undefined && item[valueField] !== null) {
                 valor = parseFloat(String(item[valueField]).replace(',', '.')).toFixed(2);
             } else if (!valueField) {
-                 valor = 'no-value-field'
+                 // Case for key without value, useful for some matching passes
+                 return `${numero}-${cnpj}`;
             }
 
             if (!numero || !cnpj) return null;
