@@ -428,11 +428,12 @@ export function runReconciliation(
 
         const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
             const cleanNumero = cleanAndToStr(numero);
-            const cleanCnpj = String(cnpj).replace(/\D/g, '');
+            const cleanCnpj = String(cnpj || '').replace(/\D/g, ''); // Trata o CNPJ como string
             const cleanValor = parseFloat(String(valor || '0').replace(',', '.')).toFixed(2);
-            if (!cleanNumero || !cleanCnpj || cleanValor === 'NaN') return null;
+            if (!cleanNumero || !cleanCnpj || isNaN(parseFloat(cleanValor))) return null;
             return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
         };
+        
 
         let reconciled: any[] = [];
         let remainingXmlItems = [...xmlItems];
@@ -475,7 +476,6 @@ export function runReconciliation(
             return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
         };
 
-        // All other passes
         const passes = [
              { name: "Valor Total", siengeKeyFn: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]), xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])},
              { name: "ICMS Outras", siengeKeyFn: (item: any) => h.icmsOutras ? getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.icmsOutras!]) : null, xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])},
@@ -497,7 +497,6 @@ export function runReconciliation(
             remainingXmlItems = passResult.remainingXml;
         }
 
-        // Apply Cost Center
         reconciled.forEach(item => {
             if (costCenterMap && h.numero && h.cnpj) {
                 const docNumberForCostCenter = item[`Sienge_${h.numero}`];
@@ -508,7 +507,6 @@ export function runReconciliation(
                 }
             }
         });
-
 
         const devolucoesEP = xmlItems
             .filter(item => {
@@ -585,11 +583,11 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
         if (!row || !Array.isArray(row)) return;
 
         const colA = String(row[0] || '').trim();
-        const colC = String(row[2] || '').trim(); // Onde o nome do centro de custo está
+        const colC = String(row[2] || '').trim(); 
         const colB_credor = String(row[1] || '').trim();
         const colD_documento = String(row[3] || '').trim();
 
-        if (colA.toLowerCase() === 'centro de custo') {
+        if (normalizeKey(colA) === normalizeKey('Centro de custo')) {
             currentCostCenter = colC;
             if (currentCostCenter && !allCostCenters.includes(currentCostCenter)) {
                 allCostCenters.push(currentCostCenter);
