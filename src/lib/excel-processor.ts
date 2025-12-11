@@ -413,7 +413,7 @@ export function runReconciliation(
         
         const getComparisonKey = (item: any, headers: typeof h, valueField: string): string | null => {
             const numero = cleanAndToStr(item[headers.numero!]);
-            const cnpj = cleanAndToStr(String(item[headers.cnpj!] || ''));
+            const cnpj = String(item[headers.cnpj!] || '').replace(/\D/g, '');
             const valor = parseFloat(String(item[valueField] || '0').replace(',', '.')).toFixed(2);
             if (!numero || !cnpj || isNaN(parseFloat(valor))) return null;
             return `${numero}-${cnpj}-${valor}`;
@@ -519,6 +519,16 @@ export function runReconciliation(
                 }
             }
         });
+        
+        const finalOnlyInSienge = remainingSiengeItems.map(item => ({
+            'Chave de Comparação': getComparisonKey(item, h, h.valorTotal!),
+            ...item
+        }));
+
+        const finalOnlyInXml = remainingXmlItems.map(item => ({
+            'Chave de Comparação': getXmlComparisonKey(item, 'Valor Total'),
+            ...item
+        }));
 
         const devolucoesEP = xmlItems
             .filter(item => {
@@ -534,7 +544,7 @@ export function runReconciliation(
                 'Chave da Nota Original': cleanAndToStr(item['refNFe']) || 'Não encontrada no XML',
             }));
 
-        return { reconciled, onlyInSienge: remainingSiengeItems, onlyInXml: remainingXmlItems, devolucoesEP, otherSiengeItems, debug: { siengeKeys: [] } };
+        return { reconciled, onlyInSienge: finalOnlyInSienge, onlyInXml: finalOnlyInXml, devolucoesEP, otherSiengeItems, debug: { siengeKeys: [] } };
 
     } catch (err: any) {
         console.error("Reconciliation Error:", err);
