@@ -407,23 +407,21 @@ export function runReconciliation(
             produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
         };
         
-        if (!h.cnpj || !h.numero || !h.valorTotal || !h.esp) {
-            throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Valor', 'Esp') na planilha Sienge.");
+        if (!h.cnpj || !h.numero || !h.esp) {
+            throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Esp') na planilha Sienge.");
         }
         
-        const getComparisonKey = (item: any, headers: typeof h, valueField: string): string | null => {
+        const getComparisonKey = (item: any, headers: typeof h, valueField?: string): string => {
             const numero = cleanAndToStr(item[headers.numero!]);
             const cnpj = String(item[headers.cnpj!] || '').replace(/\D/g, '');
-            const valor = parseFloat(String(item[valueField] || '0').replace(',', '.')).toFixed(2);
-            if (!numero || !cnpj || isNaN(parseFloat(valor))) return null;
+            const valor = valueField ? parseFloat(String(item[valueField] || '0').replace(',', '.')).toFixed(2) : 'NaN';
             return `${numero}-${cnpj}-${valor}`;
         };
         
-        const getXmlComparisonKey = (item: any, valueField: string): string | null => {
+        const getXmlComparisonKey = (item: any, valueField: string): string => {
             const numero = cleanAndToStr(item['Número']);
             const cnpj = cleanAndToStr(item['CPF/CNPJ do Fornecedor'] || '');
             const valor = parseFloat(String(item[valueField] || '0').replace(',', '.')).toFixed(2);
-            if (!numero || !cnpj || isNaN(parseFloat(valor))) return null;
             return `${numero}-${cnpj}-${valor}`;
         };
 
@@ -476,7 +474,7 @@ export function runReconciliation(
                             xmlMap.delete(key);
                         }
                          matchedInPass.push({ ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 'Observações': `Conciliado via ${passName}` });
-                        return; // Sienge item is matched, move to next
+                        return;
                     }
                 }
                 stillUnmatchedSienge.push(siengeItem);
@@ -521,7 +519,7 @@ export function runReconciliation(
         });
         
         const finalOnlyInSienge = remainingSiengeItems.map(item => ({
-            'Chave de Comparação': getComparisonKey(item, h, h.valorTotal!),
+            'Chave de Comparação': getComparisonKey(item, h, h.valorTotal),
             ...item
         }));
 
