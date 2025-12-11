@@ -413,7 +413,7 @@ export function runReconciliation(
         
         const getComparisonKey = (item: any, headers: typeof h, valueField: string): string | null => {
             const numero = cleanAndToStr(item[headers.numero!]);
-            const cnpj = String(item[headers.cnpj!] || '').replace(/\D/g, ''); 
+            const cnpj = cleanAndToStr(String(item[headers.cnpj!] || ''));
             const valor = parseFloat(String(item[valueField] || '0').replace(',', '.')).toFixed(2);
             if (!numero || !cnpj || isNaN(parseFloat(valor))) return null;
             return `${numero}-${cnpj}-${valor}`;
@@ -421,7 +421,7 @@ export function runReconciliation(
         
         const getXmlComparisonKey = (item: any, valueField: string): string | null => {
             const numero = cleanAndToStr(item['Número']);
-            const cnpj = String(item['CPF/CNPJ do Fornecedor'] || '').replace(/\D/g, '');
+            const cnpj = cleanAndToStr(item['CPF/CNPJ do Fornecedor'] || '');
             const valor = parseFloat(String(item[valueField] || '0').replace(',', '.')).toFixed(2);
             if (!numero || !cnpj || isNaN(parseFloat(valor))) return null;
             return `${numero}-${cnpj}-${valor}`;
@@ -472,10 +472,10 @@ export function runReconciliation(
                     const matchedXmlItems = xmlMap.get(key)!;
                     if (matchedXmlItems.length > 0) {
                         const matchedXmlItem = matchedXmlItems.shift()!;
-                         matchedInPass.push({ ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 'Observações': `Conciliado via ${passName}` });
                         if (matchedXmlItems.length === 0) {
                             xmlMap.delete(key);
                         }
+                         matchedInPass.push({ ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 'Observações': `Conciliado via ${passName}` });
                         return; // Sienge item is matched, move to next
                     }
                 }
