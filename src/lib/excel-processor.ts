@@ -69,6 +69,7 @@ export interface ProcessedData {
     spedDuplicates?: SpedDuplicate[] | null;
     costCenterMap?: Map<string, string>;
     siengeDebugKeys?: any[];
+    costCenterDebugKeys?: any[];
     allCostCenters?: string[];
     costCenterHeaderRows?: any[];
     fileNames?: {
@@ -133,7 +134,7 @@ const renameChaveColumn = (df: DataFrame): DataFrame => {
 // MAIN PROCESSING FUNCTION
 // =================================================================
 
-export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap' | 'siengeDebugKeys' | 'allCostCenters' | 'costCenterHeaderRows'> {
+export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap' | 'siengeDebugKeys' | 'costCenterDebugKeys' | 'allCostCenters' | 'costCenterHeaderRows'> {
     
     log("Iniciando preparação dos dados no navegador...");
     const GRANTEL_CNPJ = "81732042000119";
@@ -551,7 +552,7 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
 
         if (colA.toLowerCase() === 'centro de custo') {
             currentCostCenter = String(row[2] || 'N/A').trim();
-            if(currentCostCenter !== 'N/A' && !allCostCenters.includes(currentCostCenter)) {
+            if (currentCostCenter !== 'N/A' && !allCostCenters.includes(currentCostCenter)) {
                 allCostCenters.push(currentCostCenter);
             }
             costCenterHeaderRows.push(row);
@@ -560,20 +561,22 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
 
         if (row.length > 3 && !isNaN(parseInt(colA, 10))) {
             const docNumber = cleanAndToStr(row[3]); 
-            const credor = cleanAndToStr(row[1]);
-            const key = `${docNumber}-${credor}`;
+            const credorString = String(row[1] || '');
+            const credorCode = cleanAndToStr(credorString.split('-')[0]);
+
+            const key = `${docNumber}-${credorCode}`;
             
             const accessKeyMatch = String(row[10] || '').match(/\b(\d{44})\b/);
             if (accessKeyMatch) {
                 const accessKey = accessKeyMatch[1];
                 costCenterMap.set(accessKey, currentCostCenter);
             }
-
+            
             debugKeys.push({
                 'Chave de Comparação (Doc-CNPJ)': key,
                 'Centro de Custo': currentCostCenter,
                 'Nº Documento': docNumber,
-                'Credor': credor,
+                'Credor': credorString,
                 'Observação (Coluna K)': row[10] || 'N/A',
             });
         }
