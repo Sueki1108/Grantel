@@ -38,7 +38,6 @@ interface ReconciliationAnalysisProps {
 const getColumnsForDivergentTabs = (data: any[]) => {
     if (!data || data.length === 0) return [];
     
-    // Create columns dynamically from the first item, ensuring 'Chave de Comparação' is first
     const allKeys = new Set<string>();
     data.forEach(item => {
         if(item) Object.keys(item).forEach(key => allKeys.add(key));
@@ -47,8 +46,8 @@ const getColumnsForDivergentTabs = (data: any[]) => {
     const sortedKeys = Array.from(allKeys).sort((a, b) => {
         if (a === 'Chave de Comparação') return -1;
         if (b === 'Chave de Comparação') return 1;
-        if (a === 'Observações') return 1; // move to end
-        if (b === 'Observações') return -1; // move to end
+        if (a === 'Observações') return 1;
+        if (b === 'Observações') return -1;
         return a.localeCompare(b);
     });
     
