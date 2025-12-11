@@ -411,10 +411,13 @@ export function runReconciliation(
             throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Esp') na planilha Sienge.");
         }
         
-        const getComparisonKey = (item: any, headers: typeof h, valueField?: string): string => {
+        const getComparisonKey = (item: any, headers: typeof h, valueField: string | undefined): string => {
             const numero = cleanAndToStr(item[headers.numero!]);
-            const cnpj = String(item[headers.cnpj!] || '').replace(/\D/g, '');
-            const valor = valueField ? parseFloat(String(item[valueField] || '0').replace(',', '.')).toFixed(2) : 'NaN';
+            const cnpj = cleanAndToStr(String(item[headers.cnpj!] || ''));
+            let valor = 'NaN';
+            if (valueField && item[valueField] !== undefined) {
+                valor = parseFloat(String(item[valueField]).replace(',', '.')).toFixed(2);
+            }
             return `${numero}-${cnpj}-${valor}`;
         };
         
@@ -424,7 +427,6 @@ export function runReconciliation(
             const valor = parseFloat(String(item[valueField] || '0').replace(',', '.')).toFixed(2);
             return `${numero}-${cnpj}-${valor}`;
         };
-
 
         const filteredSiengeData = siengeData.filter(row => {
             const espValue = row[h.esp!] ? String(row[h.esp!]).trim().toUpperCase() : '';
@@ -473,14 +475,14 @@ export function runReconciliation(
                         if (matchedXmlItems.length === 0) {
                             xmlMap.delete(key);
                         }
-                         matchedInPass.push({ ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 'Observações': `Conciliado via ${passName}` });
+                        matchedInPass.push({ ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 'Observações': `Conciliado via ${passName}` });
                         return;
                     }
                 }
                 stillUnmatchedSienge.push(siengeItem);
             });
             
-             const stillUnmatchedXml = Array.from(xmlMap.values()).flat();
+            const stillUnmatchedXml = Array.from(xmlMap.values()).flat();
             return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
         };
 

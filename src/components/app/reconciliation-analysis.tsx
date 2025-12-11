@@ -10,7 +10,7 @@ import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, Fi
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns } from "@/lib/columns-helper";
+import { getColumns, getColumnsWithCustomRender } from "@/lib/columns-helper";
 import { SiengeTaxCheck } from './sienge-tax-check';
 import { CfopValidator } from './cfop-validator';
 import type { AllClassifications } from '@/lib/types';
@@ -38,19 +38,19 @@ interface ReconciliationAnalysisProps {
 const getColumnsForDivergentTabs = (data: any[]) => {
     if (!data || data.length === 0) return [];
     
-    // Create columns dynamically from the first item
-    const allColumns = getColumns(data);
+    // Create columns dynamically from the first item, ensuring 'Chave de Comparação' is first
+    const allKeys = new Set<string>();
+    data.forEach(item => {
+        if(item) Object.keys(item).forEach(key => allKeys.add(key));
+    });
+
+    const sortedKeys = Array.from(allKeys).sort((a, b) => {
+        if (a === 'Chave de Comparação') return -1;
+        if (b === 'Chave de Comparação') return 1;
+        return a.localeCompare(b);
+    });
     
-    // Find the 'Chave de Comparação' column if it exists
-    const keyColumnIndex = allColumns.findIndex(col => col.id === 'Chave de Comparação');
-    
-    if (keyColumnIndex !== -1) {
-        // Move the key column to the beginning
-        const keyColumn = allColumns.splice(keyColumnIndex, 1)[0];
-        return [keyColumn, ...allColumns];
-    }
-    
-    return allColumns;
+    return getColumns(data, sortedKeys);
 };
 
 
