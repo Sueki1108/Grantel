@@ -434,15 +434,15 @@ export function runReconciliation(
             return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
         };
 
-        const reconciled: any[] = [];
+        let reconciled: any[] = [];
         let remainingXmlItems = [...xmlItems];
         let remainingSiengeItems = [...filteredSiengeData];
-
+        
         const reconciliationPass = (
             siengeItems: any[],
             xmlItems: any[],
             getSiengeKey: (item: any) => string | null,
-            getXmlKey: (item: any) => string | null = getSiengeKey,
+            getXmlKey: (item: any) => string | null,
             passName: string
         ) => {
             const matchedInPass: any[] = [];
@@ -464,18 +464,7 @@ export function runReconciliation(
                     if (matchedXmlItems.length > 0) {
                         const matchedXmlItem = matchedXmlItems.shift()!;
                         if (matchedXmlItems.length === 0) xmlMap.delete(key);
-                        
-                        // Cost Center Logic (separate key)
-                        const docNumberForCostCenter = siengeItem[h.numero!];
-                        const credorForCostCenter = siengeItem[h.cnpj!];
-                        const costCenterKey = `${cleanAndToStr(docNumberForCostCenter)}-${cleanAndToStr(String(credorForCostCenter).split('-')[0])}`;
-                        
-                        matchedInPass.push({ 
-                            ...matchedXmlItem, 
-                            ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 
-                            'Observações': `Conciliado via ${passName}`,
-                            'Centro de Custo': costCenterMap?.get(costCenterKey) || 'N/A',
-                        });
+                        matchedInPass.push({ ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 'Observações': `Conciliado via ${passName}` });
                         return;
                     }
                 }
@@ -486,21 +475,12 @@ export function runReconciliation(
             return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
         };
 
-        // Pass 1: Valor Total
-        let result = reconciliationPass(remainingSiengeItems, remainingXmlItems, 
-            (item) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]),
-            (item) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total']),
-            "Valor Total"
-        );
-        reconciled.push(...result.matched);
-        remainingSiengeItems = result.remainingSienge;
-        remainingXmlItems = result.remainingXml;
-
         // All other passes
         const passes = [
-            { name: "ICMS Outras", getKey: (item: any, isXml: boolean) => getComparisonKey(isXml ? item['Número da Nota'] : item[h.numero!], isXml ? item['CPF/CNPJ do Emitente'] : item[h.cnpj!], isXml ? item['Valor Total'] : (h.icmsOutras ? item[h.icmsOutras!] : null)) },
-            { name: "Valor Total + Desconto", getKey: (item: any, isXml: boolean) => getComparisonKey(isXml ? item['Número da Nota'] : item[h.numero!], isXml ? item['CPF/CNPJ do Emitente'] : item[h.cnpj!], isXml ? item['Valor Total'] : (h.valorTotal && h.desconto ? parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto!] || '0').replace(',', '.')) : null)) },
-            { name: "Preço Unitário", getKey: (item: any, isXml: boolean) => getComparisonKey(isXml ? item['Número da Nota'] : item[h.numero!], isXml ? item['CPF/CNPJ do Emitente'] : item[h.cnpj!], isXml ? item['Valor Unitário'] : (h.precoUnitario ? item[h.precoUnitario!] : null)) }
+             { name: "Valor Total", siengeKeyFn: (item: any) => getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.valorTotal!]), xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])},
+             { name: "ICMS Outras", siengeKeyFn: (item: any) => h.icmsOutras ? getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.icmsOutras!]) : null, xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])},
+             { name: "Valor Total + Desconto", siengeKeyFn: (item: any) => h.valorTotal && h.desconto ? getComparisonKey(item[h.numero!], item[h.cnpj!], parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto!] || '0').replace(',', '.'))) : null, xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Total'])},
+             { name: "Preço Unitário", siengeKeyFn: (item: any) => h.precoUnitario ? getComparisonKey(item[h.numero!], item[h.cnpj!], item[h.precoUnitario!]) : null, xmlKeyFn: (item: any) => getComparisonKey(item['Número da Nota'], item['CPF/CNPJ do Emitente'], item['Valor Unitário'])},
         ];
 
         for (const pass of passes) {
@@ -508,14 +488,27 @@ export function runReconciliation(
             const passResult = reconciliationPass(
                 remainingSiengeItems,
                 remainingXmlItems,
-                (item) => pass.getKey(item, false),
-                (item) => pass.getKey(item, true),
+                pass.siengeKeyFn,
+                pass.xmlKeyFn,
                 pass.name
             );
             reconciled.push(...passResult.matched);
             remainingSiengeItems = passResult.remainingSienge;
             remainingXmlItems = passResult.remainingXml;
         }
+
+        // Apply Cost Center
+        reconciled.forEach(item => {
+            if (costCenterMap && h.numero && h.cnpj) {
+                const docNumberForCostCenter = item[`Sienge_${h.numero}`];
+                const credorForCostCenter = item[`Sienge_${h.cnpj}`];
+                if (docNumberForCostCenter && credorForCostCenter) {
+                    const costCenterKey = `${cleanAndToStr(docNumberForCostCenter)}-${cleanAndToStr(String(credorForCostCenter).split('-')[0])}`;
+                    item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
+                }
+            }
+        });
+
 
         const devolucoesEP = xmlItems
             .filter(item => {
