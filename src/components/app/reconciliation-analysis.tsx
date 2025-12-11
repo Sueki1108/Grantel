@@ -40,7 +40,7 @@ const getColumnsForDivergentTabs = (data: any[]) => {
     
     const allKeys = new Set<string>();
     data.forEach(item => {
-        if(item) Object.keys(item).forEach(key => allKeys.add(key));
+        if(item && typeof item === 'object') Object.keys(item).forEach(key => allKeys.add(key));
     });
 
     const sortedKeys = Array.from(allKeys).sort((a, b) => {

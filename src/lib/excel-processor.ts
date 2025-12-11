@@ -420,13 +420,19 @@ export function runReconciliation(
                 if (!isNaN(parsedValue)) {
                     valor = parsedValue.toFixed(2);
                 }
+            } else if (headers.valorTotal && item[headers.valorTotal] !== undefined && item[headers.valorTotal] !== null) {
+                // Fallback to valorTotal if specific value field is missing
+                const parsedValue = parseFloat(String(item[headers.valorTotal]).replace(',', '.'));
+                if (!isNaN(parsedValue)) {
+                    valor = parsedValue.toFixed(2);
+                }
             }
             return `${numero || 'N/A'}-${cnpj || 'N/A'}-${valor}`;
         };
         
         const getXmlComparisonKey = (item: any, valueField: string): string => {
-            const numero = cleanAndToStr(item['Número']);
-            const cnpj = cleanAndToStr(item['CPF/CNPJ do Fornecedor']);
+            const numero = cleanAndToStr(item['Número da Nota']);
+            const cnpj = cleanAndToStr(item['CPF/CNPJ do Emitente']);
             const valorParsed = parseFloat(String(item[valueField] || '0').replace(',', '.'));
             const valor = !isNaN(valorParsed) ? valorParsed.toFixed(2) : 'N/A';
             return `${numero || 'N/A'}-${cnpj || 'N/A'}-${valor}`;
@@ -454,10 +460,12 @@ export function runReconciliation(
         const reconciliationPass = (
             siengeItems: any[],
             xmlItems: any[],
-            siengeValueField: string,
+            siengeValueField: string | undefined,
             xmlValueField: string,
             passName: string
         ) => {
+            if (!siengeValueField) return { matched: [], remainingSienge: siengeItems, remainingXml: xmlItems };
+
             const matchedInPass: any[] = [];
             const stillUnmatchedSienge: any[] = [];
             const xmlMap = new Map<string, any[]>();
@@ -495,7 +503,6 @@ export function runReconciliation(
 
         for (const pass of passes) {
              if (remainingSiengeItems.length === 0 || remainingXmlItems.length === 0) break;
-             if (!pass.siengeField) continue;
             
             const passResult = reconciliationPass(
                 remainingSiengeItems,
@@ -530,6 +537,7 @@ export function runReconciliation(
             'Chave de Comparação': getXmlComparisonKey(item, 'Valor Total'),
             ...item
         }));
+
 
         const devolucoesEP = xmlItems
             .filter(item => {
