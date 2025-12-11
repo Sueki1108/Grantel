@@ -411,25 +411,27 @@ export function runReconciliation(
             throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Esp') na planilha Sienge.");
         }
 
-        const getComparisonKey = (item: any, headers: typeof h, valueField: string | undefined): string | null => {
+        const getComparisonKey = (item: any, headers: typeof h, valueField: string | undefined): string => {
             const numero = cleanAndToStr(item[headers.numero!]);
-            const cnpj = String(item[headers.cnpj!] || '').replace(/\\D/g, ''); 
+            const cnpj = cleanAndToStr(String(item[headers.cnpj!] || '')); 
             
-            let valor = 'NaN';
+            let valor = 'N/A';
             if (valueField && item[valueField] !== undefined && item[valueField] !== null) {
-                valor = parseFloat(String(item[valueField]).replace(',', '.')).toFixed(2);
+                const parsedValue = parseFloat(String(item[valueField]).replace(',', '.'));
+                if(!isNaN(parsedValue)) {
+                    valor = parsedValue.toFixed(2);
+                }
             }
             
-            if (!numero || !cnpj) return null;
-            return `${numero}-${cnpj}-${valor}`;
+            return `${numero || 'N/A'}-${cnpj || 'N/A'}-${valor}`;
         };
         
-        const getXmlComparisonKey = (item: any, valueField: string): string | null => {
+        const getXmlComparisonKey = (item: any, valueField: string): string => {
             const numero = cleanAndToStr(item['Número']);
-            const cnpj = String(item['CPF/CNPJ do Fornecedor'] || '').replace(/\\D/g, '');
-            const valor = parseFloat(String(item[valueField] || '0').replace(',', '.')).toFixed(2);
-            if (!numero || !cnpj) return null;
-            return `${numero}-${cnpj}-${valor}`;
+            const cnpj = cleanAndToStr(item['CPF/CNPJ do Fornecedor']);
+            const valorParsed = parseFloat(String(item[valueField] || '0').replace(',', '.'));
+            const valor = !isNaN(valorParsed) ? valorParsed.toFixed(2) : 'N/A';
+            return `${numero || 'N/A'}-${cnpj || 'N/A'}-${valor}`;
         };
 
         const filteredSiengeData = siengeData.filter(row => {
