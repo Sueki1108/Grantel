@@ -406,22 +406,22 @@ export function runReconciliation(
             precoUnitario: findHeader(siengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
             produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
         };
-
+        
         if (!h.cnpj || !h.numero || !h.valorTotal || !h.esp) {
             throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Valor', 'Esp') na planilha Sienge.");
         }
         
         const getComparisonKey = (item: any, headers: typeof h, valueField: string): string | null => {
             const numero = cleanAndToStr(item[headers.numero!]);
-            const cnpj = String(item[headers.cnpj!] || '').replace(/\D/g, ''); // Tratar CNPJ como string
+            const cnpj = String(item[headers.cnpj!] || '').replace(/\D/g, ''); 
             const valor = parseFloat(String(item[valueField] || '0').replace(',', '.')).toFixed(2);
             if (!numero || !cnpj || isNaN(parseFloat(valor))) return null;
             return `${numero}-${cnpj}-${valor}`;
         };
         
         const getXmlComparisonKey = (item: any, valueField: string): string | null => {
-            const numero = cleanAndToStr(item['Número da Nota']);
-            const cnpj = String(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
+            const numero = cleanAndToStr(item['Número']);
+            const cnpj = String(item['CPF/CNPJ do Fornecedor'] || '').replace(/\D/g, '');
             const valor = parseFloat(String(item[valueField] || '0').replace(',', '.')).toFixed(2);
             if (!numero || !cnpj || isNaN(parseFloat(valor))) return null;
             return `${numero}-${cnpj}-${valor}`;
@@ -473,7 +473,10 @@ export function runReconciliation(
                     if (matchedXmlItems.length > 0) {
                         const matchedXmlItem = matchedXmlItems.shift()!;
                          matchedInPass.push({ ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 'Observações': `Conciliado via ${passName}` });
-                        return;
+                        if (matchedXmlItems.length === 0) {
+                            xmlMap.delete(key);
+                        }
+                        return; // Sienge item is matched, move to next
                     }
                 }
                 stillUnmatchedSienge.push(siengeItem);
