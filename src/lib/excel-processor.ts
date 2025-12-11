@@ -413,16 +413,14 @@ export function runReconciliation(
 
         const getComparisonKey = (item: any, headers: typeof h, valueField: string | undefined): string => {
             const numero = cleanAndToStr(item[headers.numero!]);
-            const cnpj = cleanAndToStr(String(item[headers.cnpj!] || '')); 
-            
+            const cnpj = cleanAndToStr(String(item[headers.cnpj!] || ''));
             let valor = 'N/A';
             if (valueField && item[valueField] !== undefined && item[valueField] !== null) {
                 const parsedValue = parseFloat(String(item[valueField]).replace(',', '.'));
-                if(!isNaN(parsedValue)) {
+                if (!isNaN(parsedValue)) {
                     valor = parsedValue.toFixed(2);
                 }
             }
-            
             return `${numero || 'N/A'}-${cnpj || 'N/A'}-${valor}`;
         };
         
@@ -477,10 +475,7 @@ export function runReconciliation(
                 if (key && xmlMap.has(key)) {
                     const matchedXmlItems = xmlMap.get(key)!;
                     if (matchedXmlItems.length > 0) {
-                        const matchedXmlItem = matchedXmlItems.shift()!;
-                        if (matchedXmlItems.length === 0) {
-                            xmlMap.delete(key);
-                        }
+                        const matchedXmlItem = matchedXmlItems.shift()!; // Consume one match
                         matchedInPass.push({ ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 'Observações': `Conciliado via ${passName}` });
                         return;
                     }
@@ -527,12 +522,12 @@ export function runReconciliation(
         });
         
         const finalOnlyInSienge = remainingSiengeItems.map(item => ({
-            'Chave de Comparação': getComparisonKey(item, h, h.valorTotal) || 'Chave Inválida',
+            'Chave de Comparação': getComparisonKey(item, h, h.valorTotal),
             ...item
         }));
 
         const finalOnlyInXml = remainingXmlItems.map(item => ({
-            'Chave de Comparação': getXmlComparisonKey(item, 'Valor Total') || 'Chave Inválida',
+            'Chave de Comparação': getXmlComparisonKey(item, 'Valor Total'),
             ...item
         }));
 
