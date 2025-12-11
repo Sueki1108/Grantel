@@ -10,7 +10,7 @@ import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, Fi
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns, getColumnsWithCustomRender } from "@/lib/columns-helper";
+import { getColumns } from "@/components/app/columns-helper";
 import { SiengeTaxCheck } from './sienge-tax-check';
 import { CfopValidator } from './cfop-validator';
 import type { AllClassifications } from '@/lib/types';
@@ -47,6 +47,8 @@ const getColumnsForDivergentTabs = (data: any[]) => {
     const sortedKeys = Array.from(allKeys).sort((a, b) => {
         if (a === 'Chave de Comparação') return -1;
         if (b === 'Chave de Comparação') return 1;
+        if (a === 'Observações') return 1; // move to end
+        if (b === 'Observações') return -1; // move to end
         return a.localeCompare(b);
     });
     

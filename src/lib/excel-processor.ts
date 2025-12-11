@@ -413,18 +413,22 @@ export function runReconciliation(
         
         const getComparisonKey = (item: any, headers: typeof h, valueField: string | undefined): string | null => {
             const numero = cleanAndToStr(item[headers.numero!]);
-            const cnpj = String(item[headers.cnpj!] || '').replace(/\D/g, ''); // Ensure CNPJ is a string before cleaning
+            const cnpj = String(item[headers.cnpj!] || '').replace(/\D/g, '');
+            
             let valor = 'NaN';
             if (valueField && item[valueField] !== undefined && item[valueField] !== null) {
                 valor = parseFloat(String(item[valueField]).replace(',', '.')).toFixed(2);
+            } else if (!valueField) {
+                 valor = 'no-value-field'
             }
+
             if (!numero || !cnpj) return null;
             return `${numero}-${cnpj}-${valor}`;
         };
         
         const getXmlComparisonKey = (item: any, valueField: string): string | null => {
             const numero = cleanAndToStr(item['Número']);
-            const cnpj = String(item['CPF/CNPJ do Fornecedor'] || item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
+            const cnpj = String(item['CPF/CNPJ do Fornecedor'] || '').replace(/\D/g, '');
             const valor = parseFloat(String(item[valueField] || '0').replace(',', '.')).toFixed(2);
             if (!numero || !cnpj) return null;
             return `${numero}-${cnpj}-${valor}`;
@@ -474,9 +478,6 @@ export function runReconciliation(
                     const matchedXmlItems = xmlMap.get(key)!;
                     if (matchedXmlItems.length > 0) {
                         const matchedXmlItem = matchedXmlItems.shift()!;
-                        if (matchedXmlItems.length === 0) {
-                            xmlMap.delete(key);
-                        }
                         matchedInPass.push({ ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 'Observações': `Conciliado via ${passName}` });
                         return;
                     }
