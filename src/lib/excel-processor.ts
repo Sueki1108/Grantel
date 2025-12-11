@@ -410,26 +410,23 @@ export function runReconciliation(
         if (!h.cnpj || !h.numero || !h.esp) {
             throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Esp') na planilha Sienge.");
         }
-        
+
         const getComparisonKey = (item: any, headers: typeof h, valueField: string | undefined): string | null => {
             const numero = cleanAndToStr(item[headers.numero!]);
-            const cnpj = String(item[headers.cnpj!] || '').replace(/\D/g, ''); // Keep as string to preserve leading zeros
+            const cnpj = String(item[headers.cnpj!] || '').replace(/\\D/g, ''); 
             
             let valor = 'NaN';
             if (valueField && item[valueField] !== undefined && item[valueField] !== null) {
                 valor = parseFloat(String(item[valueField]).replace(',', '.')).toFixed(2);
-            } else if (!valueField) {
-                 // Case for key without value, useful for some matching passes
-                 return `${numero}-${cnpj}`;
             }
-
+            
             if (!numero || !cnpj) return null;
             return `${numero}-${cnpj}-${valor}`;
         };
         
         const getXmlComparisonKey = (item: any, valueField: string): string | null => {
             const numero = cleanAndToStr(item['Número']);
-            const cnpj = String(item['CPF/CNPJ do Fornecedor'] || '').replace(/\D/g, '');
+            const cnpj = String(item['CPF/CNPJ do Fornecedor'] || '').replace(/\\D/g, '');
             const valor = parseFloat(String(item[valueField] || '0').replace(',', '.')).toFixed(2);
             if (!numero || !cnpj) return null;
             return `${numero}-${cnpj}-${valor}`;
@@ -479,6 +476,9 @@ export function runReconciliation(
                     const matchedXmlItems = xmlMap.get(key)!;
                     if (matchedXmlItems.length > 0) {
                         const matchedXmlItem = matchedXmlItems.shift()!;
+                        if (matchedXmlItems.length === 0) {
+                            xmlMap.delete(key);
+                        }
                         matchedInPass.push({ ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 'Observações': `Conciliado via ${passName}` });
                         return;
                     }
