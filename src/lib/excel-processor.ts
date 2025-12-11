@@ -397,6 +397,14 @@ export function runReconciliation(
             valorTotal: findHeader(siengeData, ['valor total', 'valor', 'vlr total']),
             esp: findHeader(siengeData, ['esp']),
             cfop: findHeader(siengeData, ['cfop']),
+            icmsOutras: findHeader(siengeData, ['icms outras', 'icmsoutras']),
+            desconto: findHeader(siengeData, ['desconto']),
+            frete: findHeader(siengeData, ['frete']),
+            ipiDespesas: findHeader(siengeData, ['ipi despesas', 'ipidespesas']),
+            icmsSt: findHeader(siengeData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
+            despesasAcessorias: findHeader(siengeData, ['despesas acessórias', 'despesasacessorias', 'voutro']),
+            precoUnitario: findHeader(siengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
+            produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
         };
 
         if (!h.cnpj || !h.numero || !h.valorTotal || !h.esp) {
@@ -407,7 +415,7 @@ export function runReconciliation(
             const espValue = row[h.esp!] ? String(row[h.esp!]).trim().toUpperCase() : '';
             return espValue === 'NFE' || espValue === 'NFSR';
         });
-
+        
         const otherSiengeItems = siengeData.filter(row => {
             const espValue = row[h.esp!] ? String(row[h.esp!]).trim().toUpperCase() : '';
             return espValue !== 'NFE' && espValue !== 'NFSR';
@@ -418,60 +426,87 @@ export function runReconciliation(
             return acc;
         }, {} as {[esp: string]: any[]});
 
-        
-        const nfeHeaderMap = new Map((nfeEntradas || []).map(n => [n['Chave Unica'], n]));
-        const cteHeaderMap = new Map((cteData || []).map(c => [c['Chave Unica'], c]));
-        
-        const xmlItemMap = new Map<string, { item: any; index: number }[]>();
-        xmlItems.forEach((item, index) => {
-            const key = `${cleanAndToStr(item['Número da Nota'])}-${cleanAndToStr(item['CPF/CNPJ do Emitente'])}-${parseFloat(String(item['Valor Total'] || '0').replace(',', '.')).toFixed(2)}`;
-            if (!xmlItemMap.has(key)) xmlItemMap.set(key, []);
-            xmlItemMap.get(key)!.push({ item, index });
-        });
+        const getComparisonKey = (numero: any, cnpj: any, valor: any): string | null => {
+            const cleanNumero = cleanAndToStr(numero);
+            const cleanCnpj = String(cnpj).replace(/\D/g, '');
+            const cleanValor = parseFloat(String(valor || '0').replace(',', '.')).toFixed(2);
+            if (!cleanNumero || !cleanCnpj || cleanValor === 'NaN') return null;
+            return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
+        };
 
         const reconciled: any[] = [];
-        let remainingSiengeItems: any[] = [];
-        const matchedXmlIndices = new Set<number>();
-        const siengeDebugKeys: any[] = [];
+        let remainingXmlItems = [...xmlItems];
+        let remainingSiengeItems = [...filteredSiengeData];
 
-        filteredSiengeData.forEach(siengeItem => {
-            const siengeNumero = cleanAndToStr(siengeItem[h.numero!]);
-            const credorCode = cleanAndToStr(String(siengeItem[h.cnpj!]).split('-')[0]);
-            const siengeValor = parseFloat(String(siengeItem[h.valorTotal!] || '0').replace(',', '.')).toFixed(2);
-            
-            const keyValor = `${siengeNumero}-${credorCode}-${siengeValor}`;
-            siengeDebugKeys.push({ 'Chave de Comparação Sienge': keyValor, ...siengeItem });
+        const reconciliationPass = (
+            siengeItems: any[],
+            xmlItems: any[],
+            getSiengeKey: (item: any) => string | null,
+            getXmlKey: (item: any) => string | null = getSiengeKey,
+            passName: string
+        ) => {
+            const matchedInPass: any[] = [];
+            const stillUnmatchedSienge: any[] = [];
+            const xmlMap = new Map<string, { item: any, index: number }[]>();
 
-            if (xmlItemMap.has(keyValor)) {
-                const matches = xmlItemMap.get(keyValor)!;
-                if (matches.length > 0) {
-                    const match = matches.shift()!;
-                    const xmlChaveUnica = match.item['Chave Unica'];
-                    const header = nfeHeaderMap.get(xmlChaveUnica) || cteHeaderMap.get(xmlChaveUnica);
-                    const chaveAcesso = header ? header['Chave de acesso'] : match.item['Chave de acesso'];
-                    
-                    const costCenterKey = `${siengeNumero}-${credorCode}`;
-
-                    reconciled.push({
-                        ...match.item,
-                        Fornecedor: header?.Fornecedor || match.item.Fornecedor || 'N/A',
-                        'Chave de acesso': chaveAcesso,
-                        'Sienge_CFOP': siengeItem[h.cfop!] || 'N/A',
-                        'Sienge_Esp': siengeItem[h.esp!],
-                        'Centro de Custo': costCenterMap?.get(costCenterKey) || 'N/A',
-                        'Observações': `Conciliado via Valor Total`,
-                    });
-                    
-                    matchedXmlIndices.add(match.index);
-                    return;
+            xmlItems.forEach((item, index) => {
+                const key = getXmlKey(item);
+                if (key) {
+                    if (!xmlMap.has(key)) xmlMap.set(key, []);
+                    xmlMap.get(key)!.push({ item, index });
                 }
-            }
+            });
 
-            remainingSiengeItems.push(siengeItem);
-        });
+            siengeItems.forEach(siengeItem => {
+                const key = getSiengeKey(siengeItem);
+                if (key && xmlMap.has(key)) {
+                    const matchedXmlItems = xmlMap.get(key)!;
+                    if (matchedXmlItems.length > 0) {
+                        const match = matchedXmlItems.shift()!; // Take one match
+                        if (matchedXmlItems.length === 0) {
+                            xmlMap.delete(key);
+                        }
+                        
+                        const costCenterLookupKey = `${cleanAndToStr(siengeItem[h.numero!])}-${cleanAndToStr(String(siengeItem[h.cnpj!]).split('-')[0])}`;
+                        
+                        matchedInPass.push({ 
+                            ...match.item, 
+                            ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 
+                            'Observações': `Conciliado via ${passName}`,
+                            'Centro de Custo': costCenterMap?.get(costCenterLookupKey) || 'N/A',
+                        });
+                        return;
+                    }
+                }
+                stillUnmatchedSienge.push(siengeItem);
+            });
+            
+            const stillUnmatchedXml = Array.from(xmlMap.values()).flat().map(i => i.item);
+            return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
+        };
 
-        const remainingXmlItems = xmlItems.filter((_, index) => !matchedXmlIndices.has(index));
-        
+        // All the reconciliation passes
+        const passes = [
+            { name: "Valor Total", getKey: (item: any, isXml: boolean) => getComparisonKey(isXml ? item['Número da Nota'] : item[h.numero!], isXml ? item['CPF/CNPJ do Emitente'] : item[h.cnpj!], isXml ? item['Valor Total'] : item[h.valorTotal!]) },
+            { name: "ICMS Outras", getKey: (item: any, isXml: boolean) => getComparisonKey(isXml ? item['Número da Nota'] : item[h.numero!], isXml ? item['CPF/CNPJ do Emitente'] : item[h.cnpj!], isXml ? item['Valor Total'] : (h.icmsOutras ? item[h.icmsOutras!] : null)) },
+            { name: "Valor Total + Desconto", getKey: (item: any, isXml: boolean) => getComparisonKey(isXml ? item['Número da Nota'] : item[h.numero!], isXml ? item['CPF/CNPJ do Emitente'] : item[h.cnpj!], isXml ? item['Valor Total'] : (h.valorTotal && h.desconto ? parseFloat(String(item[h.valorTotal!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto!] || '0').replace(',', '.')) : null)) },
+            { name: "Preço Unitário", getKey: (item: any, isXml: boolean) => getComparisonKey(isXml ? item['Número da Nota'] : item[h.numero!], isXml ? item['CPF/CNPJ do Emitente'] : item[h.cnpj!], isXml ? item['Valor Unitário'] : (h.precoUnitario ? item[h.precoUnitario!] : null)) }
+        ];
+
+        for (const pass of passes) {
+            if (remainingSiengeItems.length === 0 || remainingXmlItems.length === 0) break;
+            const result = reconciliationPass(
+                remainingSiengeItems,
+                remainingXmlItems,
+                (item) => pass.getKey(item, false),
+                (item) => pass.getKey(item, true),
+                pass.name
+            );
+            reconciled.push(...result.matched);
+            remainingSiengeItems = result.remainingSienge;
+            remainingXmlItems = result.remainingXml;
+        }
+
         const devolucoesEP = xmlItems
             .filter(item => {
                 const cfop = cleanAndToStr(item.CFOP);
@@ -486,13 +521,14 @@ export function runReconciliation(
                 'Chave da Nota Original': cleanAndToStr(item['refNFe']) || 'Não encontrada no XML',
             }));
 
-        return { reconciled, onlyInSienge: remainingSiengeItems, onlyInXml: remainingXmlItems, devolucoesEP, otherSiengeItems, debug: {siengeKeys: siengeDebugKeys} };
+        return { reconciled, onlyInSienge: remainingSiengeItems, onlyInXml: remainingXmlItems, devolucoesEP, otherSiengeItems, debug: { siengeKeys: [] } };
 
     } catch (err: any) {
         console.error("Reconciliation Error:", err);
         return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 }
+
 
 export function generateSiengeDebugKeys(siengeData: any[]) {
     const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
@@ -506,7 +542,7 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
         documento: findHeader(siengeData, ['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
         credor: findHeader(siengeData, ['credor', 'cpf/cnpj', 'cpf/cnpj do fornecedor']),
     };
-
+    
     if (!h.documento || !h.credor) {
         return [];
     }
@@ -542,42 +578,41 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
 
     let currentCostCenter = 'N/A';
 
-    costCenterSheetData.forEach((row) => {
+    costCenterSheetData.forEach((row, rowIndex) => {
         if (!row || !Array.isArray(row)) return;
 
         const colA = String(row[0] || '').trim();
         const colC = String(row[2] || '').trim();
         const colB = String(row[1] || '').trim();
         const colD = String(row[3] || '').trim();
-        const colK = String(row[10] || '').trim();
 
+        // Check for "Centro de custo" in column A
         if (colA.toLowerCase() === 'centro de custo') {
             currentCostCenter = colC;
             if (currentCostCenter && !allCostCenters.includes(currentCostCenter)) {
                 allCostCenters.push(currentCostCenter);
             }
             costCenterHeaderRows.push(row);
-            return;
+            return; // Move to the next line after finding a header
         }
 
+        // Process data rows (assuming they have values in columns B and D)
         if (colB && colD) {
             const docNumber = cleanAndToStr(colD);
             const credorCode = cleanAndToStr(colB.split('-')[0]);
-            const key = `${docNumber}-${credorCode}`;
             
-            const accessKeyMatch = colK.match(/\b(\d{44})\b/);
-            if (accessKeyMatch) {
-                const accessKey = accessKeyMatch[1];
-                costCenterMap.set(accessKey, currentCostCenter);
+            if (docNumber && credorCode) {
+                 const key = `${docNumber}-${credorCode}`;
+                 costCenterMap.set(key, currentCostCenter);
+
+                debugKeys.push({
+                    'Chave de Comparação (Doc-Credor)': key,
+                    'Centro de Custo': currentCostCenter,
+                    'Documento (Coluna D)': docNumber,
+                    'Credor (Coluna B)': colB,
+                    'Linha na Planilha': rowIndex + 1,
+                });
             }
-            
-            debugKeys.push({
-                'Chave de Comparação (Doc-Credor)': key,
-                'Centro de Custo': currentCostCenter,
-                'Nº Documento (Col D)': docNumber,
-                'Credor (Col B)': colB,
-                'Observação (Coluna K)': colK || 'N/A',
-            });
         }
     });
 
