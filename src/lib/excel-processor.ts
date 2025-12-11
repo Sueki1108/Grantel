@@ -411,20 +411,22 @@ export function runReconciliation(
             throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Esp') na planilha Sienge.");
         }
         
-        const getComparisonKey = (item: any, headers: typeof h, valueField: string | undefined): string => {
+        const getComparisonKey = (item: any, headers: typeof h, valueField: string | undefined): string | null => {
             const numero = cleanAndToStr(item[headers.numero!]);
-            const cnpj = cleanAndToStr(String(item[headers.cnpj!] || ''));
+            const cnpj = String(item[headers.cnpj!] || '').replace(/\D/g, ''); // Ensure CNPJ is a string before cleaning
             let valor = 'NaN';
-            if (valueField && item[valueField] !== undefined) {
+            if (valueField && item[valueField] !== undefined && item[valueField] !== null) {
                 valor = parseFloat(String(item[valueField]).replace(',', '.')).toFixed(2);
             }
+            if (!numero || !cnpj) return null;
             return `${numero}-${cnpj}-${valor}`;
         };
         
-        const getXmlComparisonKey = (item: any, valueField: string): string => {
+        const getXmlComparisonKey = (item: any, valueField: string): string | null => {
             const numero = cleanAndToStr(item['Número']);
-            const cnpj = cleanAndToStr(item['CPF/CNPJ do Fornecedor'] || '');
+            const cnpj = String(item['CPF/CNPJ do Fornecedor'] || item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
             const valor = parseFloat(String(item[valueField] || '0').replace(',', '.')).toFixed(2);
+            if (!numero || !cnpj) return null;
             return `${numero}-${cnpj}-${valor}`;
         };
 
@@ -488,8 +490,8 @@ export function runReconciliation(
 
         const passes = [
             { name: "Valor Total", siengeField: h.valorTotal, xmlField: 'Valor Total' },
-            { name: "ICMS Outras", siengeField: h.icmsOutras, xmlField: 'Valor Total' },
             { name: "Preço Unitário", siengeField: h.precoUnitario, xmlField: 'Valor Unitário' },
+            { name: "ICMS Outras", siengeField: h.icmsOutras, xmlField: 'Valor Total' },
         ];
 
         for (const pass of passes) {
@@ -521,12 +523,12 @@ export function runReconciliation(
         });
         
         const finalOnlyInSienge = remainingSiengeItems.map(item => ({
-            'Chave de Comparação': getComparisonKey(item, h, h.valorTotal),
+            'Chave de Comparação': getComparisonKey(item, h, h.valorTotal) || 'Chave Inválida',
             ...item
         }));
 
         const finalOnlyInXml = remainingXmlItems.map(item => ({
-            'Chave de Comparação': getXmlComparisonKey(item, 'Valor Total'),
+            'Chave de Comparação': getXmlComparisonKey(item, 'Valor Total') || 'Chave Inválida',
             ...item
         }));
 
