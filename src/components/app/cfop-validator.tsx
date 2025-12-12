@@ -32,6 +32,7 @@ import { SupplierCategoryDialog } from './supplier-category-dialog';
 
 interface CfopValidatorProps {
     items: any[];
+    nfeValidasData: any[]; // Pass NFe data for enrichment
     originalXmlItems: any[]; // Pass original XML items for enrichment
     competence: string | null; 
     onPersistData: (allData: AllClassifications) => void;
@@ -213,10 +214,10 @@ const FilterDialog: React.FC<{
 // ===============================================================
 
 
-export function CfopValidator({ items: initialItems, originalXmlItems, competence, onPersistData, allPersistedData }: CfopValidatorProps) {
+export function CfopValidator({ items: initialItems, nfeValidasData, originalXmlItems, competence, onPersistData, allPersistedData }: CfopValidatorProps) {
     const { toast } = useToast();
     
-    const [enrichedItems, setEnrichedItems] = useState(initialItems);
+    const [enrichedItems, setEnrichedItems] = useState<any[]>([]);
     const [activeStatusTab, setActiveStatusTab] = useState<ValidationStatus>('unvalidated');
     const [activeCfopTabs, setActiveCfopTabs] = useState<Record<string, string>>({});
     const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
@@ -224,9 +225,23 @@ export function CfopValidator({ items: initialItems, originalXmlItems, competenc
     const [bulkActionState, setBulkActionState] = useState<BulkActionState>({ classification: null, isDifal: null });
 
     useEffect(() => {
-        // Reset enriched items when initial items change
-        setEnrichedItems(initialItems);
-    }, [initialItems]);
+        if (!initialItems || !nfeValidasData) {
+            setEnrichedItems([]);
+            return;
+        }
+
+        const nfeHeaderMap = new Map((nfeValidasData || []).map(n => [n['Chave Unica'], n]));
+
+        const newItems = initialItems.map(item => {
+            const header = nfeHeaderMap.get(item['Chave Unica']);
+            return {
+                ...item,
+                Fornecedor: header?.Fornecedor || item.Fornecedor || 'N/A',
+            };
+        });
+        setEnrichedItems(newItems);
+
+    }, [initialItems, nfeValidasData]);
 
     const handleEnrichData = () => {
         if (!originalXmlItems || originalXmlItems.length === 0) {
