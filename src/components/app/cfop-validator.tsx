@@ -23,7 +23,7 @@ import { Checkbox } from '../ui/checkbox';
 import * as XLSX from 'xlsx';
 import { Card } from '../ui/card';
 import type { RowSelectionState } from '@tanstack/react-table';
-import { cn, cleanAndToStr } from '@/lib/utils';
+import { cn, cleanAndToStr, normalizeKey } from '@/lib/utils';
 import * as LucideIcons from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { SupplierCategoryDialog } from './supplier-category-dialog';
@@ -224,7 +224,8 @@ export function CfopValidator(props: CfopValidatorProps) {
     const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
     const [bulkActionState, setBulkActionState] = useState<BulkActionState>({ classification: null, isDifal: null });
-    const [itemsBySpecialCfop, setItemsBySpecialCfop] = useState<Record<'entrega-futura' | 'simples-faturamento', Record<string, any[]>>>({ 'entrega-futura': {}, 'simples-faturamento': {} });
+    const [itemsEntregaFutura, setItemsEntregaFutura] = useState<any[]>([]);
+    const [itemsSimplesFaturamento, setItemsSimplesFaturamento] = useState<any[]>([]);
     const [isLoadingSpecialCfops, setIsLoadingSpecialCfops] = useState(false);
 
 
@@ -410,32 +411,33 @@ export function CfopValidator(props: CfopValidatorProps) {
     const handleLoadSpecialCfops = React.useCallback(() => {
         setIsLoadingSpecialCfops(true);
         setTimeout(() => {
-            const specialCfopResult: Record<'entrega-futura' | 'simples-faturamento', Record<string, any[]>> = {
-                'entrega-futura': {}, 'simples-faturamento': {}
-            };
+            const entregaFutura: any[] = [];
+            const simplesFaturamento: any[] = [];
     
             const ENTREGA_FUTURA_CFOPS = ['5116', '5117', '6116', '6117'];
             const SIMPLES_FATURAMENTO_CFOPS = ['5922', '6922'];
         
-            (itensSaidas || []).forEach((item: any) => {
-                const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item.CFOP}`;
-                const itemWithKey = { ...item, __itemKey: `cfop-special-${uniqueKey}` };
-                const xmlCfop = item['CFOP']; // Corrected to use 'CFOP'
-                const siengeCfop = item.CFOP || 'N/A';
+            (itensSaidas || []).forEach((item: any, index: number) => {
+                const itemWithKey = { ...item, __itemKey: `cfop-special-${item['Chave Unica']}-${index}` };
+                const xmlCfop = item['CFOP'];
     
                 if (ENTREGA_FUTURA_CFOPS.includes(xmlCfop)) {
-                    if (!specialCfopResult['entrega-futura'][siengeCfop]) specialCfopResult['entrega-futura'][siengeCfop] = [];
-                    specialCfopResult['entrega-futura'][siengeCfop].push(itemWithKey);
+                    entregaFutura.push(itemWithKey);
                 }
     
                 if (SIMPLES_FATURAMENTO_CFOPS.includes(xmlCfop)) {
-                    if (!specialCfopResult['simples-faturamento'][siengeCfop]) specialCfopResult['simples-faturamento'][siengeCfop] = [];
-                    specialCfopResult['simples-faturamento'][siengeCfop].push(itemWithKey);
+                    simplesFaturamento.push(itemWithKey);
                 }
             });
-            setItemsBySpecialCfop(specialCfopResult);
+
+            setItemsEntregaFutura(entregaFutura);
+            setItemsSimplesFaturamento(simplesFaturamento);
             setIsLoadingSpecialCfops(false);
-            toast({ title: 'Análise Concluída', description: 'As notas de faturamento e entrega futura foram carregadas.' });
+            if (entregaFutura.length > 0 || simplesFaturamento.length > 0) {
+                 toast({ title: 'Análise Concluída', description: 'As notas de faturamento e entrega futura foram carregadas.' });
+            } else {
+                 toast({ variant: 'destructive', title: 'Nenhum Item Encontrado', description: 'Nenhum item com os CFOPs especificados foi encontrado nos XMLs de saída.' });
+            }
         }, 50);
     }, [itensSaidas, toast]);
 
@@ -750,7 +752,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                 })}
                 <TabsContent value="faturamento-entrega" className="mt-4">
                      <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-lg mb-6">
-                        <p className="text-muted-foreground mb-4">Clique no botão para analisar as notas de Entrega Futura e Simples Faturamento de todos os itens conciliados.</p>
+                        <p className="text-muted-foreground mb-4">Clique no botão para analisar as notas de Entrega Futura e Simples Faturamento de todos os itens de SAÍDA.</p>
                         <Button onClick={handleLoadSpecialCfops} disabled={isLoadingSpecialCfops}>
                             {isLoadingSpecialCfops ? <><Cpu className="mr-2 h-4 w-4 animate-spin" />Analisando...</> : <><Cpu className="mr-2 h-4 w-4" />Analisar Faturamento/Entrega</>}
                         </Button>
@@ -758,14 +760,14 @@ export function CfopValidator(props: CfopValidatorProps) {
 
                     <Tabs defaultValue="entrega-futura">
                         <TabsList className="grid w-full grid-cols-2">
-                             <TabsTrigger value="entrega-futura">Entrega Futura ({Object.values(itemsBySpecialCfop['entrega-futura']).flat().length})</TabsTrigger>
-                             <TabsTrigger value="simples-faturamento">Simples Faturamento ({Object.values(itemsBySpecialCfop['simples-faturamento']).flat().length})</TabsTrigger>
+                             <TabsTrigger value="entrega-futura">Entrega Futura ({itemsEntregaFutura.length})</TabsTrigger>
+                             <TabsTrigger value="simples-faturamento">Simples Faturamento ({itemsSimplesFaturamento.length})</TabsTrigger>
                         </TabsList>
                         <TabsContent value="entrega-futura" className="mt-4">
-                            <DataTable columns={columns} data={Object.values(itemsBySpecialCfop['entrega-futura']).flat()} rowSelection={rowSelection} setRowSelection={setRowSelection} />
+                            <DataTable columns={columns} data={itemsEntregaFutura} rowSelection={rowSelection} setRowSelection={setRowSelection} />
                         </TabsContent>
                         <TabsContent value="simples-faturamento" className="mt-4">
-                            <DataTable columns={columns} data={Object.values(itemsBySpecialCfop['simples-faturamento']).flat()} rowSelection={rowSelection} setRowSelection={setRowSelection} />
+                            <DataTable columns={columns} data={itemsSimplesFaturamento} rowSelection={rowSelection} setRowSelection={setRowSelection} />
                         </TabsContent>
                     </Tabs>
                 </TabsContent>
