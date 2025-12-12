@@ -161,7 +161,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
             'Item': getAttributeValue(det, 'nItem'),
             'Chave de acesso': chaveAcesso,
             'Número da Nota': nNF,
-            'CPF/CNPJ do Emitente': emitCNPJ, // Always include emitter CNPJ
+            'CPF/CNPJ do Emitente': emitCNPJ,
             'Código': getTagValue(prod, 'cProd'),
             'Descrição': getTagValue(prod, 'xProd'),
             'NCM': getTagValue(prod, 'NCM') || null,
