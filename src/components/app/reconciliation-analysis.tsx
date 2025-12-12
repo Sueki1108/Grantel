@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useMemo, useState, ChangeEvent } from 'react';
@@ -9,50 +10,13 @@ import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, Fi
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
+import { getColumns, getColumnsForDivergentTabs } from "@/components/app/columns-helper";
 import { SiengeTaxCheck } from './sienge-tax-check';
 import { CfopValidator } from './cfop-validator';
 import type { AllClassifications } from '@/lib/types';
 import { FileUploadForm } from './file-upload-form';
 import * as XLSX from 'xlsx';
 import { CostCenterAnalysis } from './cost-center-analysis';
-
-const getColumnsForDivergentTabs = (data: any[]) => {
-    if (!data || data.length === 0) return [];
-
-    const allKeys = new Set<string>();
-    data.forEach(item => {
-        if(item && typeof item === 'object') {
-            Object.keys(item).forEach(key => {
-                if (key !== '__itemKey') {
-                    allKeys.add(key);
-                }
-            });
-        }
-    });
-    
-    const sortedKeys: string[] = [];
-    
-    // Prioritize "Chave de Comparação"
-    if (allKeys.has('Chave de Comparação')) {
-        sortedKeys.push('Chave de Comparação');
-        allKeys.delete('Chave de Comparação');
-    }
-    
-    // Add other important keys in a specific order if they exist
-    const preferredOrder = ['Chave de acesso', 'Número da Nota', 'Credor', 'Fornecedor', 'Descrição', 'Valor Total'];
-    preferredOrder.forEach(key => {
-        if (allKeys.has(key)) {
-            sortedKeys.push(key);
-            allKeys.delete(key);
-        }
-    });
-
-    // Add remaining keys, sorted alphabetically
-    sortedKeys.push(...Array.from(allKeys).sort());
-    
-    return getColumns(data, sortedKeys);
-};
 
 
 interface ReconciliationAnalysisProps {
@@ -68,7 +32,6 @@ interface ReconciliationAnalysisProps {
     allClassifications: AllClassifications;
     onPersistClassifications: (allData: AllClassifications) => void;
     competence: string | null;
-    onDownloadDebugSheet: () => void;
 }
 
 
@@ -85,15 +48,15 @@ export function ReconciliationAnalysis({
     allClassifications,
     onPersistClassifications,
     competence,
-    onDownloadDebugSheet,
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
     
-    const { reconciliationResults, siengeDataForTaxCheck, devolucoesEP } = useMemo(() => {
+    const { reconciliationResults, siengeDataForTaxCheck, devolucoesEP, itensValidosSaidas } = useMemo(() => {
         return {
             reconciliationResults: processedData?.reconciliationResults,
             siengeDataForTaxCheck: processedData?.siengeSheetData,
             devolucoesEP: processedData?.reconciliationResults?.devolucoesEP,
+            itensValidosSaidas: processedData?.sheets?.['Itens Válidos Saídas'] || [],
         };
     }, [processedData]);
     
@@ -144,13 +107,6 @@ export function ReconciliationAnalysis({
                  <div className="flex flex-col sm:flex-row gap-2 pt-4">
                      <Button onClick={onRunReconciliation} disabled={isReconciliationRunning || !siengeFile || !processedData?.sheets['Itens Válidos']}>
                         {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Conciliando...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
-                    </Button>
-                    <Button
-                        onClick={onDownloadDebugSheet}
-                        variant="outline"
-                        disabled={!processedData || (!processedData.siengeDebugKeys && !processedData.costCenterDebugKeys)}
-                    >
-                        <FileCog className="mr-2 h-4 w-4"/>Gerar Planilha de Depuração
                     </Button>
                 </div>
                 
@@ -242,7 +198,7 @@ export function ReconciliationAnalysis({
                         <CfopValidator 
                             items={reconciliationResults?.reconciled || []}
                             nfeValidasData={processedData?.sheets?.['Notas Válidas'] || []}
-                            originalXmlItems={processedData?.sheets['Itens Válidos'] || []}
+                            itensSaidas={itensValidosSaidas}
                             allPersistedData={allClassifications}
                             onPersistData={onPersistClassifications}
                             competence={competence}

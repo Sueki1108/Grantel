@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -501,32 +502,6 @@ export function AutomatorClientPage() {
         XLSX.writeFile(workbook, fileName);
     };
 
-    const handleDownloadDebugSheet = () => {
-        if (!processedData || (!processedData.siengeDebugKeys && !processedData.costCenterDebugKeys)) {
-            toast({ variant: "destructive", title: "Nenhum dado de depuração para baixar" });
-            return;
-        }
-        const workbook = XLSX.utils.book_new();
-
-        if (processedData.siengeDebugKeys && processedData.siengeDebugKeys.length > 0) {
-            const siengeWs = XLSX.utils.json_to_sheet(processedData.siengeDebugKeys);
-            XLSX.utils.book_append_sheet(workbook, siengeWs, "Debug_Sienge");
-        }
-
-        if (processedData.costCenterDebugKeys && processedData.costCenterDebugKeys.length > 0) {
-            const costCenterWs = XLSX.utils.json_to_sheet(processedData.costCenterDebugKeys);
-            XLSX.utils.book_append_sheet(workbook, costCenterWs, "Debug_Centro_Custo");
-        }
-        
-        if (workbook.SheetNames.length === 0) {
-             toast({ variant: "destructive", title: "Nenhum dado de depuração para baixar" });
-            return;
-        }
-
-        XLSX.writeFile(workbook, `Grantel - Depuração Conciliação.xlsx`);
-        toast({ title: "Planilha de Depuração Gerada" });
-    };
-
 
     // =================================================================
     // MAIN PROCESSING & CHILD CALLBACKS
@@ -905,7 +880,6 @@ export function AutomatorClientPage() {
                                 allClassifications={allClassifications}
                                 onPersistClassifications={handlePersistClassifications}
                                 competence={competence}
-                                onDownloadDebugSheet={handleDownloadDebugSheet}
                             /> 
                             : <Card><CardContent className="p-8 text-center text-muted-foreground"><GitCompareArrows className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação de Documentos" para habilitar a conciliação.</p></CardContent></Card>
                         }
