@@ -39,7 +39,7 @@ interface CfopValidatorProps {
     allPersistedData: AllClassifications;
 }
 
-type ValidationStatus = 'all' | 'unvalidated' | 'correct' | 'incorrect' | 'verify' | 'difal' | 'entrega-futura';
+type ValidationStatus = 'all' | 'unvalidated' | 'correct' | 'incorrect' | 'verify' | 'difal' | 'entrega-futura' | 'simples-faturamento';
 
 export type TabFilters = {
     xmlCsts: Set<string>;
@@ -225,7 +225,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
     const [bulkActionState, setBulkActionState] = useState<BulkActionState>({ classification: null, isDifal: null });
 
     useEffect(() => {
-        if (!initialItems) {
+        if (!initialItems || !nfeValidasData) {
             setEnrichedItems([]);
             return;
         }
@@ -550,10 +550,11 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
     const itemsByStatus = useMemo(() => {
         const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
         const result: Record<ValidationStatus, Record<string, any[]>> = {
-            all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}, difal: {}, 'entrega-futura': {}
+            all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}, difal: {}, 'entrega-futura': {}, 'simples-faturamento': {}
         };
 
         const ENTREGA_FUTURA_CFOPS = ['1116', '1117', '2116', '2117'];
+        const SIMPLES_FATURAMENTO_CFOPS = ['1922', '2922'];
     
         enrichedItems.forEach(item => {
             const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
@@ -581,6 +582,11 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
                 if (!result['entrega-futura'][siengeCfop]) result['entrega-futura'][siengeCfop] = [];
                 result['entrega-futura'][siengeCfop].push(itemWithKey);
             }
+
+            if (SIMPLES_FATURAMENTO_CFOPS.includes(xmlCfop)) {
+                if (!result['simples-faturamento'][siengeCfop]) result['simples-faturamento'][siengeCfop] = [];
+                result['simples-faturamento'][siengeCfop].push(itemWithKey);
+            }
         });
         return result;
     }, [enrichedItems, competence, allPersistedData]);
@@ -599,6 +605,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
         { status: 'verify', label: 'Verificar' },
         { status: 'difal', label: 'DIFAL' },
         { status: 'entrega-futura', label: 'Entrega Futura' },
+        { status: 'simples-faturamento', label: 'Simples Faturamento' },
     ];
     
     return (
@@ -624,7 +631,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
             
             <Tabs value={activeStatusTab} onValueChange={(val) => setActiveStatusTab(val as ValidationStatus)} className="w-full">
                  <div className="flex justify-between items-center mb-2">
-                    <TabsList className="grid w-full grid-cols-7">
+                    <TabsList className="grid w-full grid-cols-8">
                         {statusTabs.map(({status, label}) => {
                             const count = Object.values(itemsByStatus[status] || {}).flat().length;
                             return <TabsTrigger key={status} value={status} disabled={count === 0}>{label} ({count})</TabsTrigger>
@@ -733,7 +740,3 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
         </div>
     );
 }
-
-    
-
-    
