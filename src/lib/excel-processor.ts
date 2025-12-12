@@ -381,7 +381,7 @@ export function runReconciliation(
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], devolucoesEP: [], otherSiengeItems: {}, debug: { siengeKeys: [] } };
 
     if (!siengeData || !xmlItems) {
-        return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems || [] };
+        return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
     }
 
     try {
@@ -389,13 +389,6 @@ export function runReconciliation(
             if (!data || data.length === 0 || !data[0]) return undefined;
             const headers = Object.keys(data[0]);
             
-            // Explicitly prioritize 'cpf/cnpj' over 'credor'
-            for (const name of ['cpf/cnpj', 'cpf/cnpj do fornecedor']) {
-                const normalizedName = normalizeKey(name);
-                const found = headers.find(h => normalizeKey(h) === normalizedName);
-                if (found) return found;
-            }
-            // If not found, search for the rest
             for (const name of possibleNames) {
                  const normalizedName = normalizeKey(name);
                  const found = headers.find(h => normalizeKey(h) === normalizedName);
