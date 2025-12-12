@@ -39,7 +39,7 @@ interface CfopValidatorProps {
     allPersistedData: AllClassifications;
 }
 
-type ValidationStatus = 'all' | 'unvalidated' | 'correct' | 'incorrect' | 'verify' | 'difal' | 'entrega-futura' | 'simples-faturamento';
+type ValidationStatus = 'all' | 'unvalidated' | 'correct' | 'incorrect' | 'verify' | 'difal';
 
 export type TabFilters = {
     xmlCsts: Set<string>;
@@ -218,7 +218,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
     const { toast } = useToast();
     
     const [enrichedItems, setEnrichedItems] = useState<any[]>([]);
-    const [activeStatusTab, setActiveStatusTab] = useState<ValidationStatus>('unvalidated');
+    const [activeStatusTab, setActiveStatusTab] = useState<ValidationStatus | 'faturamento-entrega'>('unvalidated');
     const [activeCfopTabs, setActiveCfopTabs] = useState<Record<string, string>>({});
     const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -308,7 +308,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
     };
     
     const handleBulkAction = () => {
-        const activeTableItems = itemsByStatus[activeStatusTab]?.[activeCfopTabs[activeStatusTab]] || [];
+        const activeTableItems = itemsByStatus[activeStatusTab as ValidationStatus]?.[activeCfopTabs[activeStatusTab]] || [];
         const selectedItemKeys = Object.keys(rowSelection).map(index => activeTableItems[parseInt(index)].__itemKey);
 
         if (selectedItemKeys.length === 0) return;
@@ -547,10 +547,14 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
         ]);
     }, [enrichedItems, allPersistedData, competence, toast]);
     
-    const itemsByStatus = useMemo(() => {
+    const { itemsByStatus, itemsBySpecialCfop } = useMemo(() => {
         const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
-        const result: Record<ValidationStatus, Record<string, any[]>> = {
-            all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}, difal: {}, 'entrega-futura': {}, 'simples-faturamento': {}
+        
+        const statusResult: Record<ValidationStatus, Record<string, any[]>> = {
+            all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}, difal: {}
+        };
+        const specialCfopResult: Record<'entrega-futura' | 'simples-faturamento', Record<string, any[]>> = {
+            'entrega-futura': {}, 'simples-faturamento': {}
         };
 
         const ENTREGA_FUTURA_CFOPS = ['1116', '1117', '2116', '2117'];
@@ -563,32 +567,32 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
             const isDifal = validation?.isDifal || false;
             const xmlCfop = item.CFOP;
             const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
-            
             const siengeCfop = item.Sienge_CFOP || 'N/A';
 
-            if (!result.all[siengeCfop]) result.all[siengeCfop] = [];
-            result.all[siengeCfop].push(itemWithKey);
+            // Distribution by validation status
+            if (!statusResult.all[siengeCfop]) statusResult.all[siengeCfop] = [];
+            statusResult.all[siengeCfop].push(itemWithKey);
 
-            if (!result[classification]) result[classification] = {};
-            if (!result[classification][siengeCfop]) result[classification][siengeCfop] = [];
-            result[classification][siengeCfop].push(itemWithKey);
+            if (!statusResult[classification][siengeCfop]) statusResult[classification][siengeCfop] = [];
+            statusResult[classification][siengeCfop].push(itemWithKey);
             
             if (isDifal) {
-                if (!result.difal[siengeCfop]) result.difal[siengeCfop] = [];
-                result.difal[siengeCfop].push(itemWithKey);
+                if (!statusResult.difal[siengeCfop]) statusResult.difal[siengeCfop] = [];
+                statusResult.difal[siengeCfop].push(itemWithKey);
             }
             
+            // Distribution by special CFOP
             if (ENTREGA_FUTURA_CFOPS.includes(xmlCfop)) {
-                if (!result['entrega-futura'][siengeCfop]) result['entrega-futura'][siengeCfop] = [];
-                result['entrega-futura'][siengeCfop].push(itemWithKey);
+                if (!specialCfopResult['entrega-futura'][siengeCfop]) specialCfopResult['entrega-futura'][siengeCfop] = [];
+                specialCfopResult['entrega-futura'][siengeCfop].push(itemWithKey);
             }
 
             if (SIMPLES_FATURAMENTO_CFOPS.includes(xmlCfop)) {
-                if (!result['simples-faturamento'][siengeCfop]) result['simples-faturamento'][siengeCfop] = [];
-                result['simples-faturamento'][siengeCfop].push(itemWithKey);
+                if (!specialCfopResult['simples-faturamento'][siengeCfop]) specialCfopResult['simples-faturamento'][siengeCfop] = [];
+                specialCfopResult['simples-faturamento'][siengeCfop].push(itemWithKey);
             }
         });
-        return result;
+        return { itemsByStatus: statusResult, itemsBySpecialCfop: specialCfopResult };
     }, [enrichedItems, competence, allPersistedData]);
 
     const numSelected = Object.keys(rowSelection).length;
@@ -604,8 +608,6 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
         { status: 'incorrect', label: 'Incorreto' },
         { status: 'verify', label: 'Verificar' },
         { status: 'difal', label: 'DIFAL' },
-        { status: 'entrega-futura', label: 'Entrega Futura' },
-        { status: 'simples-faturamento', label: 'Simples Faturamento' },
     ];
     
     return (
@@ -629,13 +631,14 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
                 </div>
             )}
             
-            <Tabs value={activeStatusTab} onValueChange={(val) => setActiveStatusTab(val as ValidationStatus)} className="w-full">
+            <Tabs value={activeStatusTab} onValueChange={(val) => setActiveStatusTab(val as ValidationStatus | 'faturamento-entrega')} className="w-full">
                  <div className="flex justify-between items-center mb-2">
-                    <TabsList className="grid w-full grid-cols-8">
+                    <TabsList className="grid w-full grid-cols-7">
                         {statusTabs.map(({status, label}) => {
                             const count = Object.values(itemsByStatus[status] || {}).flat().length;
                             return <TabsTrigger key={status} value={status} disabled={count === 0}>{label} ({count})</TabsTrigger>
                         })}
+                         <TabsTrigger value="faturamento-entrega">Faturamento/Entrega</TabsTrigger>
                     </TabsList>
                     <div className="flex gap-2 ml-4">
                         <Button onClick={handleEnrichData} variant="outline" size="sm"><RefreshCw className="mr-2 h-4 w-4" />Carregar ICMS/CEST do XML</Button>
@@ -736,6 +739,20 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
                         </TabsContent>
                     )
                 })}
+                <TabsContent value="faturamento-entrega" className="mt-4">
+                    <Tabs defaultValue="entrega-futura">
+                        <TabsList className="grid w-full grid-cols-2">
+                             <TabsTrigger value="entrega-futura">Entrega Futura ({Object.values(itemsBySpecialCfop['entrega-futura']).flat().length})</TabsTrigger>
+                             <TabsTrigger value="simples-faturamento">Simples Faturamento ({Object.values(itemsBySpecialCfop['simples-faturamento']).flat().length})</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="entrega-futura" className="mt-4">
+                            <DataTable columns={columns} data={Object.values(itemsBySpecialCfop['entrega-futura']).flat()} rowSelection={rowSelection} setRowSelection={setRowSelection} />
+                        </TabsContent>
+                        <TabsContent value="simples-faturamento" className="mt-4">
+                            <DataTable columns={columns} data={Object.values(itemsBySpecialCfop['simples-faturamento']).flat()} rowSelection={rowSelection} setRowSelection={setRowSelection} />
+                        </TabsContent>
+                    </Tabs>
+                </TabsContent>
             </Tabs>
         </div>
     );
