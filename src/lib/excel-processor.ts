@@ -390,11 +390,11 @@ export function runReconciliation(
             const headers = Object.keys(data[0]);
             return headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
         };
-
+        
         const h = {
-            cnpj: findHeader(siengeData, ['credor']),
-            numero: findHeader(siengeData, ['documento']),
-            valorTotal: findHeader(siengeData, ['valor']),
+            cnpj: findHeader(siengeData, ['credor', 'cpf/cnpj', 'cpf/cnpj do fornecedor']),
+            numero: findHeader(siengeData, ['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
+            valorTotal: findHeader(siengeData, ['valor', 'valor total', 'vlr total']),
             esp: findHeader(siengeData, ['esp']),
             cfop: findHeader(siengeData, ['cfop']),
             icmsOutras: findHeader(siengeData, ['icms outras', 'icmsoutras']),
