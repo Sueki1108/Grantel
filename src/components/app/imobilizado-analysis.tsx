@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -20,16 +21,13 @@ import * as React from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { SupplierCategoryDialog } from './supplier-category-dialog';
 import { cn, cleanAndToStr, normalizeKey } from '@/lib/utils';
-import type { AllClassifications, Classification, SupplierCategory, DifalStatus } from '@/lib/types';
+import type { AllClassifications, Classification, SupplierCategory } from '@/lib/types';
 import { Input } from '../ui/input';
 import * as LucideIcons from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { ScrollArea } from '../ui/scroll-area';
 import { Checkbox } from '../ui/checkbox';
 import { Label } from '../ui/label';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
-import { format } from 'date-fns';
-import { cfopDescriptions } from '@/lib/cfop';
 
 
 interface ImobilizadoAnalysisProps {
@@ -161,17 +159,19 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
             return headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
         };
 
-        const siengeHeaderNumero = findSiengeHeader(['número', 'numero', 'numero da nota', 'nota fiscal', 'documento']);
-        const siengeHeaderCnpj = findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor']);
-        const siengeHeaderCfop = findSiengeHeader(['cfop']);
-        const siengeHeaderProdFiscal = findSiengeHeader(['produto fiscal', 'descrição do item']);
+        const hSienge = {
+            numero: findSiengeHeader(['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
+            cpfCnpj: findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor']),
+            cfop: findSiengeHeader(['cfop']),
+            produtoFiscal: findSiengeHeader(['produto fiscal', 'descrição do item']),
+        };
 
 
         const siengeItemMap = new Map<string, any[]>();
-        if (siengeData && siengeHeaderNumero && siengeHeaderCnpj) {
+        if (siengeData && hSienge.numero && hSienge.cpfCnpj) {
             siengeData.forEach(sItem => {
-                const docNumber = sItem[siengeHeaderNumero!];
-                const credorCnpj = sItem[siengeHeaderCnpj!];
+                const docNumber = sItem[hSienge.numero!];
+                const credorCnpj = sItem[hSienge.cpfCnpj!];
                 if (docNumber && credorCnpj) {
                     const key = `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCnpj)}`;
                     if (!siengeItemMap.has(key)) {
@@ -193,15 +193,14 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
             const siengeMatches = siengeItemMap.get(comparisonKey) || [];
 
             let siengeCfopValue = 'N/A';
-
-            if (siengeMatches.length > 0 && siengeHeaderCfop && siengeHeaderProdFiscal) {
-                 const siengeMatch = siengeMatches.find(si => {
+            if (siengeMatches.length > 0 && hSienge.cfop && hSienge.produtoFiscal) {
+                const siengeMatch = siengeMatches.find(si => {
                     const xmlProdCode = cleanAndToStr(item['Código']);
-                    const siengeProdCode = cleanAndToStr(String(si[siengeHeaderProdFiscal!]).split('-')[0]);
+                    const siengeProdCode = cleanAndToStr(String(si[hSienge.produtoFiscal!]).split('-')[0]);
                     return xmlProdCode === siengeProdCode;
                 }) || siengeMatches[0];
                 if (siengeMatch) {
-                    siengeCfopValue = siengeMatch[siengeHeaderCfop] || 'N/A';
+                    siengeCfopValue = siengeMatch[hSienge.cfop] || 'N/A';
                 }
             }
             
@@ -225,8 +224,9 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
     const allCfops = useMemo(() => {
         const cfops = new Set<string>();
         imobilizadoItems.forEach(item => {
-            if (item['CFOP (Sienge)'] && item['CFOP (Sienge)'] !== 'N/A') cfops.add(String(item['CFOP (Sienge)']));
-            if (item['CFOP (XML)'] && item['CFOP (XML)'] !== 'N/A') cfops.add(String(item['CFOP (XML)']));
+            if (item['CFOP (XML)'] && item['CFOP (XML)'] !== 'N/A') {
+                cfops.add(String(item['CFOP (XML)']));
+            }
         });
         return Array.from(cfops).sort();
     }, [imobilizadoItems]);
@@ -277,7 +277,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
 
         const itemsToProcess = cfopFilter.size === 0
             ? imobilizadoItems
-            : imobilizadoItems.filter(item => cfopFilter.has(String(item['CFOP (Sienge)'])) || cfopFilter.has(String(item['CFOP (XML)'])));
+            : imobilizadoItems.filter(item => cfopFilter.has(String(item['CFOP (XML)'])));
 
         itemsToProcess.forEach(item => {
             let classification: Classification = 'unclassified';
@@ -543,7 +543,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
                                 </DialogTrigger>
                                 <DialogContent className="max-w-4xl">
                                     <DialogHeader>
-                                        <DialogTitle>Filtrar por CFOP</DialogTitle>
+                                        <DialogTitle>Filtrar por CFOP (do XML)</DialogTitle>
                                         <DialogDescription>Selecione os CFOPs que deseja visualizar na tabela. Se nada for selecionado, todos serão exibidos.</DialogDescription>
                                     </DialogHeader>
                                     <div className="flex gap-2 my-2">
@@ -560,7 +560,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
                                                         onCheckedChange={(checked) => handleCfopFilterChange(cfop, !!checked)}
                                                     />
                                                     <Label htmlFor={`cfop-filter-${cfop}`} className="text-sm font-normal cursor-pointer">
-                                                        {cfop}: {cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}
+                                                        {cfop}: {(cfopDescriptions[parseInt(cfop, 10)] || "Descrição não encontrada")}
                                                     </Label>
                                                 </div>
                                             ))}
@@ -612,3 +612,4 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
         </div>
     );
 }
+
