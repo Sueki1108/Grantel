@@ -24,17 +24,31 @@ const getColumnsForDivergentTabs = (data: any[]) => {
     const allKeys = new Set<string>();
     data.forEach(item => {
         if(item && typeof item === 'object') {
-            Object.keys(item).forEach(key => allKeys.add(key));
+            Object.keys(item).forEach(key => {
+                if (key !== '__itemKey') {
+                    allKeys.add(key);
+                }
+            });
         }
     });
-
-    // Ensure 'Chave de Comparação' is first if it exists
+    
     const sortedKeys: string[] = [];
+    
+    // Prioritize "Chave de Comparação"
     if (allKeys.has('Chave de Comparação')) {
         sortedKeys.push('Chave de Comparação');
         allKeys.delete('Chave de Comparação');
     }
     
+    // Add other important keys in a specific order if they exist
+    const preferredOrder = ['Chave de acesso', 'Número da Nota', 'Credor', 'Fornecedor', 'Descrição', 'Valor Total'];
+    preferredOrder.forEach(key => {
+        if (allKeys.has(key)) {
+            sortedKeys.push(key);
+            allKeys.delete(key);
+        }
+    });
+
     // Add remaining keys, sorted alphabetically
     sortedKeys.push(...Array.from(allKeys).sort());
     

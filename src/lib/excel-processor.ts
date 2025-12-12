@@ -412,10 +412,10 @@ export function runReconciliation(
         }
         
         const getComparisonKey = (numero: any, cnpj: any, valor: any): string => {
-            const cleanNumero = cleanAndToStr(numero);
-            const cleanCnpj = cleanAndToStr(String(cnpj || ''));
+            const cleanNumero = cleanAndToStr(numero) || 'N/A';
+            const cleanCnpj = cleanAndToStr(String(cnpj || '')) || 'N/A';
             const cleanValor = (valor !== undefined && valor !== null) ? parseFloat(String(valor).replace(',', '.')).toFixed(2) : 'N/A';
-            return `${cleanNumero || 'N/A'}-${cleanCnpj || 'N/A'}-${cleanValor}`;
+            return `${cleanNumero}-${cleanCnpj}-${cleanValor}`;
         };
         
         const getSiengeComparisonKey = (item: any, headers: typeof h, valueField: string | undefined): string => {
@@ -425,7 +425,7 @@ export function runReconciliation(
         
         const getXmlComparisonKey = (item: any, valueField: string): string => {
             const valor = (item[valueField] !== undefined) ? item[valueField] : null;
-            return getComparisonKey(item['Número da Nota'] || item['Número'], item['CPF/CNPJ do Fornecedor'], valor);
+            return getComparisonKey(item['Número da Nota'] || item['Número'], item['CPF/CNPJ do Emitente'], valor);
         };
 
 
