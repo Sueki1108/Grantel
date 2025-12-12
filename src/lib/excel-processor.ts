@@ -1,4 +1,5 @@
 
+
 import { cfopDescriptions } from './cfop';
 import type { KeyCheckResult } from '@/components/app/key-checker';
 import type { AllClassifications } from '@/lib/types';
@@ -414,8 +415,8 @@ export function runReconciliation(
             produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
         };
         
-        if (!h.cpfCnpj || !h.numero || !h.esp) {
-            throw new Error("Não foi possível encontrar as colunas essenciais ('CPF/CNPJ', 'Documento', 'Esp') na planilha Sienge.");
+        if (!h.numero || !h.esp || (!h.cpfCnpj && !h.credor)) {
+            throw new Error("Não foi possível encontrar as colunas essenciais ('CPF/CNPJ' ou 'Credor', 'Documento', 'Esp') na planilha Sienge.");
         }
         
         const getComparisonKey = (numero: any, cnpj: any, valor: any): string => {
@@ -426,8 +427,9 @@ export function runReconciliation(
         };
         
         const getSiengeComparisonKey = (item: any, headers: typeof h, valueField: string | undefined): string => {
+            const cnpjValue = headers.cpfCnpj ? item[headers.cpfCnpj] : (headers.credor ? String(item[headers.credor]).split('-')[0] : '');
             const valor = (valueField && item[valueField] !== undefined) ? item[valueField] : null;
-            return getComparisonKey(item[headers.numero!], item[headers.cpfCnpj!], valor);
+            return getComparisonKey(item[headers.numero!], cnpjValue, valor);
         };
         
         const getXmlComparisonKey = (item: any, valueField: string): string => {
@@ -516,11 +518,13 @@ export function runReconciliation(
         }
 
         reconciled.forEach(item => {
-            if (costCenterMap && h.numero && h.cpfCnpj) {
+            if (costCenterMap && h.numero && h.credor) {
                 const docNumberForCostCenter = item[`Sienge_${h.numero}`];
-                const credorCnpjForCostCenter = item[`Sienge_${h.cpfCnpj}`];
-                if (docNumberForCostCenter && credorCnpjForCostCenter) {
-                    const costCenterKey = `${cleanAndToStr(docNumberForCostCenter)}-${cleanAndToStr(credorCnpjForCostCenter)}`;
+                const credorForCostCenter = item[`Sienge_${h.credor}`]; 
+                if (docNumberForCostCenter && credorForCostCenter) {
+                    const docNumberClean = cleanAndToStr(docNumberForCostCenter);
+                    const credorCodeClean = cleanAndToStr(String(credorForCostCenter).split('-')[0]);
+                    const costCenterKey = `${docNumberClean}-${credorCodeClean}`;
                     item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
                 }
             }
