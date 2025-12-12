@@ -555,8 +555,8 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
             'entrega-futura': {}, 'simples-faturamento': {}
         };
 
-        const ENTREGA_FUTURA_CFOPS = ['1116', '1117', '2116', '2117'];
-        const SIMPLES_FATURAMENTO_CFOPS = ['1922', '2922'];
+        const ENTREGA_FUTURA_CFOPS = ['5116', '5117', '6116', '6117'];
+        const SIMPLES_FATURAMENTO_CFOPS = ['5922', '6922'];
     
         enrichedItems.forEach(item => {
             const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
@@ -755,5 +755,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
         </div>
     );
 }
+
+    
 
     
