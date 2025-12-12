@@ -1,11 +1,10 @@
-
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, X, HelpCircle, RotateCw, ListFilter, Copy, Download, Factory, Wrench, HardHat, EyeOff, Settings, Ticket, Tag, RefreshCw, ChevronDown, ChevronRight, MinusCircle } from "lucide-react";
+import { Check, X, HelpCircle, RotateCw, ListFilter, Copy, Download, Factory, Wrench, HardHat, EyeOff, Settings, Ticket, Tag, RefreshCw, ChevronDown, ChevronRight, MinusCircle, Cpu } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import type { AllClassifications, SupplierCategory } from '@/lib/types';
 import {
@@ -223,6 +222,9 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
     const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
     const [bulkActionState, setBulkActionState] = useState<BulkActionState>({ classification: null, isDifal: null });
+    const [itemsBySpecialCfop, setItemsBySpecialCfop] = useState<Record<'entrega-futura' | 'simples-faturamento', Record<string, any[]>>>({ 'entrega-futura': {}, 'simples-faturamento': {} });
+    const [isLoadingSpecialCfops, setIsLoadingSpecialCfops] = useState(false);
+
 
     useEffect(() => {
         if (!initialItems) {
@@ -406,7 +408,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
     const columns = useMemo(() => {
         if (!enrichedItems || enrichedItems.length === 0) return [];
         
-        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'Centro de Custo', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
+        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'Centro de Custo', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP (XML)', 'CFOP (Sienge)', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
         const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
         const supplierCategories = allPersistedData.supplierCategories || [];
         const supplierClassifications = (competence && allPersistedData[competence]?.supplierClassifications) || {};
@@ -482,14 +484,6 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
                 if (['Valor Total'].includes(id) && typeof value === 'number') {
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
                 }
-
-                if (id === 'CFOP') {
-                    return (
-                        <div className="flex items-center gap-1">
-                            <span>{value}</span>
-                        </div>
-                    );
-                }
                 
                 return <div>{String(value ?? '')}</div>;
             }
@@ -545,29 +539,21 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
         ]);
     }, [enrichedItems, allPersistedData, competence, toast]);
     
-    const { itemsByStatus, itemsBySpecialCfop } = useMemo(() => {
+    const itemsByStatus = useMemo(() => {
         const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
         
         const statusResult: Record<ValidationStatus, Record<string, any[]>> = {
             all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}, difal: {}
         };
-        const specialCfopResult: Record<'entrega-futura' | 'simples-faturamento', Record<string, any[]>> = {
-            'entrega-futura': {}, 'simples-faturamento': {}
-        };
-
-        const ENTREGA_FUTURA_CFOPS = ['5116', '5117', '6116', '6117'];
-        const SIMPLES_FATURAMENTO_CFOPS = ['5922', '6922'];
-    
+        
         enrichedItems.forEach(item => {
             const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const validation = cfopValidations[uniqueKey];
             const classification = validation?.classification || 'unvalidated';
             const isDifal = validation?.isDifal || false;
-            const xmlCfop = item['CFOP (XML)'];
             const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
             const siengeCfop = item.Sienge_CFOP || 'N/A';
 
-            // Distribution by validation status
             if (!statusResult.all[siengeCfop]) statusResult.all[siengeCfop] = [];
             statusResult.all[siengeCfop].push(itemWithKey);
 
@@ -578,20 +564,43 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
                 if (!statusResult.difal[siengeCfop]) statusResult.difal[siengeCfop] = [];
                 statusResult.difal[siengeCfop].push(itemWithKey);
             }
-            
-            // Distribution by special CFOP
-            if (ENTREGA_FUTURA_CFOPS.includes(xmlCfop)) {
-                if (!specialCfopResult['entrega-futura'][siengeCfop]) specialCfopResult['entrega-futura'][siengeCfop] = [];
-                specialCfopResult['entrega-futura'][siengeCfop].push(itemWithKey);
-            }
-
-            if (SIMPLES_FATURAMENTO_CFOPS.includes(xmlCfop)) {
-                if (!specialCfopResult['simples-faturamento'][siengeCfop]) specialCfopResult['simples-faturamento'][siengeCfop] = [];
-                specialCfopResult['simples-faturamento'][siengeCfop].push(itemWithKey);
-            }
         });
-        return { itemsByStatus: statusResult, itemsBySpecialCfop: specialCfopResult };
+        return statusResult;
     }, [enrichedItems, competence, allPersistedData]);
+
+
+    const handleLoadSpecialCfops = React.useCallback(() => {
+        setIsLoadingSpecialCfops(true);
+        setTimeout(() => {
+            const specialCfopResult: Record<'entrega-futura' | 'simples-faturamento', Record<string, any[]>> = {
+                'entrega-futura': {}, 'simples-faturamento': {}
+            };
+
+            const ENTREGA_FUTURA_CFOPS = ['5116', '5117', '6116', '6117'];
+            const SIMPLES_FATURAMENTO_CFOPS = ['5922', '6922'];
+        
+            enrichedItems.forEach(item => {
+                const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+                const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
+                const xmlCfop = item['CFOP (XML)'];
+                const siengeCfop = item.Sienge_CFOP || 'N/A';
+
+                if (ENTREGA_FUTURA_CFOPS.includes(xmlCfop)) {
+                    if (!specialCfopResult['entrega-futura'][siengeCfop]) specialCfopResult['entrega-futura'][siengeCfop] = [];
+                    specialCfopResult['entrega-futura'][siengeCfop].push(itemWithKey);
+                }
+
+                if (SIMPLES_FATURAMENTO_CFOPS.includes(xmlCfop)) {
+                    if (!specialCfopResult['simples-faturamento'][siengeCfop]) specialCfopResult['simples-faturamento'][siengeCfop] = [];
+                    specialCfopResult['simples-faturamento'][siengeCfop].push(itemWithKey);
+                }
+            });
+            setItemsBySpecialCfop(specialCfopResult);
+            setIsLoadingSpecialCfops(false);
+            toast({ title: 'Análise Concluída', description: 'As notas de faturamento e entrega futura foram carregadas.' });
+        }, 50);
+    }, [enrichedItems, toast]);
+
 
     const numSelected = Object.keys(rowSelection).length;
     
@@ -738,6 +747,13 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
                     )
                 })}
                 <TabsContent value="faturamento-entrega" className="mt-4">
+                     <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-lg mb-6">
+                        <p className="text-muted-foreground mb-4">Clique no botão para analisar as notas de Entrega Futura e Simples Faturamento de todos os itens conciliados.</p>
+                        <Button onClick={handleLoadSpecialCfops} disabled={isLoadingSpecialCfops}>
+                            {isLoadingSpecialCfops ? <><Cpu className="mr-2 h-4 w-4 animate-spin" />Analisando...</> : <><Cpu className="mr-2 h-4 w-4" />Analisar Faturamento/Entrega</>}
+                        </Button>
+                    </div>
+
                     <Tabs defaultValue="entrega-futura">
                         <TabsList className="grid w-full grid-cols-2">
                              <TabsTrigger value="entrega-futura">Entrega Futura ({Object.values(itemsBySpecialCfop['entrega-futura']).flat().length})</TabsTrigger>
