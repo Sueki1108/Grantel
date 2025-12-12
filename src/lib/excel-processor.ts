@@ -410,19 +410,13 @@ export function runReconciliation(
         if (!h.cnpj || !h.numero || !h.esp) {
             throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Esp') na planilha Sienge.");
         }
-
-        const getComparisonKey = (item: any, headers: typeof h, valueField: string | undefined): string => {
+        
+        const getSiengeComparisonKey = (item: any, headers: typeof h, valueField: string | undefined): string => {
             const numero = cleanAndToStr(item[headers.numero!]);
             const cnpj = cleanAndToStr(String(item[headers.cnpj!] || ''));
             let valor = 'N/A';
-            if (valueField && item[valueField] !== undefined && item[valueField] !== null) {
+             if (valueField && item[valueField] !== undefined && item[valueField] !== null) {
                 const parsedValue = parseFloat(String(item[valueField]).replace(',', '.'));
-                if (!isNaN(parsedValue)) {
-                    valor = parsedValue.toFixed(2);
-                }
-            } else if (headers.valorTotal && item[headers.valorTotal] !== undefined && item[headers.valorTotal] !== null) {
-                // Fallback to valorTotal if specific value field is missing
-                const parsedValue = parseFloat(String(item[headers.valorTotal]).replace(',', '.'));
                 if (!isNaN(parsedValue)) {
                     valor = parsedValue.toFixed(2);
                 }
@@ -431,12 +425,13 @@ export function runReconciliation(
         };
         
         const getXmlComparisonKey = (item: any, valueField: string): string => {
-            const numero = cleanAndToStr(item['Número da Nota']);
-            const cnpj = cleanAndToStr(item['CPF/CNPJ do Emitente']);
+            const numero = cleanAndToStr(item['Número']);
+            const cnpj = cleanAndToStr(item['CPF/CNPJ do Fornecedor']);
             const valorParsed = parseFloat(String(item[valueField] || '0').replace(',', '.'));
             const valor = !isNaN(valorParsed) ? valorParsed.toFixed(2) : 'N/A';
             return `${numero || 'N/A'}-${cnpj || 'N/A'}-${valor}`;
         };
+
 
         const filteredSiengeData = siengeData.filter(row => {
             const espValue = row[h.esp!] ? String(row[h.esp!]).trim().toUpperCase() : '';
@@ -454,7 +449,7 @@ export function runReconciliation(
         }, {} as {[esp: string]: any[]});
 
         let reconciled: any[] = [];
-        let remainingXmlItems = [...xmlItems];
+        let remainingXmlItems = [...xmlItems, ...cteData];
         let remainingSiengeItems = [...filteredSiengeData];
         
         const reconciliationPass = (
@@ -479,11 +474,12 @@ export function runReconciliation(
             });
 
             siengeItems.forEach(siengeItem => {
-                const key = getComparisonKey(siengeItem, h, siengeValueField);
+                const key = getSiengeComparisonKey(siengeItem, h, siengeValueField);
                 if (key && xmlMap.has(key)) {
                     const matchedXmlItems = xmlMap.get(key)!;
                     if (matchedXmlItems.length > 0) {
                         const matchedXmlItem = matchedXmlItems.shift()!; // Consume one match
+                        if (matchedXmlItems.length === 0) xmlMap.delete(key);
                         matchedInPass.push({ ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 'Observações': `Conciliado via ${passName}` });
                         return;
                     }
@@ -529,12 +525,12 @@ export function runReconciliation(
         });
         
         const finalOnlyInSienge = remainingSiengeItems.map(item => ({
-            'Chave de Comparação': getComparisonKey(item, h, h.valorTotal),
+            "Chave de Comparação": getSiengeComparisonKey(item, h, h.valorTotal),
             ...item
         }));
 
         const finalOnlyInXml = remainingXmlItems.map(item => ({
-            'Chave de Comparação': getXmlComparisonKey(item, 'Valor Total'),
+            "Chave de Comparação": getXmlComparisonKey(item, 'Valor Total'),
             ...item
         }));
 
