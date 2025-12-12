@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Settings2, Copy, HelpCircle, Tag, ListFilter, Save } from "lucide-react";
+import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Settings2, Copy, HelpCircle, Tag, ListFilter, Save, RefreshCw } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -35,6 +35,7 @@ interface ImobilizadoAnalysisProps {
     items: any[]; 
     siengeData: any[] | null;
     nfeValidasData: any[];
+    originalXmlItems: any[];
     competence: string | null; 
     onPersistData: (allData: AllClassifications) => void;
     allPersistedData: AllClassifications;
@@ -67,7 +68,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
 }
 
 
-export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeValidasData, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
+export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeValidasData, originalXmlItems, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -76,7 +77,110 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
     const [isSupplierCategoryModalOpen, setIsSupplierCategoryModalOpen] = useState(false);
     const [cfopFilter, setCfopFilter] = useState<Set<string>>(new Set());
     const [isCfopModalOpen, setIsCfopModalOpen] = useState(false);
+    const [enrichedItems, setEnrichedItems] = useState<any[]>([]);
 
+    useEffect(() => {
+        if (!initialAllItems) {
+            setEnrichedItems([]);
+            return;
+        }
+
+        const findSiengeHeader = (possibleNames: string[]): string | undefined => {
+            if (!siengeData || siengeData.length === 0 || !siengeData[0]) return undefined;
+            const headers = Object.keys(siengeData[0]);
+            return headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
+        };
+
+        const hSienge = {
+            numero: findHeader(['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
+            cpfCnpj: findHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpfcnpj']),
+            cfop: findHeader(['cfop']),
+            produtoFiscal: findHeader(['produto fiscal', 'descrição do item', 'descrição']),
+        };
+
+        const siengeItemMap = new Map<string, any[]>();
+        if (siengeData && hSienge.numero && hSienge.cpfCnpj) {
+            siengeData.forEach(sItem => {
+                const docNumber = sItem[hSienge.numero!];
+                const credorCnpj = sItem[hSienge.cpfCnpj!];
+                if (docNumber && credorCnpj) {
+                    const key = `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCnpj)}`;
+                    if (!siengeItemMap.has(key)) {
+                         siengeItemMap.set(key, []);
+                    }
+                    siengeItemMap.get(key)!.push(sItem);
+                }
+            });
+        }
+        
+        const nfeHeaderMap = new Map((nfeValidasData || []).map(n => [n['Chave Unica'], n]));
+
+        const newItems = initialAllItems.map(item => {
+            const header = nfeHeaderMap.get(item['Chave Unica']);
+            const emitenteCnpj = header?.['CPF/CNPJ do Fornecedor'] || item['CPF/CNPJ do Emitente'] || '';
+            const codigoProduto = item['Código'] || '';
+            const numeroNota = item['Número da Nota'] || '';
+
+            const comparisonKey = `${cleanAndToStr(numeroNota)}-${cleanAndToStr(emitenteCnpj)}`;
+            const siengeMatches = siengeItemMap.get(comparisonKey) || [];
+
+            let siengeCfopValue = 'N/A';
+            if (siengeMatches.length > 0 && hSienge.cfop && hSienge.produtoFiscal) {
+                const siengeMatch = siengeMatches.find(si => {
+                    const xmlProdCode = cleanAndToStr(item['Código']);
+                    const siengeProdCode = cleanAndToStr(String(si[hSienge.produtoFiscal!]).split('-')[0]);
+                    return xmlProdCode === siengeProdCode;
+                }) || siengeMatches[0];
+                if (siengeMatch) {
+                    siengeCfopValue = siengeMatch[hSienge.cfop!] || 'N/A';
+                }
+            }
+            
+            return {
+                ...item,
+                id: `${item['Chave Unica'] || ''}-${item['Item'] || ''}`,
+                uniqueItemId: `${emitenteCnpj}-${codigoProduto}`,
+                Fornecedor: header?.Fornecedor || 'N/A',
+                'CPF/CNPJ do Emitente': emitenteCnpj,
+                'CFOP (XML)': item.CFOP, 
+                'CFOP (Sienge)': siengeCfopValue,
+                destUF: header?.destUF || '',
+                'Alíq. ICMS (%)': item['Alíq. ICMS (%)'] === undefined ? null : item['Alíq. ICMS (%)'],
+                'CST do ICMS': item['CST do ICMS'] === undefined ? null : item['CST do ICMS'],
+            };
+        });
+        setEnrichedItems(newItems);
+    }, [initialAllItems, siengeData, nfeValidasData]);
+
+    const handleEnrichData = () => {
+        if (!originalXmlItems || originalXmlItems.length === 0) {
+            toast({ variant: 'destructive', title: 'Dados XML originais não encontrados.' });
+            return;
+        }
+
+        const originalXmlItemsMap = new Map();
+        originalXmlItems.forEach(item => {
+            const key = `${item['Chave de acesso']}-${item['Item']}`;
+            originalXmlItemsMap.set(key, item);
+        });
+
+        const newEnrichedItems = enrichedItems.map(item => {
+            const key = `${item['Chave de acesso']}-${item['Item']}`;
+            const originalItem = originalXmlItemsMap.get(key);
+            if (originalItem) {
+                return {
+                    ...item,
+                    'CST do ICMS': originalItem['CST do ICMS'] ?? item['CST do ICMS'],
+                    'Alíq. ICMS (%)': originalItem['Alíq. ICMS (%)'] ?? item['Alíq. ICMS (%)'],
+                    'CEST': originalItem['CEST'] ?? item['CEST'],
+                };
+            }
+            return item;
+        });
+        
+        setEnrichedItems(newEnrichedItems);
+        toast({ title: 'Dados Enriquecidos!', description: 'As colunas de ICMS e CEST foram carregadas do XML.' });
+    };
 
     const handlePersistClassifications = (competence: string, classifications: { [uniqueItemId: string]: { classification: Classification } }) => {
         const updatedData = { ...allPersistedData };
@@ -151,86 +255,15 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
     };
 
 
-    const imobilizadoItems = useMemo(() => {
-        if (!initialAllItems) return [];
-    
-        const findSiengeHeader = (possibleNames: string[]): string | undefined => {
-            if (!siengeData || siengeData.length === 0 || !siengeData[0]) return undefined;
-            const headers = Object.keys(siengeData[0]);
-            return headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
-        };
-
-        const hSienge = {
-            numero: findSiengeHeader(['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
-            cpfCnpj: findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpfcnpj']),
-            cfop: findSiengeHeader(['cfop']),
-            produtoFiscal: findSiengeHeader(['produto fiscal', 'descrição do item']),
-        };
-
-
-        const siengeItemMap = new Map<string, any[]>();
-        if (siengeData && hSienge.numero && hSienge.cpfCnpj) {
-            siengeData.forEach(sItem => {
-                const docNumber = sItem[hSienge.numero!];
-                const credorCnpj = sItem[hSienge.cpfCnpj!];
-                if (docNumber && credorCnpj) {
-                    const key = `${cleanAndToStr(docNumber)}-${cleanAndToStr(credorCnpj)}`;
-                    if (!siengeItemMap.has(key)) {
-                         siengeItemMap.set(key, []);
-                    }
-                    siengeItemMap.get(key)!.push(sItem);
-                }
-            });
-        }
-        
-        const nfeHeaderMap = new Map((nfeValidasData || []).map(n => [n['Chave Unica'], n]));
-
-        return initialAllItems.map(item => {
-            const emitenteCnpj = item['CPF/CNPJ do Emitente'] || '';
-            const codigoProduto = item['Código'] || '';
-            const numeroNota = item['Número da Nota'] || '';
-
-            const comparisonKey = `${cleanAndToStr(numeroNota)}-${cleanAndToStr(emitenteCnpj)}`;
-            const siengeMatches = siengeItemMap.get(comparisonKey) || [];
-
-            let siengeCfopValue = 'N/A';
-            if (siengeMatches.length > 0 && hSienge.cfop && hSienge.produtoFiscal) {
-                const siengeMatch = siengeMatches.find(si => {
-                    const xmlProdCode = cleanAndToStr(item['Código']);
-                    const siengeProdCode = cleanAndToStr(String(si[hSienge.produtoFiscal!]).split('-')[0]);
-                    return xmlProdCode === siengeProdCode;
-                }) || siengeMatches[0];
-                if (siengeMatch) {
-                    siengeCfopValue = siengeMatch[hSienge.cfop] || 'N/A';
-                }
-            }
-            
-            const header = nfeHeaderMap.get(item['Chave Unica']);
-
-            return {
-                ...item,
-                id: `${item['Chave Unica'] || ''}-${item['Item'] || ''}`,
-                uniqueItemId: `${emitenteCnpj}-${codigoProduto}`,
-                Fornecedor: header?.Fornecedor || 'N/A',
-                'CPF/CNPJ do Emitente': emitenteCnpj,
-                'CFOP (XML)': item.CFOP, 
-                'CFOP (Sienge)': siengeCfopValue,
-                destUF: header?.destUF || '',
-                'Alíq. ICMS (%)': item['Alíq. ICMS (%)'] === undefined ? null : item['Alíq. ICMS (%)']
-            };
-        });
-    }, [initialAllItems, siengeData, nfeValidasData]);
-    
-    
     const allCfops = useMemo(() => {
         const cfops = new Set<string>();
-        imobilizadoItems.forEach(item => {
+        enrichedItems.forEach(item => {
             if (item['CFOP (XML)'] && item['CFOP (XML)'] !== 'N/A') {
                 cfops.add(String(item['CFOP (XML)']));
             }
         });
         return Array.from(cfops).sort();
-    }, [imobilizadoItems]);
+    }, [enrichedItems]);
     
     useEffect(() => {
         try {
@@ -277,8 +310,8 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
         const persistedForCompetence = (competence && allPersistedData[competence]?.classifications) || {};
 
         const itemsToProcess = cfopFilter.size === 0
-            ? imobilizadoItems
-            : imobilizadoItems.filter(item => cfopFilter.has(String(item['CFOP (XML)'])));
+            ? enrichedItems
+            : enrichedItems.filter(item => cfopFilter.has(String(item['CFOP (XML)'])));
 
         itemsToProcess.forEach(item => {
             let classification: Classification = 'unclassified';
@@ -292,7 +325,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
         });
         
         return categories;
-    }, [imobilizadoItems, competence, allPersistedData, cfopFilter]);
+    }, [enrichedItems, competence, allPersistedData, cfopFilter]);
     
     const handleDownload = (data: any[], classification: Classification) => {
         if (data.length === 0) {
@@ -345,10 +378,10 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
             </div>
         );
     
-        const columnsToShow = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP (XML)', 'CFOP (Sienge)', 'Valor Unitário', 'Valor Total'];
+        const columnsToShow = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP (XML)', 'CFOP (Sienge)', 'CST do ICMS', 'Alíq. ICMS (%)', 'Valor Unitário', 'Valor Total'];
     
         const baseColumns = getColumnsWithCustomRender(
-            imobilizadoItems,
+            enrichedItems,
             columnsToShow,
             (row, id) => {
                 const item = row.original;
@@ -402,6 +435,10 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
                 if ((id === 'Valor Total' || id === 'Valor Unitário') && typeof value === 'number') {
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
                 }
+                
+                if (id === 'Alíq. ICMS (%)') {
+                    return <div className='text-center'>{typeof value === 'number' ? `${value.toFixed(2)}%` : <span className='text-muted-foreground'>N/A</span>}</div>;
+                }
 
                 const summarizedValue = typeof value === 'string' && value.length > 35 ? `${value.substring(0, 35)}...` : value;
     
@@ -413,7 +450,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
                     );
                 }
                 
-                return <div className={cn("truncate max-w-xs", isIncorrectCfop && "text-red-500")}>{String(value ?? '')}</div>;
+                return <div className={cn("truncate max-w-xs", isIncorrectCfop && "text-red-500", value === null || value === undefined ? 'text-muted-foreground' : '')}>{String(value ?? 'N/A')}</div>;
             }
         );
     
@@ -476,7 +513,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
         });
     
         return baseColumns;
-    }, [imobilizadoItems, activeTab, allPersistedData, competence, toast]);
+    }, [enrichedItems, activeTab, allPersistedData, competence, toast]);
 
 
     if (!initialAllItems || initialAllItems.length === 0) {
@@ -573,6 +610,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
                                     </DialogFooter>
                                 </DialogContent>
                             </Dialog>
+                             <Button onClick={handleEnrichData} variant="outline" size="sm"><RefreshCw className="mr-2 h-4 w-4" />Carregar ICMS/CST do XML</Button>
                         </div>
                     </div>
                 </CardHeader>
@@ -613,3 +651,5 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
         </div>
     );
 }
+
+    
