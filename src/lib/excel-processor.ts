@@ -386,19 +386,20 @@ export function runReconciliation(
 
     try {
         const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
-            if (!data || data.length === 0 || !data[0]) return undefined;
-            const headers = Object.keys(data[0]);
-            
-            for (const name of possibleNames) {
+             if (!data || data.length === 0 || !data[0]) return undefined;
+             const headers = Object.keys(data[0]);
+             
+             for (const name of possibleNames) {
                  const normalizedName = normalizeKey(name);
                  const found = headers.find(h => normalizeKey(h) === normalizedName);
                  if (found) return found;
-            }
-            return undefined;
+             }
+             return undefined;
         };
         
         const h = {
-            cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'credor']),
+            cpfCnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
+            credor: findHeader(siengeData, ['credor']),
             numero: findHeader(siengeData, ['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
             valorTotal: findHeader(siengeData, ['valor', 'valor total', 'vlr total']),
             esp: findHeader(siengeData, ['esp']),
@@ -413,7 +414,7 @@ export function runReconciliation(
             produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
         };
         
-        if (!h.cnpj || !h.numero || !h.esp) {
+        if (!h.cpfCnpj || !h.numero || !h.esp) {
             throw new Error("Não foi possível encontrar as colunas essenciais ('CPF/CNPJ', 'Documento', 'Esp') na planilha Sienge.");
         }
         
@@ -426,7 +427,7 @@ export function runReconciliation(
         
         const getSiengeComparisonKey = (item: any, headers: typeof h, valueField: string | undefined): string => {
             const valor = (valueField && item[valueField] !== undefined) ? item[valueField] : null;
-            return getComparisonKey(item[headers.numero!], item[headers.cnpj!], valor);
+            return getComparisonKey(item[headers.numero!], item[headers.cpfCnpj!], valor);
         };
         
         const getXmlComparisonKey = (item: any, valueField: string): string => {
@@ -515,12 +516,11 @@ export function runReconciliation(
         }
 
         reconciled.forEach(item => {
-            if (costCenterMap && h.numero && h.cnpj) {
-                 const docNumberForCostCenter = item[`Sienge_${h.numero}`];
-                 const credorForCostCenter = item[`Sienge_${h.cnpj}`];
-                 if (docNumberForCostCenter && credorForCostCenter) {
-                    const credorCode = String(credorForCostCenter).split('-')[0].trim();
-                    const costCenterKey = `${cleanAndToStr(docNumberForCostCenter)}-${cleanAndToStr(credorCode)}`;
+            if (costCenterMap && h.numero && h.cpfCnpj) {
+                const docNumberForCostCenter = item[`Sienge_${h.numero}`];
+                const credorCnpjForCostCenter = item[`Sienge_${h.cpfCnpj}`];
+                if (docNumberForCostCenter && credorCnpjForCostCenter) {
+                    const costCenterKey = `${cleanAndToStr(docNumberForCostCenter)}-${cleanAndToStr(credorCnpjForCostCenter)}`;
                     item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
                 }
             }
