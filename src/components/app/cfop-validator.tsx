@@ -225,7 +225,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
     const [bulkActionState, setBulkActionState] = useState<BulkActionState>({ classification: null, isDifal: null });
 
     useEffect(() => {
-        if (!initialItems || !nfeValidasData) {
+        if (!initialItems) {
             setEnrichedItems([]);
             return;
         }

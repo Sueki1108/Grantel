@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useMemo, useState, ChangeEvent } from 'react';
@@ -10,7 +9,7 @@ import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, Fi
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns } from "@/components/app/columns-helper";
+import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { SiengeTaxCheck } from './sienge-tax-check';
 import { CfopValidator } from './cfop-validator';
 import type { AllClassifications } from '@/lib/types';
@@ -242,6 +241,7 @@ export function ReconciliationAnalysis({
                     <TabsContent value="cfop_validation" className="mt-4">
                         <CfopValidator 
                             items={reconciliationResults?.reconciled || []}
+                            nfeValidasData={processedData?.sheets?.['Notas Válidas'] || []}
                             originalXmlItems={processedData?.sheets['Itens Válidos'] || []}
                             allPersistedData={allClassifications}
                             onPersistData={onPersistClassifications}
