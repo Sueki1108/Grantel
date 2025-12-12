@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -6,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Settings2, Copy, HelpCircle, Tag } from "lucide-react";
+import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Settings2, Copy, HelpCircle, Tag, ListFilter } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -24,6 +23,10 @@ import { cn, cleanAndToStr, normalizeKey } from '@/lib/utils';
 import type { AllClassifications, Classification, SupplierCategory, DifalStatus } from '@/lib/types';
 import { Input } from '../ui/input';
 import * as LucideIcons from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { ScrollArea } from '../ui/scroll-area';
+import { Checkbox } from '../ui/checkbox';
+import { Label } from '../ui/label';
 
 
 interface ImobilizadoAnalysisProps {
@@ -66,6 +69,8 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
     const containerRef = React.useRef<HTMLDivElement>(null);
     const [activeTab, setActiveTab] = useState<Classification>('unclassified');
     const [isSupplierCategoryModalOpen, setIsSupplierCategoryModalOpen] = useState(false);
+    const [cfopFilter, setCfopFilter] = useState<Set<string>>(new Set());
+    const [isCfopModalOpen, setIsCfopModalOpen] = useState(false);
 
 
     const handlePersistClassifications = (competence: string, classifications: { [uniqueItemId: string]: { classification: Classification } }) => {
@@ -177,32 +182,51 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             const comparisonKey = `${cleanAndToStr(numeroNota)}-${cleanAndToStr(emitenteCnpj)}`;
             const siengeMatches = siengeItemMap.get(comparisonKey) || [];
 
-            let finalCfop = item.CFOP;
             let siengeCfopValue = 'N/A';
 
             if (siengeMatches.length > 0 && siengeHeaderCfop) {
-                // Find a match within the note based on value, if multiple items exist
                 const siengeMatch = siengeMatches.find(si => Math.abs((si['Valor Total'] || 0) - (item['Valor Total'] || 0)) < 0.01) || siengeMatches[0];
                 if (siengeMatch) {
                     siengeCfopValue = siengeMatch[siengeHeaderCfop] || 'N/A';
-                    finalCfop = siengeCfopValue;
                 }
             }
             
-
             return {
                 ...item,
                 id: `${item['Chave Unica'] || ''}-${item['Item'] || ''}`,
                 uniqueItemId: `${emitenteCnpj}-${codigoProduto}`,
                 Fornecedor: item.Fornecedor || 'N/A',
                 'CPF/CNPJ do Emitente': emitenteCnpj,
-                CFOP: finalCfop, 
-                Sienge_CFOP: siengeCfopValue,
+                'CFOP (XML)': item.CFOP, 
+                'CFOP (Sienge)': siengeCfopValue,
+                destUF: header?.destUF || '',
+                'Alíq. ICMS (%)': item['Alíq. ICMS (%)'] === undefined ? null : item['Alíq. ICMS (%)']
             };
         });
     }, [initialAllItems, siengeData]);
-
     
+    
+    const allCfops = useMemo(() => {
+        const cfops = new Set<string>();
+        imobilizadoItems.forEach(item => {
+            if (item['CFOP (Sienge)'] && item['CFOP (Sienge)'] !== 'N/A') cfops.add(String(item['CFOP (Sienge)']));
+            if (item['CFOP (XML)'] && item['CFOP (XML)'] !== 'N/A') cfops.add(String(item['CFOP (XML)']));
+        });
+        return Array.from(cfops).sort();
+    }, [imobilizadoItems]);
+    
+    const handleCfopFilterChange = (cfop: string, checked: boolean) => {
+        setCfopFilter(prev => {
+            const newSet = new Set(prev);
+            if (checked) {
+                newSet.add(cfop);
+            } else {
+                newSet.delete(cfop);
+            }
+            return newSet;
+        });
+    };
+
     const filteredItems = useMemo(() => {
         const categories: Record<Classification, any[]> = {
             unclassified: [], imobilizado: [], 'uso-consumo': [], 'utilizado-em-obra': [], verify: []
@@ -210,7 +234,11 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         
         const persistedForCompetence = (competence && allPersistedData[competence]?.classifications) || {};
 
-        imobilizadoItems.forEach(item => {
+        const itemsToProcess = cfopFilter.size === 0
+            ? imobilizadoItems
+            : imobilizadoItems.filter(item => cfopFilter.has(String(item['CFOP (Sienge)'])) || cfopFilter.has(String(item['CFOP (XML)'])));
+
+        itemsToProcess.forEach(item => {
             let classification: Classification = 'unclassified';
             const persistedClassification = persistedForCompetence[item.uniqueItemId]?.classification;
 
@@ -222,7 +250,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         });
         
         return categories;
-    }, [imobilizadoItems, competence, allPersistedData]);
+    }, [imobilizadoItems, competence, allPersistedData, cfopFilter]);
     
     const handleDownload = (data: any[], classification: Classification) => {
         if (data.length === 0) {
@@ -237,8 +265,8 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             return {
                 'Número da Nota': item['Número da Nota'],
                 'Descrição': item['Descrição'],
-                'CFOP': item['CFOP'],
-                'Sienge_CFOP': item['Sienge_CFOP'],
+                'CFOP (XML)': item['CFOP (XML)'],
+                'CFOP (Sienge)': item['CFOP (Sienge)'],
                 'Descricao CFOP': (item['Descricao CFOP'] || '').substring(0, 20),
                 'Valor Unitário': item['Valor Unitário'],
                 'Valor Total': item['Valor Total'],
@@ -275,7 +303,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             </div>
         );
     
-        const columnsToShow = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'Sienge_CFOP', 'Valor Unitário', 'Valor Total'];
+        const columnsToShow = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP (XML)', 'CFOP (Sienge)', 'Valor Unitário', 'Valor Total'];
     
         const baseColumns = getColumnsWithCustomRender(
             imobilizadoItems,
@@ -287,7 +315,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 const supplierClassificationId = supplierClassifications[supplierCnpj];
                 const supplierCategory = supplierCategories.find(c => c.id === supplierClassificationId);
                 
-                const isIncorrectCfop = supplierCategory && supplierCategory.allowedCfops.length > 0 && !supplierCategory.allowedCfops.includes(String(item.CFOP));
+                const isIncorrectCfop = supplierCategory && supplierCategory.allowedCfops.length > 0 && !supplierCategory.allowedCfops.includes(String(item['CFOP (Sienge)']));
 
                 if (id === 'Fornecedor') {
                     const LucideIcon = supplierCategory?.icon ? (LucideIcons[supplierCategory.icon as keyof typeof LucideIcons] as React.ElementType) : Tag;
@@ -461,11 +489,45 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                                 <CardDescription>Classifique os itens. Clique nas linhas para selecionar múltiplos itens e use a barra de ações. Suas escolhas serão guardadas automaticamente.</CardDescription>
                             </div>
                         </div>
-                        <div className='flex items-center gap-2'>
+                         <div className='flex items-center gap-2'>
                            <SupplierCategoryDialog 
                                 categories={allPersistedData.supplierCategories || []} 
                                 onSave={handleSaveSupplierCategories}
                             />
+                            <Dialog open={isCfopModalOpen} onOpenChange={setIsCfopModalOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                        <ListFilter className="mr-2 h-4 w-4" />Filtrar por CFOP ({cfopFilter.size > 0 ? cfopFilter.size : "Todos"})
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>Filtrar por CFOP</DialogTitle>
+                                        <DialogDescription>Selecione os CFOPs que deseja visualizar na tabela. Se nada for selecionado, todos serão exibidos.</DialogDescription>
+                                    </DialogHeader>
+                                    <div className="flex gap-2 my-2">
+                                        <Button size="sm" variant="secondary" onClick={() => setCfopFilter(new Set(allCfops))}>Marcar Todos</Button>
+                                        <Button size="sm" variant="secondary" onClick={() => setCfopFilter(new Set())}>Limpar Seleção</Button>
+                                    </div>
+                                    <ScrollArea className='h-72 border rounded-md p-4'>
+                                        <div className='grid grid-cols-2 gap-4'>
+                                            {allCfops.map(cfop => (
+                                                <div key={cfop} className="flex items-center space-x-2">
+                                                    <Checkbox
+                                                        id={`cfop-filter-${cfop}`}
+                                                        checked={cfopFilter.has(cfop)}
+                                                        onCheckedChange={(checked) => handleCfopFilterChange(cfop, !!checked)}
+                                                    />
+                                                    <Label htmlFor={`cfop-filter-${cfop}`}>{cfop}</Label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </ScrollArea>
+                                    <DialogFooter>
+                                        <Button onClick={() => setIsCfopModalOpen(false)}>Aplicar</Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
                         </div>
                     </div>
                 </CardHeader>
@@ -506,5 +568,3 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         </div>
     );
 }
-
-    
