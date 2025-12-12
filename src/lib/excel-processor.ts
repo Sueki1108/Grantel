@@ -474,7 +474,7 @@ export function runReconciliation(
                 if (key && xmlMap.has(key)) {
                     const matchedXmlItems = xmlMap.get(key)!;
                     if (matchedXmlItems.length > 0) {
-                        const matchedXmlItem = matchedXmlItems.shift()!; // Consume one match
+                        const matchedXmlItem = matchedXmlItems.shift()!;
                         if (matchedXmlItems.length === 0) xmlMap.delete(key);
                         matchedInPass.push({ ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 'Observações': `Conciliado via ${passName}` });
                         return;
@@ -520,16 +520,6 @@ export function runReconciliation(
             }
         });
         
-        const finalOnlyInSienge = remainingSiengeItems.map(item => ({
-            "Chave de Comparação": getSiengeComparisonKey(item, h, h.valorTotal),
-            ...item
-        }));
-
-        const finalOnlyInXml = remainingXmlItems.map(item => ({
-            "Chave de Comparação": getXmlComparisonKey(item, 'Valor Total'),
-            ...item
-        }));
-
         const devolucoesEP = xmlItems
             .filter(item => {
                 const cfop = cleanAndToStr(item.CFOP);
@@ -543,6 +533,18 @@ export function runReconciliation(
                 'Data Emissão': item.Emissão,
                 'Chave da Nota Original': cleanAndToStr(item['refNFe']) || 'Não encontrada no XML',
             }));
+            
+        // CRITICAL FIX: Add debug key to remaining items at the end
+        const finalOnlyInSienge = remainingSiengeItems.map(item => ({
+            ...item,
+            "Chave de Comparação": getSiengeComparisonKey(item, h, h.valorTotal)
+        }));
+
+        const finalOnlyInXml = remainingXmlItems.map(item => ({
+            ...item,
+            "Chave de Comparação": getXmlComparisonKey(item, 'Valor Total')
+        }));
+
 
         return { reconciled, onlyInSienge: finalOnlyInSienge, onlyInXml: finalOnlyInXml, devolucoesEP, otherSiengeItems, debug: { siengeKeys: [] } };
 

@@ -10,13 +10,36 @@ import { GitCompareArrows, AlertTriangle, Download, FileSearch, Loader2, Cpu, Fi
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/app/data-table";
-import { getColumns, getColumnsWithCustomRender } from "@/components/app/columns-helper";
+import { getColumns } from "@/components/app/columns-helper";
 import { SiengeTaxCheck } from './sienge-tax-check';
 import { CfopValidator } from './cfop-validator';
 import type { AllClassifications } from '@/lib/types';
 import { FileUploadForm } from './file-upload-form';
 import * as XLSX from 'xlsx';
 import { CostCenterAnalysis } from './cost-center-analysis';
+
+const getColumnsForDivergentTabs = (data: any[]) => {
+    if (!data || data.length === 0) return [];
+
+    const allKeys = new Set<string>();
+    data.forEach(item => {
+        if(item && typeof item === 'object') {
+            Object.keys(item).forEach(key => allKeys.add(key));
+        }
+    });
+
+    // Ensure 'Chave de Comparação' is first if it exists
+    const sortedKeys: string[] = [];
+    if (allKeys.has('Chave de Comparação')) {
+        sortedKeys.push('Chave de Comparação');
+        allKeys.delete('Chave de Comparação');
+    }
+    
+    // Add remaining keys, sorted alphabetically
+    sortedKeys.push(...Array.from(allKeys).sort());
+    
+    return getColumns(data, sortedKeys);
+};
 
 
 interface ReconciliationAnalysisProps {
@@ -34,25 +57,6 @@ interface ReconciliationAnalysisProps {
     competence: string | null;
     onDownloadDebugSheet: () => void;
 }
-
-const getColumnsForDivergentTabs = (data: any[]) => {
-    if (!data || data.length === 0) return [];
-    
-    const allKeys = new Set<string>();
-    data.forEach(item => {
-        if(item && typeof item === 'object') Object.keys(item).forEach(key => allKeys.add(key));
-    });
-
-    const sortedKeys = Array.from(allKeys).sort((a, b) => {
-        if (a === 'Chave de Comparação') return -1;
-        if (b === 'Chave de Comparação') return 1;
-        if (a === 'Observações') return 1;
-        if (b === 'Observações') return -1;
-        return a.localeCompare(b);
-    });
-    
-    return getColumns(data, sortedKeys);
-};
 
 
 export function ReconciliationAnalysis({ 
