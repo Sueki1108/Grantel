@@ -28,6 +28,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ScrollArea } from '../ui/scroll-area';
 import { Checkbox } from '../ui/checkbox';
 import { Label } from '../ui/label';
+import { cfopDescriptions } from '@/lib/cfop';
 
 
 interface ImobilizadoAnalysisProps {
@@ -161,7 +162,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
 
         const hSienge = {
             numero: findSiengeHeader(['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
-            cpfCnpj: findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor']),
+            cpfCnpj: findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpfcnpj']),
             cfop: findSiengeHeader(['cfop']),
             produtoFiscal: findSiengeHeader(['produto fiscal', 'descrição do item']),
         };
@@ -210,7 +211,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
                 ...item,
                 id: `${item['Chave Unica'] || ''}-${item['Item'] || ''}`,
                 uniqueItemId: `${emitenteCnpj}-${codigoProduto}`,
-                Fornecedor: header?.Fornecedor || item.Fornecedor || 'N/A',
+                Fornecedor: header?.Fornecedor || 'N/A',
                 'CPF/CNPJ do Emitente': emitenteCnpj,
                 'CFOP (XML)': item.CFOP, 
                 'CFOP (Sienge)': siengeCfopValue,
@@ -612,4 +613,3 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
         </div>
     );
 }
-
