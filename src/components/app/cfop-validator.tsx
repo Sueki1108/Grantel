@@ -33,6 +33,7 @@ interface CfopValidatorProps {
     items: any[];
     nfeValidasData: any[]; // Pass NFe data for enrichment
     originalXmlItems: any[]; // Pass original XML items for enrichment
+    itensSaidas: any[]; // Pass outgoing items
     competence: string | null; 
     onPersistData: (allData: AllClassifications) => void;
     allPersistedData: AllClassifications;
@@ -213,7 +214,8 @@ const FilterDialog: React.FC<{
 // ===============================================================
 
 
-export function CfopValidator({ items: initialItems, nfeValidasData, originalXmlItems, competence, onPersistData, allPersistedData }: CfopValidatorProps) {
+export function CfopValidator(props: CfopValidatorProps) {
+    const { items: initialItems, nfeValidasData, originalXmlItems, itensSaidas, competence, onPersistData, allPersistedData } = props;
     const { toast } = useToast();
     
     const [enrichedItems, setEnrichedItems] = useState<any[]>([]);
@@ -405,6 +407,39 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
          onPersistData(updatedData);
     };
 
+    const handleLoadSpecialCfops = React.useCallback(() => {
+        setIsLoadingSpecialCfops(true);
+        setTimeout(() => {
+            const specialCfopResult: Record<'entrega-futura' | 'simples-faturamento', Record<string, any[]>> = {
+                'entrega-futura': {}, 'simples-faturamento': {}
+            };
+    
+            const ENTREGA_FUTURA_CFOPS = ['5116', '5117', '6116', '6117'];
+            const SIMPLES_FATURAMENTO_CFOPS = ['5922', '6922'];
+        
+            (itensSaidas || []).forEach((item: any) => {
+                const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item.CFOP}`;
+                const itemWithKey = { ...item, __itemKey: `cfop-special-${uniqueKey}` };
+                const xmlCfop = item['CFOP']; // Corrected to use 'CFOP'
+                const siengeCfop = item.CFOP || 'N/A';
+    
+                if (ENTREGA_FUTURA_CFOPS.includes(xmlCfop)) {
+                    if (!specialCfopResult['entrega-futura'][siengeCfop]) specialCfopResult['entrega-futura'][siengeCfop] = [];
+                    specialCfopResult['entrega-futura'][siengeCfop].push(itemWithKey);
+                }
+    
+                if (SIMPLES_FATURAMENTO_CFOPS.includes(xmlCfop)) {
+                    if (!specialCfopResult['simples-faturamento'][siengeCfop]) specialCfopResult['simples-faturamento'][siengeCfop] = [];
+                    specialCfopResult['simples-faturamento'][siengeCfop].push(itemWithKey);
+                }
+            });
+            setItemsBySpecialCfop(specialCfopResult);
+            setIsLoadingSpecialCfops(false);
+            toast({ title: 'Análise Concluída', description: 'As notas de faturamento e entrega futura foram carregadas.' });
+        }, 50);
+    }, [itensSaidas, toast]);
+
+
     const columns = useMemo(() => {
         if (!enrichedItems || enrichedItems.length === 0) return [];
         
@@ -567,39 +602,6 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
         });
         return statusResult;
     }, [enrichedItems, competence, allPersistedData]);
-
-
-    const handleLoadSpecialCfops = React.useCallback(() => {
-        setIsLoadingSpecialCfops(true);
-        setTimeout(() => {
-            const specialCfopResult: Record<'entrega-futura' | 'simples-faturamento', Record<string, any[]>> = {
-                'entrega-futura': {}, 'simples-faturamento': {}
-            };
-
-            const ENTREGA_FUTURA_CFOPS = ['5116', '5117', '6116', '6117'];
-            const SIMPLES_FATURAMENTO_CFOPS = ['5922', '6922'];
-        
-            enrichedItems.forEach(item => {
-                const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
-                const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
-                const xmlCfop = item['CFOP (XML)'];
-                const siengeCfop = item.Sienge_CFOP || 'N/A';
-
-                if (ENTREGA_FUTURA_CFOPS.includes(xmlCfop)) {
-                    if (!specialCfopResult['entrega-futura'][siengeCfop]) specialCfopResult['entrega-futura'][siengeCfop] = [];
-                    specialCfopResult['entrega-futura'][siengeCfop].push(itemWithKey);
-                }
-
-                if (SIMPLES_FATURAMENTO_CFOPS.includes(xmlCfop)) {
-                    if (!specialCfopResult['simples-faturamento'][siengeCfop]) specialCfopResult['simples-faturamento'][siengeCfop] = [];
-                    specialCfopResult['simples-faturamento'][siengeCfop].push(itemWithKey);
-                }
-            });
-            setItemsBySpecialCfop(specialCfopResult);
-            setIsLoadingSpecialCfops(false);
-            toast({ title: 'Análise Concluída', description: 'As notas de faturamento e entrega futura foram carregadas.' });
-        }, 50);
-    }, [enrichedItems, toast]);
 
 
     const numSelected = Object.keys(rowSelection).length;
@@ -771,7 +773,3 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
         </div>
     );
 }
-
-    
-
-    
