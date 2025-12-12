@@ -32,6 +32,7 @@ import { Label } from '../ui/label';
 interface ImobilizadoAnalysisProps {
     items: any[]; 
     siengeData: any[] | null;
+    nfeValidasData: any[]; // <-- Added this prop
     competence: string | null; 
     onPersistData: (allData: AllClassifications) => void;
     allPersistedData: AllClassifications;
@@ -62,7 +63,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
 }
 
 
-export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
+export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeValidasData, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -156,10 +157,10 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         };
 
         const siengeHeaderNumero = findSiengeHeader(['número', 'numero', 'numero da nota', 'nota fiscal']);
-        const siengeHeaderCnpj = findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor']);
+        const siengeHeaderCnpj = findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor', 'credor']);
         const siengeHeaderCfop = findSiengeHeader(['cfop']);
 
-        const siengeItemMap = new Map<string, any>();
+        const siengeItemMap = new Map<string, any[]>();
         if (siengeData && siengeHeaderNumero && siengeHeaderCnpj) {
             siengeData.forEach(sItem => {
                 const docNumber = sItem[siengeHeaderNumero!];
@@ -174,6 +175,8 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             });
         }
         
+        const nfeHeaderMap = new Map((nfeValidasData || []).map(n => [n['Chave Unica'], n]));
+
         return initialAllItems.map(item => {
             const emitenteCnpj = item['CPF/CNPJ do Emitente'] || '';
             const codigoProduto = item['Código'] || '';
@@ -191,11 +194,13 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 }
             }
             
+            const header = nfeHeaderMap.get(item['Chave Unica']);
+
             return {
                 ...item,
                 id: `${item['Chave Unica'] || ''}-${item['Item'] || ''}`,
                 uniqueItemId: `${emitenteCnpj}-${codigoProduto}`,
-                Fornecedor: item.Fornecedor || 'N/A',
+                Fornecedor: item.Fornecedor || header?.Fornecedor || 'N/A',
                 'CPF/CNPJ do Emitente': emitenteCnpj,
                 'CFOP (XML)': item.CFOP, 
                 'CFOP (Sienge)': siengeCfopValue,
@@ -203,7 +208,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 'Alíq. ICMS (%)': item['Alíq. ICMS (%)'] === undefined ? null : item['Alíq. ICMS (%)']
             };
         });
-    }, [initialAllItems, siengeData]);
+    }, [initialAllItems, siengeData, nfeValidasData]);
     
     
     const allCfops = useMemo(() => {

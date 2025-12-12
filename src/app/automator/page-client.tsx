@@ -895,17 +895,11 @@ export function AutomatorClientPage() {
                             <ReconciliationAnalysis 
                                 processedData={processedData} 
                                 siengeFile={siengeFile} 
-                                costCenterFile={costCenterFile}
                                 onSiengeFileChange={handleSiengeFileChange}
+                                onClearSiengeFile={() => setSiengeFile(null)}
+                                costCenterFile={costCenterFile}
                                 onCostCenterFileChange={handleCostCenterFileChange}
-                                onClearSiengeFile={() => {
-                                    setSiengeFile(null);
-                                     setProcessedData(prev => prev ? ({ ...prev, siengeSheetData: null, reconciliationResults: null, siengeDebugKeys: [] }) : null);
-                                }}
-                                onClearCostCenterFile={() => {
-                                     setCostCenterFile(null);
-                                     setProcessedData(prev => prev ? ({ ...prev, costCenterMap: undefined, costCenterDebugKeys: [] }) : null);
-                                }}
+                                onClearCostCenterFile={() => setCostCenterFile(null)}
                                 onRunReconciliation={handleRunReconciliation}
                                 isReconciliationRunning={processing}
                                 allClassifications={allClassifications}
@@ -926,7 +920,7 @@ export function AutomatorClientPage() {
                         </TabsContent>
                         
                         <TabsContent value="imobilizado" className="mt-6">
-                            { !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} siengeData={processedData?.siengeSheetData} onPersistData={handlePersistClassifications} allPersistedData={allClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card> }
+                            { !imobilizadoTabDisabled ? <ImobilizadoAnalysis items={processedData?.sheets?.['Imobilizados'] || []} siengeData={processedData?.siengeSheetData} nfeValidasData={processedData?.sheets?.['Notas Válidas'] || []} onPersistData={handlePersistClassifications} allPersistedData={allClassifications} competence={competence}/> : <Card><CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Complete a "Validação" e verifique se há itens de imobilizado para habilitar esta etapa.</p></CardContent></Card> }
                         </TabsContent>
 
                         <TabsContent value="difal" className="mt-6">
