@@ -388,7 +388,20 @@ export function runReconciliation(
         const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
             if (!data || data.length === 0 || !data[0]) return undefined;
             const headers = Object.keys(data[0]);
-            return headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
+            
+            // Explicitly prioritize 'cpf/cnpj' over 'credor'
+            for (const name of ['cpf/cnpj', 'cpf/cnpj do fornecedor']) {
+                const normalizedName = normalizeKey(name);
+                const found = headers.find(h => normalizeKey(h) === normalizedName);
+                if (found) return found;
+            }
+            // If not found, search for the rest
+            for (const name of possibleNames) {
+                 const normalizedName = normalizeKey(name);
+                 const found = headers.find(h => normalizeKey(h) === normalizedName);
+                 if (found) return found;
+            }
+            return undefined;
         };
         
         const h = {
