@@ -411,25 +411,21 @@ export function runReconciliation(
             throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Esp') na planilha Sienge.");
         }
         
+        const getComparisonKey = (numero: any, cnpj: any, valor: any): string => {
+            const cleanNumero = cleanAndToStr(numero);
+            const cleanCnpj = cleanAndToStr(String(cnpj || ''));
+            const cleanValor = (valor !== undefined && valor !== null) ? parseFloat(String(valor).replace(',', '.')).toFixed(2) : 'N/A';
+            return `${cleanNumero || 'N/A'}-${cleanCnpj || 'N/A'}-${cleanValor}`;
+        };
+        
         const getSiengeComparisonKey = (item: any, headers: typeof h, valueField: string | undefined): string => {
-            const numero = cleanAndToStr(item[headers.numero!]);
-            const cnpj = cleanAndToStr(String(item[headers.cnpj!] || ''));
-            let valor = 'N/A';
-             if (valueField && item[valueField] !== undefined && item[valueField] !== null) {
-                const parsedValue = parseFloat(String(item[valueField]).replace(',', '.'));
-                if (!isNaN(parsedValue)) {
-                    valor = parsedValue.toFixed(2);
-                }
-            }
-            return `${numero || 'N/A'}-${cnpj || 'N/A'}-${valor}`;
+            const valor = valueField ? item[valueField] : undefined;
+            return getComparisonKey(item[headers.numero!], item[headers.cnpj!], valor);
         };
         
         const getXmlComparisonKey = (item: any, valueField: string): string => {
-            const numero = cleanAndToStr(item['Número']);
-            const cnpj = cleanAndToStr(item['CPF/CNPJ do Fornecedor']);
-            const valorParsed = parseFloat(String(item[valueField] || '0').replace(',', '.'));
-            const valor = !isNaN(valorParsed) ? valorParsed.toFixed(2) : 'N/A';
-            return `${numero || 'N/A'}-${cnpj || 'N/A'}-${valor}`;
+            const valor = item[valueField];
+            return getComparisonKey(item['Número'], item['CPF/CNPJ do Fornecedor'], valor);
         };
 
 
@@ -524,6 +520,7 @@ export function runReconciliation(
             }
         });
         
+        // This is the critical fix: Add the debug key AFTER all reconciliation passes.
         const finalOnlyInSienge = remainingSiengeItems.map(item => ({
             "Chave de Comparação": getSiengeComparisonKey(item, h, h.valorTotal),
             ...item
@@ -533,7 +530,6 @@ export function runReconciliation(
             "Chave de Comparação": getXmlComparisonKey(item, 'Valor Total'),
             ...item
         }));
-
 
         const devolucoesEP = xmlItems
             .filter(item => {
