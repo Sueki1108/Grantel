@@ -39,7 +39,7 @@ interface CfopValidatorProps {
     allPersistedData: AllClassifications;
 }
 
-type ValidationStatus = 'all' | 'unvalidated' | 'correct' | 'incorrect' | 'verify' | 'difal';
+type ValidationStatus = 'all' | 'unvalidated' | 'correct' | 'incorrect' | 'verify' | 'difal' | 'entrega-futura';
 
 export type TabFilters = {
     xmlCsts: Set<string>;
@@ -284,7 +284,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
         if (!updatedPersistedData[competence].cfopValidations) updatedPersistedData[competence].cfopValidations = { classifications: {} };
         
         itemsToUpdate.forEach(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const current = updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] || { isDifal: false };
             updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] = { ...current, classification: newClassification };
         });
@@ -299,7 +299,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
         if (!updatedPersistedData[competence].cfopValidations) updatedPersistedData[competence].cfopValidations = { classifications: {} };
 
         itemsToUpdate.forEach(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const current = updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] || { classification: 'unvalidated', isDifal: false };
             updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] = { ...current, isDifal: !current.isDifal };
         });
@@ -315,7 +315,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
         
         const selectedItems = selectedItemKeys.map(itemKey => {
             const uniqueKey = itemKey.replace('cfop-pending-', '');
-            return enrichedItems.find(item => `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}` === uniqueKey);
+            return enrichedItems.find(item => `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}` === uniqueKey);
         }).filter(Boolean);
 
         let changedCount = 0;
@@ -328,7 +328,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
 
         selectedItems.forEach(item => {
             if (!item) return;
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const current = { ...(newValidations[uniqueKey] || { classification: 'unvalidated', isDifal: false }) };
             let itemChanged = false;
 
@@ -550,28 +550,36 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
     const itemsByStatus = useMemo(() => {
         const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
         const result: Record<ValidationStatus, Record<string, any[]>> = {
-            all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}, difal: {}
+            all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}, difal: {}, 'entrega-futura': {}
         };
+
+        const ENTREGA_FUTURA_CFOPS = ['1116', '1117', '2116', '2117'];
     
         enrichedItems.forEach(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const validation = cfopValidations[uniqueKey];
             const classification = validation?.classification || 'unvalidated';
             const isDifal = validation?.isDifal || false;
+            const xmlCfop = item.CFOP;
             const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
             
-            const cfop = item.Sienge_CFOP || 'N/A';
+            const siengeCfop = item.Sienge_CFOP || 'N/A';
 
-            if (!result.all[cfop]) result.all[cfop] = [];
-            result.all[cfop].push(itemWithKey);
+            if (!result.all[siengeCfop]) result.all[siengeCfop] = [];
+            result.all[siengeCfop].push(itemWithKey);
 
             if (!result[classification]) result[classification] = {};
-            if (!result[classification][cfop]) result[classification][cfop] = [];
-            result[classification][cfop].push(itemWithKey);
+            if (!result[classification][siengeCfop]) result[classification][siengeCfop] = [];
+            result[classification][siengeCfop].push(itemWithKey);
             
             if (isDifal) {
-                if (!result.difal[cfop]) result.difal[cfop] = [];
-                result.difal[cfop].push(itemWithKey);
+                if (!result.difal[siengeCfop]) result.difal[siengeCfop] = [];
+                result.difal[siengeCfop].push(itemWithKey);
+            }
+            
+            if (ENTREGA_FUTURA_CFOPS.includes(xmlCfop)) {
+                if (!result['entrega-futura'][siengeCfop]) result['entrega-futura'][siengeCfop] = [];
+                result['entrega-futura'][siengeCfop].push(itemWithKey);
             }
         });
         return result;
@@ -590,6 +598,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
         { status: 'incorrect', label: 'Incorreto' },
         { status: 'verify', label: 'Verificar' },
         { status: 'difal', label: 'DIFAL' },
+        { status: 'entrega-futura', label: 'Entrega Futura' },
     ];
     
     return (
@@ -615,7 +624,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
             
             <Tabs value={activeStatusTab} onValueChange={(val) => setActiveStatusTab(val as ValidationStatus)} className="w-full">
                  <div className="flex justify-between items-center mb-2">
-                    <TabsList className="grid w-full grid-cols-6">
+                    <TabsList className="grid w-full grid-cols-7">
                         {statusTabs.map(({status, label}) => {
                             const count = Object.values(itemsByStatus[status] || {}).flat().length;
                             return <TabsTrigger key={status} value={status} disabled={count === 0}>{label} ({count})</TabsTrigger>
@@ -724,5 +733,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
         </div>
     );
 }
+
+    
 
     
