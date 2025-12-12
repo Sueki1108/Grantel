@@ -77,7 +77,7 @@ const FilterDialog: React.FC<{
 
             if (item['Alíq. ICMS (%)'] !== undefined && item['Alíq. ICMS (%)'] !== null) xmlPicms.add(String(item['Alíq. ICMS (%)']));
             
-            const cfopCode = item.CFOP;
+            const cfopCode = item['CFOP (XML)'];
             if (cfopCode) {
                 const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
                 const combined = `${cfopCode}: ${fullDescription}`;
@@ -225,15 +225,13 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
     const [bulkActionState, setBulkActionState] = useState<BulkActionState>({ classification: null, isDifal: null });
 
     useEffect(() => {
-        if (!initialItems || !nfeValidasData) {
+        if (!initialItems) {
             setEnrichedItems([]);
             return;
         }
 
-        const nfeHeaderMap = new Map((nfeValidasData || []).map(n => [n['Chave Unica'], n]));
-
         const newItems = initialItems.map(item => {
-            const header = nfeHeaderMap.get(item['Chave Unica']);
+            const header = (nfeValidasData || []).find(n => n['Chave Unica'] === item['Chave Unica']);
             return {
                 ...item,
                 Fornecedor: header?.Fornecedor || item.Fornecedor || 'N/A',
@@ -565,7 +563,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
             const validation = cfopValidations[uniqueKey];
             const classification = validation?.classification || 'unvalidated';
             const isDifal = validation?.isDifal || false;
-            const xmlCfop = item.CFOP;
+            const xmlCfop = item['CFOP (XML)'];
             const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
             const siengeCfop = item.Sienge_CFOP || 'N/A';
 
@@ -658,7 +656,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
                         const filteredCount = !tabFilters[currentCfopTab] ? cfopData.length : cfopData.filter((item: any) => {
                             const currentFilters = tabFilters[currentCfopTab];
                             if(!currentFilters) return true;
-                            const cfopCode = item.CFOP;
+                            const cfopCode = item['CFOP (XML)'];
                             const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
                             const combinedCfop = `${cfopCode}: ${fullDescription}`;
                             const cstCode = String(item['CST do ICMS'] || '');
@@ -703,7 +701,7 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
                                         const currentCfopData = itemsByStatus[status]?.[cfop]?.filter(item => {
                                             if (!currentFilters) return true;
                                             
-                                            const cfopCode = item.CFOP;
+                                            const cfopCode = item['CFOP (XML)'];
                                             const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
                                             const combinedCfop = `${cfopCode}: ${fullDescription}`;
 
@@ -757,3 +755,5 @@ export function CfopValidator({ items: initialItems, nfeValidasData, originalXml
         </div>
     );
 }
+
+    
