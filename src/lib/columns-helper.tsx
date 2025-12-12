@@ -108,3 +108,21 @@ export function getColumnsWithCustomRender<TData extends Record<string, any>>(
         };
     });
 }
+
+
+export function getColumnsForDivergentTabs<TData extends Record<string, any>>(data: TData[]): ColumnDef<TData>[] {
+    if (!data || data.length === 0) {
+        return [];
+    }
+
+    const siengeSpecificHeaders = Object.keys(data[0]).filter(k => k.startsWith('Sienge_') || !['Chave de acesso', 'Número da Nota', 'Chave Unica', 'Item', 'Fornecedor', 'Emissão', 'Total'].includes(k));
+    const xmlSpecificHeaders = Object.keys(data[0]).filter(k => !k.startsWith('Sienge_'));
+
+    const baseColumnsToShow: (keyof TData)[] = [
+        'Número da Nota', 'Fornecedor', 'Emissão', 'Total', 'Chave de Comparação'
+    ];
+    
+    const relevantSiengeHeaders = siengeSpecificHeaders.filter(k => data.some(row => row[k] !== null && row[k] !== undefined && row[k] !== ''));
+    
+    return getColumns(data, [...baseColumnsToShow, ...relevantSiengeHeaders]);
+}
