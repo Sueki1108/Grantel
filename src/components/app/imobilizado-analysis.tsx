@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Settings2, Copy, HelpCircle, Tag, ListFilter } from "lucide-react";
+import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Settings2, Copy, HelpCircle, Tag, ListFilter, Save } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -27,12 +27,15 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ScrollArea } from '../ui/scroll-area';
 import { Checkbox } from '../ui/checkbox';
 import { Label } from '../ui/label';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
+import { format } from 'date-fns';
+import { cfopDescriptions } from '@/lib/cfop';
 
 
 interface ImobilizadoAnalysisProps {
     items: any[]; 
     siengeData: any[] | null;
-    nfeValidasData: any[]; // <-- Added this prop
+    nfeValidasData: any[];
     competence: string | null; 
     onPersistData: (allData: AllClassifications) => void;
     allPersistedData: AllClassifications;
@@ -45,6 +48,8 @@ interface ClassificationTableProps {
     setRowSelection: React.Dispatch<React.SetStateAction<RowSelectionState>>;
     tableRef: React.MutableRefObject<ReactTable<any> | null>;
 }
+
+const CFOP_FILTER_STORAGE_KEY = 'imobilizadoCfopFilter';
 
 
 const ClassificationTable: React.FC<ClassificationTableProps> = ({ 
@@ -156,9 +161,11 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
             return headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
         };
 
-        const siengeHeaderNumero = findSiengeHeader(['número', 'numero', 'numero da nota', 'nota fiscal']);
-        const siengeHeaderCnpj = findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor', 'credor']);
+        const siengeHeaderNumero = findSiengeHeader(['número', 'numero', 'numero da nota', 'nota fiscal', 'documento']);
+        const siengeHeaderCnpj = findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor']);
         const siengeHeaderCfop = findSiengeHeader(['cfop']);
+        const siengeHeaderProdFiscal = findSiengeHeader(['produto fiscal', 'descrição do item']);
+
 
         const siengeItemMap = new Map<string, any[]>();
         if (siengeData && siengeHeaderNumero && siengeHeaderCnpj) {
@@ -187,8 +194,12 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
 
             let siengeCfopValue = 'N/A';
 
-            if (siengeMatches.length > 0 && siengeHeaderCfop) {
-                const siengeMatch = siengeMatches.find(si => Math.abs((si['Valor Total'] || 0) - (item['Valor Total'] || 0)) < 0.01) || siengeMatches[0];
+            if (siengeMatches.length > 0 && siengeHeaderCfop && siengeHeaderProdFiscal) {
+                 const siengeMatch = siengeMatches.find(si => {
+                    const xmlProdCode = cleanAndToStr(item['Código']);
+                    const siengeProdCode = cleanAndToStr(String(si[siengeHeaderProdFiscal!]).split('-')[0]);
+                    return xmlProdCode === siengeProdCode;
+                }) || siengeMatches[0];
                 if (siengeMatch) {
                     siengeCfopValue = siengeMatch[siengeHeaderCfop] || 'N/A';
                 }
@@ -200,7 +211,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
                 ...item,
                 id: `${item['Chave Unica'] || ''}-${item['Item'] || ''}`,
                 uniqueItemId: `${emitenteCnpj}-${codigoProduto}`,
-                Fornecedor: item.Fornecedor || header?.Fornecedor || 'N/A',
+                Fornecedor: header?.Fornecedor || item.Fornecedor || 'N/A',
                 'CPF/CNPJ do Emitente': emitenteCnpj,
                 'CFOP (XML)': item.CFOP, 
                 'CFOP (Sienge)': siengeCfopValue,
@@ -220,6 +231,31 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
         return Array.from(cfops).sort();
     }, [imobilizadoItems]);
     
+    useEffect(() => {
+        try {
+            const savedFilter = localStorage.getItem(CFOP_FILTER_STORAGE_KEY);
+            if (savedFilter) {
+                setCfopFilter(new Set(JSON.parse(savedFilter)));
+            } else {
+                setCfopFilter(new Set(allCfops));
+            }
+        } catch(e) {
+            console.error("Failed to load CFOP filter from storage:", e);
+            setCfopFilter(new Set(allCfops));
+        }
+    }, [allCfops]);
+
+    const handleSaveCfopFilter = () => {
+        try {
+            localStorage.setItem(CFOP_FILTER_STORAGE_KEY, JSON.stringify(Array.from(cfopFilter)));
+            toast({title: 'Filtro Guardado', description: 'A sua seleção de CFOPs foi guardada para futuras sessões.'});
+            setIsCfopModalOpen(false);
+        } catch(e) {
+            console.error("Failed to save CFOP filter to storage:", e);
+            toast({title: 'Erro ao Guardar', variant: 'destructive'});
+        }
+    };
+
     const handleCfopFilterChange = (cfop: string, checked: boolean) => {
         setCfopFilter(prev => {
             const newSet = new Set(prev);
@@ -505,7 +541,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
                                         <ListFilter className="mr-2 h-4 w-4" />Filtrar por CFOP ({cfopFilter.size > 0 ? cfopFilter.size : "Todos"})
                                     </Button>
                                 </DialogTrigger>
-                                <DialogContent>
+                                <DialogContent className="max-w-4xl">
                                     <DialogHeader>
                                         <DialogTitle>Filtrar por CFOP</DialogTitle>
                                         <DialogDescription>Selecione os CFOPs que deseja visualizar na tabela. Se nada for selecionado, todos serão exibidos.</DialogDescription>
@@ -514,22 +550,25 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
                                         <Button size="sm" variant="secondary" onClick={() => setCfopFilter(new Set(allCfops))}>Marcar Todos</Button>
                                         <Button size="sm" variant="secondary" onClick={() => setCfopFilter(new Set())}>Limpar Seleção</Button>
                                     </div>
-                                    <ScrollArea className='h-72 border rounded-md p-4'>
-                                        <div className='grid grid-cols-2 gap-4'>
+                                    <ScrollArea className='h-[60vh] border rounded-md p-4'>
+                                        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2'>
                                             {allCfops.map(cfop => (
-                                                <div key={cfop} className="flex items-center space-x-2">
+                                                <div key={cfop} className="flex items-start space-x-2">
                                                     <Checkbox
                                                         id={`cfop-filter-${cfop}`}
                                                         checked={cfopFilter.has(cfop)}
                                                         onCheckedChange={(checked) => handleCfopFilterChange(cfop, !!checked)}
                                                     />
-                                                    <Label htmlFor={`cfop-filter-${cfop}`}>{cfop}</Label>
+                                                    <Label htmlFor={`cfop-filter-${cfop}`} className="text-sm font-normal cursor-pointer">
+                                                        {cfop}: {cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}
+                                                    </Label>
                                                 </div>
                                             ))}
                                         </div>
                                     </ScrollArea>
                                     <DialogFooter>
-                                        <Button onClick={() => setIsCfopModalOpen(false)}>Aplicar</Button>
+                                         <Button variant="outline" onClick={() => setIsCfopModalOpen(false)}>Cancelar</Button>
+                                         <Button onClick={handleSaveCfopFilter}><Save className='mr-2 h-4 w-4' />Guardar Filtro</Button>
                                     </DialogFooter>
                                 </DialogContent>
                             </Dialog>
