@@ -94,7 +94,7 @@ const addChaveUnica = (df: DataFrame): DataFrame => {
     const findKey = (possibleNames: string[]) => Object.keys(df[0]).find(k => possibleNames.includes(normalizeKey(k)));
 
     const numeroKey = findKey(['número', 'numero']);
-    const emitenteCnpjKey = findKey(['cpf/cnpj do fornecedor', 'emitcnpj']);
+    const emitenteCnpjKey = findKey(['cpf/cnpj do fornecedor', 'emitcnpj', 'cpf/cnpj do emitente']);
     
     if (!numeroKey) return df;
 
@@ -392,7 +392,7 @@ export function runReconciliation(
         };
         
         const h = {
-            cnpj: findHeader(siengeData, ['credor', 'cpf/cnpj', 'cpf/cnpj do fornecedor']),
+            cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'credor']),
             numero: findHeader(siengeData, ['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
             valorTotal: findHeader(siengeData, ['valor', 'valor total', 'vlr total']),
             esp: findHeader(siengeData, ['esp']),
@@ -408,7 +408,7 @@ export function runReconciliation(
         };
         
         if (!h.cnpj || !h.numero || !h.esp) {
-            throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Esp') na planilha Sienge.");
+            throw new Error("Não foi possível encontrar as colunas essenciais ('CPF/CNPJ', 'Documento', 'Esp') na planilha Sienge.");
         }
         
         const getComparisonKey = (numero: any, cnpj: any, valor: any): string => {
@@ -534,7 +534,6 @@ export function runReconciliation(
                 'Chave da Nota Original': cleanAndToStr(item['refNFe']) || 'Não encontrada no XML',
             }));
             
-        // CRITICAL FIX: Add debug key to remaining items at the end
         const finalOnlyInSienge = remainingSiengeItems.map(item => ({
             ...item,
             "Chave de Comparação": getSiengeComparisonKey(item, h, h.valorTotal)
