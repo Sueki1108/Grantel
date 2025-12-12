@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -708,3 +709,5 @@ export function CfopValidator({ items: initialItems, originalXmlItems, competenc
         </div>
     );
 }
+
+    
