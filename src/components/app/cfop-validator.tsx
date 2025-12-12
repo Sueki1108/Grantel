@@ -37,7 +37,7 @@ interface CfopValidatorProps {
     allPersistedData: AllClassifications;
 }
 
-type ValidationStatus = 'all' | 'unvalidated' | 'correct' | 'incorrect' | 'verify';
+type ValidationStatus = 'all' | 'unvalidated' | 'correct' | 'incorrect' | 'verify' | 'difal';
 
 export type TabFilters = {
     xmlCsts: Set<string>;
@@ -515,8 +515,7 @@ export function CfopValidator({ items: initialItems, originalXmlItems, competenc
                                     <TooltipContent><p>Incorreto</p></TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
-                                    <TooltipTrigger asChild><Button size="icon" variant={classification === 'verify' ? 'default' : 'ghost'} className={cn("h-7 w-7", classification === 'verify' ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/50')} onClick={() => handleValidationChange([row.original], 'verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger>
-                                    <TooltipContent><p>A Verificar</p></TooltipContent>
+                                    <TooltipTrigger asChild><Button size="icon" variant={classification === 'verify' ? 'default' : 'ghost'} className={cn("h-7 w-7", classification === 'verify' ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/50')} onClick={() => handleValidationChange([row.original], 'verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>A Verificar</p></TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
                                     <TooltipTrigger asChild><Button variant={isDifal ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", isDifal && "bg-primary hover:bg-primary/90")} onClick={() => handleDifalChange([row.original])}><Ticket className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>{isDifal ? 'Desmarcar DIFAL' : 'Marcar como DIFAL'}</p></TooltipContent>
@@ -535,12 +534,14 @@ export function CfopValidator({ items: initialItems, originalXmlItems, competenc
     const itemsByStatus = useMemo(() => {
         const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
         const result: Record<ValidationStatus, Record<string, any[]>> = {
-            all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}
+            all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}, difal: {}
         };
     
         enrichedItems.forEach(item => {
             const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
-            const classification = (cfopValidations[uniqueKey]?.classification) || 'unvalidated';
+            const validation = cfopValidations[uniqueKey];
+            const classification = validation?.classification || 'unvalidated';
+            const isDifal = validation?.isDifal || false;
             const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
             
             const cfop = item.Sienge_CFOP || 'N/A';
@@ -551,6 +552,11 @@ export function CfopValidator({ items: initialItems, originalXmlItems, competenc
             if (!result[classification]) result[classification] = {};
             if (!result[classification][cfop]) result[classification][cfop] = [];
             result[classification][cfop].push(itemWithKey);
+            
+            if (isDifal) {
+                if (!result.difal[cfop]) result.difal[cfop] = [];
+                result.difal[cfop].push(itemWithKey);
+            }
         });
         return result;
     }, [enrichedItems, competence, allPersistedData]);
@@ -567,6 +573,7 @@ export function CfopValidator({ items: initialItems, originalXmlItems, competenc
         { status: 'correct', label: 'Correto' },
         { status: 'incorrect', label: 'Incorreto' },
         { status: 'verify', label: 'Verificar' },
+        { status: 'difal', label: 'DIFAL' },
     ];
     
     return (
@@ -592,7 +599,7 @@ export function CfopValidator({ items: initialItems, originalXmlItems, competenc
             
             <Tabs value={activeStatusTab} onValueChange={(val) => setActiveStatusTab(val as ValidationStatus)} className="w-full">
                  <div className="flex justify-between items-center mb-2">
-                    <TabsList className="grid w-full grid-cols-5">
+                    <TabsList className="grid w-full grid-cols-6">
                         {statusTabs.map(({status, label}) => {
                             const count = Object.values(itemsByStatus[status] || {}).flat().length;
                             return <TabsTrigger key={status} value={status} disabled={count === 0}>{label} ({count})</TabsTrigger>
@@ -701,6 +708,3 @@ export function CfopValidator({ items: initialItems, originalXmlItems, competenc
         </div>
     );
 }
-
-
-    
