@@ -36,14 +36,13 @@ const columnNameMap: Record<string, string> = {
 const renderHeader = (column: any, columnId: string) => {
     const displayName = columnNameMap[columnId] || columnId;
     return (
-        <Button
-            variant="ghost"
-            className="p-0 hover:bg-transparent"
+        <div 
+            className="flex items-center text-left w-full cursor-pointer"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
         >
-            {displayName}
+            <span>{displayName}</span>
             <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
+        </div>
     );
 };
 

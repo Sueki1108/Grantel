@@ -51,7 +51,6 @@ const getColumnsForDivergentTabs = (data: any[]) => {
         return a.localeCompare(b);
     });
     
-    // Pass the sorted keys to getColumns
     return getColumns(data, sortedKeys);
 };
 

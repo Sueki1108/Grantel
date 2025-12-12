@@ -419,13 +419,13 @@ export function runReconciliation(
         };
         
         const getSiengeComparisonKey = (item: any, headers: typeof h, valueField: string | undefined): string => {
-            const valor = valueField ? item[valueField] : undefined;
+            const valor = (valueField && item[valueField] !== undefined) ? item[valueField] : null;
             return getComparisonKey(item[headers.numero!], item[headers.cnpj!], valor);
         };
         
         const getXmlComparisonKey = (item: any, valueField: string): string => {
-            const valor = item[valueField];
-            return getComparisonKey(item['Número'], item['CPF/CNPJ do Fornecedor'], valor);
+            const valor = (item[valueField] !== undefined) ? item[valueField] : null;
+            return getComparisonKey(item['Número da Nota'] || item['Número'], item['CPF/CNPJ do Fornecedor'], valor);
         };
 
 
@@ -520,7 +520,6 @@ export function runReconciliation(
             }
         });
         
-        // This is the critical fix: Add the debug key AFTER all reconciliation passes.
         const finalOnlyInSienge = remainingSiengeItems.map(item => ({
             "Chave de Comparação": getSiengeComparisonKey(item, h, h.valorTotal),
             ...item
