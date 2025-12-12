@@ -411,35 +411,31 @@ export function CfopValidator(props: CfopValidatorProps) {
     const handleLoadSpecialCfops = React.useCallback(() => {
         setIsLoadingSpecialCfops(true);
         setTimeout(() => {
-            const entregaFutura: any[] = [];
-            const simplesFaturamento: any[] = [];
+            // Source from initialItems (reconciled data, which are entry items)
+            const sourceItems = initialItems || [];
     
             const ENTREGA_FUTURA_CFOPS = ['5116', '5117', '6116', '6117'];
             const SIMPLES_FATURAMENTO_CFOPS = ['5922', '6922'];
         
-            (itensSaidas || []).forEach((item: any, index: number) => {
-                const itemWithKey = { ...item, __itemKey: `cfop-special-${item['Chave Unica']}-${index}` };
-                const xmlCfop = item['CFOP'];
-    
-                if (ENTREGA_FUTURA_CFOPS.includes(xmlCfop)) {
-                    entregaFutura.push(itemWithKey);
-                }
-    
-                if (SIMPLES_FATURAMENTO_CFOPS.includes(xmlCfop)) {
-                    simplesFaturamento.push(itemWithKey);
-                }
-            });
+            const entregaFutura = sourceItems.filter((item: any) => 
+                ENTREGA_FUTURA_CFOPS.includes(item['CFOP (XML)'])
+            ).map((item, index) => ({...item, __itemKey: `entrega-futura-${index}`}));
+            
+            const simplesFaturamento = sourceItems.filter((item: any) => 
+                SIMPLES_FATURAMENTO_CFOPS.includes(item['CFOP (XML)'])
+            ).map((item, index) => ({...item, __itemKey: `simples-faturamento-${index}`}));
 
             setItemsEntregaFutura(entregaFutura);
             setItemsSimplesFaturamento(simplesFaturamento);
             setIsLoadingSpecialCfops(false);
+            
             if (entregaFutura.length > 0 || simplesFaturamento.length > 0) {
                  toast({ title: 'Análise Concluída', description: 'As notas de faturamento e entrega futura foram carregadas.' });
             } else {
-                 toast({ variant: 'destructive', title: 'Nenhum Item Encontrado', description: 'Nenhum item com os CFOPs especificados foi encontrado nos XMLs de saída.' });
+                 toast({ variant: 'destructive', title: 'Nenhum Item Encontrado', description: 'Nenhum item com os CFOPs de saída especificados foi encontrado nas notas de entrada conciliadas.' });
             }
         }, 50);
-    }, [itensSaidas, toast]);
+    }, [initialItems, toast]);
 
 
     const columns = useMemo(() => {
@@ -472,7 +468,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                     const category = supplierCategories.find(c => c.id === supplierClassificationId);
                     
                     const LucideIcon = category?.icon ? (LucideIcons[category.icon as keyof typeof LucideIcons] as React.ElementType) : Tag;
-                    const isAllowedCfop = !category || !category.allowedCfops || !Array.isArray(category.allowedCfops) || category.allowedCfops.length === 0 || category.allowedCfops.includes(String(item.CFOP));
+                    const isAllowedCfop = !category || !category.allowedCfops || !Array.isArray(category.allowedCfops) || category.allowedCfops.length === 0 || category.allowedCfops.includes(String(item['CFOP (XML)']));
 
                     return (
                          <div className="flex items-center gap-2 group/row">
@@ -752,7 +748,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                 })}
                 <TabsContent value="faturamento-entrega" className="mt-4">
                      <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-lg mb-6">
-                        <p className="text-muted-foreground mb-4">Clique no botão para analisar as notas de Entrega Futura e Simples Faturamento de todos os itens de SAÍDA.</p>
+                        <p className="text-muted-foreground mb-4">Clique no botão para analisar as notas de Entrega Futura e Simples Faturamento dos itens de ENTRADA.</p>
                         <Button onClick={handleLoadSpecialCfops} disabled={isLoadingSpecialCfops}>
                             {isLoadingSpecialCfops ? <><Cpu className="mr-2 h-4 w-4 animate-spin" />Analisando...</> : <><Cpu className="mr-2 h-4 w-4" />Analisar Faturamento/Entrega</>}
                         </Button>
