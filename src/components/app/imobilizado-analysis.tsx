@@ -335,7 +335,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             </div>
         );
     
-        const columnsToShow = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'CFOP (Sienge)', 'Valor Unitário', 'Valor Total'];
+        const columnsToShow = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'CFOP (Sienge)', 'CST do ICMS', 'Valor Unitário', 'Valor Total'];
     
         const baseColumns = getColumnsWithCustomRender(
             enrichedItems,
