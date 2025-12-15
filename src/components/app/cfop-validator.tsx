@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -100,7 +99,7 @@ const FilterDialog: React.FC<{
                 xmlPicms: new Set(availableOptions.xmlPicms),
                 xmlCfops: new Set(availableOptions.xmlCfops),
             };
-            setLocalFilters(JSON.parse(JSON.stringify(currentGlobalFilters, (k,v) => v instanceof Set ? [...v] : v), (k,v) => k.endsWith("s") ? new Set(v) : v));
+            setLocalFilters(JSON.parse(JSON.stringify(currentGlobalFilters, (k,v) => v instanceof Set ? [...v] : v), (k,v) => k === 'xmlCsts' || k === 'xmlPicms' || k === 'xmlCfops' ? new Set(v) : v));
         }
     }, [isDialogOpen, tabFilters, siengeCfop, availableOptions]);
     
@@ -626,7 +625,7 @@ export function CfopValidator(props: CfopValidatorProps) {
     const allCfopsForStatus = Object.keys(cfopGroupsForStatus).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
 
     if (!activeCfopTab || !allCfopsForStatus.includes(activeCfopTab)) {
-        activeCfopTab = allCfopsForStatus.find(cfop => (cfopGroupsForStatus[cfop] || []).length > 0) || allCfopsForStatus[0];
+        activeCfopTab = allCfopsForStatus[0];
     }
     
     return (
@@ -675,7 +674,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                         <TabsContent key={status} value={status} className="mt-4">
                             {allCfopsForStatus.length > 0 ? (
                                 <Tabs 
-                                    value={activeCfopTabs[status] || allCfopsForStatus[0]} 
+                                    value={activeCfopTab} 
                                     onValueChange={(val) => setActiveCfopTabs(prev => ({...prev, [status]: val}))}
                                     className="w-full"
                                 >
@@ -691,19 +690,22 @@ export function CfopValidator(props: CfopValidatorProps) {
                                         </Button>
                                     </div>
                                     {allCfopsForStatus.map(cfop => {
-                                        const currentFilters = tabFilters[cfop];
                                         const allItemsForCfop = cfopGroupsForStatus[cfop] || [];
-                                        const currentCfopData = currentFilters ? allItemsForCfop.filter(item => {
+                                        const currentFilters = tabFilters[cfop];
+                                        
+                                        const currentCfopData = allItemsForCfop.filter(item => {
+                                            if (!currentFilters) return true; // Se não houver filtro para este CFOP, mostra tudo
+
                                             const cfopCode = item['CFOP'];
                                             const cstCode = String(item['CST do ICMS'] || '');
                                             const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
 
-                                            const cfopMatch = currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(`${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}`);
-                                            const cstMatch = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(`${cstCode}: ${getCstDescription(cstCode)}`);
-                                            const picmsMatch = currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(picmsValue);
+                                            const cfopMatch = currentFilters.xmlCfops.has(`${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}`);
+                                            const cstMatch = currentFilters.xmlCsts.has(`${cstCode}: ${getCstDescription(cstCode)}`);
+                                            const picmsMatch = currentFilters.xmlPicms.has(picmsValue);
 
                                             return cfopMatch && cstMatch && picmsMatch;
-                                        }) : allItemsForCfop;
+                                        });
 
                                         return (
                                             <TabsContent key={`${status}-${cfop}`} value={cfop} className="mt-4">
@@ -711,7 +713,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                     <div className='text-lg font-bold'>
                                                         {cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}
                                                     </div>
-                                                    <FilterDialog siengeCfop={cfop} items={itemsByStatus[status]?.[cfop] || []} tabFilters={tabFilters} setTabFilters={setTabFilters} />
+                                                    <FilterDialog siengeCfop={cfop} items={allItemsForCfop} tabFilters={tabFilters} setTabFilters={setTabFilters} />
                                                 </div>
                                                 <DataTable columns={columns} data={currentCfopData} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
                                             </TabsContent>
