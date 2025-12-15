@@ -15,8 +15,9 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '../ui/tooltip';
-import { AllClassifications, DifalStatus } from '@/lib/types';
+import { AllClassifications } from '@/lib/types';
 import { ReconciliationResults } from '@/lib/excel-processor';
+import { DifalStatus } from '@/lib/types';
 
 
 // ===============================================================
@@ -54,8 +55,8 @@ export function DifalAnalysis({ reconciliationResults, allClassifications, onPer
     const handleLoadSubjects = useCallback(() => {
         setIsLoading(true);
         setTimeout(() => {
-            if (!reconciliationResults) {
-                toast({ variant: 'destructive', title: 'Conciliação necessária', description: 'Execute a conciliação XML vs Sienge primeiro.' });
+            if (!reconciliationResults || !reconciliationResults.reconciled) {
+                toast({ variant: 'destructive', title: 'Conciliação necessária', description: 'Execute a conciliação XML vs Sienge primeiro para carregar os itens.' });
                 setIsLoading(false);
                 return;
             }
@@ -220,7 +221,7 @@ export function DifalAnalysis({ reconciliationResults, allClassifications, onPer
             { id: 'actions', header: 'Ações DIFAL', cell: ({ row }: any) => actionButtons(row.original) }
         ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [difalAnalysisData.sujeitosAoDifal]);
+    }, [difalAnalysisData, competence, allClassifications]);
 
 
     return (
