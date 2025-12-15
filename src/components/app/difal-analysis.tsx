@@ -249,7 +249,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
                             </div>
                         </CardContent>
                     </Card>
-                    <Card>
+                    <Card className="mt-6">
                          <CardHeader>
                              <CardTitle className='flex items-center gap-2'><span className='flex items-center justify-center text-sm rounded-full bg-primary text-primary-foreground h-6 w-6'>2</span>Passo 2: Classificar Itens</CardTitle>
                             <CardDescription>
