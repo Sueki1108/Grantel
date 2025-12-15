@@ -58,9 +58,14 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
                 setIsLoading(false);
                 return;
             }
+             if (!processedData.reconciliationResults?.reconciled) {
+                toast({ variant: 'destructive', title: 'Conciliação necessária', description: 'Execute a conciliação XML vs Sienge primeiro.' });
+                setIsLoading(false);
+                return;
+            }
 
             const cfopValidations = allClassifications[competence]?.cfopValidations?.classifications || {};
-            const allReconciledItems = processedData.reconciliationResults?.reconciled || [];
+            const allReconciledItems = processedData.reconciliationResults.reconciled || [];
 
             const items = allReconciledItems.filter(item => {
                 const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
@@ -156,6 +161,10 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
                         <TooltipProvider><Tooltip>
                             <TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([item], 'difal')}><Ticket className="h-4 w-4" /></Button></TooltipTrigger>
                             <TooltipContent><p>Marcar como DIFAL</p></TooltipContent>
+                        </Tooltip></TooltipProvider>
+                         <TooltipProvider><Tooltip>
+                            <TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" onClick={() => handleDifalStatusChange([item], 'beneficio-fiscal')}><ShieldCheck className="h-4 w-4" /></Button></TooltipTrigger>
+                            <TooltipContent><p>Marcar como Benefício Fiscal</p></TooltipContent>
                         </Tooltip></TooltipProvider>
                         <TooltipProvider><Tooltip>
                             <TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-gray-500" onClick={() => handleDifalStatusChange([item], 'disregard')}><EyeOff className="h-4 w-4" /></Button></TooltipTrigger>
