@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Settings2, Copy, HelpCircle, Tag, ListFilter, Save, RefreshCw } from "lucide-react";
+import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Settings2, Copy, HelpCircle, Tag, ListFilter, Save } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -34,8 +34,6 @@ import { cfopDescriptions } from '@/lib/cfop';
 interface ImobilizadoAnalysisProps {
     items: any[]; 
     siengeData: any[] | null;
-    nfeValidasData: any[];
-    originalXmlItems: any[];
     competence: string | null; 
     onPersistData: (allData: AllClassifications) => void;
     allPersistedData: AllClassifications;
@@ -68,13 +66,12 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
 }
 
 
-export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeValidasData, originalXmlItems, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
+export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
     const containerRef = React.useRef<HTMLDivElement>(null);
     const [activeTab, setActiveTab] = useState<Classification>('unclassified');
-    const [isSupplierCategoryModalOpen, setIsSupplierCategoryModalOpen] = useState(false);
     const [cfopFilter, setCfopFilter] = useState<Set<string>>(new Set());
     const [isCfopModalOpen, setIsCfopModalOpen] = useState(false);
     const [enrichedItems, setEnrichedItems] = useState<any[]>([]);
@@ -113,11 +110,8 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
             });
         }
         
-        const nfeHeaderMap = new Map((nfeValidasData || []).map(n => [n['Chave Unica'], n]));
-
         const newItems = initialAllItems.map(item => {
-            const header = nfeHeaderMap.get(item['Chave Unica']);
-            const emitenteCnpj = header?.['CPF/CNPJ do Fornecedor'] || item['CPF/CNPJ do Emitente'] || '';
+            const emitenteCnpj = item['CPF/CNPJ do Emitente'] || '';
             const codigoProduto = item['Código'] || '';
             const numeroNota = item['Número da Nota'] || '';
 
@@ -138,49 +132,12 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
             
             return {
                 ...item,
-                id: `${item['Chave Unica'] || ''}-${item['Item'] || ''}`,
-                uniqueItemId: `${emitenteCnpj}-${codigoProduto}`,
-                Fornecedor: header?.Fornecedor || 'N/A',
-                'CPF/CNPJ do Emitente': emitenteCnpj,
-                'CFOP (XML)': item.CFOP, 
                 'CFOP (Sienge)': siengeCfopValue,
-                destUF: header?.destUF || '',
-                'Alíq. ICMS (%)': item['Alíq. ICMS (%)'] === undefined ? null : item['Alíq. ICMS (%)'],
-                'CST do ICMS': item['CST do ICMS'] === undefined ? null : item['CST do ICMS'],
             };
         });
         setEnrichedItems(newItems);
-    }, [initialAllItems, siengeData, nfeValidasData]);
+    }, [initialAllItems, siengeData]);
 
-    const handleEnrichData = () => {
-        if (!originalXmlItems || originalXmlItems.length === 0) {
-            toast({ variant: 'destructive', title: 'Dados XML originais não encontrados.' });
-            return;
-        }
-
-        const originalXmlItemsMap = new Map();
-        originalXmlItems.forEach(item => {
-            const key = `${item['Chave de acesso']}-${item['Item']}`;
-            originalXmlItemsMap.set(key, item);
-        });
-
-        const newEnrichedItems = enrichedItems.map(item => {
-            const key = `${item['Chave de acesso']}-${item['Item']}`;
-            const originalItem = originalXmlItemsMap.get(key);
-            if (originalItem) {
-                return {
-                    ...item,
-                    'CST do ICMS': originalItem['CST do ICMS'] ?? item['CST do ICMS'],
-                    'Alíq. ICMS (%)': originalItem['pICMS'] ?? item['Alíq. ICMS (%)'],
-                    'CEST': originalItem['prod_CEST'] ?? item['CEST'],
-                };
-            }
-            return item;
-        });
-        
-        setEnrichedItems(newEnrichedItems);
-        toast({ title: 'Dados Enriquecidos!', description: 'As colunas de ICMS e CEST foram carregadas do XML.' });
-    };
 
     const handlePersistClassifications = (competence: string, classifications: { [uniqueItemId: string]: { classification: Classification } }) => {
         const updatedData = { ...allPersistedData };
@@ -258,8 +215,8 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
     const allCfops = useMemo(() => {
         const cfops = new Set<string>();
         enrichedItems.forEach(item => {
-            if (item['CFOP (XML)'] && item['CFOP (XML)'] !== 'N/A') {
-                cfops.add(String(item['CFOP (XML)']));
+            if (item['CFOP'] && item['CFOP'] !== 'N/A') {
+                cfops.add(String(item['CFOP']));
             }
         });
         return Array.from(cfops).sort();
@@ -311,7 +268,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
 
         const itemsToProcess = cfopFilter.size === 0
             ? enrichedItems
-            : enrichedItems.filter(item => cfopFilter.has(String(item['CFOP (XML)'])));
+            : enrichedItems.filter(item => cfopFilter.has(String(item['CFOP'])));
 
         itemsToProcess.forEach(item => {
             let classification: Classification = 'unclassified';
@@ -340,7 +297,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
             return {
                 'Número da Nota': item['Número da Nota'],
                 'Descrição': item['Descrição'],
-                'CFOP (XML)': item['CFOP (XML)'],
+                'CFOP (XML)': item['CFOP'],
                 'CFOP (Sienge)': item['CFOP (Sienge)'],
                 'Descricao CFOP': (item['Descricao CFOP'] || '').substring(0, 20),
                 'Valor Unitário': item['Valor Unitário'],
@@ -378,7 +335,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
             </div>
         );
     
-        const columnsToShow = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP (XML)', 'CFOP (Sienge)', 'CST do ICMS', 'Alíq. ICMS (%)', 'CEST', 'Valor Unitário', 'Valor Total'];
+        const columnsToShow = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'CFOP (Sienge)', 'Valor Unitário', 'Valor Total'];
     
         const baseColumns = getColumnsWithCustomRender(
             enrichedItems,
@@ -434,10 +391,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
 
                 if ((id === 'Valor Total' || id === 'Valor Unitário') && typeof value === 'number') {
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
-                }
-                
-                if (id === 'Alíq. ICMS (%)') {
-                    return <div className='text-center'>{typeof value === 'number' ? `${value.toFixed(2)}%` : <span className='text-muted-foreground'>N/A</span>}</div>;
                 }
 
                 const summarizedValue = typeof value === 'string' && value.length > 35 ? `${value.substring(0, 35)}...` : value;
@@ -610,7 +563,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
                                     </DialogFooter>
                                 </DialogContent>
                             </Dialog>
-                             <Button onClick={handleEnrichData} variant="outline" size="sm"><RefreshCw className="mr-2 h-4 w-4" />Carregar ICMS/CST do XML</Button>
                         </div>
                     </div>
                 </CardHeader>
@@ -651,7 +603,3 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
         </div>
     );
 }
-
-    
-
-    

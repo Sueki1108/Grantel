@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -99,7 +100,13 @@ const FilterDialog: React.FC<{
                 xmlPicms: new Set(availableOptions.xmlPicms),
                 xmlCfops: new Set(availableOptions.xmlCfops),
             };
-            setLocalFilters(JSON.parse(JSON.stringify(currentGlobalFilters, (k,v) => v instanceof Set ? [...v] : v), (k,v) => k === 'xmlCsts' || k === 'xmlPicms' || k === 'xmlCfops' ? new Set(v) : v));
+             // Deep copy to prevent unintended mutations
+            const deepCopiedFilters = {
+                xmlCsts: new Set(currentGlobalFilters.xmlCsts),
+                xmlPicms: new Set(currentGlobalFilters.xmlPicms),
+                xmlCfops: new Set(currentGlobalFilters.xmlCfops),
+            };
+            setLocalFilters(deepCopiedFilters);
         }
     }, [isDialogOpen, tabFilters, siengeCfop, availableOptions]);
     
@@ -414,17 +421,17 @@ export function CfopValidator(props: CfopValidatorProps) {
             const ENTREGA_FUTURA_CFOPS = ['5116', '5117', '6116', '6117'];
             const SIMPLES_FATURAMENTO_CFOPS = ['5922', '6922'];
         
-            if (!originalXmlItems || originalXmlItems.length === 0) {
-                 toast({ variant: 'destructive', title: 'Fonte de Dados Vazia', description: 'Não há itens de XML de entrada para analisar.' });
+            if (!initialItems || initialItems.length === 0) {
+                 toast({ variant: 'destructive', title: 'Fonte de Dados Vazia', description: 'Não há itens de entrada conciliados para analisar.' });
                  setIsLoadingSpecialCfops(false);
                  return;
             }
 
-            const entregaFutura = originalXmlItems.filter((item: any) => 
+            const entregaFutura = initialItems.filter((item: any) => 
                 ENTREGA_FUTURA_CFOPS.includes(item['CFOP'])
             ).map((item, index) => ({...item, '__itemKey': `entrega-futura-${index}`}));
             
-            const simplesFaturamento = originalXmlItems.filter((item: any) => 
+            const simplesFaturamento = initialItems.filter((item: any) => 
                 SIMPLES_FATURAMENTO_CFOPS.includes(item['CFOP'])
             ).map((item, index) => ({...item, '__itemKey': `simples-faturamento-${index}`}));
 
@@ -435,10 +442,10 @@ export function CfopValidator(props: CfopValidatorProps) {
             if (entregaFutura.length > 0 || simplesFaturamento.length > 0) {
                  toast({ title: 'Análise Concluída', description: 'As notas de faturamento e entrega futura foram carregadas.' });
             } else {
-                 toast({ variant: 'destructive', title: 'Nenhum Item Encontrado', description: 'Nenhum item com os CFOPs de saída especificados foi encontrado.' });
+                 toast({ variant: 'destructive', title: 'Nenhum Item Encontrado', description: 'Nenhum item com os CFOPs de saída especificados foi encontrado nas entradas.' });
             }
         }, 50);
-    }, [originalXmlItems, toast]);
+    }, [initialItems, toast]);
 
 
     const columns = useMemo(() => {
@@ -694,7 +701,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                                         const currentFilters = tabFilters[cfop];
                                         
                                         const currentCfopData = allItemsForCfop.filter(item => {
-                                            if (!currentFilters) return true; // Se não houver filtro para este CFOP, mostra tudo
+                                            if (!currentFilters) return true;
 
                                             const cfopCode = item['CFOP'];
                                             const cstCode = String(item['CST do ICMS'] || '');
