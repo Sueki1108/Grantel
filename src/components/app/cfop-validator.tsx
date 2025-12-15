@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -32,8 +33,8 @@ import { SupplierCategoryDialog } from './supplier-category-dialog';
 interface CfopValidatorProps {
     items: any[];
     nfeValidasData: any[]; // Pass NFe data for enrichment
-    originalXmlItems: any[]; // Pass original XML items for enrichment
-    itensSaidas: any[]; // Pass outgoing items
+    originalXmlItems: any[];
+    itensSaidas: any[];
     competence: string | null; 
     onPersistData: (allData: AllClassifications) => void;
     allPersistedData: AllClassifications;
@@ -77,7 +78,7 @@ const FilterDialog: React.FC<{
 
             if (item['Alíq. ICMS (%)'] !== undefined && item['Alíq. ICMS (%)'] !== null) xmlPicms.add(String(item['Alíq. ICMS (%)']));
             
-            const cfopCode = item['CFOP']; // Corrigido de 'CFOP (XML)' para 'CFOP'
+            const cfopCode = item['CFOP']; 
             if (cfopCode) {
                 const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
                 const combined = `${cfopCode}: ${fullDescription}`;
@@ -414,11 +415,19 @@ export function CfopValidator(props: CfopValidatorProps) {
             const ENTREGA_FUTURA_CFOPS = ['5116', '5117', '6116', '6117'];
             const SIMPLES_FATURAMENTO_CFOPS = ['5922', '6922'];
         
-            const entregaFutura = (originalXmlItems || []).filter((item: any) => 
+            const itemsToAnalyze = originalXmlItems;
+
+            if (!itemsToAnalyze || itemsToAnalyze.length === 0) {
+                 toast({ variant: 'destructive', title: 'Fonte de Dados Vazia', description: 'Não há itens de entrada originais do XML para analisar.' });
+                 setIsLoadingSpecialCfops(false);
+                 return;
+            }
+
+            const entregaFutura = itemsToAnalyze.filter((item: any) => 
                 ENTREGA_FUTURA_CFOPS.includes(item['CFOP'])
             ).map((item, index) => ({...item, '__itemKey': `entrega-futura-${index}`}));
             
-            const simplesFaturamento = (originalXmlItems || []).filter((item: any) => 
+            const simplesFaturamento = itemsToAnalyze.filter((item: any) => 
                 SIMPLES_FATURAMENTO_CFOPS.includes(item['CFOP'])
             ).map((item, index) => ({...item, '__itemKey': `simples-faturamento-${index}`}));
 
@@ -670,9 +679,9 @@ export function CfopValidator(props: CfopValidatorProps) {
                             const combinedCst = `${cstCode}: ${cstDesc}`;
                             const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
 
-                            const cfopFilterOk = currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(combinedCfop);
-                            const cstFilterOk = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(combinedCst);
-                            const picmsFilterOk = currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(picmsValue);
+                            const cfopFilterOk = currentFilters.xmlCfops.has(combinedCfop);
+                            const cstFilterOk = currentFilters.xmlCsts.has(combinedCst);
+                            const picmsFilterOk = currentFilters.xmlPicms.has(picmsValue);
                             
                             return cstFilterOk && picmsFilterOk && cfopFilterOk;
                         }).length;
@@ -717,9 +726,9 @@ export function CfopValidator(props: CfopValidatorProps) {
 
                                             const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
 
-                                            const cfopFilterOk = currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(combinedCfop);
-                                            const cstFilterOk = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(combinedCst);
-                                            const picmsFilterOk = currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(picmsValue);
+                                            const cfopFilterOk = currentFilters.xmlCfops.has(combinedCfop);
+                                            const cstFilterOk = currentFilters.xmlCsts.has(combinedCst);
+                                            const picmsFilterOk = currentFilters.xmlPicms.has(picmsValue);
                                             
                                             return cstFilterOk && picmsFilterOk && cfopFilterOk;
                                         }) || [];
