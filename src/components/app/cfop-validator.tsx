@@ -1,13 +1,12 @@
-
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, X, HelpCircle, RotateCw, ListFilter, Copy, Download, Factory, Wrench, HardHat, EyeOff, Settings, Ticket, Tag, RefreshCw, ChevronDown, ChevronRight, MinusCircle, Cpu } from "lucide-react";
+import { Check, X, HelpCircle, RotateCw, ListFilter, Copy, Download, Factory, Wrench, HardHat, Settings, Ticket, Tag, RefreshCw, ChevronDown, ChevronRight, MinusCircle, Cpu, EyeOff, ShieldCheck, TicketX } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
-import type { AllClassifications, SupplierCategory } from '@/lib/types';
+import type { AllClassifications, SupplierCategory, Classification, DifalStatus } from '@/lib/types';
 import {
   Tooltip,
   TooltipContent,
@@ -40,7 +39,7 @@ interface CfopValidatorProps {
     allPersistedData: AllClassifications;
 }
 
-type ValidationStatus = 'all' | 'unvalidated' | 'correct' | 'incorrect' | 'verify' | 'difal';
+type ValidationStatus = 'all' | 'unvalidated' | 'correct' | 'incorrect' | 'verify';
 
 export type TabFilters = {
     xmlCsts: Set<string>;
@@ -50,8 +49,8 @@ export type TabFilters = {
 
 type BulkActionState = {
     classification: 'correct' | 'incorrect' | 'verify' | 'unvalidated' | null;
-    isDifal: boolean | null;
 };
+
 
 // ===============================================================
 // Filter Dialog Component
@@ -110,10 +109,10 @@ const FilterDialog: React.FC<{
         }
     }, [isDialogOpen, tabFilters, siengeCfop, availableOptions]);
     
-    const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(availableOptions.xmlCsts), xmlPicms: new Set(availableOptions.xmlPicms), xmlCfops: new Set(availableOptions.xmlCfops) };
-    const isFilterActive = filters.xmlCsts.size < availableOptions.xmlCsts.length ||
-                           filters.xmlPicms.size < availableOptions.xmlPicms.length ||
-                           filters.xmlCfops.size < availableOptions.xmlCfops.length;
+    const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set() };
+    const isFilterActive = filters.xmlCsts?.size < availableOptions.xmlCsts.length ||
+                           filters.xmlPicms?.size < availableOptions.xmlPicms.length ||
+                           filters.xmlCfops?.size < availableOptions.xmlCfops.length;
 
 
     const handleFilterChange = (type: keyof TabFilters, value: string, checked: boolean) => {
@@ -226,11 +225,11 @@ export function CfopValidator(props: CfopValidatorProps) {
     const { toast } = useToast();
     
     const [enrichedItems, setEnrichedItems] = useState<any[]>([]);
-    const [activeStatusTab, setActiveStatusTab] = useState<ValidationStatus | 'faturamento-entrega'>('unvalidated');
+    const [activeTab, setActiveTab] = useState<ValidationStatus | 'faturamento-entrega' | 'difal-analysis'>('unvalidated');
     const [activeCfopTabs, setActiveCfopTabs] = useState<Record<string, string>>({});
     const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-    const [bulkActionState, setBulkActionState] = useState<BulkActionState>({ classification: null, isDifal: null });
+    const [bulkActionState, setBulkActionState] = useState<BulkActionState>({ classification: null });
     const [itemsEntregaFutura, setItemsEntregaFutura] = useState<any[]>([]);
     const [itemsSimplesFaturamento, setItemsSimplesFaturamento] = useState<any[]>([]);
     const [isLoadingSpecialCfops, setIsLoadingSpecialCfops] = useState(false);
@@ -294,7 +293,7 @@ export function CfopValidator(props: CfopValidatorProps) {
         if (!updatedPersistedData[competence].cfopValidations) updatedPersistedData[competence].cfopValidations = { classifications: {} };
         
         itemsToUpdate.forEach(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const current = updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] || { isDifal: false };
             updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] = { ...current, classification: newClassification };
         });
@@ -302,30 +301,33 @@ export function CfopValidator(props: CfopValidatorProps) {
         onPersistData(updatedPersistedData);
     };
 
-    const handleDifalChange = (itemsToUpdate: any[]) => {
+    const handleDifalStatusChange = (itemsToUpdate: any[], status: DifalStatus) => {
         if (!competence) return;
         const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
-        if (!updatedPersistedData[competence]) updatedPersistedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }};
-        if (!updatedPersistedData[competence].cfopValidations) updatedPersistedData[competence].cfopValidations = { classifications: {} };
+        if (!updatedPersistedData[competence]) {
+            updatedPersistedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {}} };
+        }
+        if (!updatedPersistedData[competence].difalValidations) {
+            updatedPersistedData[competence].difalValidations = { classifications: {} };
+        }
 
         itemsToUpdate.forEach(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
-            const current = updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] || { classification: 'unvalidated', isDifal: false };
-            updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] = { ...current, isDifal: !current.isDifal };
+            const itemKey = `${item['Chave de acesso']}-${item['Item']}`;
+            updatedPersistedData[competence].difalValidations!.classifications[itemKey] = { status };
         });
-        
+
         onPersistData(updatedPersistedData);
     };
     
     const handleBulkAction = () => {
-        const activeTableItems = itemsByStatus[activeStatusTab as ValidationStatus]?.[activeCfopTabs[activeStatusTab]] || [];
+        const activeTableItems = itemsByStatus[activeTab as ValidationStatus]?.[activeCfopTabs[activeTab]] || [];
         const selectedItemKeys = Object.keys(rowSelection).map(index => activeTableItems[parseInt(index)].__itemKey);
 
         if (selectedItemKeys.length === 0) return;
         
         const selectedItems = selectedItemKeys.map(itemKey => {
             const uniqueKey = itemKey.replace('cfop-pending-', '');
-            return enrichedItems.find(item => `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}` === uniqueKey);
+            return enrichedItems.find(item => `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}` === uniqueKey);
         }).filter(Boolean);
 
         let changedCount = 0;
@@ -338,21 +340,13 @@ export function CfopValidator(props: CfopValidatorProps) {
 
         selectedItems.forEach(item => {
             if (!item) return;
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
-            const current = { ...(newValidations[uniqueKey] || { classification: 'unvalidated', isDifal: false }) };
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const current = { ...(newValidations[uniqueKey] || { classification: 'unvalidated' }) };
             let itemChanged = false;
 
-            if (bulkActionState.classification) {
-                if (current.classification !== bulkActionState.classification) {
-                    current.classification = bulkActionState.classification;
-                    itemChanged = true;
-                }
-            }
-            if (bulkActionState.isDifal !== null) {
-                if (current.isDifal !== bulkActionState.isDifal) {
-                    current.isDifal = bulkActionState.isDifal;
-                    itemChanged = true;
-                }
+            if (bulkActionState.classification && current.classification !== bulkActionState.classification) {
+                current.classification = bulkActionState.classification;
+                itemChanged = true;
             }
             
             if (itemChanged) {
@@ -365,7 +359,7 @@ export function CfopValidator(props: CfopValidatorProps) {
             onPersistData(updatedPersistedData);
         }
         
-        setBulkActionState({ classification: null, isDifal: null });
+        setBulkActionState({ classification: null });
         setRowSelection({});
         toast({
             title: "Ações em Massa Aplicadas",
@@ -421,17 +415,17 @@ export function CfopValidator(props: CfopValidatorProps) {
             const ENTREGA_FUTURA_CFOPS = ['5116', '5117', '6116', '6117'];
             const SIMPLES_FATURAMENTO_CFOPS = ['5922', '6922'];
         
-            if (!initialItems || initialItems.length === 0) {
-                 toast({ variant: 'destructive', title: 'Fonte de Dados Vazia', description: 'Não há itens de entrada conciliados para analisar.' });
+            if (!originalXmlItems || originalXmlItems.length === 0) {
+                 toast({ variant: 'destructive', title: 'Fonte de Dados Vazia', description: 'Não há itens de XML de entrada para analisar.' });
                  setIsLoadingSpecialCfops(false);
                  return;
             }
 
-            const entregaFutura = initialItems.filter((item: any) => 
+            const entregaFutura = originalXmlItems.filter((item: any) => 
                 ENTREGA_FUTURA_CFOPS.includes(item['CFOP'])
             ).map((item, index) => ({...item, '__itemKey': `entrega-futura-${index}`}));
             
-            const simplesFaturamento = initialItems.filter((item: any) => 
+            const simplesFaturamento = originalXmlItems.filter((item: any) => 
                 SIMPLES_FATURAMENTO_CFOPS.includes(item['CFOP'])
             ).map((item, index) => ({...item, '__itemKey': `simples-faturamento-${index}`}));
 
@@ -442,10 +436,10 @@ export function CfopValidator(props: CfopValidatorProps) {
             if (entregaFutura.length > 0 || simplesFaturamento.length > 0) {
                  toast({ title: 'Análise Concluída', description: 'As notas de faturamento e entrega futura foram carregadas.' });
             } else {
-                 toast({ variant: 'destructive', title: 'Nenhum Item Encontrado', description: 'Nenhum item com os CFOPs de saída especificados foi encontrado nas entradas.' });
+                 toast({ variant: 'destructive', title: 'Nenhum Item Encontrado', description: 'Nenhum item com os CFOPs de saída especificados foi encontrado nos XMLs de entrada.' });
             }
         }, 50);
-    }, [initialItems, toast]);
+    }, [originalXmlItems, toast]);
 
 
     const columns = useMemo(() => {
@@ -535,10 +529,9 @@ export function CfopValidator(props: CfopValidatorProps) {
                 id: 'actions',
                 header: 'Ações',
                 cell: ({ row }) => {
-                    const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
+                    const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
                     const validation = cfopValidations[uniqueKey];
                     const classification = validation?.classification || 'unvalidated';
-                    const isDifal = validation?.isDifal;
 
                     return (
                         <div className="flex justify-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -569,9 +562,6 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     <TooltipTrigger asChild><Button size="icon" variant={classification === 'verify' ? 'default' : 'ghost'} className={cn("h-7 w-7", classification === 'verify' ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/50')} onClick={() => handleValidationChange([row.original], 'verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>A Verificar</p></TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
-                                    <TooltipTrigger asChild><Button variant={isDifal ? 'default' : 'ghost'} size="icon" className={cn("h-7 w-7", isDifal && "bg-primary hover:bg-primary/90")} onClick={() => handleDifalChange([row.original])}><Ticket className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>{isDifal ? 'Desmarcar DIFAL' : 'Marcar como DIFAL'}</p></TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
                                     <TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange([row.original], 'unvalidated')}><RotateCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Limpar Validação</p></TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>
@@ -586,14 +576,13 @@ export function CfopValidator(props: CfopValidatorProps) {
         const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
         
         const statusResult: Record<ValidationStatus, Record<string, any[]>> = {
-            all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}, difal: {}
+            all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}
         };
         
         enrichedItems.forEach(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const validation = cfopValidations[uniqueKey];
             const classification = validation?.classification || 'unvalidated';
-            const isDifal = validation?.isDifal || false;
             const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
             const siengeCfop = item.Sienge_CFOP || 'N/A';
 
@@ -602,14 +591,51 @@ export function CfopValidator(props: CfopValidatorProps) {
 
             if (!statusResult[classification][siengeCfop]) statusResult[classification][siengeCfop] = [];
             statusResult[classification][siengeCfop].push(itemWithKey);
-            
-            if (isDifal) {
-                if (!statusResult.difal[siengeCfop]) statusResult.difal[siengeCfop] = [];
-                statusResult.difal[siengeCfop].push(itemWithKey);
-            }
         });
         return statusResult;
     }, [enrichedItems, competence, allPersistedData]);
+
+
+    const difalAnalysisData = useMemo(() => {
+        const difalValidations = (competence && allPersistedData[competence]?.difalValidations?.classifications) || {};
+        const correctItems = Object.values(itemsByStatus.correct).flat();
+        
+        const sujeitosAoDifal = correctItems.filter(item => 
+            item['CFOP'] === '2551' || item['CFOP'] === '2556'
+        ).map(item => ({...item, __itemKey: `${item['Chave de acesso']}-${item['Item']}`}));
+
+        const difalItems = [];
+        const desconsideradosItems = [];
+        const beneficioFiscalItems = [];
+        
+        sujeitosAoDifal.forEach(item => {
+            const itemKey = `${item['Chave de acesso']}-${item['Item']}`;
+            const status = difalValidations[itemKey]?.status;
+            switch(status) {
+                case 'difal':
+                    difalItems.push(item);
+                    break;
+                case 'disregard':
+                    desconsideradosItems.push(item);
+                    break;
+                case 'beneficio-fiscal':
+                    beneficioFiscalItems.push(item);
+                    break;
+                default:
+                    // fica nos sujeitos
+                    break;
+            }
+        });
+
+        // Filter out items that have been moved to other tabs
+        const finalSujeitos = sujeitosAoDifal.filter(item => {
+             const itemKey = `${item['Chave de acesso']}-${item['Item']}`;
+             return !difalValidations[itemKey];
+        });
+
+        return { sujeitosAoDifal: finalSujeitos, difalItems, desconsideradosItems, beneficioFiscalItems };
+
+    }, [itemsByStatus.correct, allPersistedData, competence]);
 
 
     const numSelected = Object.keys(rowSelection).length;
@@ -624,16 +650,12 @@ export function CfopValidator(props: CfopValidatorProps) {
         { status: 'correct', label: 'Correto' },
         { status: 'incorrect', label: 'Incorreto' },
         { status: 'verify', label: 'Verificar' },
-        { status: 'difal', label: 'DIFAL' },
     ];
     
-    let activeCfopTab = activeCfopTabs[activeStatusTab as ValidationStatus];
-    const cfopGroupsForStatus = itemsByStatus[activeStatusTab as ValidationStatus] || {};
+    const activeCfopTab = activeCfopTabs[activeTab as ValidationStatus];
+    const cfopGroupsForStatus = itemsByStatus[activeTab as ValidationStatus] || {};
     const allCfopsForStatus = Object.keys(cfopGroupsForStatus).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
 
-    if (!activeCfopTab || !allCfopsForStatus.includes(activeCfopTab)) {
-        activeCfopTab = allCfopsForStatus[0];
-    }
     
     return (
         <div className='relative'>
@@ -649,14 +671,13 @@ export function CfopValidator(props: CfopValidatorProps) {
                             <Button size="sm" className={cn("bg-secondary text-secondary-foreground", bulkActionState.classification === 'incorrect' && "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-100")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'incorrect'}))}><X className="mr-2 h-4 w-4" /> Incorreto</Button>
                             <Button size="sm" className={cn("bg-secondary text-secondary-foreground", bulkActionState.classification === 'verify' && "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
                             <Button size="sm" variant="outline" onClick={() => setBulkActionState(prev => ({...prev, classification: 'unvalidated'}))}><RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
-                            <Button size="sm" variant={bulkActionState.isDifal ? 'default' : 'outline'} onClick={() => setBulkActionState(prev => ({...prev, isDifal: prev.isDifal === null ? true : !prev.isDifal}))}><Ticket className="mr-2 h-4 w-4" /> DIFAL</Button>
                         </div>
                          <Button onClick={handleBulkAction}>Aplicar</Button>
                     </Card>
                 </div>
             )}
             
-            <Tabs value={activeStatusTab} onValueChange={(val) => setActiveStatusTab(val as ValidationStatus | 'faturamento-entrega')} className="w-full">
+            <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as ValidationStatus | 'faturamento-entrega' | 'difal-analysis')} className="w-full">
                  <div className="flex justify-between items-center mb-2">
                     <TabsList className="grid w-full grid-cols-7">
                         {statusTabs.map(({status, label}) => {
@@ -664,6 +685,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                             return <TabsTrigger key={status} value={status} disabled={count === 0}>{label} ({count})</TabsTrigger>
                         })}
                          <TabsTrigger value="faturamento-entrega">Faturamento/Entrega</TabsTrigger>
+                         <TabsTrigger value="difal-analysis">Análise DIFAL</TabsTrigger>
                     </TabsList>
                     <div className="flex gap-2 ml-4">
                         <Button onClick={handleEnrichData} variant="outline" size="sm"><RefreshCw className="mr-2 h-4 w-4" />Carregar ICMS/CEST do XML</Button>
@@ -681,7 +703,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                         <TabsContent key={status} value={status} className="mt-4">
                             {allCfopsForStatus.length > 0 ? (
                                 <Tabs 
-                                    value={activeCfopTab} 
+                                    value={activeCfopTabs[status] || allCfopsForStatus[0]} 
                                     onValueChange={(val) => setActiveCfopTabs(prev => ({...prev, [status]: val}))}
                                     className="w-full"
                                 >
@@ -701,15 +723,15 @@ export function CfopValidator(props: CfopValidatorProps) {
                                         const currentFilters = tabFilters[cfop];
                                         
                                         const currentCfopData = allItemsForCfop.filter(item => {
-                                            if (!currentFilters) return true;
-
+                                             if (!currentFilters) return true;
+                                            
                                             const cfopCode = item['CFOP'];
                                             const cstCode = String(item['CST do ICMS'] || '');
                                             const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
 
-                                            const cfopMatch = currentFilters.xmlCfops.has(`${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}`);
-                                            const cstMatch = currentFilters.xmlCsts.has(`${cstCode}: ${getCstDescription(cstCode)}`);
-                                            const picmsMatch = currentFilters.xmlPicms.has(picmsValue);
+                                            const cfopMatch = currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(`${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}`);
+                                            const cstMatch = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(`${cstCode}: ${getCstDescription(cstCode)}`);
+                                            const picmsMatch = currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(picmsValue);
 
                                             return cfopMatch && cstMatch && picmsMatch;
                                         });
@@ -735,7 +757,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                 })}
                 <TabsContent value="faturamento-entrega" className="mt-4">
                      <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-lg mb-6">
-                        <p className="text-muted-foreground mb-4">Clique no botão para analisar as notas de Entrega Futura e Simples Faturamento dos itens de SAÍDA.</p>
+                        <p className="text-muted-foreground mb-4">Clique no botão para analisar as notas de Entrega Futura e Simples Faturamento dos itens de entrada (CFOPs do fornecedor).</p>
                         <Button onClick={handleLoadSpecialCfops} disabled={isLoadingSpecialCfops}>
                             {isLoadingSpecialCfops ? <><Cpu className="mr-2 h-4 w-4 animate-spin" />Analisando...</> : <><Cpu className="mr-2 h-4 w-4" />Analisar Faturamento/Entrega</>}
                         </Button>
@@ -751,6 +773,48 @@ export function CfopValidator(props: CfopValidatorProps) {
                         </TabsContent>
                         <TabsContent value="simples-faturamento" className="mt-4">
                             <DataTable columns={columns} data={itemsSimplesFaturamento} rowSelection={rowSelection} setRowSelection={setRowSelection} />
+                        </TabsContent>
+                    </Tabs>
+                </TabsContent>
+                <TabsContent value="difal-analysis" className="mt-4">
+                    <Tabs defaultValue="sujeitos">
+                        <TabsList className="grid w-full grid-cols-4">
+                            <TabsTrigger value="sujeitos">Sujeitos ao DIFAL ({difalAnalysisData.sujeitosAoDifal.length})</TabsTrigger>
+                            <TabsTrigger value="difal">DIFAL ({difalAnalysisData.difalItems.length})</TabsTrigger>
+                            <TabsTrigger value="beneficio-fiscal">Benefício Fiscal ({difalAnalysisData.beneficioFiscalItems.length})</TabsTrigger>
+                            <TabsTrigger value="desconsiderados">Desconsiderados ({difalAnalysisData.desconsideradosItems.length})</TabsTrigger>
+                        </TabsList>
+                         <TabsContent value="sujeitos" className="mt-4">
+                            <DataTable columns={[...columns, { id: 'difal-actions', header: 'Ações DIFAL', cell: ({row}) => (
+                                <div className="flex justify-center gap-1">
+                                    <TooltipProvider>
+                                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([row.original], 'difal')}><Ticket className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar como DIFAL</p></TooltipContent></Tooltip>
+                                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-gray-500" onClick={() => handleDifalStatusChange([row.original], 'disregard')}><EyeOff className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Desconsiderar</p></TooltipContent></Tooltip>
+                                    </TooltipProvider>
+                                </div>
+                            )}]} data={difalAnalysisData.sujeitosAoDifal} />
+                        </TabsContent>
+                         <TabsContent value="difal" className="mt-4">
+                            <DataTable columns={[...columns, { id: 'difal-actions', header: 'Ações DIFAL', cell: ({row}) => (
+                                <div className="flex justify-center gap-1">
+                                    <TooltipProvider>
+                                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" onClick={() => handleDifalStatusChange([row.original], 'beneficio-fiscal')}><ShieldCheck className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Benefício Fiscal</p></TooltipContent></Tooltip>
+                                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-gray-500" onClick={() => handleDifalStatusChange([row.original], 'disregard')}><EyeOff className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Desconsiderar</p></TooltipContent></Tooltip>
+                                    </TooltipProvider>
+                                </div>
+                            )}]} data={difalAnalysisData.difalItems} />
+                        </TabsContent>
+                        <TabsContent value="beneficio-fiscal" className="mt-4">
+                             <DataTable columns={columns} data={difalAnalysisData.beneficioFiscalItems} />
+                        </TabsContent>
+                        <TabsContent value="desconsiderados" className="mt-4">
+                            <DataTable columns={[...columns, { id: 'difal-actions', header: 'Ações DIFAL', cell: ({row}) => (
+                                <div className="flex justify-center gap-1">
+                                    <TooltipProvider>
+                                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([row.original], 'difal')}><TicketX className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Reverter e Marcar como DIFAL</p></TooltipContent></Tooltip>
+                                    </TooltipProvider>
+                                </div>
+                            )}]} data={difalAnalysisData.desconsideradosItems} />
                         </TabsContent>
                     </Tabs>
                 </TabsContent>
