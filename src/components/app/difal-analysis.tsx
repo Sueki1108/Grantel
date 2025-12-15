@@ -15,26 +15,26 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '../ui/tooltip';
-import { AllClassifications, DifalStatus, ProcessedData } from '@/lib/types';
+import { AllClassifications, DifalStatus } from '@/lib/types';
+import { ReconciliationResults } from '@/lib/excel-processor';
 
 
 // ===============================================================
 // Componente Principal
 // ===============================================================
 interface DifalAnalysisProps {
-    processedData: ProcessedData | null;
+    reconciliationResults: ReconciliationResults | null;
     allClassifications: AllClassifications;
     onPersistData: (allData: AllClassifications) => void;
+    competence: string | null;
 }
 
-export function DifalAnalysis({ processedData, allClassifications, onPersistData }: DifalAnalysisProps) {
+export function DifalAnalysis({ reconciliationResults, allClassifications, onPersistData, competence }: DifalAnalysisProps) {
     const { toast } = useToast();
     const [vencimento, setVencimento] = useState('');
     const [isGeneratingScript, setIsGeneratingScript] = useState(false);
     const [sujeitosAoDifal, setSujeitosAoDifal] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-
-    const competence = processedData?.competence;
 
     const handleVencimentoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         let value = e.target.value.replace(/\D/g, '');
@@ -54,19 +54,19 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
     const handleLoadSubjects = useCallback(() => {
         setIsLoading(true);
         setTimeout(() => {
-            if (!processedData || !competence) {
-                toast({ variant: 'destructive', title: 'Dados Incompletos', description: 'Valide os dados e selecione uma competência primeiro.' });
+            if (!reconciliationResults) {
+                toast({ variant: 'destructive', title: 'Conciliação necessária', description: 'Execute a conciliação XML vs Sienge primeiro.' });
                 setIsLoading(false);
                 return;
             }
-            if (!processedData.reconciliationResults?.reconciled) {
-                toast({ variant: 'destructive', title: 'Conciliação necessária', description: 'Execute a conciliação XML vs Sienge primeiro.' });
+            if (!competence) {
+                toast({ variant: 'destructive', title: 'Competência não definida', description: 'Valide os dados e selecione uma competência primeiro.' });
                 setIsLoading(false);
                 return;
             }
 
             const cfopValidations = allClassifications[competence]?.cfopValidations?.classifications || {};
-            const allReconciledItems = processedData.reconciliationResults.reconciled || [];
+            const allReconciledItems = reconciliationResults.reconciled || [];
 
             const items = allReconciledItems.filter(item => {
                 const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
@@ -80,7 +80,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
             setIsLoading(false);
             toast({ title: "Itens Carregados", description: `${items.length} itens sujeitos a DIFAL foram carregados para análise.` });
         }, 50);
-    }, [processedData, allClassifications, competence, toast]);
+    }, [reconciliationResults, allClassifications, competence, toast]);
 
 
     const handleDifalStatusChange = (itemsToUpdate: any[], status: DifalStatus) => {

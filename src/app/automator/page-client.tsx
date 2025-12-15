@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -899,9 +898,10 @@ export function AutomatorClientPage() {
 
                         <TabsContent value="difal" className="mt-6">
                            <DifalAnalysis 
-                             processedData={processedData}
-                             allClassifications={allClassifications}
-                             onPersistData={handlePersistClassifications}
+                                reconciliationResults={processedData?.reconciliationResults}
+                                allClassifications={allClassifications}
+                                onPersistData={handlePersistClassifications}
+                                competence={competence}
                            />
                         </TabsContent>
                         
