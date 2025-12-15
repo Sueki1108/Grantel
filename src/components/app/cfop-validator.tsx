@@ -77,7 +77,7 @@ const FilterDialog: React.FC<{
 
             if (item['Alíq. ICMS (%)'] !== undefined && item['Alíq. ICMS (%)'] !== null) xmlPicms.add(String(item['Alíq. ICMS (%)']));
             
-            const cfopCode = item['CFOP (XML)'];
+            const cfopCode = item['CFOP']; // Corrigido de 'CFOP (XML)' para 'CFOP'
             if (cfopCode) {
                 const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
                 const combined = `${cfopCode}: ${fullDescription}`;
@@ -265,8 +265,8 @@ export function CfopValidator(props: CfopValidatorProps) {
                 return {
                     ...item,
                     'CST do ICMS': originalItem['CST do ICMS'] ?? item['CST do ICMS'],
-                    'Alíq. ICMS (%)': originalItem['Alíq. ICMS (%)'] ?? item['Alíq. ICMS (%)'],
-                    'CEST': originalItem['CEST'] ?? item['CEST'],
+                    'Alíq. ICMS (%)': originalItem['pICMS'] ?? item['Alíq. ICMS (%)'],
+                    'CEST': originalItem['prod_CEST'] ?? item['CEST'],
                 };
             }
             return item;
@@ -411,18 +411,16 @@ export function CfopValidator(props: CfopValidatorProps) {
     const handleLoadSpecialCfops = React.useCallback(() => {
         setIsLoadingSpecialCfops(true);
         setTimeout(() => {
-            const sourceItems = originalXmlItems || [];
-    
             const ENTREGA_FUTURA_CFOPS = ['5116', '5117', '6116', '6117'];
             const SIMPLES_FATURAMENTO_CFOPS = ['5922', '6922'];
         
-            const entregaFutura = sourceItems.filter((item: any) => 
+            const entregaFutura = (originalXmlItems || []).filter((item: any) => 
                 ENTREGA_FUTURA_CFOPS.includes(item['CFOP'])
-            ).map((item, index) => ({...item, 'CFOP (XML)': item.CFOP, __itemKey: `entrega-futura-${index}`}));
+            ).map((item, index) => ({...item, '__itemKey': `entrega-futura-${index}`}));
             
-            const simplesFaturamento = sourceItems.filter((item: any) => 
+            const simplesFaturamento = (originalXmlItems || []).filter((item: any) => 
                 SIMPLES_FATURAMENTO_CFOPS.includes(item['CFOP'])
-            ).map((item, index) => ({...item, 'CFOP (XML)': item.CFOP, __itemKey: `simples-faturamento-${index}`}));
+            ).map((item, index) => ({...item, '__itemKey': `simples-faturamento-${index}`}));
 
             setItemsEntregaFutura(entregaFutura);
             setItemsSimplesFaturamento(simplesFaturamento);
@@ -440,7 +438,7 @@ export function CfopValidator(props: CfopValidatorProps) {
     const columns = useMemo(() => {
         if (!enrichedItems || enrichedItems.length === 0) return [];
         
-        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'Centro de Custo', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP (XML)', 'CFOP (Sienge)', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
+        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'Centro de Custo', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'CFOP (Sienge)', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
         const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
         const supplierCategories = allPersistedData.supplierCategories || [];
         const supplierClassifications = (competence && allPersistedData[competence]?.supplierClassifications) || {};
@@ -467,7 +465,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                     const category = supplierCategories.find(c => c.id === supplierClassificationId);
                     
                     const LucideIcon = category?.icon ? (LucideIcons[category.icon as keyof typeof LucideIcons] as React.ElementType) : Tag;
-                    const isAllowedCfop = !category || !category.allowedCfops || !Array.isArray(category.allowedCfops) || category.allowedCfops.length === 0 || category.allowedCfops.includes(String(item['CFOP (XML)']));
+                    const isAllowedCfop = !category || !category.allowedCfops || !Array.isArray(category.allowedCfops) || category.allowedCfops.length === 0 || category.allowedCfops.includes(String(item['CFOP']));
 
                     return (
                          <div className="flex items-center gap-2 group/row">
@@ -664,7 +662,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                         const filteredCount = !tabFilters[currentCfopTab] ? cfopData.length : cfopData.filter((item: any) => {
                             const currentFilters = tabFilters[currentCfopTab];
                             if(!currentFilters) return true;
-                            const cfopCode = item['CFOP (XML)'];
+                            const cfopCode = item['CFOP'];
                             const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
                             const combinedCfop = `${cfopCode}: ${fullDescription}`;
                             const cstCode = String(item['CST do ICMS'] || '');
@@ -709,7 +707,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                                         const currentCfopData = itemsByStatus[status]?.[cfop]?.filter(item => {
                                             if (!currentFilters) return true;
                                             
-                                            const cfopCode = item['CFOP (XML)'];
+                                            const cfopCode = item['CFOP'];
                                             const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
                                             const combinedCfop = `${cfopCode}: ${fullDescription}`;
 
