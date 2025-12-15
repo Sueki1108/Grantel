@@ -220,7 +220,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
             { id: 'actions', header: 'Ações DIFAL', cell: ({ row }: any) => actionButtons(row.original) }
         ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [difalAnalysisData.sujeitosAoDifal, handleDifalStatusChange]);
+    }, [difalAnalysisData.sujeitosAoDifal]);
 
 
     return (
