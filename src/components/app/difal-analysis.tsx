@@ -1,19 +1,15 @@
 
 "use client";
 
-import { useState, useMemo, type ChangeEvent } from 'react';
+import { useState, useMemo, type ChangeEvent, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Loader2, Download, Cpu, TicketPercent, Copy, Hash, Sigma, Coins, ClipboardCopy, X, UploadCloud, EyeOff, Ticket, ShieldCheck, TicketX } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
 import { DataTable } from '@/components/app/data-table';
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '../ui/dialog';
-import { processUploadedXmls } from '@/lib/xml-processor';
-import JSZip from 'jszip';
-import { FileUploadForm } from './file-upload-form';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,6 +30,9 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
     const { toast } = useToast();
     const [vencimento, setVencimento] = useState('');
     const [isGeneratingScript, setIsGeneratingScript] = useState(false);
+    const [sujeitosAoDifal, setSujeitosAoDifal] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+
     const competence = processedData?.competence;
 
     const handleVencimentoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -50,6 +49,32 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
         
         setVencimento(value);
     };
+    
+    const handleLoadSubjects = useCallback(() => {
+        setIsLoading(true);
+        setTimeout(() => {
+            if (!processedData || !competence) {
+                toast({ variant: 'destructive', title: 'Dados Incompletos', description: 'Valide os dados e selecione uma competência primeiro.' });
+                setIsLoading(false);
+                return;
+            }
+
+            const cfopValidations = allClassifications[competence]?.cfopValidations?.classifications || {};
+            const allReconciledItems = processedData.reconciliationResults?.reconciled || [];
+
+            const items = allReconciledItems.filter(item => {
+                const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+                const isCorrect = cfopValidations[uniqueKey]?.classification === 'correct';
+                const isDifalCfop = item.CFOP === '2551' || item.CFOP === '2556';
+                return isCorrect && isDifalCfop;
+            });
+            
+            setSujeitosAoDifal(items);
+            setIsLoading(false);
+            toast({ title: "Itens Carregados", description: `${items.length} itens sujeitos a DIFAL foram carregados para análise.` });
+        }, 50);
+    }, [processedData, allClassifications, competence, toast]);
+
 
     const handleDifalStatusChange = (itemsToUpdate: any[], status: DifalStatus) => {
         if (!competence) {
@@ -68,7 +93,6 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
         itemsToUpdate.forEach(item => {
             const itemKey = `${item['Chave de acesso']}-${item['Item']}`;
             if (status === 'subject-to-difal') {
-                 // Reverte, removendo a chave
                 delete updatedData[competence].difalValidations.classifications[itemKey];
             } else {
                  updatedData[competence].difalValidations.classifications[itemKey] = { status };
@@ -80,14 +104,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
     };
 
     const difalAnalysisData = useMemo(() => {
-        const correctItems = Object.values(processedData?.reconciliationResults?.reconciled || []).flat();
-        
-        const sujeitosAoDifal = correctItems.filter(item => 
-            (item['CFOP'] === '2551' || item['CFOP'] === '2556')
-        );
-
         const difalValidations = (competence && allClassifications[competence]?.difalValidations?.classifications) || {};
-
         const difalItems: any[] = [];
         const desconsideradosItems: any[] = [];
         const beneficioFiscalItems: any[] = [];
@@ -115,7 +132,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
 
         return { sujeitosAoDifal: finalSujeitos, difalItems, desconsideradosItems, beneficioFiscalItems };
 
-    }, [processedData?.reconciliationResults?.reconciled, allClassifications, competence]);
+    }, [sujeitosAoDifal, allClassifications, competence]);
 
 
     const generateGnreScript = () => {
@@ -127,7 +144,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
         }, 1500);
     };
 
-    const columns = (tab: 'sujeitos' | 'difal' | 'beneficio' | 'desconsiderados') => {
+    const columns = useCallback((tab: 'sujeitos' | 'difal' | 'beneficio' | 'desconsiderados') => {
         const baseColumns = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'CFOP (Sienge)', 'Valor Total'];
         
         let actionButtons;
@@ -191,7 +208,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
             ),
              { id: 'actions', header: 'Ações DIFAL', cell: ({ row }: any) => actionButtons(row.original) }
         ]
-    }
+    }, [difalAnalysisData.sujeitosAoDifal, handleDifalStatusChange]);
 
 
     return (
@@ -203,12 +220,18 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
                         <div>
                             <CardTitle className="font-headline text-2xl">Gerador de Guia DIFAL</CardTitle>
                             <CardDescription>
-                                Classifique as notas e gere o script para pagamento da guia GNRE de DIFAL.
+                                Carregue os itens, classifique-os e gere o script para pagamento da guia GNRE de DIFAL.
                             </CardDescription>
                         </div>
                     </div>
                 </CardHeader>
                  <CardContent>
+                     <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-lg mb-6">
+                        <p className="text-muted-foreground mb-4 text-center">Clique no botão para carregar todos os itens classificados como "Correto" com CFOP 2551 ou 2556 da aba de Validação CFOP.</p>
+                        <Button onClick={handleLoadSubjects} disabled={isLoading}>
+                            {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Carregando...</> : <><Cpu className="mr-2 h-4 w-4" />Carregar Itens Sujeitos ao DIFAL</>}
+                        </Button>
+                    </div>
                      <Tabs defaultValue="sujeitos" className="w-full">
                         <TabsList className="grid w-full grid-cols-4">
                             <TabsTrigger value="sujeitos">Sujeitos ao DIFAL ({difalAnalysisData.sujeitosAoDifal.length})</TabsTrigger>
@@ -251,4 +274,3 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
         </div>
     );
 }
-
