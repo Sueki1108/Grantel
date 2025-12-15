@@ -218,7 +218,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
             ),
             { id: 'actions', header: 'Ações DIFAL', cell: ({ row }: any) => actionButtons(row.original) }
         ]
-    }, [difalAnalysisData.sujeitosAoDifal]);
+    }, [difalAnalysisData.sujeitosAoDifal, handleDifalStatusChange]);
 
 
     return (
