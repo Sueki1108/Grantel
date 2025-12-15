@@ -415,19 +415,17 @@ export function CfopValidator(props: CfopValidatorProps) {
             const ENTREGA_FUTURA_CFOPS = ['5116', '5117', '6116', '6117'];
             const SIMPLES_FATURAMENTO_CFOPS = ['5922', '6922'];
         
-            const itemsToAnalyze = originalXmlItems;
-
-            if (!itemsToAnalyze || itemsToAnalyze.length === 0) {
-                 toast({ variant: 'destructive', title: 'Fonte de Dados Vazia', description: 'Não há itens de entrada originais do XML para analisar.' });
+            if (!itensSaidas || itensSaidas.length === 0) {
+                 toast({ variant: 'destructive', title: 'Fonte de Dados Vazia', description: 'Não há itens de saída para analisar.' });
                  setIsLoadingSpecialCfops(false);
                  return;
             }
 
-            const entregaFutura = itemsToAnalyze.filter((item: any) => 
+            const entregaFutura = itensSaidas.filter((item: any) => 
                 ENTREGA_FUTURA_CFOPS.includes(item['CFOP'])
             ).map((item, index) => ({...item, '__itemKey': `entrega-futura-${index}`}));
             
-            const simplesFaturamento = itemsToAnalyze.filter((item: any) => 
+            const simplesFaturamento = itensSaidas.filter((item: any) => 
                 SIMPLES_FATURAMENTO_CFOPS.includes(item['CFOP'])
             ).map((item, index) => ({...item, '__itemKey': `simples-faturamento-${index}`}));
 
@@ -438,10 +436,10 @@ export function CfopValidator(props: CfopValidatorProps) {
             if (entregaFutura.length > 0 || simplesFaturamento.length > 0) {
                  toast({ title: 'Análise Concluída', description: 'As notas de faturamento e entrega futura foram carregadas.' });
             } else {
-                 toast({ variant: 'destructive', title: 'Nenhum Item Encontrado', description: 'Nenhum item com os CFOPs de saída especificados foi encontrado nos XMLs de entrada.' });
+                 toast({ variant: 'destructive', title: 'Nenhum Item Encontrado', description: 'Nenhum item com os CFOPs de saída especificados foi encontrado.' });
             }
         }, 50);
-    }, [originalXmlItems, toast]);
+    }, [itensSaidas, toast]);
 
 
     const columns = useMemo(() => {
@@ -664,25 +662,9 @@ export function CfopValidator(props: CfopValidatorProps) {
                 {statusTabs.map(({ status }) => {
                     const cfopGroupsForStatus = itemsByStatus[status] || {};
                     const allCfopsForStatus = Object.keys(cfopGroupsForStatus).sort((a,b) => parseInt(a,10) - parseInt(b,10));
+                    
                     let activeCfopTab = activeCfopTabs[status];
-                    
-                    const activeTabHasVisibleItems = activeCfopTab && cfopGroupsForStatus[activeCfopTab]?.filter((item: any) => {
-                         const currentFilters = tabFilters[activeCfopTab];
-                         if (!currentFilters) return true;
-                         if (currentFilters.xmlCsts.size === 0 || currentFilters.xmlCfops.size === 0 || currentFilters.xmlPicms.size === 0) return false;
-                         
-                         const cfopCode = item['CFOP'];
-                         const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
-                         const combinedCfop = `${cfopCode}: ${fullDescription}`;
-                         const cstCode = String(item['CST do ICMS'] || '');
-                         const cstDesc = getCstDescription(cstCode);
-                         const combinedCst = `${cstCode}: ${cstDesc}`;
-                         const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
-
-                         return currentFilters.xmlCsts.has(combinedCst) && currentFilters.xmlCfops.has(combinedCfop) && currentFilters.xmlPicms.has(picmsValue);
-                    }).length > 0;
-                    
-                    if (!activeCfopTab || !allCfopsForStatus.includes(activeCfopTab) || !activeTabHasVisibleItems) {
+                    if (!activeCfopTab || !allCfopsForStatus.includes(activeCfopTab)) {
                         activeCfopTab = allCfopsForStatus.find(cfop => (cfopGroupsForStatus[cfop] || []).length > 0) || allCfopsForStatus[0];
                     }
 
@@ -714,16 +696,15 @@ export function CfopValidator(props: CfopValidatorProps) {
                                             if (currentFilters.xmlCfops.size === 0 || currentFilters.xmlCsts.size === 0 || currentFilters.xmlPicms.size === 0) return false;
 
                                             const cfopCode = item['CFOP'];
-                                            const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
-                                            const combinedCfop = `${cfopCode}: ${fullDescription}`;
+                                            if (!currentFilters.xmlCfops.has(`${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}`)) return false;
 
                                             const cstCode = String(item['CST do ICMS'] || '');
-                                            const cstDesc = getCstDescription(cstCode);
-                                            const combinedCst = `${cstCode}: ${cstDesc}`;
+                                            if (!currentFilters.xmlCsts.has(`${cstCode}: ${getCstDescription(cstCode)}`)) return false;
 
                                             const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
+                                            if (!currentFilters.xmlPicms.has(picmsValue)) return false;
 
-                                            return currentFilters.xmlCsts.has(combinedCst) && currentFilters.xmlCfops.has(combinedCfop) && currentFilters.xmlPicms.has(picmsValue);
+                                            return true;
                                         }) || [];
 
                                         return (
@@ -747,7 +728,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                 })}
                 <TabsContent value="faturamento-entrega" className="mt-4">
                      <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-lg mb-6">
-                        <p className="text-muted-foreground mb-4">Clique no botão para analisar as notas de Entrega Futura e Simples Faturamento dos itens de ENTRADA.</p>
+                        <p className="text-muted-foreground mb-4">Clique no botão para analisar as notas de Entrega Futura e Simples Faturamento dos itens de SAÍDA.</p>
                         <Button onClick={handleLoadSpecialCfops} disabled={isLoadingSpecialCfops}>
                             {isLoadingSpecialCfops ? <><Cpu className="mr-2 h-4 w-4 animate-spin" />Analisando...</> : <><Cpu className="mr-2 h-4 w-4" />Analisar Faturamento/Entrega</>}
                         </Button>
@@ -770,4 +751,3 @@ export function CfopValidator(props: CfopValidatorProps) {
         </div>
     );
 }
-
