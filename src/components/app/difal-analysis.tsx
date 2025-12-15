@@ -36,9 +36,9 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
     const competence = processedData?.competence;
 
     const handleVencimentoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        let value = e.target.value.replace(/\D/g, ''); 
+        let value = e.target.value.replace(/\D/g, '');
         if (value.length > 8) {
-            value = value.substring(0, 8); 
+            value = value.substring(0, 8);
         }
 
         if (value.length > 4) {
@@ -46,10 +46,10 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
         } else if (value.length > 2) {
             value = `${value.substring(0, 2)}/${value.substring(2)}`;
         }
-        
+
         setVencimento(value);
     };
-    
+
     const handleLoadSubjects = useCallback(() => {
         setIsLoading(true);
         setTimeout(() => {
@@ -58,7 +58,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
                 setIsLoading(false);
                 return;
             }
-             if (!processedData.reconciliationResults?.reconciled) {
+            if (!processedData.reconciliationResults?.reconciled) {
                 toast({ variant: 'destructive', title: 'Conciliação necessária', description: 'Execute a conciliação XML vs Sienge primeiro.' });
                 setIsLoading(false);
                 return;
@@ -73,7 +73,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
                 const isDifalCfop = item.CFOP === '2551' || item.CFOP === '2556';
                 return isCorrect && isDifalCfop;
             });
-            
+
             setSujeitosAoDifal(items);
             setIsLoading(false);
             toast({ title: "Itens Carregados", description: `${items.length} itens sujeitos a DIFAL foram carregados para análise.` });
@@ -89,7 +89,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
 
         const updatedData = JSON.parse(JSON.stringify(allClassifications));
         if (!updatedData[competence]) {
-            updatedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {} } };
+            updatedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {} }, supplierClassifications: {} };
         }
         if (!updatedData[competence].difalValidations) {
             updatedData[competence].difalValidations = { classifications: {} };
@@ -100,7 +100,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
             if (status === 'subject-to-difal') {
                 delete updatedData[competence].difalValidations.classifications[itemKey];
             } else {
-                 updatedData[competence].difalValidations.classifications[itemKey] = { status };
+                updatedData[competence].difalValidations.classifications[itemKey] = { status };
             }
         });
 
@@ -114,12 +114,12 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
         const desconsideradosItems: any[] = [];
         const beneficioFiscalItems: any[] = [];
         const finalSujeitos: any[] = [];
-        
+
         sujeitosAoDifal.forEach(item => {
             const itemKey = `${item['Chave de acesso']}-${item['Item']}`;
             const validation = difalValidations[itemKey];
-            
-            switch(validation?.status) {
+
+            switch (validation?.status) {
                 case 'difal':
                     difalItems.push(item);
                     break;
@@ -151,7 +151,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
 
     const columns = useCallback((tab: 'sujeitos' | 'difal' | 'beneficio' | 'desconsiderados') => {
         const baseColumns = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'CFOP (Sienge)', 'Valor Total'];
-        
+
         let actionButtons;
 
         switch (tab) {
@@ -162,7 +162,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
                             <TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([item], 'difal')}><Ticket className="h-4 w-4" /></Button></TooltipTrigger>
                             <TooltipContent><p>Marcar como DIFAL</p></TooltipContent>
                         </Tooltip></TooltipProvider>
-                         <TooltipProvider><Tooltip>
+                        <TooltipProvider><Tooltip>
                             <TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" onClick={() => handleDifalStatusChange([item], 'beneficio-fiscal')}><ShieldCheck className="h-4 w-4" /></Button></TooltipTrigger>
                             <TooltipContent><p>Marcar como Benefício Fiscal</p></TooltipContent>
                         </Tooltip></TooltipProvider>
@@ -174,7 +174,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
                 );
                 break;
             case 'difal':
-                 actionButtons = (item: any) => (
+                actionButtons = (item: any) => (
                     <div className="flex justify-center gap-1">
                         <TooltipProvider><Tooltip>
                             <TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" onClick={() => handleDifalStatusChange([item], 'beneficio-fiscal')}><ShieldCheck className="h-4 w-4" /></Button></TooltipTrigger>
@@ -188,8 +188,8 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
                 );
                 break;
             case 'desconsiderados':
-                 actionButtons = (item: any) => (
-                     <div className="flex justify-center gap-1">
+                actionButtons = (item: any) => (
+                    <div className="flex justify-center gap-1">
                         <TooltipProvider><Tooltip>
                             <TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([item], 'difal')}><TicketX className="h-4 w-4" /> Reverter para DIFAL</Button></TooltipTrigger>
                             <TooltipContent><p>Reverter e Marcar como DIFAL</p></TooltipContent>
@@ -209,13 +209,13 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
                 baseColumns,
                 (row, id) => {
                     const value = row.original[id];
-                     if (id === 'Valor Total' && typeof value === 'number') {
+                    if (id === 'Valor Total' && typeof value === 'number') {
                         return <div className='text-right'>{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
                     }
                     return <div>{value}</div>
                 }
             ),
-             { id: 'actions', header: 'Ações DIFAL', cell: ({ row }: any) => actionButtons(row.original) }
+            { id: 'actions', header: 'Ações DIFAL', cell: ({ row }: any) => actionButtons(row.original) }
         ]
     }, [difalAnalysisData.sujeitosAoDifal, handleDifalStatusChange]);
 
@@ -234,51 +234,72 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
                         </div>
                     </div>
                 </CardHeader>
-                 <CardContent>
-                     <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-lg mb-6">
-                        <p className="text-muted-foreground mb-4 text-center">Clique no botão para carregar todos os itens classificados como "Correto" com CFOP 2551 ou 2556 da aba de Validação CFOP.</p>
-                        <Button onClick={handleLoadSubjects} disabled={isLoading}>
-                            {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Carregando...</> : <><Cpu className="mr-2 h-4 w-4" />Carregar Itens Sujeitos ao DIFAL</>}
-                        </Button>
-                    </div>
-                     <Tabs defaultValue="sujeitos" className="w-full">
-                        <TabsList className="grid w-full grid-cols-4">
-                            <TabsTrigger value="sujeitos">Sujeitos ao DIFAL ({difalAnalysisData.sujeitosAoDifal.length})</TabsTrigger>
-                            <TabsTrigger value="difal">DIFAL ({difalAnalysisData.difalItems.length})</TabsTrigger>
-                            <TabsTrigger value="beneficio-fiscal">Benefício Fiscal ({difalAnalysisData.beneficioFiscalItems.length})</TabsTrigger>
-                            <TabsTrigger value="desconsiderados">Desconsiderados ({difalAnalysisData.desconsideradosItems.length})</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="sujeitos" className="mt-4">
-                            <DataTable columns={columns('sujeitos')} data={difalAnalysisData.sujeitosAoDifal} />
-                        </TabsContent>
-                         <TabsContent value="difal" className="mt-4">
-                            <DataTable columns={columns('difal')} data={difalAnalysisData.difalItems} />
-                        </TabsContent>
-                        <TabsContent value="beneficio-fiscal" className="mt-4">
-                             <DataTable columns={columns('beneficio')} data={difalAnalysisData.beneficioFiscalItems} />
-                        </TabsContent>
-                        <TabsContent value="desconsiderados" className="mt-4">
-                            <DataTable columns={columns('desconsiderados')} data={difalAnalysisData.desconsideradosItems} />
-                        </TabsContent>
-                    </Tabs>
+                <CardContent>
+                    <Card className="mb-6 border-dashed">
+                         <CardHeader>
+                            <CardTitle className='flex items-center gap-2'><span className='flex items-center justify-center text-sm rounded-full bg-primary text-primary-foreground h-6 w-6'>1</span>Passo 1: Carregar Itens</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex flex-col items-center justify-center p-4">
+                                <p className="text-muted-foreground mb-4 text-center">Clique no botão para carregar todos os itens classificados como "Correto" com CFOP 2551 ou 2556 da aba de Validação CFOP.</p>
+                                <Button onClick={handleLoadSubjects} disabled={isLoading}>
+                                    {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Carregando...</> : <><Cpu className="mr-2 h-4 w-4" />Carregar Itens Sujeitos ao DIFAL</>}
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                         <CardHeader>
+                             <CardTitle className='flex items-center gap-2'><span className='flex items-center justify-center text-sm rounded-full bg-primary text-primary-foreground h-6 w-6'>2</span>Passo 2: Classificar Itens</CardTitle>
+                            <CardDescription>
+                                Mova os itens da aba "Sujeitos ao DIFAL" para as categorias corretas usando os botões de ação em cada linha.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                             <Tabs defaultValue="sujeitos" className="w-full">
+                                <TabsList className="grid w-full grid-cols-4">
+                                    <TabsTrigger value="sujeitos">Sujeitos ao DIFAL ({difalAnalysisData.sujeitosAoDifal.length})</TabsTrigger>
+                                    <TabsTrigger value="difal">DIFAL ({difalAnalysisData.difalItems.length})</TabsTrigger>
+                                    <TabsTrigger value="beneficio-fiscal">Benefício Fiscal ({difalAnalysisData.beneficioFiscalItems.length})</TabsTrigger>
+                                    <TabsTrigger value="desconsiderados">Desconsiderados ({difalAnalysisData.desconsideradosItems.length})</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="sujeitos" className="mt-4">
+                                    <DataTable columns={columns('sujeitos')} data={difalAnalysisData.sujeitosAoDifal} />
+                                </TabsContent>
+                                <TabsContent value="difal" className="mt-4">
+                                    <DataTable columns={columns('difal')} data={difalAnalysisData.difalItems} />
+                                </TabsContent>
+                                <TabsContent value="beneficio-fiscal" className="mt-4">
+                                    <DataTable columns={columns('beneficio')} data={difalAnalysisData.beneficioFiscalItems} />
+                                </TabsContent>
+                                <TabsContent value="desconsiderados" className="mt-4">
+                                    <DataTable columns={columns('desconsiderados')} data={difalAnalysisData.desconsideradosItems} />
+                                </TabsContent>
+                            </Tabs>
+                        </CardContent>
+                    </Card>
+
+                    <Card className='mt-6'>
+                         <CardHeader>
+                             <CardTitle className='flex items-center gap-2'><span className='flex items-center justify-center text-sm rounded-full bg-primary text-primary-foreground h-6 w-6'>3</span>Passo 3: Gerar Script</CardTitle>
+                              <CardDescription>
+                                Após classificar todos os itens, insira a data de vencimento para gerar o script de pagamento.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid w-full max-w-sm items-center gap-1.5">
+                                <Label htmlFor="vencimento">Data de Vencimento</Label>
+                                <Input id="vencimento" placeholder="DD/MM/AAAA" value={vencimento} onChange={handleVencimentoChange} />
+                            </div>
+                            <Button onClick={generateGnreScript} disabled={isGeneratingScript || !vencimento || difalAnalysisData.difalItems.length === 0} className="mt-4">
+                                {isGeneratingScript ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                                Gerar e Baixar Script
+                            </Button>
+                        </CardContent>
+                    </Card>
+
                 </CardContent>
             </Card>
-
-             <Card>
-                <CardHeader>
-                    <CardTitle>Geração do Script</CardTitle>
-                </CardHeader>
-                <CardContent>
-                     <div className="grid w-full max-w-sm items-center gap-1.5">
-                        <Label htmlFor="vencimento">Data de Vencimento</Label>
-                        <Input id="vencimento" placeholder="DD/MM/AAAA" value={vencimento} onChange={handleVencimentoChange} />
-                    </div>
-                    <Button onClick={generateGnreScript} disabled={isGeneratingScript || !vencimento} className="mt-4">
-                        {isGeneratingScript ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                        Gerar e Baixar Script
-                    </Button>
-                </CardContent>
-             </Card>
 
         </div>
     );
