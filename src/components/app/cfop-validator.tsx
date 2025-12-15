@@ -95,24 +95,20 @@ const FilterDialog: React.FC<{
     
      useEffect(() => {
         if (isDialogOpen) {
-            // Initialize local state when dialog opens by deeply cloning the current filters
             const currentGlobalFilters = tabFilters[siengeCfop] || {
                 xmlCsts: new Set(availableOptions.xmlCsts),
                 xmlPicms: new Set(availableOptions.xmlPicms),
                 xmlCfops: new Set(availableOptions.xmlCfops),
             };
-            setLocalFilters({
-                xmlCsts: new Set(currentGlobalFilters.xmlCsts),
-                xmlPicms: new Set(currentGlobalFilters.xmlPicms),
-                xmlCfops: new Set(currentGlobalFilters.xmlCfops),
-            });
+            setLocalFilters(JSON.parse(JSON.stringify(currentGlobalFilters, (k,v) => v instanceof Set ? [...v] : v), (k,v) => k.endsWith("s") ? new Set(v) : v));
         }
     }, [isDialogOpen, tabFilters, siengeCfop, availableOptions]);
     
-    const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set() };
-    const isFilterActive = (availableOptions.xmlCsts.length > 0 && filters.xmlCsts.size < availableOptions.xmlCsts.length) ||
-                           (availableOptions.xmlPicms.length > 0 && filters.xmlPicms.size < availableOptions.xmlPicms.length) ||
-                           (availableOptions.xmlCfops.length > 0 && filters.xmlCfops.size < availableOptions.xmlCfops.length);
+    const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(availableOptions.xmlCsts), xmlPicms: new Set(availableOptions.xmlPicms), xmlCfops: new Set(availableOptions.xmlCfops) };
+    const isFilterActive = filters.xmlCsts.size < availableOptions.xmlCsts.length ||
+                           filters.xmlPicms.size < availableOptions.xmlPicms.length ||
+                           filters.xmlCfops.size < availableOptions.xmlCfops.length;
+
 
     const handleFilterChange = (type: keyof TabFilters, value: string, checked: boolean) => {
         setLocalFilters(prev => {
@@ -134,12 +130,10 @@ const FilterDialog: React.FC<{
     };
     
     const handleApplyFilters = () => {
-        if (localFilters) {
-            setTabFilters(prev => ({
-                ...prev,
-                [siengeCfop]: localFilters,
-            }));
-        }
+        setTabFilters(prev => ({
+            ...prev,
+            [siengeCfop]: localFilters,
+        }));
         setIsDialogOpen(false);
     };
 
@@ -698,19 +692,18 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     </div>
                                     {allCfopsForStatus.map(cfop => {
                                         const currentFilters = tabFilters[cfop];
-                                        const currentCfopData = cfopGroupsForStatus[cfop]?.filter(item => {
-                                            if (!currentFilters) return true;
-                                            
-                                            const cfopCode = item['CFOP']; 
+                                        const allItemsForCfop = cfopGroupsForStatus[cfop] || [];
+                                        const currentCfopData = currentFilters ? allItemsForCfop.filter(item => {
+                                            const cfopCode = item['CFOP'];
                                             const cstCode = String(item['CST do ICMS'] || '');
                                             const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
-                                            
-                                            if (currentFilters.xmlCfops.size > 0 && !currentFilters.xmlCfops.has(`${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}`)) return false;
-                                            if (currentFilters.xmlCsts.size > 0 && !currentFilters.xmlCsts.has(`${cstCode}: ${getCstDescription(cstCode)}`)) return false;
-                                            if (currentFilters.xmlPicms.size > 0 && !currentFilters.xmlPicms.has(picmsValue)) return false;
 
-                                            return true;
-                                        }) || [];
+                                            const cfopMatch = currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(`${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}`);
+                                            const cstMatch = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(`${cstCode}: ${getCstDescription(cstCode)}`);
+                                            const picmsMatch = currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(picmsValue);
+
+                                            return cfopMatch && cstMatch && picmsMatch;
+                                        }) : allItemsForCfop;
 
                                         return (
                                             <TabsContent key={`${status}-${cfop}`} value={cfop} className="mt-4">
