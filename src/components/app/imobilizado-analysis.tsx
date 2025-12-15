@@ -92,10 +92,10 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
         };
 
         const hSienge = {
-            numero: findHeader(['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
-            cpfCnpj: findHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpfcnpj']),
-            cfop: findHeader(['cfop']),
-            produtoFiscal: findHeader(['produto fiscal', 'descrição do item', 'descrição']),
+            numero: findSiengeHeader(['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
+            cpfCnpj: findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpfcnpj']),
+            cfop: findSiengeHeader(['cfop']),
+            produtoFiscal: findSiengeHeader(['produto fiscal', 'descrição do item', 'descrição']),
         };
 
         const siengeItemMap = new Map<string, any[]>();
@@ -171,8 +171,8 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
                 return {
                     ...item,
                     'CST do ICMS': originalItem['CST do ICMS'] ?? item['CST do ICMS'],
-                    'Alíq. ICMS (%)': originalItem['Alíq. ICMS (%)'] ?? item['Alíq. ICMS (%)'],
-                    'CEST': originalItem['CEST'] ?? item['CEST'],
+                    'Alíq. ICMS (%)': originalItem['pICMS'] ?? item['Alíq. ICMS (%)'],
+                    'CEST': originalItem['prod_CEST'] ?? item['CEST'],
                 };
             }
             return item;
@@ -378,7 +378,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
             </div>
         );
     
-        const columnsToShow = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP (XML)', 'CFOP (Sienge)', 'CST do ICMS', 'Alíq. ICMS (%)', 'Valor Unitário', 'Valor Total'];
+        const columnsToShow = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP (XML)', 'CFOP (Sienge)', 'CST do ICMS', 'Alíq. ICMS (%)', 'CEST', 'Valor Unitário', 'Valor Total'];
     
         const baseColumns = getColumnsWithCustomRender(
             enrichedItems,
@@ -651,5 +651,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, nfeVal
         </div>
     );
 }
+
+    
 
     
