@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Loader2, Download, Cpu, TicketPercent, Copy, Hash, Sigma, Coins, ClipboardCopy, X, UploadCloud, EyeOff, Ticket, ShieldCheck, TicketX } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { DataTable } from '@/components/app/data-table';
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '../ui/dialog';
@@ -217,7 +218,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
             ),
             { id: 'actions', header: 'Ações DIFAL', cell: ({ row }: any) => actionButtons(row.original) }
         ]
-    }, [difalAnalysisData.sujeitosAoDifal, handleDifalStatusChange]);
+    }, [difalAnalysisData.sujeitosAoDifal]);
 
 
     return (
