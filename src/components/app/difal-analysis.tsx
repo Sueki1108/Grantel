@@ -71,7 +71,8 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
             const items = allReconciledItems.filter(item => {
                 const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
                 const isCorrect = cfopValidations[uniqueKey]?.classification === 'correct';
-                const isDifalCfop = item.CFOP === '2551' || item.CFOP === '2556';
+                const cfop = String(item.CFOP);
+                const isDifalCfop = cfop === '2551' || cfop === '2556';
                 return isCorrect && isDifalCfop;
             });
 
@@ -218,6 +219,7 @@ export function DifalAnalysis({ processedData, allClassifications, onPersistData
             ),
             { id: 'actions', header: 'Ações DIFAL', cell: ({ row }: any) => actionButtons(row.original) }
         ]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [difalAnalysisData.sujeitosAoDifal, handleDifalStatusChange]);
 
 
