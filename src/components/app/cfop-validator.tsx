@@ -64,6 +64,7 @@ const FilterDialog: React.FC<{
     setTabFilters: React.Dispatch<React.SetStateAction<Record<string, TabFilters>>>;
 }> = ({ siengeCfop, items, tabFilters, setTabFilters }) => {
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+    const [localFilters, setLocalFilters] = React.useState<TabFilters | null>(null);
 
     const availableOptions = useMemo(() => {
         const xmlCsts = new Set<string>();
@@ -93,17 +94,15 @@ const FilterDialog: React.FC<{
     }, [items]);
     
     useEffect(() => {
-        if (!tabFilters[siengeCfop]) {
-            setTabFilters(prev => ({
-                ...prev,
-                [siengeCfop]: {
-                    xmlCsts: new Set(availableOptions.xmlCsts),
-                    xmlPicms: new Set(availableOptions.xmlPicms),
-                    xmlCfops: new Set(availableOptions.xmlCfops),
-                }
-            }));
+        if (isDialogOpen) {
+            // Initialize local state when dialog opens
+            setLocalFilters(tabFilters[siengeCfop] || {
+                xmlCsts: new Set(availableOptions.xmlCsts),
+                xmlPicms: new Set(availableOptions.xmlPicms),
+                xmlCfops: new Set(availableOptions.xmlCfops),
+            });
         }
-    }, [siengeCfop, availableOptions, tabFilters, setTabFilters]);
+    }, [isDialogOpen, tabFilters, siengeCfop, availableOptions]);
     
     const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set() };
     const isFilterActive = (availableOptions.xmlCsts.length > 0 && filters.xmlCsts.size < availableOptions.xmlCsts.length) ||
@@ -111,31 +110,34 @@ const FilterDialog: React.FC<{
                            (availableOptions.xmlCfops.length > 0 && filters.xmlCfops.size < availableOptions.xmlCfops.length);
 
     const handleFilterChange = (type: keyof TabFilters, value: string, checked: boolean) => {
-        setTabFilters(prev => {
-            const currentCfopFilters = prev[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set() };
-            const newSet = new Set(currentCfopFilters[type]);
-            
+        setLocalFilters(prev => {
+            if (!prev) return null;
+            const newSet = new Set(prev[type]);
             if (checked) {
                 newSet.add(value);
             } else {
                 newSet.delete(value);
             }
-            return { 
-                ...prev, 
-                [siengeCfop]: { ...currentCfopFilters, [type]: newSet } 
-            };
+            return { ...prev, [type]: newSet };
         });
     };
     
     const handleSelectAllForTab = (filterKey: keyof TabFilters, type: 'all' | 'none') => {
-        setTabFilters(prev => {
-            const currentCfopFilters = prev[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set() };
+         setLocalFilters(prev => {
+            if (!prev) return null;
             const newSet = type === 'all' ? new Set(availableOptions[filterKey as keyof typeof availableOptions]) : new Set<string>();
-            return {
-                ...prev,
-                [siengeCfop]: { ...currentCfopFilters, [filterKey]: newSet }
-            };
+            return { ...prev, [filterKey]: newSet };
         });
+    };
+    
+    const handleApplyFilters = () => {
+        if (localFilters) {
+            setTabFilters(prev => ({
+                ...prev,
+                [siengeCfop]: localFilters,
+            }));
+        }
+        setIsDialogOpen(false);
     };
 
     return (
@@ -165,7 +167,7 @@ const FilterDialog: React.FC<{
                             <ScrollArea className='h-96 border rounded-md p-4'>
                                 {availableOptions.xmlCfops.map(opt => (
                                     <div key={`cfop-${opt}`} className="flex items-start space-x-2 mb-2">
-                                        <Checkbox id={`cfop-${opt}`} checked={(filters.xmlCfops || new Set()).has(opt)} onCheckedChange={checked => handleFilterChange('xmlCfops', opt, !!checked)} />
+                                        <Checkbox id={`cfop-${opt}`} checked={localFilters?.xmlCfops.has(opt)} onCheckedChange={checked => handleFilterChange('xmlCfops', opt, !!checked)} />
                                         <Label htmlFor={`cfop-${opt}`} className="text-sm font-normal cursor-pointer">{opt}</Label>
                                     </div>
                                 ))}
@@ -179,7 +181,7 @@ const FilterDialog: React.FC<{
                              <ScrollArea className='h-96 border rounded-md p-4'>
                                 {availableOptions.xmlCsts.map(opt => (
                                     <div key={`cst-${opt}`} className="flex items-center space-x-2 mb-2">
-                                        <Checkbox id={`cst-${opt}`} checked={(filters.xmlCsts || new Set()).has(opt)} onCheckedChange={checked => handleFilterChange('xmlCsts', opt, !!checked)} />
+                                        <Checkbox id={`cst-${opt}`} checked={localFilters?.xmlCsts.has(opt)} onCheckedChange={checked => handleFilterChange('xmlCsts', opt, !!checked)} />
                                         <Label htmlFor={`cst-${opt}`} className="text-sm font-normal">{opt}</Label>
                                     </div>
                                 ))}
@@ -193,7 +195,7 @@ const FilterDialog: React.FC<{
                             <ScrollArea className='h-96 border rounded-md p-4'>
                                 {availableOptions.xmlPicms.map(opt => (
                                     <div key={`picms-${opt}`} className="flex items-center space-x-2 mb-2">
-                                        <Checkbox id={`picms-${opt}`} checked={(filters.xmlPicms || new Set()).has(opt)} onCheckedChange={checked => handleFilterChange('xmlPicms', opt, !!checked)} />
+                                        <Checkbox id={`picms-${opt}`} checked={localFilters?.xmlPicms.has(opt)} onCheckedChange={checked => handleFilterChange('xmlPicms', opt, !!checked)} />
                                         <Label htmlFor={`picms-${opt}`} className="text-sm font-normal">{parseFloat(opt).toFixed(2)}%</Label>
                                     </div>
                                 ))}
@@ -202,7 +204,8 @@ const FilterDialog: React.FC<{
                     </div>
                 </Tabs>
                  <DialogFooter className="mt-4">
-                     <Button onClick={() => setIsDialogOpen(false)}>Aplicar e Fechar</Button>
+                     <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+                     <Button onClick={handleApplyFilters}>Aplicar e Fechar</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -415,17 +418,17 @@ export function CfopValidator(props: CfopValidatorProps) {
             const ENTREGA_FUTURA_CFOPS = ['5116', '5117', '6116', '6117'];
             const SIMPLES_FATURAMENTO_CFOPS = ['5922', '6922'];
         
-            if (!itensSaidas || itensSaidas.length === 0) {
-                 toast({ variant: 'destructive', title: 'Fonte de Dados Vazia', description: 'Não há itens de saída para analisar.' });
+            if (!originalXmlItems || originalXmlItems.length === 0) {
+                 toast({ variant: 'destructive', title: 'Fonte de Dados Vazia', description: 'Não há itens de XML de entrada para analisar.' });
                  setIsLoadingSpecialCfops(false);
                  return;
             }
 
-            const entregaFutura = itensSaidas.filter((item: any) => 
+            const entregaFutura = originalXmlItems.filter((item: any) => 
                 ENTREGA_FUTURA_CFOPS.includes(item['CFOP'])
             ).map((item, index) => ({...item, '__itemKey': `entrega-futura-${index}`}));
             
-            const simplesFaturamento = itensSaidas.filter((item: any) => 
+            const simplesFaturamento = originalXmlItems.filter((item: any) => 
                 SIMPLES_FATURAMENTO_CFOPS.includes(item['CFOP'])
             ).map((item, index) => ({...item, '__itemKey': `simples-faturamento-${index}`}));
 
@@ -439,7 +442,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                  toast({ variant: 'destructive', title: 'Nenhum Item Encontrado', description: 'Nenhum item com os CFOPs de saída especificados foi encontrado.' });
             }
         }, 50);
-    }, [itensSaidas, toast]);
+    }, [originalXmlItems, toast]);
 
 
     const columns = useMemo(() => {
@@ -621,6 +624,14 @@ export function CfopValidator(props: CfopValidatorProps) {
         { status: 'difal', label: 'DIFAL' },
     ];
     
+    let activeCfopTab = activeCfopTabs[activeStatusTab as ValidationStatus];
+    const cfopGroupsForStatus = itemsByStatus[activeStatusTab as ValidationStatus] || {};
+    const allCfopsForStatus = Object.keys(cfopGroupsForStatus).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
+    if (!activeCfopTab || !allCfopsForStatus.includes(activeCfopTab)) {
+        activeCfopTab = allCfopsForStatus.find(cfop => (cfopGroupsForStatus[cfop] || []).length > 0) || allCfopsForStatus[0];
+    }
+    
     return (
         <div className='relative'>
              {numSelected > 0 && (
@@ -663,16 +674,11 @@ export function CfopValidator(props: CfopValidatorProps) {
                     const cfopGroupsForStatus = itemsByStatus[status] || {};
                     const allCfopsForStatus = Object.keys(cfopGroupsForStatus).sort((a,b) => parseInt(a,10) - parseInt(b,10));
                     
-                    let activeCfopTab = activeCfopTabs[status];
-                    if (!activeCfopTab || !allCfopsForStatus.includes(activeCfopTab)) {
-                        activeCfopTab = allCfopsForStatus.find(cfop => (cfopGroupsForStatus[cfop] || []).length > 0) || allCfopsForStatus[0];
-                    }
-
                     return (
                         <TabsContent key={status} value={status} className="mt-4">
                             {allCfopsForStatus.length > 0 ? (
                                 <Tabs 
-                                    value={activeCfopTab} 
+                                    value={activeCfopTabs[status] || allCfopsForStatus[0]} 
                                     onValueChange={(val) => setActiveCfopTabs(prev => ({...prev, [status]: val}))}
                                     className="w-full"
                                 >
@@ -689,20 +695,17 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     </div>
                                     {allCfopsForStatus.map(cfop => {
                                         const currentFilters = tabFilters[cfop];
-                                        const currentCfopData = itemsByStatus[status]?.[cfop]?.filter(item => {
+                                        const currentCfopData = cfopGroupsForStatus[cfop]?.filter(item => {
                                             if (!currentFilters) return true;
                                             
-                                            // Handle empty filter case correctly
-                                            if (currentFilters.xmlCfops.size === 0 || currentFilters.xmlCsts.size === 0 || currentFilters.xmlPicms.size === 0) return false;
-
                                             const cfopCode = item['CFOP'];
-                                            if (!currentFilters.xmlCfops.has(`${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}`)) return false;
+                                            if (currentFilters.xmlCfops.size > 0 && !currentFilters.xmlCfops.has(`${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}`)) return false;
 
                                             const cstCode = String(item['CST do ICMS'] || '');
-                                            if (!currentFilters.xmlCsts.has(`${cstCode}: ${getCstDescription(cstCode)}`)) return false;
+                                            if (currentFilters.xmlCsts.size > 0 && !currentFilters.xmlCsts.has(`${cstCode}: ${getCstDescription(cstCode)}`)) return false;
 
                                             const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
-                                            if (!currentFilters.xmlPicms.has(picmsValue)) return false;
+                                            if (currentFilters.xmlPicms.size > 0 && !currentFilters.xmlPicms.has(picmsValue)) return false;
 
                                             return true;
                                         }) || [];
@@ -751,3 +754,4 @@ export function CfopValidator(props: CfopValidatorProps) {
         </div>
     );
 }
+
