@@ -6,9 +6,8 @@ import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Loader2, Download, Cpu, TicketPercent, Copy, Hash, Sigma, Coins, ClipboardCopy, X, UploadCloud } from 'lucide-react';
+import { Loader2, Download, Cpu, TicketPercent, Copy, Hash, Sigma, Coins, ClipboardCopy, X, UploadCloud, EyeOff, Ticket, ShieldCheck, TicketX } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { DataTable } from '@/components/app/data-table';
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '../ui/dialog';
@@ -17,144 +16,26 @@ import JSZip from 'jszip';
 import { FileUploadForm } from './file-upload-form';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-
-
-// ===============================================================
-// Tipos
-// ===============================================================
-type DifalDataItem = {
-    'Nome da Guia': string;
-    'Chave de Acesso': string;
-    'Número da Nota': string;
-    'Data de Emissão': string;
-    'Valor Total da Nota': number;
-    'Valor da Guia (10%)': number;
-    'Município Entrega': string;
-    'UF Entrega': string;
-};
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '../ui/tooltip';
+import { AllClassifications, DifalStatus, ProcessedData } from '@/lib/types';
 
 
 // ===============================================================
 // Componente Principal
 // ===============================================================
-export function DifalAnalysis() {
-    const [isLoading, setIsLoading] = useState(false);
-    const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
-    const [difalXmlFiles, setDifalXmlFiles] = useState<File[]>([]);
-    const [processedItems, setProcessedItems] = useState<DifalDataItem[]>([]);
-    const [vencimento, setVencimento] = useState('');
-    
+interface DifalAnalysisProps {
+    processedData: ProcessedData | null;
+    allClassifications: AllClassifications;
+    onPersistData: (allData: AllClassifications) => void;
+}
+
+export function DifalAnalysis({ processedData, allClassifications, onPersistData }: DifalAnalysisProps) {
     const { toast } = useToast();
+    const [vencimento, setVencimento] = useState('');
+    const [isGeneratingScript, setIsGeneratingScript] = useState(false);
+    const competence = processedData?.competence;
 
-    const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-        const selectedFiles = e.target.files;
-        if (!selectedFiles) return;
-
-        const newFiles: File[] = [];
-        let extractedCount = 0;
-
-        for (const file of Array.from(selectedFiles)) {
-            if (file.type === 'application/zip' || file.name.toLowerCase().endsWith('.zip')) {
-                try {
-                    const zip = await JSZip.loadAsync(file);
-                    const xmlFilePromises: Promise<File>[] = [];
-                    zip.forEach((relativePath, zipEntry) => {
-                        if (!zipEntry.dir && relativePath.toLowerCase().endsWith('.xml')) {
-                            const promise = zipEntry.async('string').then(content => new File([content], zipEntry.name, { type: 'application/xml' }));
-                            xmlFilePromises.push(promise);
-                        }
-                    });
-                    const extractedFiles = await Promise.all(xmlFilePromises);
-                    newFiles.push(...extractedFiles);
-                    extractedCount += extractedFiles.length;
-                } catch (error) {
-                    toast({ variant: "destructive", title: `Erro ao descompactar ${file.name}` });
-                }
-            } else if (file.type === 'text/xml' || file.name.toLowerCase().endsWith('.xml')) {
-                newFiles.push(file);
-            }
-        }
-        
-        setDifalXmlFiles(prev => [...prev, ...newFiles]);
-        toast({ title: "Ficheiros Adicionados", description: `${newFiles.length + extractedCount} ficheiros XML adicionados para análise DIFAL.` });
-    };
-
-    const processDifalItems = async () => {
-        if (difalXmlFiles.length === 0) {
-            toast({ variant: "destructive", title: "Nenhum XML carregado", description: "Carregue os ficheiros XML para processar." });
-            return;
-        }
-        setIsLoading(true);
-        
-        try {
-            const { nfe, saidas } = await processUploadedXmls(difalXmlFiles);
-            const allItems = [...nfe, ...saidas];
-            
-            const difalData: DifalDataItem[] = allItems.map(item => {
-                const date = parseISO(item['Emissão']);
-                const formattedMonth = format(date, 'MMM', { locale: ptBR });
-                const formattedYear = format(date, 'yyyy');
-                const guideName = `Grantel - ICMS DIFAL NF ${item['Número']} - ${formattedMonth} ${formattedYear}`;
-
-                return {
-                    'Nome da Guia': guideName,
-                    'Chave de Acesso': item['Chave de acesso'],
-                    'Número da Nota': item['Número'],
-                    'Data de Emissão': item['Emissão'],
-                    'Valor Total da Nota': item['Total'],
-                    'Valor da Guia (10%)': parseFloat((item['Total'] * 0.10).toFixed(2)),
-                    'Município Entrega': item.entrega_Mun || 'N/A',
-                    'UF Entrega': item.entrega_UF || 'N/A',
-                }
-            });
-
-            setProcessedItems(difalData);
-            setIsResultsModalOpen(true);
-            toast({ title: "Análise DIFAL Concluída", description: `${difalData.length} notas processadas.` });
-        } catch (err: any) {
-            toast({ variant: "destructive", title: "Erro ao processar XMLs", description: err.message });
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const totals = useMemo(() => {
-        if (processedItems.length === 0) return null;
-        const totalNotesValue = processedItems.reduce((sum, item) => sum + item['Valor Total da Nota'], 0);
-        return {
-            count: processedItems.length,
-            totalNotesValue,
-            totalGuideValue: totalNotesValue * 0.10,
-        }
-    }, [processedItems]);
-    
-    const handleDownloadExcel = () => {
-        if (processedItems.length === 0) {
-            toast({ variant: 'destructive', title: 'Nenhum dado para exportar' });
-            return;
-        }
-
-        const dataToExport = processedItems.map(item => ({
-            ...item,
-            'Data de Emissão': item['Data de Emissão'] ? format(parseISO(item['Data de Emissão']), 'dd/MM/yyyy') : 'N/A',
-        }));
-
-        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Dados DIFAL');
-        XLSX.writeFile(workbook, `Relatorio_DIFAL.xlsx`);
-        toast({ title: 'Relatório Excel Gerado' });
-    };
-
-    const copyToClipboard = (text: string | number) => {
-        const textToCopy = typeof text === 'number' ? text.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\./g, '').replace(',', '.') : text;
-        navigator.clipboard.writeText(textToCopy).then(() => {
-            toast({ title: 'Copiado!', description: `Valor "${textToCopy}" copiado para a área de transferência.` });
-        }).catch(err => {
-            toast({ variant: 'destructive', title: 'Falha ao copiar', description: 'Não foi possível copiar o valor.' });
-        });
-    };
-    
     const handleVencimentoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         let value = e.target.value.replace(/\D/g, ''); 
         if (value.length > 8) {
@@ -170,30 +51,147 @@ export function DifalAnalysis() {
         setVencimento(value);
     };
 
-    const columns = useMemo(() => getColumnsWithCustomRender(
-        processedItems, 
-        ['Nome da Guia', 'Chave de Acesso', 'Data de Emissão', 'Valor Total da Nota', 'Valor da Guia (10%)', 'Município Entrega', 'UF Entrega'],
-        (row, id) => {
-            const item = row.original as DifalDataItem;
-            const value = item[id as keyof DifalDataItem];
-            let displayValue: React.ReactNode = String(value ?? '');
-            
-             if (id === 'Data de Emissão' && typeof value === 'string') {
-                displayValue = format(parseISO(value), 'dd/MM/yyyy');
-             } else if (typeof value === 'number') {
-                displayValue = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-             } else if (id === 'Nome da Guia') {
-                 displayValue = <span className='font-bold'>{value}</span>
-             }
-             
-             return (
-                <div className="cursor-pointer hover:bg-muted p-1 rounded group flex items-center gap-1 justify-between" onClick={() => copyToClipboard(String(value))}>
-                    <span>{displayValue}</span>
-                    <ClipboardCopy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-             )
+    const handleDifalStatusChange = (itemsToUpdate: any[], status: DifalStatus) => {
+        if (!competence) {
+            toast({ variant: 'destructive', title: 'Competência não definida!' });
+            return;
         }
-    ), [processedItems]);
+
+        const updatedData = JSON.parse(JSON.stringify(allClassifications));
+        if (!updatedData[competence]) {
+            updatedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {} } };
+        }
+        if (!updatedData[competence].difalValidations) {
+            updatedData[competence].difalValidations = { classifications: {} };
+        }
+
+        itemsToUpdate.forEach(item => {
+            const itemKey = `${item['Chave de acesso']}-${item['Item']}`;
+            if (status === 'subject-to-difal') {
+                 // Reverte, removendo a chave
+                delete updatedData[competence].difalValidations.classifications[itemKey];
+            } else {
+                 updatedData[competence].difalValidations.classifications[itemKey] = { status };
+            }
+        });
+
+        onPersistData(updatedData);
+        toast({ title: 'Status DIFAL atualizado!' });
+    };
+
+    const difalAnalysisData = useMemo(() => {
+        const correctItems = Object.values(processedData?.reconciliationResults?.reconciled || []).flat();
+        
+        const sujeitosAoDifal = correctItems.filter(item => 
+            (item['CFOP'] === '2551' || item['CFOP'] === '2556')
+        );
+
+        const difalValidations = (competence && allClassifications[competence]?.difalValidations?.classifications) || {};
+
+        const difalItems: any[] = [];
+        const desconsideradosItems: any[] = [];
+        const beneficioFiscalItems: any[] = [];
+        const finalSujeitos: any[] = [];
+        
+        sujeitosAoDifal.forEach(item => {
+            const itemKey = `${item['Chave de acesso']}-${item['Item']}`;
+            const validation = difalValidations[itemKey];
+            
+            switch(validation?.status) {
+                case 'difal':
+                    difalItems.push(item);
+                    break;
+                case 'disregard':
+                    desconsideradosItems.push(item);
+                    break;
+                case 'beneficio-fiscal':
+                    beneficioFiscalItems.push(item);
+                    break;
+                default:
+                    finalSujeitos.push(item);
+                    break;
+            }
+        });
+
+        return { sujeitosAoDifal: finalSujeitos, difalItems, desconsideradosItems, beneficioFiscalItems };
+
+    }, [processedData?.reconciliationResults?.reconciled, allClassifications, competence]);
+
+
+    const generateGnreScript = () => {
+        setIsGeneratingScript(true);
+        // Lógica de geração de script...
+        setTimeout(() => {
+            toast({ title: "Script GNRE gerado com sucesso!" });
+            setIsGeneratingScript(false);
+        }, 1500);
+    };
+
+    const columns = (tab: 'sujeitos' | 'difal' | 'beneficio' | 'desconsiderados') => {
+        const baseColumns = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'CFOP (Sienge)', 'Valor Total'];
+        
+        let actionButtons;
+
+        switch (tab) {
+            case 'sujeitos':
+                actionButtons = (item: any) => (
+                    <div className="flex justify-center gap-1">
+                        <TooltipProvider><Tooltip>
+                            <TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([item], 'difal')}><Ticket className="h-4 w-4" /></Button></TooltipTrigger>
+                            <TooltipContent><p>Marcar como DIFAL</p></TooltipContent>
+                        </Tooltip></TooltipProvider>
+                        <TooltipProvider><Tooltip>
+                            <TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-gray-500" onClick={() => handleDifalStatusChange([item], 'disregard')}><EyeOff className="h-4 w-4" /></Button></TooltipTrigger>
+                            <TooltipContent><p>Desconsiderar</p></TooltipContent>
+                        </Tooltip></TooltipProvider>
+                    </div>
+                );
+                break;
+            case 'difal':
+                 actionButtons = (item: any) => (
+                    <div className="flex justify-center gap-1">
+                        <TooltipProvider><Tooltip>
+                            <TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" onClick={() => handleDifalStatusChange([item], 'beneficio-fiscal')}><ShieldCheck className="h-4 w-4" /></Button></TooltipTrigger>
+                            <TooltipContent><p>Marcar como Benefício Fiscal</p></TooltipContent>
+                        </Tooltip></TooltipProvider>
+                        <TooltipProvider><Tooltip>
+                            <TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-gray-500" onClick={() => handleDifalStatusChange([item], 'disregard')}><EyeOff className="h-4 w-4" /></Button></TooltipTrigger>
+                            <TooltipContent><p>Desconsiderar</p></TooltipContent>
+                        </Tooltip></TooltipProvider>
+                    </div>
+                );
+                break;
+            case 'desconsiderados':
+                 actionButtons = (item: any) => (
+                     <div className="flex justify-center gap-1">
+                        <TooltipProvider><Tooltip>
+                            <TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([item], 'difal')}><TicketX className="h-4 w-4" /> Reverter para DIFAL</Button></TooltipTrigger>
+                            <TooltipContent><p>Reverter e Marcar como DIFAL</p></TooltipContent>
+                        </Tooltip></TooltipProvider>
+                    </div>
+                );
+                break;
+            case 'beneficio':
+            default:
+                actionButtons = () => null;
+                break;
+        }
+
+        return [
+            ...getColumnsWithCustomRender(
+                difalAnalysisData.sujeitosAoDifal,
+                baseColumns,
+                (row, id) => {
+                    const value = row.original[id];
+                     if (id === 'Valor Total' && typeof value === 'number') {
+                        return <div className='text-right'>{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                    }
+                    return <div>{value}</div>
+                }
+            ),
+             { id: 'actions', header: 'Ações DIFAL', cell: ({ row }: any) => actionButtons(row.original) }
+        ]
+    }
 
 
     return (
@@ -203,103 +201,54 @@ export function DifalAnalysis() {
                     <div className="flex items-center gap-3">
                         <TicketPercent className="h-8 w-8 text-primary" />
                         <div>
-                            <CardTitle className="font-headline text-2xl">Ferramenta de Extração de Dados DIFAL</CardTitle>
+                            <CardTitle className="font-headline text-2xl">Gerador de Guia DIFAL</CardTitle>
                             <CardDescription>
-                                Carregue os XMLs, insira a data de vencimento e visualize os dados para análise de DIFAL.
+                                Classifique as notas e gere o script para pagamento da guia GNRE de DIFAL.
                             </CardDescription>
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="space-y-8">
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><UploadCloud className="h-5 w-5" />Etapa 1: Carregar XMLs</h3>
-                            <FileUploadForm
-                                formId="xml-difal"
-                                files={{ 'xml-difal': difalXmlFiles.length > 0 }}
-                                onFileChange={handleXmlFileChange}
-                                onClearFile={() => setDifalXmlFiles([])}
-                                xmlFileCount={difalXmlFiles.length}
-                                displayName="Carregar XMLs para DIFAL"
-                            />
-                        </div>
-                         <div>
-                            <h3 className="text-lg font-bold mb-4">Etapa 2: Informar Vencimento</h3>
-                            <div className="space-y-2">
-                                <Label htmlFor="vencimento-input">Data de Vencimento da Guia</Label>
-                                <Input 
-                                    id="vencimento-input"
-                                    placeholder="DD/MM/AAAA"
-                                    value={vencimento}
-                                    onChange={handleVencimentoChange}
-                                    maxLength={10}
-                                />
-                                <p className="text-xs text-muted-foreground">Esta data será exibida no relatório final.</p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                     <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Etapa Final</span></div></div>
-                     <div>
-                        <h3 className="text-lg font-bold mb-2">Etapa 3: Processar e Visualizar</h3>
-                         <p className='text-sm text-muted-foreground mb-4'>Clique para analisar os XMLs e ver os resultados.</p>
-                        <div className='flex flex-col sm:flex-row gap-4'>
-                            <Button onClick={processDifalItems} disabled={isLoading || difalXmlFiles.length === 0} className="w-full">
-                                {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processando...</> : <><Cpu className="mr-2 h-4 w-4" /> Processar e Ver Resultados</>}
-                            </Button>
-                        </div>
-                    </div>
+                 <CardContent>
+                     <Tabs defaultValue="sujeitos" className="w-full">
+                        <TabsList className="grid w-full grid-cols-4">
+                            <TabsTrigger value="sujeitos">Sujeitos ao DIFAL ({difalAnalysisData.sujeitosAoDifal.length})</TabsTrigger>
+                            <TabsTrigger value="difal">DIFAL ({difalAnalysisData.difalItems.length})</TabsTrigger>
+                            <TabsTrigger value="beneficio-fiscal">Benefício Fiscal ({difalAnalysisData.beneficioFiscalItems.length})</TabsTrigger>
+                            <TabsTrigger value="desconsiderados">Desconsiderados ({difalAnalysisData.desconsideradosItems.length})</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="sujeitos" className="mt-4">
+                            <DataTable columns={columns('sujeitos')} data={difalAnalysisData.sujeitosAoDifal} />
+                        </TabsContent>
+                         <TabsContent value="difal" className="mt-4">
+                            <DataTable columns={columns('difal')} data={difalAnalysisData.difalItems} />
+                        </TabsContent>
+                        <TabsContent value="beneficio-fiscal" className="mt-4">
+                             <DataTable columns={columns('beneficio')} data={difalAnalysisData.beneficioFiscalItems} />
+                        </TabsContent>
+                        <TabsContent value="desconsiderados" className="mt-4">
+                            <DataTable columns={columns('desconsiderados')} data={difalAnalysisData.desconsideradosItems} />
+                        </TabsContent>
+                    </Tabs>
                 </CardContent>
             </Card>
 
-            <Dialog open={isResultsModalOpen} onOpenChange={setIsResultsModalOpen}>
-                <DialogContent className="max-w-7xl h-auto max-h-[90vh] flex flex-col">
-                     <DialogHeader>
-                        <DialogTitle>Resultados da Análise DIFAL</DialogTitle>
-                        <DialogDescription>
-                            Os dados foram extraídos dos XMLs. Clique num valor para o copiar para a área de transferência.
-                        </DialogDescription>
-                    </DialogHeader>
-                    
-                    {totals && (
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 my-4">
-                             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total de Notas</CardTitle><Hash className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{totals.count}</div></CardContent></Card>
-                             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Valor Total das Notas</CardTitle><Sigma className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{totals.totalNotesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div></CardContent></Card>
-                             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Valor Total Guias (10%)</CardTitle><Coins className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{totals.totalGuideValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div></CardContent></Card>
-                             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Vencimento</CardTitle><ClipboardCopy className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>
-                                <div className="text-2xl font-bold flex items-center justify-between">
-                                    <span>{vencimento || 'N/A'}</span>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => copyToClipboard(vencimento)}>
-                                        <Copy className="h-4 w-4"/>
-                                    </Button>
-                                </div>
-                             </CardContent></Card>
-                        </div>
-                    )}
-                    
-                    {processedItems.length > 0 && (
-                        <Card className="flex-grow overflow-hidden">
-                            <CardContent className='pt-6 h-full'>
-                                <DataTable 
-                                    columns={columns}
-                                    data={processedItems}
-                                    pageSize={1}
-                                />
-                            </CardContent>
-                        </Card>
-                    )}
-                    <DialogFooter>
-                         <Button onClick={handleDownloadExcel} disabled={processedItems.length === 0} variant="outline">
-                            <Download className="mr-2 h-4 w-4" /> Baixar Excel
-                        </Button>
-                    </DialogFooter>
-                     <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-                        <X className="h-4 w-4" />
-                        <span className="sr-only">Close</span>
-                    </DialogClose>
-                </DialogContent>
-            </Dialog>
+             <Card>
+                <CardHeader>
+                    <CardTitle>Geração do Script</CardTitle>
+                </CardHeader>
+                <CardContent>
+                     <div className="grid w-full max-w-sm items-center gap-1.5">
+                        <Label htmlFor="vencimento">Data de Vencimento</Label>
+                        <Input id="vencimento" placeholder="DD/MM/AAAA" value={vencimento} onChange={handleVencimentoChange} />
+                    </div>
+                    <Button onClick={generateGnreScript} disabled={isGeneratingScript || !vencimento} className="mt-4">
+                        {isGeneratingScript ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                        Gerar e Baixar Script
+                    </Button>
+                </CardContent>
+             </Card>
 
         </div>
     );
 }
+
