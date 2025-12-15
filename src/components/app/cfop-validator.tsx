@@ -287,7 +287,7 @@ export function CfopValidator(props: CfopValidatorProps) {
         if (!updatedPersistedData[competence].cfopValidations) updatedPersistedData[competence].cfopValidations = { classifications: {} };
         
         itemsToUpdate.forEach(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const current = updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] || { isDifal: false };
             updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] = { ...current, classification: newClassification };
         });
@@ -302,7 +302,7 @@ export function CfopValidator(props: CfopValidatorProps) {
         if (!updatedPersistedData[competence].cfopValidations) updatedPersistedData[competence].cfopValidations = { classifications: {} };
 
         itemsToUpdate.forEach(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const current = updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] || { classification: 'unvalidated', isDifal: false };
             updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] = { ...current, isDifal: !current.isDifal };
         });
@@ -318,7 +318,7 @@ export function CfopValidator(props: CfopValidatorProps) {
         
         const selectedItems = selectedItemKeys.map(itemKey => {
             const uniqueKey = itemKey.replace('cfop-pending-', '');
-            return enrichedItems.find(item => `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}` === uniqueKey);
+            return enrichedItems.find(item => `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}` === uniqueKey);
         }).filter(Boolean);
 
         let changedCount = 0;
@@ -331,7 +331,7 @@ export function CfopValidator(props: CfopValidatorProps) {
 
         selectedItems.forEach(item => {
             if (!item) return;
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const current = { ...(newValidations[uniqueKey] || { classification: 'unvalidated', isDifal: false }) };
             let itemChanged = false;
 
@@ -411,19 +411,18 @@ export function CfopValidator(props: CfopValidatorProps) {
     const handleLoadSpecialCfops = React.useCallback(() => {
         setIsLoadingSpecialCfops(true);
         setTimeout(() => {
-            // Source from initialItems (reconciled data, which are entry items)
-            const sourceItems = initialItems || [];
+            const sourceItems = originalXmlItems || [];
     
             const ENTREGA_FUTURA_CFOPS = ['5116', '5117', '6116', '6117'];
             const SIMPLES_FATURAMENTO_CFOPS = ['5922', '6922'];
         
             const entregaFutura = sourceItems.filter((item: any) => 
-                ENTREGA_FUTURA_CFOPS.includes(item['CFOP (XML)'])
-            ).map((item, index) => ({...item, __itemKey: `entrega-futura-${index}`}));
+                ENTREGA_FUTURA_CFOPS.includes(item['CFOP'])
+            ).map((item, index) => ({...item, 'CFOP (XML)': item.CFOP, __itemKey: `entrega-futura-${index}`}));
             
             const simplesFaturamento = sourceItems.filter((item: any) => 
-                SIMPLES_FATURAMENTO_CFOPS.includes(item['CFOP (XML)'])
-            ).map((item, index) => ({...item, __itemKey: `simples-faturamento-${index}`}));
+                SIMPLES_FATURAMENTO_CFOPS.includes(item['CFOP'])
+            ).map((item, index) => ({...item, 'CFOP (XML)': item.CFOP, __itemKey: `simples-faturamento-${index}`}));
 
             setItemsEntregaFutura(entregaFutura);
             setItemsSimplesFaturamento(simplesFaturamento);
@@ -432,10 +431,10 @@ export function CfopValidator(props: CfopValidatorProps) {
             if (entregaFutura.length > 0 || simplesFaturamento.length > 0) {
                  toast({ title: 'Análise Concluída', description: 'As notas de faturamento e entrega futura foram carregadas.' });
             } else {
-                 toast({ variant: 'destructive', title: 'Nenhum Item Encontrado', description: 'Nenhum item com os CFOPs de saída especificados foi encontrado nas notas de entrada conciliadas.' });
+                 toast({ variant: 'destructive', title: 'Nenhum Item Encontrado', description: 'Nenhum item com os CFOPs de saída especificados foi encontrado nos XMLs de entrada.' });
             }
         }, 50);
-    }, [initialItems, toast]);
+    }, [originalXmlItems, toast]);
 
 
     const columns = useMemo(() => {
@@ -525,7 +524,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                 id: 'actions',
                 header: 'Ações',
                 cell: ({ row }) => {
-                    const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
+                    const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
                     const validation = cfopValidations[uniqueKey];
                     const classification = validation?.classification || 'unvalidated';
                     const isDifal = validation?.isDifal;
@@ -580,7 +579,7 @@ export function CfopValidator(props: CfopValidatorProps) {
         };
         
         enrichedItems.forEach(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const validation = cfopValidations[uniqueKey];
             const classification = validation?.classification || 'unvalidated';
             const isDifal = validation?.isDifal || false;
