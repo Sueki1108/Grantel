@@ -664,39 +664,33 @@ export function CfopValidator(props: CfopValidatorProps) {
                 {statusTabs.map(({ status }) => {
                     const cfopGroupsForStatus = itemsByStatus[status] || {};
                     const allCfopsForStatus = Object.keys(cfopGroupsForStatus).sort((a,b) => parseInt(a,10) - parseInt(b,10));
+                    let activeCfopTab = activeCfopTabs[status];
+                    
+                    const activeTabHasVisibleItems = activeCfopTab && cfopGroupsForStatus[activeCfopTab]?.filter((item: any) => {
+                         const currentFilters = tabFilters[activeCfopTab];
+                         if (!currentFilters) return true;
+                         if (currentFilters.xmlCsts.size === 0 || currentFilters.xmlCfops.size === 0 || currentFilters.xmlPicms.size === 0) return false;
+                         
+                         const cfopCode = item['CFOP'];
+                         const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
+                         const combinedCfop = `${cfopCode}: ${fullDescription}`;
+                         const cstCode = String(item['CST do ICMS'] || '');
+                         const cstDesc = getCstDescription(cstCode);
+                         const combinedCst = `${cstCode}: ${cstDesc}`;
+                         const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
 
-                     useEffect(() => {
-                        const currentCfopTab = activeCfopTabs[status];
-                        const cfopData = cfopGroupsForStatus[currentCfopTab] || [];
-                        const filteredCount = !tabFilters[currentCfopTab] ? cfopData.length : cfopData.filter((item: any) => {
-                            const currentFilters = tabFilters[currentCfopTab];
-                            if(!currentFilters) return true;
-                            const cfopCode = item['CFOP'];
-                            const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
-                            const combinedCfop = `${cfopCode}: ${fullDescription}`;
-                            const cstCode = String(item['CST do ICMS'] || '');
-                            const cstDesc = getCstDescription(cstCode);
-                            const combinedCst = `${cstCode}: ${cstDesc}`;
-                            const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
-
-                            const cfopFilterOk = currentFilters.xmlCfops.has(combinedCfop);
-                            const cstFilterOk = currentFilters.xmlCsts.has(combinedCst);
-                            const picmsFilterOk = currentFilters.xmlPicms.has(picmsValue);
-                            
-                            return cstFilterOk && picmsFilterOk && cfopFilterOk;
-                        }).length;
-
-                        if (status === activeStatusTab && allCfopsForStatus.length > 0 && (!allCfopsForStatus.includes(activeCfopTabs[status]) || filteredCount === 0)) {
-                            const firstVisibleTab = allCfopsForStatus.find(cfop => (cfopGroupsForStatus[cfop] || []).length > 0);
-                            if(firstVisibleTab) setActiveCfopTabs(prev => ({...prev, [status]: firstVisibleTab}));
-                        }
-                    }, [status, activeStatusTab, allCfopsForStatus, activeCfopTabs, tabFilters, cfopGroupsForStatus]);
+                         return currentFilters.xmlCsts.has(combinedCst) && currentFilters.xmlCfops.has(combinedCfop) && currentFilters.xmlPicms.has(picmsValue);
+                    }).length > 0;
+                    
+                    if (!activeCfopTab || !allCfopsForStatus.includes(activeCfopTab) || !activeTabHasVisibleItems) {
+                        activeCfopTab = allCfopsForStatus.find(cfop => (cfopGroupsForStatus[cfop] || []).length > 0) || allCfopsForStatus[0];
+                    }
 
                     return (
                         <TabsContent key={status} value={status} className="mt-4">
                             {allCfopsForStatus.length > 0 ? (
                                 <Tabs 
-                                    value={activeCfopTabs[status] || allCfopsForStatus[0]} 
+                                    value={activeCfopTab} 
                                     onValueChange={(val) => setActiveCfopTabs(prev => ({...prev, [status]: val}))}
                                     className="w-full"
                                 >
@@ -716,6 +710,9 @@ export function CfopValidator(props: CfopValidatorProps) {
                                         const currentCfopData = itemsByStatus[status]?.[cfop]?.filter(item => {
                                             if (!currentFilters) return true;
                                             
+                                            // Handle empty filter case correctly
+                                            if (currentFilters.xmlCfops.size === 0 || currentFilters.xmlCsts.size === 0 || currentFilters.xmlPicms.size === 0) return false;
+
                                             const cfopCode = item['CFOP'];
                                             const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
                                             const combinedCfop = `${cfopCode}: ${fullDescription}`;
@@ -726,11 +723,7 @@ export function CfopValidator(props: CfopValidatorProps) {
 
                                             const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
 
-                                            const cfopFilterOk = currentFilters.xmlCfops.has(combinedCfop);
-                                            const cstFilterOk = currentFilters.xmlCsts.has(combinedCst);
-                                            const picmsFilterOk = currentFilters.xmlPicms.has(picmsValue);
-                                            
-                                            return cstFilterOk && picmsFilterOk && cfopFilterOk;
+                                            return currentFilters.xmlCsts.has(combinedCst) && currentFilters.xmlCfops.has(combinedCfop) && currentFilters.xmlPicms.has(picmsValue);
                                         }) || [];
 
                                         return (
@@ -777,3 +770,4 @@ export function CfopValidator(props: CfopValidatorProps) {
         </div>
     );
 }
+
