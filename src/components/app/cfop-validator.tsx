@@ -64,7 +64,7 @@ const FilterDialog: React.FC<{
     setTabFilters: React.Dispatch<React.SetStateAction<Record<string, TabFilters>>>;
 }> = ({ siengeCfop, items, tabFilters, setTabFilters }) => {
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
-    const [localFilters, setLocalFilters] = React.useState<TabFilters | null>(null);
+    const [localFilters, setLocalFilters] = React.useState<TabFilters>({ xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set() });
 
     const availableOptions = useMemo(() => {
         const xmlCsts = new Set<string>();
@@ -93,13 +93,18 @@ const FilterDialog: React.FC<{
         };
     }, [items]);
     
-    useEffect(() => {
+     useEffect(() => {
         if (isDialogOpen) {
-            // Initialize local state when dialog opens
-            setLocalFilters(tabFilters[siengeCfop] || {
+            // Initialize local state when dialog opens by deeply cloning the current filters
+            const currentGlobalFilters = tabFilters[siengeCfop] || {
                 xmlCsts: new Set(availableOptions.xmlCsts),
                 xmlPicms: new Set(availableOptions.xmlPicms),
                 xmlCfops: new Set(availableOptions.xmlCfops),
+            };
+            setLocalFilters({
+                xmlCsts: new Set(currentGlobalFilters.xmlCsts),
+                xmlPicms: new Set(currentGlobalFilters.xmlPicms),
+                xmlCfops: new Set(currentGlobalFilters.xmlCfops),
             });
         }
     }, [isDialogOpen, tabFilters, siengeCfop, availableOptions]);
@@ -111,7 +116,6 @@ const FilterDialog: React.FC<{
 
     const handleFilterChange = (type: keyof TabFilters, value: string, checked: boolean) => {
         setLocalFilters(prev => {
-            if (!prev) return null;
             const newSet = new Set(prev[type]);
             if (checked) {
                 newSet.add(value);
@@ -124,7 +128,6 @@ const FilterDialog: React.FC<{
     
     const handleSelectAllForTab = (filterKey: keyof TabFilters, type: 'all' | 'none') => {
          setLocalFilters(prev => {
-            if (!prev) return null;
             const newSet = type === 'all' ? new Set(availableOptions[filterKey as keyof typeof availableOptions]) : new Set<string>();
             return { ...prev, [filterKey]: newSet };
         });
@@ -698,13 +701,12 @@ export function CfopValidator(props: CfopValidatorProps) {
                                         const currentCfopData = cfopGroupsForStatus[cfop]?.filter(item => {
                                             if (!currentFilters) return true;
                                             
-                                            const cfopCode = item['CFOP'];
-                                            if (currentFilters.xmlCfops.size > 0 && !currentFilters.xmlCfops.has(`${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}`)) return false;
-
+                                            const cfopCode = item['CFOP']; 
                                             const cstCode = String(item['CST do ICMS'] || '');
-                                            if (currentFilters.xmlCsts.size > 0 && !currentFilters.xmlCsts.has(`${cstCode}: ${getCstDescription(cstCode)}`)) return false;
-
                                             const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
+                                            
+                                            if (currentFilters.xmlCfops.size > 0 && !currentFilters.xmlCfops.has(`${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}`)) return false;
+                                            if (currentFilters.xmlCsts.size > 0 && !currentFilters.xmlCsts.has(`${cstCode}: ${getCstDescription(cstCode)}`)) return false;
                                             if (currentFilters.xmlPicms.size > 0 && !currentFilters.xmlPicms.has(picmsValue)) return false;
 
                                             return true;
@@ -754,4 +756,3 @@ export function CfopValidator(props: CfopValidatorProps) {
         </div>
     );
 }
-
