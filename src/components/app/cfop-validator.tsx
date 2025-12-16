@@ -244,8 +244,10 @@ export function CfopValidator(props: CfopValidatorProps) {
 
         const newItems = initialItems.map(item => {
             const header = (nfeValidasData || []).find(n => n['Chave Unica'] === item['Chave Unica']);
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             return {
                 ...item,
+                '__itemKey': `cfop-pending-${uniqueKey}`,
                 Fornecedor: header?.Fornecedor || item.Fornecedor || 'N/A',
             };
         });
@@ -327,8 +329,7 @@ export function CfopValidator(props: CfopValidatorProps) {
         if (selectedItemKeys.length === 0) return;
         
         const selectedItems = selectedItemKeys.map(itemKey => {
-            const uniqueKey = itemKey.replace('cfop-pending-', '');
-            return enrichedItems.find(item => `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}` === uniqueKey);
+            return enrichedItems.find(item => item.__itemKey === itemKey);
         }).filter(Boolean);
 
         let changedCount = 0;
@@ -584,8 +585,8 @@ export function CfopValidator(props: CfopValidatorProps) {
             const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
             const validation = cfopValidations[uniqueKey];
             const classification = validation?.classification || 'unvalidated';
-            const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
-            const siengeCfop = item['CFOP (Sienge)'] || 'N/A';
+            const itemWithKey = { ...item };
+            const siengeCfop = String(item['CFOP (Sienge)']) || 'N/A';
 
             if (!statusResult.all[siengeCfop]) statusResult.all[siengeCfop] = [];
             statusResult.all[siengeCfop].push(itemWithKey);
@@ -790,6 +791,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 <div className="flex justify-center gap-1">
                                     <TooltipProvider>
                                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([row.original], 'difal')}><Ticket className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar como DIFAL</p></TooltipContent></Tooltip>
+                                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" onClick={() => handleDifalStatusChange([row.original], 'beneficio-fiscal')}><ShieldCheck className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Benefício Fiscal</p></TooltipContent></Tooltip>
                                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-gray-500" onClick={() => handleDifalStatusChange([row.original], 'disregard')}><EyeOff className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Desconsiderar</p></TooltipContent></Tooltip>
                                     </TooltipProvider>
                                 </div>
