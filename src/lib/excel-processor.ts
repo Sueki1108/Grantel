@@ -1,3 +1,4 @@
+
 import { cfopDescriptions } from './cfop';
 import type { KeyCheckResult } from '@/components/app/key-checker';
 import type { AllClassifications } from '@/lib/types';
@@ -520,27 +521,23 @@ export function runReconciliation(
         }
 
         reconciled = reconciled.map(item => {
-            const docNumberClean = cleanAndToStr(item['Número da Nota']);
-            
+            const siengeDocNumber = cleanAndToStr(item[h.numero!]);
+
             // Cost Center Mapping
             const siengeCredorRaw = item.Sienge_Credor || '';
             const credorCode = cleanAndToStr(siengeCredorRaw.split('-')[0]);
-            const costCenterKey = `${docNumberClean}-${credorCode}`;
+            const costCenterKey = `${siengeDocNumber}-${credorCode}`;
             item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
             
-            // Accounting Mapping - CORRECTED LOGIC
+            // Accounting Mapping
             const siengeCredorFullName = String(item['Sienge_Credor'] || '').trim();
-            const accountingKey = `${docNumberClean}-${siengeCredorFullName}`;
+            const accountingKey = `${siengeDocNumber}-${siengeCredorFullName}`;
             const accInfo = accountingMap?.get(accountingKey);
             item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
             
             // Add Sienge CFOP
-            if (h.cfop && item[`Sienge_${h.cfop}`]) {
-                item['CFOP (Sienge)'] = item[`Sienge_${h.cfop}`];
-            } else {
-                item['CFOP (Sienge)'] = 'N/A';
-            }
-
+            item['CFOP (Sienge)'] = (h.cfop && item[`Sienge_${h.cfop}`]) ? item[`Sienge_${h.cfop}`] : 'N/A';
+            
             return item;
         });
         
