@@ -529,9 +529,8 @@ export function runReconciliation(
             item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
             
             // Chave para Contabilização
-            const siengeCredorFullName = String(item['Sienge_Credor'] || '').trim();
             const docNumberClean = cleanAndToStr(item['Sienge_Documento']);
-            const accountingKey = `${docNumberClean}-${siengeCredorFullName}`;
+            const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
             const accInfo = accountingMap?.get(accountingKey);
             item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
             
@@ -544,7 +543,7 @@ export function runReconciliation(
         reconciled = reconciled.map(enrichItem);
         
         for (const esp in otherSiengeItems) {
-            otherSiengeItems[esp] = otherSiengeItems[esp].map(enrichItem);
+            otherSiengeItems[esp] = otherSiengeItems[esp].map(item => ({...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' }));
         }
         
         const devolucoesEP = xmlItems
@@ -602,11 +601,9 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
         const docNumberClean = cleanAndToStr(item[h.documento!]);
         const credorRaw = String(item[h.credor!] || '');
         const credorCode = cleanAndToStr(credorRaw.split('-')[0]);
-        const credorNameOnly = credorRaw.includes('-') ? credorRaw.substring(credorRaw.indexOf('-') + 1).trim() : credorRaw;
 
         return { 
             "Chave de Depuração (Centro de Custo)": `${docNumberClean}-${credorCode}`,
-            "Chave de Depuração (Contabilização)": `${docNumberClean}-${credorNameOnly}`,
             "Documento (Original)": item[h.documento!],
             "Credor (Original)": credorRaw,
         };
