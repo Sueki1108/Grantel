@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -445,7 +446,7 @@ export function CfopValidator(props: CfopValidatorProps) {
     const columns = useMemo(() => {
         if (!enrichedItems || enrichedItems.length === 0) return [];
         
-        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'Centro de Custo', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'CFOP (Sienge)', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
+        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'Centro de Custo', 'Contabilização', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'CFOP (Sienge)', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
         const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
         const supplierCategories = allPersistedData.supplierCategories || [];
         const supplierClassifications = (competence && allPersistedData[competence]?.supplierClassifications) || {};

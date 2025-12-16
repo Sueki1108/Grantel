@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useMemo, useState, ChangeEvent } from 'react';
@@ -160,7 +161,7 @@ export function ReconciliationAnalysis({
                                     <div className="mt-4">
                                         <TabsContent value="reconciled">
                                             <Button onClick={() => handleDownload(reconciliationResults.reconciled, 'Itens_Conciliados')} size="sm" className="mb-4" disabled={reconciliationResults.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                            <DataTable columns={getColumns(reconciliationResults.reconciled)} data={reconciliationResults.reconciled} />
+                                            <DataTable columns={getColumns(reconciliationResults.reconciled, ['Fornecedor', 'Número da Nota', 'Descrição', 'Valor Total', 'CFOP', 'CFOP (Sienge)', 'Centro de Custo', 'Contabilização', 'Observações'])} data={reconciliationResults.reconciled} />
                                         </TabsContent>
                                         <TabsContent value="onlyInSienge">
                                             <Button onClick={() => handleDownload(reconciliationResults.onlyInSienge, 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
