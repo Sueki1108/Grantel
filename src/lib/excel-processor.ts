@@ -685,7 +685,7 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
         const firstCell = String(currentRow[0] || '').trim();
         const thirdCell = String(currentRow[2] || '').trim();
 
-        const isHeaderOrFooter = ["empresa", "período", "credor", "total do dia"].some(keyword => firstCell.toLowerCase().startsWith(keyword));
+        const isHeaderOrFooter = ["empresa", "período", "credor", "total do dia"].some(keyword => normalizeKey(firstCell).startsWith(keyword));
         if (isHeaderOrFooter || !firstCell || !thirdCell) {
             continue;
         }
@@ -725,7 +725,6 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
     return { accountingMap, payableAccountingDebugKeys };
 }
 
-
 export function processPaidAccountingData(paidSheetData: any[][]): { 
     accountingMap: Map<string, { account: string; description: string }>;
     paidAccountingDebugKeys: any[];
@@ -744,7 +743,7 @@ export function processPaidAccountingData(paidSheetData: any[][]): {
         const firstCell = String(currentRow[0] || '').trim();
         const thirdCell = String(currentRow[2] || '').trim();
 
-        const isHeaderOrFooter = ["empresa", "período", "credor", "data da baixa", "total do dia"].some(keyword => firstCell.toLowerCase().startsWith(keyword));
+        const isHeaderOrFooter = ["empresa", "período", "credor", "data da baixa", "total do dia"].some(keyword => normalizeKey(firstCell).startsWith(keyword));
         if (isHeaderOrFooter || !firstCell || !thirdCell) {
             continue;
         }
