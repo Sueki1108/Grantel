@@ -446,7 +446,7 @@ export function runReconciliation(
             return espValue === 'NFE' || espValue === 'NFSR' || espValue === 'CTE';
         });
 
-        const otherSiengeItems = siengeData.filter(row => {
+        let otherSiengeItems: { [esp: string]: any[] } = siengeData.filter(row => {
             const espValue = row[h.esp!] ? String(row[h.esp!]).trim().toUpperCase() : '';
             return espValue !== 'NFE' && espValue !== 'NFSR' && espValue !== 'CTE';
         }).reduce((acc, item) => {
@@ -520,26 +520,27 @@ export function runReconciliation(
             remainingXmlItems = passResult.remainingXml;
         }
 
-        reconciled = reconciled.map(item => {
-            const siengeDocNumber = cleanAndToStr(item[h.numero!]);
-
-            // Cost Center Mapping
+        const enrichItem = (item: any) => {
             const siengeCredorRaw = item.Sienge_Credor || '';
             const credorCode = cleanAndToStr(siengeCredorRaw.split('-')[0]);
-            const costCenterKey = `${siengeDocNumber}-${credorCode}`;
+            const costCenterKey = `${cleanAndToStr(item['Sienge_Documento'])}-${credorCode}`;
             item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
             
-            // Accounting Mapping
             const siengeCredorFullName = String(item['Sienge_Credor'] || '').trim();
-            const accountingKey = `${siengeDocNumber}-${siengeCredorFullName}`;
+            const accountingKey = `${cleanAndToStr(item[h.numero!])}-${siengeCredorFullName}`;
             const accInfo = accountingMap?.get(accountingKey);
             item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
             
-            // Add Sienge CFOP
             item['CFOP (Sienge)'] = (h.cfop && item[`Sienge_${h.cfop}`]) ? item[`Sienge_${h.cfop}`] : 'N/A';
             
             return item;
-        });
+        }
+
+        reconciled = reconciled.map(enrichItem);
+        
+        for (const esp in otherSiengeItems) {
+            otherSiengeItems[esp] = otherSiengeItems[esp].map(enrichItem);
+        }
         
         const devolucoesEP = xmlItems
             .filter(item => {
