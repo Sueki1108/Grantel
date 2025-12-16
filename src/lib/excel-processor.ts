@@ -529,7 +529,7 @@ export function runReconciliation(
                 item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
             }
 
-            const accountingKey = `${credorLimpo}-${numeroLimpo}`;
+            const accountingKey = `${item.Sienge_Credor || ''}-${item.Sienge_Documento || ''}`;
             if (accountingMap) {
                 item['Contabilização'] = accountingMap.get(accountingKey)?.account || 'N/A';
             }
@@ -588,13 +588,14 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
 
     return siengeData.map(item => {
         const numDoc = cleanAndToStr(item[h.documento!]);
-        const credorCode = cleanAndToStr(String(item[h.credor!]).split('-')[0]);
-        const key = `${numDoc}-${credorCode}`;
-        
+        const credorName = String(item[h.credor!] || '');
+        const credorCode = cleanAndToStr(credorName.split('-')[0]);
+
         return { 
-            "Chave de Comparação Sienge": key,
+            "Chave de Depuração (Item)": `${numDoc}-${credorCode}`,
+            "Chave de Depuração (Contabilização)": `${credorName}-${item[h.documento!]}`,
             "Documento (Original)": item[h.documento!],
-            "Credor (Original)": item[h.credor!]
+            "Credor (Original)": credorName,
         };
     });
 }
@@ -664,15 +665,16 @@ export function processAccountingData(accountingSheetData: any[][]): {
     const accountingDebugKeys: any[] = [];
     if (!accountingSheetData || accountingSheetData.length < 1) return { accountingMap, accountingDebugKeys };
 
-    const headerRow = accountingSheetData.find(row => row.some(cell => typeof cell === 'string' && normalizeKey(cell) === 'credor'));
-    if (!headerRow) return { accountingMap, accountingDebugKeys };
+    const headerRowIndex = accountingSheetData.findIndex(row => row.some(cell => typeof cell === 'string' && normalizeKey(cell) === 'credor'));
+    if (headerRowIndex === -1) return { accountingMap, accountingDebugKeys };
     
+    const headerRow = accountingSheetData[headerRowIndex];
     const credorIndex = headerRow.findIndex(cell => normalizeKey(cell) === 'credor');
     const docIndex = headerRow.findIndex(cell => normalizeKey(cell) === 'documento');
 
     if (credorIndex === -1 || docIndex === -1) return { accountingMap, accountingDebugKeys };
 
-    for (let i = 0; i < accountingSheetData.length; i++) {
+    for (let i = headerRowIndex + 1; i < accountingSheetData.length; i++) {
         const row = accountingSheetData[i];
         if (!Array.isArray(row) || row.length < Math.max(credorIndex, docIndex) + 1) continue;
 
@@ -682,9 +684,7 @@ export function processAccountingData(accountingSheetData: any[][]): {
         const isDataRow = credorRaw && documentoRaw && !credorRaw.toLowerCase().startsWith('total do dia') && !credorRaw.toLowerCase().startsWith('data de vencimento');
 
         if (isDataRow) {
-            const credor = cleanAndToStr(credorRaw.split('-')[0]);
-            const documento = cleanAndToStr(documentoRaw);
-            const key = `${credor}-${documento}`;
+            const key = `${credorRaw}-${documentoRaw}`;
             
             let accountInfo = '';
             
@@ -707,7 +707,7 @@ export function processAccountingData(accountingSheetData: any[][]): {
                 'Coluna Credor': credorRaw,
                 'Coluna Documento': documentoRaw,
                 'Conta Encontrada': accountInfo || 'Nenhuma',
-                'Linha': i + 11 // Assumindo que os dados começam na linha 11
+                'Linha': i + 1 
             });
             
             if (accountInfo) {

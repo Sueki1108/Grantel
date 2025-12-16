@@ -103,6 +103,13 @@ export function ReconciliationAnalysis({
                         />
                          <Button onClick={() => handleDownload(processedData?.siengeDebugKeys || [], 'Depuracao_Sienge')} size="sm" variant="outline" disabled={!processedData?.siengeDebugKeys || processedData.siengeDebugKeys.length === 0}><Download className='h-4 w-4 mr-2' />Baixar Chaves de Depuração</Button>
                     </div>
+                    <CostCenterAnalysis
+                        costCenterFile={costCenterFile}
+                        onCostCenterFileChange={onCostCenterFileChange}
+                        onClearCostCenterFile={onClearCostCenterFile}
+                        processedData={processedData}
+                        onDownloadDebug={() => handleDownload(processedData?.costCenterDebugKeys || [], 'Depuracao_CentroCusto')}
+                    />
                     <div className='space-y-2'>
                          <h3 className='font-medium'>Planilha de Contabilização</h3>
                          <FileUploadForm
@@ -114,13 +121,6 @@ export function ReconciliationAnalysis({
                         />
                          <Button onClick={() => handleDownload(processedData?.accountingDebugKeys || [], 'Depuracao_Contabilizacao')} size="sm" variant="outline" disabled={!processedData?.accountingDebugKeys || processedData.accountingDebugKeys.length === 0}><Download className='h-4 w-4 mr-2' />Baixar Chaves de Depuração</Button>
                     </div>
-                    <CostCenterAnalysis
-                        costCenterFile={costCenterFile}
-                        onCostCenterFileChange={onCostCenterFileChange}
-                        onClearCostCenterFile={onClearCostCenterFile}
-                        processedData={processedData}
-                        onDownloadDebug={() => handleDownload(processedData?.costCenterDebugKeys || [], 'Depuracao_CentroCusto')}
-                    />
                 </div>
                 
                  <div className="flex flex-col sm:flex-row gap-2 pt-4">
