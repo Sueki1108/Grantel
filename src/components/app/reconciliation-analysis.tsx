@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useMemo, useState, ChangeEvent } from 'react';
@@ -29,7 +28,7 @@ interface ReconciliationAnalysisProps {
     costCenterFile: File | null;
     onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearCostCenterFile: () => void;
-    accountingFile: File | null;
+    accountingFiles: File[];
     onAccountingFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearAccountingFile: () => void;
     allClassifications: AllClassifications;
@@ -48,7 +47,7 @@ export function ReconciliationAnalysis({
     costCenterFile,
     onCostCenterFileChange,
     onClearCostCenterFile,
-    accountingFile,
+    accountingFiles,
     onAccountingFileChange,
     onClearAccountingFile,
     allClassifications,
@@ -116,9 +115,11 @@ export function ReconciliationAnalysis({
                          <FileUploadForm
                             displayName="Contabilização"
                             formId="accounting"
-                            files={{ 'accounting': !!accountingFile }}
+                            files={{ 'accounting': accountingFiles.length > 0 }}
                             onFileChange={onAccountingFileChange}
                             onClearFile={onClearAccountingFile}
+                            multiple={true}
+                            fileCount={accountingFiles.length}
                         />
                          <Button onClick={() => handleDownload(processedData?.accountingDebugKeys || [], 'Depuracao_Contabilizacao')} size="sm" variant="outline" disabled={!processedData?.accountingDebugKeys || processedData.accountingDebugKeys.length === 0}><Download className='h-4 w-4 mr-2' />Baixar Chaves de Depuração</Button>
                     </div>

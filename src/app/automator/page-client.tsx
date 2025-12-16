@@ -73,7 +73,7 @@ export function AutomatorClientPage() {
     const [spedFiles, setSpedFiles] = useState<File[]>([]);
     const [siengeFile, setSiengeFile] = useState<File | null>(null);
     const [costCenterFile, setCostCenterFile] = useState<File | null>(null);
-    const [accountingFile, setAccountingFile] = useState<File | null>(null);
+    const [accountingFiles, setAccountingFiles] = useState<File[]>([]);
     const [lastSaidaNumber, setLastSaidaNumber] = useState<number>(0);
     const [disregardedNfseNotes, setDisregardedNfseNotes] = useState<Set<string>>(new Set());
     const [allClassifications, setAllClassifications] = useState<AllClassifications>({});
@@ -363,45 +363,57 @@ export function AutomatorClientPage() {
     };
 
     const handleAccountingFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        setAccountingFile(file || null);
-    
-        if (file) {
-            setProcessing(true);
-            try {
-                const data = await file.arrayBuffer();
-                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-                const sheetName = workbook.SheetNames[0];
-                if (!sheetName) throw new Error("A planilha de Contabilização não contém abas.");
-                
-                const worksheet = workbook.Sheets[sheetName];
-                const accountingSheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 10 });
-                const { accountingMap, accountingDebugKeys } = processAccountingData(accountingSheetData);
-    
-                setProcessedData(prev => ({
-                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, accountingDebugKeys: [] }),
-                    accountingMap,
-                    accountingDebugKeys,
-                }));
-
-                if (accountingMap) {
-                     toast({ title: "Planilha de Contabilização Carregada", description: `${accountingMap.size} mapeamentos de contabilização encontrados.` });
-                } else {
-                     toast({ title: "Planilha de Contabilização Carregada", description: "0 mapeamentos encontrados na planilha de contabilização." });
-                }
-    
-            } catch (err: any) {
-                toast({ variant: 'destructive', title: 'Erro ao Processar Contabilização', description: err.message });
-                setAccountingFile(null);
-            } finally {
-                setProcessing(false);
-            }
-        } else {
+        const selectedFiles = e.target.files;
+        if (!selectedFiles || selectedFiles.length === 0) {
+            setAccountingFiles([]);
             setProcessedData(prev => {
                 if (!prev) return null;
                 const { accountingMap, accountingDebugKeys, ...rest } = prev;
                 return { ...rest, accountingMap: undefined, accountingDebugKeys: [] } as ProcessedData;
             });
+            return;
+        }
+
+        const newFiles = Array.from(selectedFiles);
+        setAccountingFiles(prev => [...prev, ...newFiles]);
+        setProcessing(true);
+
+        try {
+            const allSheetsData: any[][] = [];
+            for (const file of newFiles) {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) {
+                    toast({ variant: 'destructive', title: `Planilha de Contabilização ${file.name} não contém abas.` });
+                    continue;
+                }
+                
+                const worksheet = workbook.Sheets[sheetName];
+                const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 10 });
+                allSheetsData.push(sheetData);
+            }
+
+            const combinedData = allSheetsData.flat();
+            const { accountingMap, accountingDebugKeys } = processAccountingData(combinedData);
+
+            setProcessedData(prev => ({
+                ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, accountingDebugKeys: [] }),
+                accountingMap,
+                accountingDebugKeys,
+            }));
+
+            if (accountingMap) {
+                 toast({ title: "Planilhas de Contabilização Carregadas", description: `${newFiles.length} ficheiro(s) processado(s), ${accountingMap.size} mapeamentos de contabilização encontrados.` });
+            } else {
+                 toast({ title: "Planilhas de Contabilização Carregadas", description: "Nenhum mapeamento encontrado nas planilhas de contabilização." });
+            }
+
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Erro ao Processar Contabilização', description: err.message });
+            setAccountingFiles([]);
+        } finally {
+            setProcessing(false);
         }
     };
 
@@ -480,7 +492,7 @@ export function AutomatorClientPage() {
         setSpedFiles([]);
         setSiengeFile(null);
         setCostCenterFile(null);
-        setAccountingFile(null);
+        setAccountingFiles([]);
         setProcessing(false);
         setLastSaidaNumber(0);
         setDisregardedNfseNotes(new Set());
@@ -920,9 +932,9 @@ export function AutomatorClientPage() {
                                 costCenterFile={costCenterFile}
                                 onCostCenterFileChange={handleCostCenterFileChange}
                                 onClearCostCenterFile={() => setCostCenterFile(null)}
-                                accountingFile={accountingFile}
+                                accountingFiles={accountingFiles}
                                 onAccountingFileChange={handleAccountingFileChange}
-                                onClearAccountingFile={() => setAccountingFile(null)}
+                                onClearAccountingFile={() => setAccountingFiles([])}
                                 onRunReconciliation={handleRunReconciliation}
                                 isReconciliationRunning={processing}
                                 allClassifications={allClassifications}

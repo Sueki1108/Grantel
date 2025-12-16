@@ -12,8 +12,10 @@ interface FileUploadFormProps {
     onClearFile: (fileName: string) => void;
     requiredFiles?: string[];
     xmlFileCount?: number;
+    fileCount?: number;
     displayName?: string;
     formId?: string;
+    multiple?: boolean;
 }
 
 export function FileUploadForm({
@@ -22,8 +24,10 @@ export function FileUploadForm({
     onFileChange,
     onClearFile,
     xmlFileCount = 0,
+    fileCount = 0,
     displayName,
     formId,
+    multiple = false,
 }: FileUploadFormProps) {
     const getFileAcceptType = (fileName: string) => {
         if (fileName.startsWith('xml') || (displayName && displayName.toLowerCase().includes('xml'))) {
@@ -45,6 +49,8 @@ export function FileUploadForm({
     if (displayName && formId) {
         const hasFile = files[formId];
         const addMoreId = `${formId}-add-more`;
+        const currentFileCount = xmlFileCount > 0 ? xmlFileCount : fileCount;
+
         return (
             <div className="relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/50 p-4 transition-all min-h-[160px]">
                 {hasFile && (
@@ -57,7 +63,7 @@ export function FileUploadForm({
                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onClearFile(formId)}>
                             <X className="h-4 w-4" />
                         </Button>
-                        <input id={addMoreId} name={addMoreId} type="file" accept={getFileAcceptType(formId)} className="sr-only" onChange={onFileChange} multiple />
+                        <input id={addMoreId} name={addMoreId} type="file" accept={getFileAcceptType(formId)} className="sr-only" onChange={onFileChange} multiple={multiple} />
                     </div>
                 )}
                 {hasFile ? (
@@ -65,7 +71,7 @@ export function FileUploadForm({
                         <FileCheck className="h-10 w-10 text-primary" />
                         <p className="font-semibold">{displayName}</p>
                         <p className="text-xs text-muted-foreground">
-                            {xmlFileCount > 0 ? `${xmlFileCount} arquivo(s) carregado(s)` : 'Arquivo carregado'}
+                            {currentFileCount > 0 ? `${currentFileCount} arquivo(s) carregado(s)` : 'Arquivo carregado'}
                         </p>
                     </div>
                 ) : (
@@ -82,7 +88,7 @@ export function FileUploadForm({
                             accept={getFileAcceptType(formId)}
                             className="sr-only"
                             onChange={onFileChange}
-                            multiple
+                            multiple={multiple}
                         />
                     </>
                 )}
