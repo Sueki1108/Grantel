@@ -529,14 +529,18 @@ export function runReconciliation(
             item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
 
             // Accounting
-            const credorNameOnly = credorSienge.includes('-') ? credorSienge.substring(credorSienge.indexOf('-') + 1).trim() : credorSienge;
-            const accountingKey = `${numeroLimpo}-${credorNameOnly}`;
+            const docNumber = cleanAndToStr(item.Sienge_Documento || item['Número da Nota']);
+            const credorNameRaw = String(item.Sienge_Credor || '');
+            const credorNameOnly = credorNameRaw.includes('-') ? credorNameRaw.substring(credorNameRaw.indexOf('-') + 1).trim() : credorNameRaw;
+            const accountingKey = `${docNumber}-${credorNameOnly}`;
             const accInfo = accountingMap?.get(accountingKey);
             item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
             
             // Add Sienge CFOP
-            if(h.cfop) {
-                item['CFOP (Sienge)'] = item[`Sienge_${h.cfop}`] || 'N/A';
+            if(h.cfop && item[`Sienge_${h.cfop}`]) {
+                item['CFOP (Sienge)'] = item[`Sienge_${h.cfop}`];
+            } else {
+                 item['CFOP (Sienge)'] = 'N/A';
             }
 
             return item;
@@ -672,28 +676,42 @@ export function processAccountingData(accountingSheetData: any[][]): {
     const accountingMap = new Map<string, { account: string; description: string }>();
     const accountingDebugKeys: any[] = [];
 
-    if (!accountingSheetData || accountingSheetData.length < 11) {
+    if (!accountingSheetData || accountingSheetData.length === 0) {
         return { accountingMap, accountingDebugKeys };
     }
+    
+    // Encontrar dinamicamente os índices das colunas
+    let headerRowIndex = -1;
+    let credorIndex = -1;
+    let docIndex = -1;
 
-    const headers = accountingSheetData[10];
-    if (!Array.isArray(headers)) {
-        return { accountingMap, accountingDebugKeys }; // Retorna vazio se os cabeçalhos não forem um array
-    }
-
-    const credorIndex = headers.findIndex(h => normalizeKey(h) === 'credor');
-    const docIndex = headers.findIndex(h => normalizeKey(h) === 'documento');
-
-    if (credorIndex === -1 || docIndex === -1) {
-        return { accountingMap, accountingDebugKeys };
-    }
-
-    for (let i = 11; i < accountingSheetData.length; i++) {
+    for (let i = 0; i < accountingSheetData.length; i++) {
         const row = accountingSheetData[i];
-        if (!row || !Array.isArray(row) || row.every(cell => !cell)) continue;
+        if (Array.isArray(row)) {
+            const foundCredor = row.findIndex(h => normalizeKey(h) === 'credor');
+            const foundDoc = row.findIndex(h => normalizeKey(h) === 'documento');
+            if (foundCredor !== -1 && foundDoc !== -1) {
+                headerRowIndex = i;
+                credorIndex = foundCredor;
+                docIndex = foundDoc;
+                break;
+            }
+        }
+    }
+    
+    if (headerRowIndex === -1) {
+        // Fallback ou erro se os cabeçalhos não forem encontrados
+        return { accountingMap, accountingDebugKeys };
+    }
+
+
+    for (let i = headerRowIndex + 1; i < accountingSheetData.length; i++) {
+        const row = accountingSheetData[i];
+        if (!Array.isArray(row) || row.every(cell => !cell)) continue;
         
         // Verifica se é uma linha de apropriação
-        if (String(row[0]).toLowerCase().startsWith('apropriações:')) {
+        const firstCell = String(row[0] || '').trim();
+        if (firstCell.toLowerCase().startsWith('apropriações:')) {
             const prevRow = accountingSheetData[i - 1];
             if (!prevRow || !Array.isArray(prevRow)) continue;
 
@@ -707,10 +725,8 @@ export function processAccountingData(accountingSheetData: any[][]): {
                 const accountingKey = `${docNumberClean}-${credorNameOnly}`;
                 let accountInfo = '';
 
-                // Procura a conta contábil da direita para a esquerda na linha de apropriação
                 for (let k = row.length - 1; k >= 0; k--) {
                     const cellValue = String(row[k] || '').trim();
-                    // Expressão regular para encontrar um padrão de conta contábil, ex: "2.01.01.14..."
                     if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
                         accountInfo = cellValue;
                         break;
@@ -728,7 +744,7 @@ export function processAccountingData(accountingSheetData: any[][]): {
                         'Coluna Credor': credorRaw,
                         'Coluna Documento': documentoRaw,
                         'Conta Encontrada': accountInfo,
-                        'Linha': i, // Linha da apropriação
+                        'Linha': i + 1, // Linha da apropriação
                     });
                 }
             }
