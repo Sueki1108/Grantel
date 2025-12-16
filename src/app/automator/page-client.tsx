@@ -375,7 +375,6 @@ export function AutomatorClientPage() {
                 if (!sheetName) throw new Error("A planilha de Contabilização não contém abas.");
                 
                 const worksheet = workbook.Sheets[sheetName];
-                // Use header: 1 to get array of arrays, and start from row 11 (index 10)
                 const sheetDataAsArray: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 10 });
                 const { accountingMap, accountingDebugKeys } = processAccountingData(sheetDataAsArray);
     
@@ -384,7 +383,11 @@ export function AutomatorClientPage() {
                     accountingMap,
                     accountingDebugKeys,
                 }));
-                toast({ title: "Planilha de Contabilização Carregada", description: `${accountingMap.size} mapeamentos de contabilização encontrados.` });
+                if (accountingMap) {
+                     toast({ title: "Planilha de Contabilização Carregada", description: `${accountingMap.size} mapeamentos de contabilização encontrados.` });
+                } else {
+                     toast({ title: "Planilha de Contabilização Carregada", description: "Nenhum mapeamento encontrado." });
+                }
     
             } catch (err: any) {
                 toast({ variant: 'destructive', title: 'Erro ao Processar Contabilização', description: err.message });

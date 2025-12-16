@@ -73,7 +73,8 @@ export interface ProcessedData {
     costCenterDebugKeys?: any[];
     allCostCenters?: string[];
     costCenterHeaderRows?: any[][];
-    accountingMap?: Map<string, { account: string, description: string }>;
+    accountingMap?: Map<string, { account: string; description: string }>;
+    accountingDebugKeys?: any[];
     fileNames?: {
         nfeEntrada: string[];
         cte: string[];
@@ -136,7 +137,7 @@ const renameChaveColumn = (df: DataFrame): DataFrame => {
 // MAIN PROCESSING FUNCTION
 // =================================================================
 
-export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap' | 'siengeDebugKeys' | 'costCenterDebugKeys' | 'allCostCenters' | 'costCenterHeaderRows' | 'accountingMap'> {
+export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap' | 'siengeDebugKeys' | 'costCenterDebugKeys' | 'allCostCenters' | 'costCenterHeaderRows' | 'accountingMap' | 'accountingDebugKeys'> {
     
     log("Iniciando preparação dos dados no navegador...");
     const GRANTEL_CNPJ = "81732042000119";
@@ -654,28 +655,29 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
     return { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows };
 }
 
-export function processAccountingData(accountingSheetData: any[][]): Map<string, { account: string; description: string }> {
+export function processAccountingData(accountingSheetData: any[][]): { 
+    accountingMap: Map<string, { account: string; description: string; }>;
+    accountingDebugKeys: any[];
+} {
     const accountingMap = new Map<string, { account: string; description: string }>();
-    if (!accountingSheetData) return accountingMap;
+    const accountingDebugKeys: any[] = [];
+    if (!accountingSheetData) return { accountingMap, accountingDebugKeys };
 
     let currentCredor = '';
     let currentDocumento = '';
 
-    accountingSheetData.forEach(row => {
+    accountingSheetData.forEach((row, rowIndex) => {
         if (!Array.isArray(row) || row.length < 3) return;
 
         const colA = String(row[0] || '').trim();
         const colC = String(row[2] || '').trim();
         
-        // Verifica se é uma linha de nota (tem credor e documento)
-        if (colA && colC && !colA.startsWith('Apropriações:') && !colA.startsWith('Data de vencimento') && !colA.startsWith('Total do dia')) {
+        if (colA && colC && !colA.startsWith('Apropriações:') && !colA.startsWith('Data de vencimento') && !colA.startsWith('Total do dia') && !colA.startsWith('Obs:')) {
              currentCredor = colA.split('-')[0].trim();
-             currentDocumento = colC.split('.')[1] || colC.split('.')[0] || ''; // Tenta extrair NFE. 1234 -> 1234
+             currentDocumento = colC.split('.')[1] || colC.split('.')[0] || '';
         }
         
-        // Verifica se é uma linha de apropriação
         if (colA.startsWith('Apropriações:') && currentCredor && currentDocumento) {
-            // A conta contábil está na coluna H (índice 7) ou I (índice 8)
             const accountInfo = String(row[7] || row[8] || '').trim();
             if (accountInfo) {
                 const parts = accountInfo.split(' - ');
@@ -685,9 +687,17 @@ export function processAccountingData(accountingSheetData: any[][]): Map<string,
                 const key = `${cleanAndToStr(currentDocumento)}-${cleanAndToStr(currentCredor)}`;
                 if (key && account && !accountingMap.has(key)) {
                     accountingMap.set(key, { account, description });
+                     accountingDebugKeys.push({
+                        'Chave de Comparação (Doc-Credor)': key,
+                        'Conta Contábil': account,
+                        'Descrição da Conta': description,
+                        'Documento (Original)': currentDocumento,
+                        'Credor (Original)': currentCredor,
+                        'Linha na Planilha': rowIndex + 11 // Adjust for header rows
+                    });
                 }
             }
         }
     });
-    return accountingMap;
+    return { accountingMap, accountingDebugKeys };
 }
