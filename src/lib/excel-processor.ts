@@ -440,6 +440,37 @@ export function runReconciliation(
             return getComparisonKey(item['Número da Nota'] || item['Número'], item['CPF/CNPJ do Emitente'], valor);
         };
 
+        const enrichItem = (item: any) => {
+            if (!item || typeof item !== 'object') return item;
+            
+            const siengeCredorRaw = item.Sienge_Credor || (h.credor && item[h.credor]) || '';
+            const credorCodeMatch = siengeCredorRaw.match(/(\d+)\s*-/);
+            const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
+            const siengeDocNumber = cleanAndToStr(item.Sienge_Documento || (h.numero && item[h.numero]));
+
+            // Chave para Centro de Custo
+            if (siengeDocNumber && credorCode) {
+                 const costCenterKey = `${siengeDocNumber}-${credorCode}`;
+                 item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
+            } else {
+                 item['Centro de Custo'] = 'N/A (Chave Incompleta)';
+            }
+           
+            
+            // Chave para Contabilização
+            if (siengeDocNumber && siengeCredorRaw) {
+                const accountingKey = `${siengeDocNumber}-${siengeCredorRaw}`;
+                const accInfo = accountingMap?.get(accountingKey);
+                item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
+            } else {
+                item['Contabilização'] = 'N/A (Chave Incompleta)';
+            }
+            
+            // CFOP (Sienge)
+            item['CFOP (Sienge)'] = (h.cfop && (item[`Sienge_${h.cfop}`] || item[h.cfop])) ? (item[`Sienge_${h.cfop}`] || item[h.cfop]) : 'N/A';
+            
+            return item;
+        }
 
         const filteredSiengeData = siengeData.filter(row => {
             const espValue = row[h.esp!] ? String(row[h.esp!]).trim().toUpperCase() : '';
@@ -488,7 +519,8 @@ export function runReconciliation(
                     if (matchedXmlItems.length > 0) {
                         const matchedXmlItem = matchedXmlItems.shift()!;
                         if (matchedXmlItems.length === 0) xmlMap.delete(key);
-                        matchedInPass.push({ ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 'Observações': `Conciliado via ${passName}` });
+                        const reconciledItem = { ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 'Observações': `Conciliado via ${passName}` };
+                        matchedInPass.push(reconciledItem);
                         return;
                     }
                 }
@@ -520,30 +552,9 @@ export function runReconciliation(
             remainingXmlItems = passResult.remainingXml;
         }
 
-        const enrichItem = (item: any) => {
-            const siengeCredorRaw = item.Sienge_Credor || '';
-            const credorCode = cleanAndToStr(siengeCredorRaw.split('-')[0]);
-            
-            // Chave para Centro de Custo
-            const costCenterKey = `${cleanAndToStr(item['Sienge_Documento'])}-${credorCode}`;
-            item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
-            
-            // Chave para Contabilização
-            const docNumberClean = cleanAndToStr(item['Sienge_Documento']);
-            const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
-            const accInfo = accountingMap?.get(accountingKey);
-            item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
-            
-            // CFOP (Sienge)
-            item['CFOP (Sienge)'] = (h.cfop && item[`Sienge_${h.cfop}`]) ? item[`Sienge_${h.cfop}`] : 'N/A';
-            
-            return item;
-        }
-
         reconciled = reconciled.map(enrichItem);
-        
         for (const esp in otherSiengeItems) {
-            otherSiengeItems[esp] = otherSiengeItems[esp].map(item => ({...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' }));
+            otherSiengeItems[esp] = otherSiengeItems[esp].map(enrichItem);
         }
         
         const devolucoesEP = xmlItems
@@ -604,6 +615,7 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
 
         return { 
             "Chave de Depuração (Centro de Custo)": `${docNumberClean}-${credorCode}`,
+            "Chave de Depuração (Contabilização)": `${docNumberClean}-${credorRaw}`,
             "Documento (Original)": item[h.documento!],
             "Credor (Original)": credorRaw,
         };
