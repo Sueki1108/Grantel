@@ -529,7 +529,7 @@ export function runReconciliation(
                 item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
             }
 
-            const accountingKey = `${item.Sienge_Credor || ''}-${item.Sienge_Documento || ''}`;
+            const accountingKey = `${cleanAndToStr(item.Sienge_Documento)}-${item.Sienge_Credor}`;
             if (accountingMap) {
                 item['Contabilização'] = accountingMap.get(accountingKey)?.account || 'N/A';
             }
@@ -590,10 +590,12 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
         const numDoc = cleanAndToStr(item[h.documento!]);
         const credorName = String(item[h.credor!] || '');
         const credorCode = cleanAndToStr(credorName.split('-')[0]);
+        const credorNameOnly = credorName.includes('-') ? credorName.substring(credorName.indexOf('-') + 1).trim() : credorName;
+
 
         return { 
-            "Chave de Depuração (Item)": `${numDoc}-${credorCode}`,
-            "Chave de Depuração (Contabilização)": `${credorName}-${item[h.documento!]}`,
+            "Chave de Depuração (Centro de Custo)": `${numDoc}-${credorCode}`,
+            "Chave de Depuração (Contabilização)": `${numDoc}-${credorNameOnly}`,
             "Documento (Original)": item[h.documento!],
             "Credor (Original)": credorName,
         };
@@ -684,7 +686,7 @@ export function processAccountingData(accountingSheetData: any[][]): {
         const isDataRow = credorRaw && documentoRaw && !credorRaw.toLowerCase().startsWith('total do dia') && !credorRaw.toLowerCase().startsWith('data de vencimento');
 
         if (isDataRow) {
-            const key = `${credorRaw}-${documentoRaw}`;
+            const key = `${cleanAndToStr(documentoRaw)}-${credorRaw}`;
             
             let accountInfo = '';
             
