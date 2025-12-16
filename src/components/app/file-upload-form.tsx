@@ -9,7 +9,7 @@ export type FileList = Record<string, boolean>;
 interface FileUploadFormProps {
     files: FileList;
     onFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
-    onClearFile: (fileName: string) => void;
+    onClearFile: (fileName: string, category?: string) => void;
     requiredFiles?: string[];
     xmlFileCount?: number;
     fileCount?: number;
@@ -44,7 +44,7 @@ export function FileUploadForm({
         if (fileName.startsWith('xml')) return "XMLs NFe/CTe";
         return `${fileName}.xlsx`;
     }
-
+    
     // Single uploader mode (when displayName is provided)
     if (displayName && formId) {
         const hasFile = files[formId];
@@ -60,10 +60,10 @@ export function FileUploadForm({
                                 <FileUp className="h-4 w-4" />
                             </label>
                         </Button>
-                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onClearFile(formId)}>
+                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onClearFile(formId, formId.replace('xml-',''))}>
                             <X className="h-4 w-4" />
                         </Button>
-                        <input id={addMoreId} name={addMoreId} type="file" accept={getFileAcceptType(formId)} className="sr-only" onChange={onFileChange} multiple={multiple} />
+                        <input id={addMoreId} name={addMoreId} type="file" accept={getFileAcceptType(formId)} className="sr-only" onChange={onFileChange} multiple={multiple || formId.includes('xml')} />
                     </div>
                 )}
                 {hasFile ? (
@@ -88,7 +88,7 @@ export function FileUploadForm({
                             accept={getFileAcceptType(formId)}
                             className="sr-only"
                             onChange={onFileChange}
-                            multiple={multiple}
+                            multiple={multiple || formId.includes('xml')}
                         />
                     </>
                 )}
