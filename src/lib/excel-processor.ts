@@ -379,7 +379,7 @@ export function runReconciliation(
     nfeEntradas: any[],
     cteData: any[],
     costCenterMap?: Map<string, string> | null,
-    accountingMap?: Map<string, { account: string; description: string }> | null
+    accountingMap?: Map<string, { account: string; description: string }> | null,
 ): ReconciliationResults {
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], devolucoesEP: [], otherSiengeItems: {}, debug: { siengeKeys: [] } };
 
@@ -520,18 +520,16 @@ export function runReconciliation(
         }
 
         reconciled = reconciled.map(item => {
-            const numeroLimpo = cleanAndToStr(item['Número da Nota']);
+            const docNumber = cleanAndToStr(item['Número da Nota']);
             
             // Cost Center
             const credorSienge = item.Sienge_Credor || '';
             const credorCode = cleanAndToStr(credorSienge.split('-')[0]);
-            const costCenterKey = `${numeroLimpo}-${credorCode}`;
+            const costCenterKey = `${docNumber}-${credorCode}`;
             item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
 
             // Accounting
-            const docNumber = cleanAndToStr(item.Sienge_Documento || item['Número da Nota']);
-            const credorNameRaw = String(item.Sienge_Credor || '');
-            const credorNameOnly = credorNameRaw.includes('-') ? credorNameRaw.substring(credorNameRaw.indexOf('-') + 1).trim() : credorNameRaw;
+            const credorNameOnly = String(item['Fornecedor'] || '').trim();
             const accountingKey = `${docNumber}-${credorNameOnly}`;
             const accInfo = accountingMap?.get(accountingKey);
             item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
@@ -679,8 +677,7 @@ export function processAccountingData(accountingSheetData: any[][]): {
     if (!accountingSheetData || accountingSheetData.length === 0) {
         return { accountingMap, accountingDebugKeys };
     }
-    
-    // Encontrar dinamicamente os índices das colunas
+
     let headerRowIndex = -1;
     let credorIndex = -1;
     let docIndex = -1;
@@ -698,54 +695,49 @@ export function processAccountingData(accountingSheetData: any[][]): {
             }
         }
     }
-    
+
     if (headerRowIndex === -1) {
-        // Fallback ou erro se os cabeçalhos não forem encontrados
         return { accountingMap, accountingDebugKeys };
     }
 
-
     for (let i = headerRowIndex + 1; i < accountingSheetData.length; i++) {
         const row = accountingSheetData[i];
-        if (!Array.isArray(row) || row.every(cell => !cell)) continue;
-        
-        // Verifica se é uma linha de apropriação
-        const firstCell = String(row[0] || '').trim();
-        if (firstCell.toLowerCase().startsWith('apropriações:')) {
-            const prevRow = accountingSheetData[i - 1];
-            if (!prevRow || !Array.isArray(prevRow)) continue;
+        if (Array.isArray(row) && row.some(cell => !!cell)) {
+            const firstCell = String(row[0] || '').trim();
+            if (firstCell.toLowerCase().startsWith('apropriações:')) {
+                const prevRow = accountingSheetData[i - 1];
+                if (!prevRow || !Array.isArray(prevRow)) continue;
 
-            const credorRaw = String(prevRow[credorIndex] || '').trim();
-            const documentoRaw = String(prevRow[docIndex] || '').trim();
-            
-            const docNumberClean = cleanAndToStr(documentoRaw);
-            const credorNameOnly = credorRaw.includes('-') ? credorRaw.substring(credorRaw.indexOf('-') + 1).trim() : credorRaw;
-            
-            if (docNumberClean && credorNameOnly) {
-                const accountingKey = `${docNumberClean}-${credorNameOnly}`;
-                let accountInfo = '';
-
-                for (let k = row.length - 1; k >= 0; k--) {
-                    const cellValue = String(row[k] || '').trim();
-                    if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
-                        accountInfo = cellValue;
-                        break;
-                    }
-                }
+                const credorRaw = String(prevRow[credorIndex] || '').trim();
+                const documentoRaw = String(prevRow[docIndex] || '').trim();
+                const docNumberClean = cleanAndToStr(documentoRaw);
                 
-                if (accountInfo) {
-                    const parts = accountInfo.split(' - ');
-                    const account = parts[0];
-                    const description = parts.slice(1).join(' - ');
-                    accountingMap.set(accountingKey, { account, description });
+                if (docNumberClean && credorRaw) {
+                    const accountingKey = `${docNumberClean}-${credorRaw}`;
+                    let accountInfo = '';
+
+                    for (let k = row.length - 1; k >= 0; k--) {
+                        const cellValue = String(row[k] || '').trim();
+                        if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
+                            accountInfo = cellValue;
+                            break;
+                        }
+                    }
                     
-                     accountingDebugKeys.push({
-                        'Chave de Depuração': accountingKey,
-                        'Coluna Credor': credorRaw,
-                        'Coluna Documento': documentoRaw,
-                        'Conta Encontrada': accountInfo,
-                        'Linha': i + 1, // Linha da apropriação
-                    });
+                    if (accountInfo) {
+                        const parts = accountInfo.split(' - ');
+                        const account = parts[0];
+                        const description = parts.slice(1).join(' - ');
+                        accountingMap.set(accountingKey, { account, description });
+                        
+                        accountingDebugKeys.push({
+                            'Chave de Depuração': accountingKey,
+                            'Coluna Credor': credorRaw,
+                            'Coluna Documento': documentoRaw,
+                            'Conta Encontrada': accountInfo,
+                            'Linha': i + 1,
+                        });
+                    }
                 }
             }
         }
