@@ -671,46 +671,46 @@ export function processAccountingData(accountingSheetData: any[][]): {
 } {
     const accountingMap = new Map<string, { account: string; description: string }>();
     const accountingDebugKeys: any[] = [];
-    if (!accountingSheetData || accountingSheetData.length < 11) { // Mínimo 10 linhas de cabeçalho + 1 de dados
+
+    if (!accountingSheetData || accountingSheetData.length < 11) {
         return { accountingMap, accountingDebugKeys };
     }
 
-    // Identificar as colunas dinamicamente a partir da linha 11 (índice 10)
     const headers = accountingSheetData[10];
+    if (!Array.isArray(headers)) {
+        return { accountingMap, accountingDebugKeys }; // Retorna vazio se os cabeçalhos não forem um array
+    }
+
     const credorIndex = headers.findIndex(h => normalizeKey(h) === 'credor');
     const docIndex = headers.findIndex(h => normalizeKey(h) === 'documento');
-    const lancamentoIndex = headers.findIndex(h => normalizeKey(h) === 'lançamento');
 
-
-    if (credorIndex === -1 || docIndex === -1 || lancamentoIndex === -1) {
+    if (credorIndex === -1 || docIndex === -1) {
         return { accountingMap, accountingDebugKeys };
     }
 
     for (let i = 11; i < accountingSheetData.length; i++) {
         const row = accountingSheetData[i];
-        if (!Array.isArray(row) || row.every(cell => !cell)) continue;
-
-        const credorRaw = String(row[credorIndex] || '').trim();
-        const documentoRaw = String(row[docIndex] || '').trim();
-        const lancamentoRaw = String(row[lancamentoIndex] || '').trim();
-
-        // Linha de apropriação
+        if (!row || !Array.isArray(row) || row.every(cell => !cell)) continue;
+        
+        // Verifica se é uma linha de apropriação
         if (String(row[0]).toLowerCase().startsWith('apropriações:')) {
             const prevRow = accountingSheetData[i - 1];
-            if (!prevRow) continue;
+            if (!prevRow || !Array.isArray(prevRow)) continue;
 
-            const prevCredorRaw = String(prevRow[credorIndex] || '').trim();
-            const prevDocumentoRaw = String(prevRow[docIndex] || '').trim();
+            const credorRaw = String(prevRow[credorIndex] || '').trim();
+            const documentoRaw = String(prevRow[docIndex] || '').trim();
             
-            const docNumberClean = cleanAndToStr(prevDocumentoRaw);
-            const credorNameOnly = prevCredorRaw.includes('-') ? prevCredorRaw.substring(prevCredorRaw.indexOf('-') + 1).trim() : prevCredorRaw;
-
+            const docNumberClean = cleanAndToStr(documentoRaw);
+            const credorNameOnly = credorRaw.includes('-') ? credorRaw.substring(credorRaw.indexOf('-') + 1).trim() : credorRaw;
+            
             if (docNumberClean && credorNameOnly) {
                 const accountingKey = `${docNumberClean}-${credorNameOnly}`;
                 let accountInfo = '';
 
-                 for (let k = row.length - 1; k >= 0; k--) {
+                // Procura a conta contábil da direita para a esquerda na linha de apropriação
+                for (let k = row.length - 1; k >= 0; k--) {
                     const cellValue = String(row[k] || '').trim();
+                    // Expressão regular para encontrar um padrão de conta contábil, ex: "2.01.01.14..."
                     if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
                         accountInfo = cellValue;
                         break;
@@ -725,10 +725,10 @@ export function processAccountingData(accountingSheetData: any[][]): {
                     
                      accountingDebugKeys.push({
                         'Chave de Depuração': accountingKey,
-                        'Coluna Credor': prevCredorRaw,
-                        'Coluna Documento': prevDocumentoRaw,
+                        'Coluna Credor': credorRaw,
+                        'Coluna Documento': documentoRaw,
                         'Conta Encontrada': accountInfo,
-                        'Linha': i + 1,
+                        'Linha': i, // Linha da apropriação
                     });
                 }
             }

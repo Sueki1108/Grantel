@@ -29,7 +29,8 @@ export const parseSpedDate = (dateStr: string): Date => {
     return new Date(year, month, day);
 };
 
-export const normalizeKey = (key: string | undefined): string => {
-    if(!key) return '';
-    return key.toLowerCase().replace(/[\s._\/-]/g, '');
+export const normalizeKey = (key: any): string => {
+    if (key === null || typeof key === 'undefined') return '';
+    // Garante que o valor é uma string antes de chamar métodos de string
+    return String(key).toLowerCase().replace(/[\s._\/-]/g, '');
 }
