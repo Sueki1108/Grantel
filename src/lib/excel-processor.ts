@@ -523,13 +523,14 @@ export function runReconciliation(
         reconciled.forEach(item => {
             const numeroLimpo = cleanAndToStr(item.Sienge_Documento || item['Número da Nota']);
             const credorLimpo = cleanAndToStr(String(item.Sienge_Credor || '').split('-')[0]);
-
+            
+            const costCenterKey = `${numeroLimpo}-${credorLimpo}`;
             if (costCenterMap) {
-                const costCenterKey = `${numeroLimpo}-${credorLimpo}`;
                 item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
             }
+
+            const accountingKey = `${credorLimpo}-${numeroLimpo}`;
             if (accountingMap) {
-                const accountingKey = `${numeroLimpo}-${credorLimpo}`;
                 item['Contabilização'] = accountingMap.get(accountingKey)?.account || 'N/A';
             }
         });
@@ -656,35 +657,41 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
 }
 
 export function processAccountingData(accountingSheetData: any[][]): { 
-    accountingMap: Map<string, { account: string; description: string; }>;
+    accountingMap: Map<string, { account: string; description: string }>;
     accountingDebugKeys: any[];
 } {
     const accountingMap = new Map<string, { account: string; description: string }>();
     const accountingDebugKeys: any[] = [];
     if (!accountingSheetData || accountingSheetData.length < 1) return { accountingMap, accountingDebugKeys };
 
+    const headerRow = accountingSheetData.find(row => row.some(cell => typeof cell === 'string' && normalizeKey(cell) === 'credor'));
+    if (!headerRow) return { accountingMap, accountingDebugKeys };
+    
+    const credorIndex = headerRow.findIndex(cell => normalizeKey(cell) === 'credor');
+    const docIndex = headerRow.findIndex(cell => normalizeKey(cell) === 'documento');
+
+    if (credorIndex === -1 || docIndex === -1) return { accountingMap, accountingDebugKeys };
+
     for (let i = 0; i < accountingSheetData.length; i++) {
         const row = accountingSheetData[i];
-        if (!Array.isArray(row) || row.length < 3) continue; // Precisa de pelo menos 3 colunas
+        if (!Array.isArray(row) || row.length < Math.max(credorIndex, docIndex) + 1) continue;
 
-        const credorRaw = String(row[0] || '').trim();
-        const documentoRaw = String(row[2] || '').trim();
+        const credorRaw = String(row[credorIndex] || '').trim();
+        const documentoRaw = String(row[docIndex] || '').trim();
 
-        const isDataRow = credorRaw && documentoRaw && !credorRaw.toLowerCase().startsWith('total do dia') && !credorRaw.toLowerCase().startsWith('data de vencimento') && !credorRaw.toLowerCase().startsWith('credor');
+        const isDataRow = credorRaw && documentoRaw && !credorRaw.toLowerCase().startsWith('total do dia') && !credorRaw.toLowerCase().startsWith('data de vencimento');
 
         if (isDataRow) {
             const credor = cleanAndToStr(credorRaw.split('-')[0]);
             const documento = cleanAndToStr(documentoRaw);
-
             const key = `${credor}-${documento}`;
             
             let accountInfo = '';
-            // Procura apropriação na linha seguinte
+            
             if (i + 1 < accountingSheetData.length) {
                 const nextRow = accountingSheetData[i + 1];
                 const apropriacaoText = String(nextRow[0] || '').trim();
                 if (apropriacaoText.toLowerCase().startsWith('apropriações:')) {
-                    // Itera da direita para a esquerda para encontrar a primeira célula com o formato de conta
                     for (let j = nextRow.length - 1; j >= 0; j--) {
                         const cellValue = String(nextRow[j] || '').trim();
                         if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
@@ -697,8 +704,8 @@ export function processAccountingData(accountingSheetData: any[][]): {
 
             accountingDebugKeys.push({
                 'Chave de Depuração': key,
-                'Coluna A (Credor)': credorRaw,
-                'Coluna C (Documento)': documentoRaw,
+                'Coluna Credor': credorRaw,
+                'Coluna Documento': documentoRaw,
                 'Conta Encontrada': accountInfo || 'Nenhuma',
                 'Linha': i + 11 // Assumindo que os dados começam na linha 11
             });
