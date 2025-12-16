@@ -90,9 +90,9 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
 
         const hSienge = {
             numero: findSiengeHeader(['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
-            cpfCnpj: findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpfcnpj']),
-            cfop: findSiengeHeader(['cfop']),
-            produtoFiscal: findSiengeHeader(['produto fiscal', 'descrição do item', 'descrição']),
+            cpfCnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpfcnpj']),
+            cfop: findHeader(siengeData, ['cfop']),
+            produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
         };
 
         const siengeItemMap = new Map<string, any[]>();

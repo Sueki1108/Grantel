@@ -1,5 +1,4 @@
 
-
 import { cfopDescriptions } from './cfop';
 import type { KeyCheckResult } from '@/components/app/key-checker';
 import type { AllClassifications } from '@/lib/types';
@@ -534,6 +533,11 @@ export function runReconciliation(
             const accountingKey = `${numeroLimpo}-${credorNameOnly}`;
             const accInfo = accountingMap?.get(accountingKey);
             item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
+            
+            // Add Sienge CFOP
+            if(h.cfop) {
+                item['CFOP (Sienge)'] = item[`Sienge_${h.cfop}`] || 'N/A';
+            }
 
             return item;
         });
@@ -667,60 +671,66 @@ export function processAccountingData(accountingSheetData: any[][]): {
 } {
     const accountingMap = new Map<string, { account: string; description: string }>();
     const accountingDebugKeys: any[] = [];
-    if (!accountingSheetData || accountingSheetData.length === 0) {
+    if (!accountingSheetData || accountingSheetData.length < 11) { // Mínimo 10 linhas de cabeçalho + 1 de dados
         return { accountingMap, accountingDebugKeys };
     }
 
-    const headers = accountingSheetData[0];
+    // Identificar as colunas dinamicamente a partir da linha 11 (índice 10)
+    const headers = accountingSheetData[10];
     const credorIndex = headers.findIndex(h => normalizeKey(h) === 'credor');
     const docIndex = headers.findIndex(h => normalizeKey(h) === 'documento');
+    const lancamentoIndex = headers.findIndex(h => normalizeKey(h) === 'lançamento');
 
-    if (credorIndex === -1 || docIndex === -1) {
+
+    if (credorIndex === -1 || docIndex === -1 || lancamentoIndex === -1) {
         return { accountingMap, accountingDebugKeys };
     }
 
-    for (let i = 1; i < accountingSheetData.length; i++) {
+    for (let i = 11; i < accountingSheetData.length; i++) {
         const row = accountingSheetData[i];
-        if (!Array.isArray(row) || row.length < Math.max(credorIndex, docIndex) + 1) continue;
+        if (!Array.isArray(row) || row.every(cell => !cell)) continue;
 
         const credorRaw = String(row[credorIndex] || '').trim();
         const documentoRaw = String(row[docIndex] || '').trim();
-        const docNumberClean = cleanAndToStr(documentoRaw);
+        const lancamentoRaw = String(row[lancamentoIndex] || '').trim();
 
-        const isDataRow = credorRaw && documentoRaw && docNumberClean && !credorRaw.toLowerCase().startsWith('total do dia');
+        // Linha de apropriação
+        if (String(row[0]).toLowerCase().startsWith('apropriações:')) {
+            const prevRow = accountingSheetData[i - 1];
+            if (!prevRow) continue;
 
-        if (isDataRow) {
-            const accountingKey = `${docNumberClean}-${credorRaw}`;
+            const prevCredorRaw = String(prevRow[credorIndex] || '').trim();
+            const prevDocumentoRaw = String(prevRow[docIndex] || '').trim();
             
-            let accountInfo = '';
-            
-            if (i + 1 < accountingSheetData.length) {
-                const nextRow = accountingSheetData[i + 1];
-                const appropriationCell = String(nextRow[0] || '').trim();
-                if (appropriationCell.toLowerCase().startsWith('apropriações:')) {
-                    for (let k = nextRow.length - 1; k >= 0; k--) {
-                        const cellValue = String(nextRow[k] || '').trim();
-                        if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
-                            accountInfo = cellValue;
-                            break;
-                        }
+            const docNumberClean = cleanAndToStr(prevDocumentoRaw);
+            const credorNameOnly = prevCredorRaw.includes('-') ? prevCredorRaw.substring(prevCredorRaw.indexOf('-') + 1).trim() : prevCredorRaw;
+
+            if (docNumberClean && credorNameOnly) {
+                const accountingKey = `${docNumberClean}-${credorNameOnly}`;
+                let accountInfo = '';
+
+                 for (let k = row.length - 1; k >= 0; k--) {
+                    const cellValue = String(row[k] || '').trim();
+                    if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
+                        accountInfo = cellValue;
+                        break;
                     }
                 }
-            }
-
-            accountingDebugKeys.push({
-                'Chave de Depuração': accountingKey,
-                'Coluna Credor': credorRaw,
-                'Coluna Documento': documentoRaw,
-                'Conta Encontrada': accountInfo || 'Nenhuma',
-                'Linha': i + 11 
-            });
-            
-            if (accountInfo) {
-                const parts = accountInfo.split(' - ');
-                const account = parts[0];
-                const description = parts.slice(1).join(' - ');
-                accountingMap.set(accountingKey, { account, description });
+                
+                if (accountInfo) {
+                    const parts = accountInfo.split(' - ');
+                    const account = parts[0];
+                    const description = parts.slice(1).join(' - ');
+                    accountingMap.set(accountingKey, { account, description });
+                    
+                     accountingDebugKeys.push({
+                        'Chave de Depuração': accountingKey,
+                        'Coluna Credor': prevCredorRaw,
+                        'Coluna Documento': prevDocumentoRaw,
+                        'Conta Encontrada': accountInfo,
+                        'Linha': i + 1,
+                    });
+                }
             }
         }
     }
