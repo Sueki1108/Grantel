@@ -204,7 +204,7 @@ export function ReconciliationAnalysis({
                                                 {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
                                                     <TabsContent key={esp} value={esp} className='mt-4'>
                                                          <Button onClick={() => handleDownload(items, `Outros_Sienge_${esp}`)} size="sm" className="mb-4" disabled={items.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                                         <DataTable columns={getColumns(items)} data={items} />
+                                                         <DataTable columns={getColumns(items, ['Documento', 'Credor', 'Centro de Custo', 'Contabilização'])} data={items} />
                                                     </TabsContent>
                                                 ))}
                                             </Tabs>

@@ -523,14 +523,19 @@ export function runReconciliation(
         const enrichItem = (item: any) => {
             const siengeCredorRaw = item.Sienge_Credor || '';
             const credorCode = cleanAndToStr(siengeCredorRaw.split('-')[0]);
+            
+            // Chave para Centro de Custo
             const costCenterKey = `${cleanAndToStr(item['Sienge_Documento'])}-${credorCode}`;
             item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
             
+            // Chave para Contabilização
             const siengeCredorFullName = String(item['Sienge_Credor'] || '').trim();
-            const accountingKey = `${cleanAndToStr(item[h.numero!])}-${siengeCredorFullName}`;
+            const docNumberClean = cleanAndToStr(item['Sienge_Documento']);
+            const accountingKey = `${docNumberClean}-${siengeCredorFullName}`;
             const accInfo = accountingMap?.get(accountingKey);
             item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
             
+            // CFOP (Sienge)
             item['CFOP (Sienge)'] = (h.cfop && item[`Sienge_${h.cfop}`]) ? item[`Sienge_${h.cfop}`] : 'N/A';
             
             return item;
