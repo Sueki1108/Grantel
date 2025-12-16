@@ -411,6 +411,17 @@ export function AutomatorClientPage() {
             setProcessing(false);
         }
     };
+    
+    const handlePaidAccountingFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const selectedFiles = e.target.files;
+        if (!selectedFiles || selectedFiles.length === 0) {
+            setPaidAccountingFiles([]);
+            return;
+        }
+        const newFiles = Array.from(selectedFiles);
+        setPaidAccountingFiles(prev => [...prev, ...newFiles]);
+        toast({ title: "Contas Pagas Carregadas", description: `${newFiles.length} ficheiro(s) foram adicionados. O processamento ainda não está implementado.` });
+    };
 
 
     const handleXmlFileChange = async (e: ChangeEvent<HTMLInputElement>, category: 'nfeEntrada' | 'cte' | 'nfeSaida' | 'nfse') => {
@@ -932,7 +943,7 @@ export function AutomatorClientPage() {
                                 onPayableAccountingFileChange={handlePayableAccountingFileChange}
                                 onClearPayableAccountingFile={() => setPayableAccountingFiles([])}
                                 paidAccountingFiles={paidAccountingFiles}
-                                onPaidAccountingFileChange={() => {}}
+                                onPaidAccountingFileChange={handlePaidAccountingFileChange}
                                 onClearPaidAccountingFile={() => setPaidAccountingFiles([])}
                                 onRunReconciliation={handleRunReconciliation}
                                 isReconciliationRunning={processing}
