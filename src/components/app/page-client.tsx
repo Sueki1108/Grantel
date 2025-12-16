@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/app/theme-toggle";
-import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult, processCostCenterData, generateSiengeDebugKeys, processAccountingData } from "@/lib/excel-processor";
+import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult, processCostCenterData, generateSiengeDebugKeys, processPayableAccountingData, processPaidAccountingData } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -73,7 +73,8 @@ export function AutomatorClientPage() {
     const [spedFiles, setSpedFiles] = useState<File[]>([]);
     const [siengeFile, setSiengeFile] = useState<File | null>(null);
     const [costCenterFile, setCostCenterFile] = useState<File | null>(null);
-    const [accountingFile, setAccountingFile] = useState<File | null>(null);
+    const [payableAccountingFiles, setPayableAccountingFiles] = useState<File[]>([]);
+    const [paidAccountingFiles, setPaidAccountingFiles] = useState<File[]>([]);
     const [lastSaidaNumber, setLastSaidaNumber] = useState<number>(0);
     const [disregardedNfseNotes, setDisregardedNfseNotes] = useState<Set<string>>(new Set());
     const [allClassifications, setAllClassifications] = useState<AllClassifications>({});
@@ -299,7 +300,7 @@ export function AutomatorClientPage() {
                 const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
     
                 setProcessedData(prev => ({
-                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
+                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
                     siengeSheetData,
                     siengeDebugKeys,
                     reconciliationResults: null, // Reset reconciliation results on new file
@@ -340,7 +341,7 @@ export function AutomatorClientPage() {
                 const { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows } = processCostCenterData(costCenterData);
                 
                 setProcessedData(prev => ({
-                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
+                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
                     costCenterMap,
                     costCenterDebugKeys: debugKeys,
                     allCostCenters,
@@ -362,40 +363,96 @@ export function AutomatorClientPage() {
         }
     };
 
-    const handleAccountingFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        setAccountingFile(file || null);
-    
-        if (file) {
-            setProcessing(true);
-            try {
+    const handlePayableAccountingFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+        const selectedFiles = e.target.files;
+        if (!selectedFiles || selectedFiles.length === 0) {
+            setPayableAccountingFiles([]);
+             setProcessedData(prev => {
+                if (!prev) return null;
+                const { accountingMap, payableAccountingDebugKeys, ...rest } = prev;
+                return { ...rest, accountingMap: undefined, payableAccountingDebugKeys: [] } as ProcessedData;
+            });
+            return;
+        }
+
+        const newFiles = Array.from(selectedFiles);
+        setPayableAccountingFiles(prev => [...prev, ...newFiles]);
+        setProcessing(true);
+
+        try {
+            const allSheetsData: any[][] = [];
+            for (const file of newFiles) {
                 const data = await file.arrayBuffer();
                 const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-                const sheetName = workbook.SheetNames[0];
-                if (!sheetName) throw new Error("A planilha de Contabilização não contém abas.");
-                
-                const worksheet = workbook.Sheets[sheetName];
-                const accountingSheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 10 });
-                const accountingMap = processAccountingData(accountingSheetData);
-    
-                setProcessedData(prev => ({
-                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null }),
-                    accountingMap,
-                }));
-                toast({ title: "Planilha de Contabilização Carregada", description: `${accountingMap.size} mapeamentos de contabilização encontrados.` });
-    
-            } catch (err: any) {
-                toast({ variant: 'destructive', title: 'Erro ao Processar Contabilização', description: err.message });
-                setAccountingFile(null);
-            } finally {
-                setProcessing(false);
+                 workbook.SheetNames.forEach(sheetName => {
+                    const worksheet = workbook.Sheets[sheetName];
+                    const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    allSheetsData.push(sheetData);
+                });
             }
-        } else {
-            setProcessedData(prev => {
-                if (!prev) return null;
-                const { accountingMap, ...rest } = prev;
-                return { ...rest, accountingMap: undefined } as ProcessedData;
-            });
+
+            const combinedData = allSheetsData.flat();
+            const { accountingMap, payableAccountingDebugKeys } = processPayableAccountingData(combinedData);
+
+            setProcessedData(prev => ({
+                ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
+                accountingMap: new Map([...(prev?.accountingMap || []), ...accountingMap]),
+                payableAccountingDebugKeys: [...(prev?.payableAccountingDebugKeys || []), ...payableAccountingDebugKeys],
+            }));
+
+            if (accountingMap) {
+                 toast({ title: "Contas a Pagar Carregadas", description: `${newFiles.length} ficheiro(s) processado(s), ${accountingMap.size} novos mapeamentos encontrados.` });
+            }
+
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Erro ao Processar Contas a Pagar', description: err.message });
+            setPayableAccountingFiles([]);
+        } finally {
+            setProcessing(false);
+        }
+    };
+    
+     const handlePaidAccountingFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+        const selectedFiles = e.target.files;
+        if (!selectedFiles || selectedFiles.length === 0) {
+            setPaidAccountingFiles([]);
+            return;
+        }
+
+        const newFiles = Array.from(selectedFiles);
+        setPaidAccountingFiles(prev => [...prev, ...newFiles]);
+        setProcessing(true);
+
+        try {
+            const allSheetsData: any[][] = [];
+            for (const file of newFiles) {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                workbook.SheetNames.forEach(sheetName => {
+                    const worksheet = workbook.Sheets[sheetName];
+                    const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    allSheetsData.push(sheetData);
+                });
+            }
+
+            const combinedData = allSheetsData.flat();
+            const { accountingMap, paidAccountingDebugKeys } = processPaidAccountingData(combinedData);
+
+            setProcessedData(prev => ({
+                ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
+                accountingMap: new Map([...(prev?.accountingMap || []), ...accountingMap]),
+                paidAccountingDebugKeys: [...(prev?.paidAccountingDebugKeys || []), ...paidAccountingDebugKeys],
+            }));
+
+            if (accountingMap.size > 0) {
+                toast({ title: "Contas Pagas Carregadas", description: `${newFiles.length} ficheiro(s) processado(s), ${accountingMap.size} novos mapeamentos encontrados.` });
+            }
+
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Erro ao Processar Contas Pagas', description: err.message });
+            setPaidAccountingFiles([]);
+        } finally {
+            setProcessing(false);
         }
     };
 
@@ -451,8 +508,8 @@ export function AutomatorClientPage() {
         });
     };
 
-    const handleClearFile = (fileName: string, category?: 'nfeEntrada' | 'cte' | 'nfeSaida' | 'nfse') => {
-        if (category) {
+    const handleClearFile = (fileName: string, category?: string) => {
+        if (category && ['nfeEntrada', 'cte', 'nfeSaida', 'nfse'].includes(category)) {
             setXmlFiles(prev => ({ ...prev, [category]: [] }));
         } else {
             setFiles(prev => { const newFiles = { ...prev }; delete newFiles[fileName]; return newFiles; });
@@ -474,7 +531,8 @@ export function AutomatorClientPage() {
         setSpedFiles([]);
         setSiengeFile(null);
         setCostCenterFile(null);
-        setAccountingFile(null);
+        setPayableAccountingFiles([]);
+        setPaidAccountingFiles([]);
         setProcessing(false);
         setLastSaidaNumber(0);
         setDisregardedNfseNotes(new Set());
@@ -622,7 +680,7 @@ export function AutomatorClientPage() {
         setError(null);
         setLogs([]);
         setProcessedData(prev => ({
-            ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
+            ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
             sheets: {}, // Clear only sheets, keep other state
         }));
         setIsPeriodModalOpen(false);
@@ -713,7 +771,7 @@ export function AutomatorClientPage() {
                 const errorMessage = err.message || "Ocorreu um erro desconhecido durante o processamento.";
                 setError(errorMessage);
                 setProcessedData(prev => ({
-                    ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] }),
+                    ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
                     sheets: {},
                 }));
                 setLogs(prev => [...prev, `[ERRO FATAL] ${errorMessage}`]);
@@ -763,7 +821,7 @@ export function AutomatorClientPage() {
 
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null, spedDuplicates: SpedDuplicate[] | null) => {
         setProcessedData(prevData => {
-            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] };
+            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] };
             return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections, spedDuplicates };
         });
     }, []);
@@ -874,10 +932,10 @@ export function AutomatorClientPage() {
                                         <div>
                                             <h3 className="text-lg font-medium mb-4 flex items-center gap-2"><FileUp className="h-5 w-5" />Carregar por XML (Recomendado)</h3>
                                             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                                <FileUploadForm formId="xml-nfe-entrada" files={{ 'xml-nfe-entrada': xmlFiles.nfeEntrada.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfeEntrada')} onClearFile={() => handleClearFile('xml-nfe-entrada', 'nfeEntrada')} xmlFileCount={xmlFiles.nfeEntrada.length} displayName="XMLs NF-e Entrada" />
-                                                <FileUploadForm formId="xml-cte" files={{ 'xml-cte': xmlFiles.cte.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'cte')} onClearFile={() => handleClearFile('xml-cte', 'cte')} xmlFileCount={xmlFiles.cte.length} displayName="XMLs CT-e" />
-                                                <FileUploadForm formId="xml-saida" files={{ 'xml-saida': xmlFiles.nfeSaida.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfeSaida')} onClearFile={() => handleClearFile('xml-saida', 'nfeSaida')} xmlFileCount={xmlFiles.nfeSaida.length} displayName="XMLs NF-e Saída" />
-                                                <FileUploadForm formId="xml-nfse" files={{ 'xml-nfse': xmlFiles.nfse.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfse')} onClearFile={() => handleClearFile('xml-nfse', 'nfse')} xmlFileCount={xmlFiles.nfse.length} displayName="XMLs NFS-e" />
+                                                <FileUploadForm formId="xml-nfe-entrada" files={{ 'xml-nfe-entrada': xmlFiles.nfeEntrada.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfeEntrada')} onClearFile={() => handleClearFile('xml-nfe-entrada', 'nfeEntrada')} xmlFileCount={xmlFiles.nfeEntrada.length} displayName="XMLs NF-e Entrada" multiple/>
+                                                <FileUploadForm formId="xml-cte" files={{ 'xml-cte': xmlFiles.cte.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'cte')} onClearFile={() => handleClearFile('xml-cte', 'cte')} xmlFileCount={xmlFiles.cte.length} displayName="XMLs CT-e" multiple/>
+                                                <FileUploadForm formId="xml-saida" files={{ 'xml-saida': xmlFiles.nfeSaida.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfeSaida')} onClearFile={() => handleClearFile('xml-saida', 'nfeSaida')} xmlFileCount={xmlFiles.nfeSaida.length} displayName="XMLs NF-e Saída" multiple/>
+                                                <FileUploadForm formId="xml-nfse" files={{ 'xml-nfse': xmlFiles.nfse.length > 0 }} onFileChange={(e) => handleXmlFileChange(e, 'nfse')} onClearFile={() => handleClearFile('xml-nfse', 'nfse')} xmlFileCount={xmlFiles.nfse.length} displayName="XMLs NFS-e" multiple/>
                                             </div>
                                         </div>
                                         <div className="relative"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">E/Ou</span></div></div>
@@ -914,9 +972,12 @@ export function AutomatorClientPage() {
                                 costCenterFile={costCenterFile}
                                 onCostCenterFileChange={handleCostCenterFileChange}
                                 onClearCostCenterFile={() => setCostCenterFile(null)}
-                                accountingFile={accountingFile}
-                                onAccountingFileChange={handleAccountingFileChange}
-                                onClearAccountingFile={() => setAccountingFile(null)}
+                                payableAccountingFiles={payableAccountingFiles}
+                                onPayableAccountingFileChange={handlePayableAccountingFileChange}
+                                onClearPayableAccountingFile={() => setPayableAccountingFiles([])}
+                                paidAccountingFiles={paidAccountingFiles}
+                                onPaidAccountingFileChange={handlePaidAccountingFileChange}
+                                onClearPaidAccountingFile={() => setPaidAccountingFiles([])}
                                 onRunReconciliation={handleRunReconciliation}
                                 isReconciliationRunning={processing}
                                 allClassifications={allClassifications}

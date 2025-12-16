@@ -130,7 +130,7 @@ export function ReconciliationAnalysis({
                             multiple={true}
                             fileCount={payableAccountingFiles.length}
                         />
-                         <Button onClick={() => handleDownload(processedData?.accountingDebugKeys || [], 'Depuracao_Contas_Pagar')} size="sm" variant="outline" disabled={!processedData?.accountingDebugKeys || processedData.accountingDebugKeys.length === 0}><Download className='h-4 w-4 mr-2' />Baixar Chaves de Depuração</Button>
+                         <Button onClick={() => handleDownload(processedData?.payableAccountingDebugKeys || [], 'Depuracao_Contas_Pagar')} size="sm" variant="outline" disabled={!processedData?.payableAccountingDebugKeys || processedData.payableAccountingDebugKeys.length === 0}><Download className='h-4 w-4 mr-2' />Baixar Chaves de Depuração</Button>
                     </div>
                      <div className='space-y-2'>
                          <h3 className='font-medium'>Contas Pagas</h3>
@@ -143,6 +143,7 @@ export function ReconciliationAnalysis({
                             multiple={true}
                             fileCount={paidAccountingFiles.length}
                         />
+                         <Button onClick={() => handleDownload(processedData?.paidAccountingDebugKeys || [], 'Depuracao_Contas_Pagas')} size="sm" variant="outline" disabled={!processedData?.paidAccountingDebugKeys || processedData.paidAccountingDebugKeys.length === 0}><Download className='h-4 w-4 mr-2' />Baixar Chaves de Depuração</Button>
                     </div>
                 </div>
                 

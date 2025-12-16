@@ -72,7 +72,8 @@ export interface ProcessedData {
     allCostCenters?: string[];
     costCenterHeaderRows?: any[][];
     accountingMap?: Map<string, { account: string; description: string }>;
-    accountingDebugKeys?: any[];
+    payableAccountingDebugKeys?: any[];
+    paidAccountingDebugKeys?: any[];
     fileNames?: {
         nfeEntrada: string[];
         cte: string[];
@@ -135,7 +136,7 @@ const renameChaveColumn = (df: DataFrame): DataFrame => {
 // MAIN PROCESSING FUNCTION
 // =================================================================
 
-export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap' | 'siengeDebugKeys' | 'costCenterDebugKeys' | 'allCostCenters' | 'costCenterHeaderRows' | 'accountingMap' | 'accountingDebugKeys'> {
+export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap' | 'siengeDebugKeys' | 'costCenterDebugKeys' | 'allCostCenters' | 'costCenterHeaderRows' | 'accountingMap' | 'payableAccountingDebugKeys' | 'paidAccountingDebugKeys'> {
     
     log("Iniciando preparação dos dados no navegador...");
     const GRANTEL_CNPJ = "81732042000119";
@@ -668,76 +669,117 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
 
 export function processPayableAccountingData(accountingSheetData: any[][]): { 
     accountingMap: Map<string, { account: string; description: string }>;
-    accountingDebugKeys: any[];
+    payableAccountingDebugKeys: any[];
 } {
     const accountingMap = new Map<string, { account: string; description: string }>();
-    const accountingDebugKeys: any[] = [];
+    const payableAccountingDebugKeys: any[] = [];
 
     if (!accountingSheetData || accountingSheetData.length === 0) {
-        return { accountingMap, accountingDebugKeys };
-    }
-    
-    // Find header indices dynamically
-    const headerRowIndex = accountingSheetData.findIndex(row => 
-        row.some(cell => typeof cell === 'string' && normalizeKey(cell) === 'credor')
-    );
-    
-    if (headerRowIndex === -1) {
-        console.error("Cabeçalho 'Credor' não encontrado na planilha de Contas a Pagar.");
-        return { accountingMap, accountingDebugKeys };
-    }
-    
-    const headers = accountingSheetData[headerRowIndex].map(h => normalizeKey(h));
-    const credorIndex = headers.indexOf('credor');
-    const docIndex = headers.indexOf('documento');
-
-    if (credorIndex === -1 || docIndex === -1) {
-        console.error("Colunas 'Credor' ou 'Documento' não encontradas no cabeçalho.");
-        return { accountingMap, accountingDebugKeys };
+        return { accountingMap, payableAccountingDebugKeys };
     }
 
-    for (let i = headerRowIndex + 1; i < accountingSheetData.length; i++) {
+    for (let i = 0; i < accountingSheetData.length; i++) {
         const currentRow = accountingSheetData[i];
-        if (!Array.isArray(currentRow) || currentRow.length <= Math.max(credorIndex, docIndex)) continue;
-
-        const credorRaw = String(currentRow[credorIndex] || '').trim();
-        const documentoRaw = String(currentRow[docIndex] || '').trim();
+        if (!Array.isArray(currentRow)) continue;
         
-        // Check if it's a valid data row and not a total/header line
-        if (credorRaw && documentoRaw && !credorRaw.toLowerCase().startsWith('total')) {
-            const appropriationsRow = accountingSheetData[i + 1];
-            if (appropriationsRow && Array.isArray(appropriationsRow) && String(appropriationsRow[0] || '').trim().toLowerCase().startsWith('apropriações:')) {
-                
-                const docNumberClean = cleanAndToStr(documentoRaw);
-                const credorName = credorRaw; // Use the full name as is
-                const accountingKey = `${docNumberClean}-${credorName}`;
-                
-                let accountInfo = '';
-                for (let k = appropriationsRow.length - 1; k >= 0; k--) {
-                    const cellValue = String(appropriationsRow[k] || '').trim();
-                    if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
-                        accountInfo = cellValue;
-                        break;
-                    }
-                }
+        const firstCell = String(currentRow[0] || '').trim();
+        const thirdCell = String(currentRow[2] || '').trim();
 
-                if (accountInfo) {
-                    const parts = accountInfo.split(' - ');
-                    const account = parts[0];
-                    const description = parts.slice(1).join(' - ');
-                    accountingMap.set(accountingKey, { account, description });
+        const isHeaderOrFooter = ["empresa", "período", "credor", "total do dia"].some(keyword => firstCell.toLowerCase().startsWith(keyword));
+        if (isHeaderOrFooter || !firstCell || !thirdCell) {
+            continue;
+        }
 
-                    accountingDebugKeys.push({
-                        'Chave de Depuração': accountingKey,
-                        'Coluna Credor': credorRaw,
-                        'Coluna Documento': documentoRaw,
-                        'Conta Encontrada': accountInfo,
-                        'Linha': i + 1,
-                    });
+        const appropriationsRow = accountingSheetData[i + 1];
+        if (appropriationsRow && Array.isArray(appropriationsRow) && String(appropriationsRow[0] || '').trim().toLowerCase().startsWith('apropriações:')) {
+            const docNumberClean = cleanAndToStr(thirdCell);
+            const credorName = firstCell;
+            const accountingKey = `${docNumberClean}-${credorName}`;
+            
+            let accountInfo = '';
+            for (let k = appropriationsRow.length - 1; k >= 0; k--) {
+                const cellValue = String(appropriationsRow[k] || '').trim();
+                if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
+                    accountInfo = cellValue;
+                    break;
                 }
+            }
+
+            if (accountInfo) {
+                const parts = accountInfo.split(' - ');
+                const account = parts[0];
+                const description = parts.slice(1).join(' - ');
+                accountingMap.set(accountingKey, { account, description });
+
+                payableAccountingDebugKeys.push({
+                    'Chave de Depuração': accountingKey,
+                    'Coluna Credor': credorName,
+                    'Coluna Documento': thirdCell,
+                    'Conta Encontrada': accountInfo,
+                    'Linha': i + 1,
+                });
             }
         }
     }
     
-    return { accountingMap, accountingDebugKeys };
+    return { accountingMap, payableAccountingDebugKeys };
+}
+
+
+export function processPaidAccountingData(paidSheetData: any[][]): { 
+    accountingMap: Map<string, { account: string; description: string }>;
+    paidAccountingDebugKeys: any[];
+} {
+    const accountingMap = new Map<string, { account: string; description: string }>();
+    const paidAccountingDebugKeys: any[] = [];
+
+    if (!paidSheetData || paidSheetData.length === 0) {
+        return { accountingMap, paidAccountingDebugKeys };
+    }
+
+    for (let i = 0; i < paidSheetData.length; i++) {
+        const currentRow = paidSheetData[i];
+        if (!Array.isArray(currentRow) || currentRow.length < 3) continue;
+
+        const firstCell = String(currentRow[0] || '').trim();
+        const thirdCell = String(currentRow[2] || '').trim();
+
+        const isHeaderOrFooter = ["empresa", "período", "credor", "data da baixa", "total do dia"].some(keyword => firstCell.toLowerCase().startsWith(keyword));
+        if (isHeaderOrFooter || !firstCell || !thirdCell) {
+            continue;
+        }
+
+        const appropriationsRow = paidSheetData[i + 1];
+        if (appropriationsRow && Array.isArray(appropriationsRow) && String(appropriationsRow[0] || '').trim().toLowerCase().startsWith('apropriações:')) {
+            const docNumberClean = cleanAndToStr(thirdCell);
+            const credorName = firstCell;
+            const accountingKey = `${docNumberClean}-${credorName}`;
+            
+            let accountInfo = '';
+            for (let k = appropriationsRow.length - 1; k >= 0; k--) {
+                const cellValue = String(appropriationsRow[k] || '').trim();
+                if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
+                    accountInfo = cellValue;
+                    break;
+                }
+            }
+
+            if (accountInfo) {
+                const parts = accountInfo.split(' - ');
+                const account = parts[0];
+                const description = parts.slice(1).join(' - ');
+                accountingMap.set(accountingKey, { account, description });
+
+                paidAccountingDebugKeys.push({
+                    'Chave de Depuração': accountingKey,
+                    'Coluna Credor': credorName,
+                    'Coluna Documento': thirdCell,
+                    'Conta Encontrada': accountInfo,
+                    'Linha': i + 1,
+                });
+            }
+        }
+    }
+
+    return { accountingMap, paidAccountingDebugKeys };
 }
