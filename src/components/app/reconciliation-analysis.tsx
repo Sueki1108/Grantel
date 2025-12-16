@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useMemo, useState, ChangeEvent } from 'react';
@@ -29,6 +28,9 @@ interface ReconciliationAnalysisProps {
     costCenterFile: File | null;
     onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearCostCenterFile: () => void;
+    accountingFile: File | null;
+    onAccountingFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onClearAccountingFile: () => void;
     allClassifications: AllClassifications;
     onPersistClassifications: (allData: AllClassifications) => void;
     competence: string | null;
@@ -45,6 +47,9 @@ export function ReconciliationAnalysis({
     costCenterFile,
     onCostCenterFileChange,
     onClearCostCenterFile,
+    accountingFile,
+    onAccountingFileChange,
+    onClearAccountingFile,
     allClassifications,
     onPersistClassifications,
     competence,
@@ -80,13 +85,13 @@ export function ReconciliationAnalysis({
                         <GitCompareArrows className="h-8 w-8 text-primary" />
                         <div>
                             <CardTitle className="font-headline text-2xl">XML VS Sienge</CardTitle>
-                            <CardDescription>Carregue as planilhas Sienge e de Centro de Custo para cruzar informações com os XMLs processados.</CardDescription>
+                            <CardDescription>Carregue as planilhas Sienge, Contabilização e de Centro de Custo para cruzar informações com os XMLs processados.</CardDescription>
                         </div>
                     </div>
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
-                 <div className='grid grid-cols-1 md:grid-cols-2 gap-6 items-start'>
+                 <div className='grid grid-cols-1 md:grid-cols-3 gap-6 items-start'>
                     <div className='space-y-2'>
                         <h3 className='font-medium'>Planilha do Sienge</h3>
                         <FileUploadForm
@@ -95,6 +100,16 @@ export function ReconciliationAnalysis({
                             files={{ 'sienge-for-reconciliation': !!siengeFile }}
                             onFileChange={onSiengeFileChange}
                             onClearFile={onClearSiengeFile}
+                        />
+                    </div>
+                    <div className='space-y-2'>
+                         <h3 className='font-medium'>Planilha de Contabilização</h3>
+                         <FileUploadForm
+                            displayName="Contabilização"
+                            formId="accounting"
+                            files={{ 'accounting': !!accountingFile }}
+                            onFileChange={onAccountingFileChange}
+                            onClearFile={onClearAccountingFile}
                         />
                     </div>
                     <CostCenterAnalysis

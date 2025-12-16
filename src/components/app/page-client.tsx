@@ -5,36 +5,41 @@ import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loa
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import dynamic from 'next/dynamic';
+import * as XLSX from 'xlsx';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUploadForm } from "@/components/app/file-upload-form";
-import { ResultsDisplay } from "@/components/app/results-display";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
-import * as XLSX from 'xlsx';
-import { LogDisplay } from "@/components/app/log-display";
 import { ThemeToggle } from "@/components/app/theme-toggle";
-import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult, processCostCenterData, generateSiengeDebugKeys } from "@/lib/excel-processor";
+import { processDataFrames, runReconciliation, type ProcessedData, type SpedInfo, type SpedCorrectionResult, processCostCenterData, generateSiengeDebugKeys, processAccountingData } from "@/lib/excel-processor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AdvancedAnalyses } from "@/components/app/advanced-analyses";
 import { processNfseForPeriodDetection, processUploadedXmls } from "@/lib/xml-processor";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { SaidasAnalysis } from "@/components/app/saidas-analysis";
-import { NfseAnalysis } from "@/components/app/nfse-analysis";
 import type { KeyCheckResult } from "@/components/app/key-checker";
 import { cn } from "@/lib/utils";
-import { ImobilizadoAnalysis, type AllClassifications } from "@/components/app/imobilizado-analysis";
-import { HistoryAnalysis, type SessionData } from "@/components/app/history-analysis";
-import { PendingIssuesReport } from "@/components/app/pending-issues-report";
+import type { AllClassifications } from "@/lib/types";
+import type { SessionData } from "@/components/app/history-analysis";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { ReconciliationAnalysis } from "@/components/app/reconciliation-analysis";
 import type { SpedDuplicate } from "@/lib/types";
-import { DifalAnalysis } from "@/components/app/difal-analysis";
+
+// Dynamic Imports for heavy components
+const ResultsDisplay = dynamic(() => import('@/components/app/results-display').then(mod => mod.ResultsDisplay), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const LogDisplay = dynamic(() => import('@/components/app/log-display').then(mod => mod.LogDisplay), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const SaidasAnalysis = dynamic(() => import('@/components/app/saidas-analysis').then(mod => mod.SaidasAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const NfseAnalysis = dynamic(() => import('@/components/app/nfse-analysis').then(mod => mod.NfseAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const ReconciliationAnalysis = dynamic(() => import('@/components/app/reconciliation-analysis').then(mod => mod.ReconciliationAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const AdvancedAnalyses = dynamic(() => import('@/components/app/advanced-analyses').then(mod => mod.AdvancedAnalyses), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const ImobilizadoAnalysis = dynamic(() => import('@/components/app/imobilizado-analysis').then(mod => mod.ImobilizadoAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const PendingIssuesReport = dynamic(() => import('@/components/app/pending-issues-report').then(mod => mod.PendingIssuesReport), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const HistoryAnalysis = dynamic(() => import('@/components/app/history-analysis').then(mod => mod.HistoryAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const DifalAnalysis = dynamic(() => import('@/components/app/difal-analysis').then(mod => mod.DifalAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 
 
 // This should be defined outside the component to avoid re-declaration
@@ -68,6 +73,7 @@ export function AutomatorClientPage() {
     const [spedFiles, setSpedFiles] = useState<File[]>([]);
     const [siengeFile, setSiengeFile] = useState<File | null>(null);
     const [costCenterFile, setCostCenterFile] = useState<File | null>(null);
+    const [accountingFile, setAccountingFile] = useState<File | null>(null);
     const [lastSaidaNumber, setLastSaidaNumber] = useState<number>(0);
     const [disregardedNfseNotes, setDisregardedNfseNotes] = useState<Set<string>>(new Set());
     const [allClassifications, setAllClassifications] = useState<AllClassifications>({});
@@ -286,8 +292,10 @@ export function AutomatorClientPage() {
                 const sheetName = workbook.SheetNames[0];
                 if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
     
-                const worksheet = workbook.Sheets[sheetName];
-                const siengeSheetData = XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
+                const siengeWorksheet = workbook.Sheets[sheetName];
+                if(!siengeWorksheet) throw new Error("Aba da planilha não encontrada.");
+
+                const siengeSheetData = XLSX.utils.sheet_to_json(siengeWorksheet, { range: 8, defval: null });
                 const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
     
                 setProcessedData(prev => ({
@@ -350,6 +358,43 @@ export function AutomatorClientPage() {
                 if (!prev) return null;
                 const { costCenterMap, costCenterDebugKeys, allCostCenters, costCenterHeaderRows, ...rest } = prev;
                  return { ...rest, costCenterMap: undefined, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] } as ProcessedData;
+            });
+        }
+    };
+
+    const handleAccountingFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        setAccountingFile(file || null);
+    
+        if (file) {
+            setProcessing(true);
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) throw new Error("A planilha de Contabilização não contém abas.");
+                
+                const worksheet = workbook.Sheets[sheetName];
+                const accountingSheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 10 });
+                const accountingMap = processAccountingData(accountingSheetData);
+    
+                setProcessedData(prev => ({
+                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null }),
+                    accountingMap,
+                }));
+                toast({ title: "Planilha de Contabilização Carregada", description: `${accountingMap.size} mapeamentos de contabilização encontrados.` });
+    
+            } catch (err: any) {
+                toast({ variant: 'destructive', title: 'Erro ao Processar Contabilização', description: err.message });
+                setAccountingFile(null);
+            } finally {
+                setProcessing(false);
+            }
+        } else {
+            setProcessedData(prev => {
+                if (!prev) return null;
+                const { accountingMap, ...rest } = prev;
+                return { ...rest, accountingMap: undefined } as ProcessedData;
             });
         }
     };
@@ -429,6 +474,7 @@ export function AutomatorClientPage() {
         setSpedFiles([]);
         setSiengeFile(null);
         setCostCenterFile(null);
+        setAccountingFile(null);
         setProcessing(false);
         setLastSaidaNumber(0);
         setDisregardedNfseNotes(new Set());
@@ -697,7 +743,8 @@ export function AutomatorClientPage() {
                 processedData.sheets['Itens Válidos'] || [],
                 processedData.sheets['Notas Válidas'] || [],
                 processedData.sheets['CTEs Válidos'] || [],
-                processedData.costCenterMap
+                processedData.costCenterMap,
+                processedData.accountingMap,
             );
             
             setProcessedData(prev => ({
@@ -862,11 +909,14 @@ export function AutomatorClientPage() {
                             <ReconciliationAnalysis 
                                 processedData={processedData} 
                                 siengeFile={siengeFile} 
-                                costCenterFile={costCenterFile}
                                 onSiengeFileChange={handleSiengeFileChange}
-                                onCostCenterFileChange={handleCostCenterFileChange}
                                 onClearSiengeFile={() => setSiengeFile(null)}
+                                costCenterFile={costCenterFile}
+                                onCostCenterFileChange={handleCostCenterFileChange}
                                 onClearCostCenterFile={() => setCostCenterFile(null)}
+                                accountingFile={accountingFile}
+                                onAccountingFileChange={handleAccountingFileChange}
+                                onClearAccountingFile={() => setAccountingFile(null)}
                                 onRunReconciliation={handleRunReconciliation}
                                 isReconciliationRunning={processing}
                                 allClassifications={allClassifications}
@@ -890,7 +940,12 @@ export function AutomatorClientPage() {
                         </TabsContent>
 
                         <TabsContent value="difal" className="mt-6">
-                           <DifalAnalysis />
+                           <DifalAnalysis 
+                                reconciliationResults={processedData?.reconciliationResults}
+                                allClassifications={allClassifications}
+                                onPersistData={handlePersistClassifications}
+                                competence={competence}
+                           />
                         </TabsContent>
                         
                         <TabsContent value="analyses" className="mt-6">
