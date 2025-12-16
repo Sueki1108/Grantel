@@ -420,28 +420,27 @@ export function runReconciliation(
             if (!item || typeof item !== 'object') return item;
         
             const siengeDocNumber = cleanAndToStr(item[h.numero!]);
-            const siengeCredorRaw = String(item[`Sienge_${h.credor}`] || item[h.credor!] || '');
+            const siengeCredorRaw = String(item[`Sienge_${h.credor!}`] || item[h.credor!] || '');
+        
+            // Chave para Centro de Custo: Usa o código do credor
             const credorCodeMatch = siengeCredorRaw.match(/^(\d+)\s*-/);
             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
-
-            // Chave para Centro de Custo
             if (siengeDocNumber && credorCode) {
                  const costCenterKey = `${siengeDocNumber}-${credorCode}`;
                  item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
             } else {
-                 item['Centro de Custo'] = 'N/A (Chave Incompleta)';
+                 item['Centro de Custo'] = 'N/A';
             }
            
-            // Chave para Contabilização
+            // Chave para Contabilização: Usa o nome completo do credor
             if (siengeDocNumber && siengeCredorRaw) {
                 const accountingKey = `${siengeDocNumber}-${siengeCredorRaw}`;
                 const accInfo = accountingMap?.get(accountingKey);
                 item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
             } else {
-                item['Contabilização'] = 'N/A (Chave Incompleta)';
+                item['Contabilização'] = 'N/A';
             }
             
-            // CFOP (Sienge)
             item['CFOP (Sienge)'] = (h.cfop && (item[`Sienge_${h.cfop}`] || item[h.cfop])) ? (item[`Sienge_${h.cfop}`] || item[h.cfop]) : 'N/A';
             
             return item;
@@ -496,6 +495,7 @@ export function runReconciliation(
         remainingXmlItems = Array.from(xmlMap.values()).flat();
         remainingSiengeItems = stillUnmatchedSienge;
         
+        // Enrich data for all sections
         reconciled = reconciled.map(enrichItem);
         for (const esp in otherSiengeItems) {
             otherSiengeItems[esp] = otherSiengeItems[esp].map(enrichItem);
