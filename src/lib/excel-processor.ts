@@ -73,6 +73,7 @@ export interface ProcessedData {
     costCenterDebugKeys?: any[];
     allCostCenters?: string[];
     costCenterHeaderRows?: any[][];
+    accountingMap?: Map<string, { account: string, description: string }>;
     fileNames?: {
         nfeEntrada: string[];
         cte: string[];
@@ -135,7 +136,7 @@ const renameChaveColumn = (df: DataFrame): DataFrame => {
 // MAIN PROCESSING FUNCTION
 // =================================================================
 
-export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap' | 'siengeDebugKeys' | 'costCenterDebugKeys' | 'allCostCenters' | 'costCenterHeaderRows'> {
+export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap' | 'siengeDebugKeys' | 'costCenterDebugKeys' | 'allCostCenters' | 'costCenterHeaderRows' | 'accountingMap'> {
     
     log("Iniciando preparação dos dados no navegador...");
     const GRANTEL_CNPJ = "81732042000119";
@@ -377,7 +378,8 @@ export function runReconciliation(
     xmlItems: any[],
     nfeEntradas: any[],
     cteData: any[],
-    costCenterMap?: Map<string, string> | null
+    costCenterMap?: Map<string, string> | null,
+    accountingMap?: Map<string, { account: string; description: string }> | null
 ): ReconciliationResults {
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], devolucoesEP: [], otherSiengeItems: {}, debug: { siengeKeys: [] } };
 
@@ -518,15 +520,16 @@ export function runReconciliation(
         }
 
         reconciled.forEach(item => {
-            if (costCenterMap && h.numero && h.credor) {
-                const docNumberForCostCenter = item[`Sienge_${h.numero}`];
-                const credorForCostCenter = item[`Sienge_${h.credor}`]; 
-                if (docNumberForCostCenter && credorForCostCenter) {
-                    const docNumberClean = cleanAndToStr(docNumberForCostCenter);
-                    const credorCodeClean = cleanAndToStr(String(credorForCostCenter).split('-')[0]);
-                    const costCenterKey = `${docNumberClean}-${credorCodeClean}`;
-                    item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
-                }
+            const numeroLimpo = cleanAndToStr(item.Sienge_Documento || item['Número da Nota']);
+            const credorLimpo = cleanAndToStr(String(item.Sienge_Credor || '').split('-')[0]);
+
+            if (costCenterMap) {
+                const costCenterKey = `${numeroLimpo}-${credorLimpo}`;
+                item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
+            }
+            if (accountingMap) {
+                const accountingKey = `${numeroLimpo}-${credorLimpo}`;
+                item['Contabilização'] = accountingMap.get(accountingKey)?.account || 'N/A';
             }
         });
         
@@ -649,4 +652,42 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
     });
 
     return { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows };
+}
+
+export function processAccountingData(accountingSheetData: any[][]): Map<string, { account: string; description: string }> {
+    const accountingMap = new Map<string, { account: string; description: string }>();
+    if (!accountingSheetData) return accountingMap;
+
+    let currentCredor = '';
+    let currentDocumento = '';
+
+    accountingSheetData.forEach(row => {
+        if (!Array.isArray(row) || row.length < 3) return;
+
+        const colA = String(row[0] || '').trim();
+        const colC = String(row[2] || '').trim();
+        
+        // Verifica se é uma linha de nota (tem credor e documento)
+        if (colA && colC && !colA.startsWith('Apropriações:') && !colA.startsWith('Data de vencimento') && !colA.startsWith('Total do dia')) {
+             currentCredor = colA.split('-')[0].trim();
+             currentDocumento = colC.split('.')[1] || colC.split('.')[0] || ''; // Tenta extrair NFE. 1234 -> 1234
+        }
+        
+        // Verifica se é uma linha de apropriação
+        if (colA.startsWith('Apropriações:') && currentCredor && currentDocumento) {
+            // A conta contábil está na coluna H (índice 7) ou I (índice 8)
+            const accountInfo = String(row[7] || row[8] || '').trim();
+            if (accountInfo) {
+                const parts = accountInfo.split(' - ');
+                const account = parts[0];
+                const description = parts.slice(1).join(' - ');
+                
+                const key = `${cleanAndToStr(currentDocumento)}-${cleanAndToStr(currentCredor)}`;
+                if (key && account && !accountingMap.has(key)) {
+                    accountingMap.set(key, { account, description });
+                }
+            }
+        }
+    });
+    return accountingMap;
 }
