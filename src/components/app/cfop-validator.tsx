@@ -585,7 +585,7 @@ export function CfopValidator(props: CfopValidatorProps) {
             const validation = cfopValidations[uniqueKey];
             const classification = validation?.classification || 'unvalidated';
             const itemWithKey = { ...item, __itemKey: `cfop-pending-${uniqueKey}` };
-            const siengeCfop = item.Sienge_CFOP || 'N/A';
+            const siengeCfop = item['CFOP (Sienge)'] || 'N/A';
 
             if (!statusResult.all[siengeCfop]) statusResult.all[siengeCfop] = [];
             statusResult.all[siengeCfop].push(itemWithKey);
@@ -812,7 +812,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                             <DataTable columns={[...columns, { id: 'difal-actions', header: 'Ações DIFAL', cell: ({row}) => (
                                 <div className="flex justify-center gap-1">
                                     <TooltipProvider>
-                                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([row.original], 'difal')}><TicketX className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Reverter e Marcar como DIFAL</p></TooltipContent></Tooltip>
+                                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([row.original], 'difal')}><TicketX className="h-4 w-4" /> Reverter para DIFAL</Button></TooltipTrigger><TooltipContent><p>Reverter e Marcar como DIFAL</p></TooltipContent></Tooltip>
                                     </TooltipProvider>
                                 </div>
                             )}]} data={difalAnalysisData.desconsideradosItems} />

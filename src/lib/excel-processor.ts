@@ -521,17 +521,23 @@ export function runReconciliation(
         }
 
         reconciled.forEach(item => {
-            const numeroLimpo = cleanAndToStr(item.Sienge_Documento || item['Número da Nota']);
-            const credorLimpo = cleanAndToStr(String(item.Sienge_Credor || '').split('-')[0]);
-            
+            const numeroLimpo = cleanAndToStr(item['Número da Nota']);
+            const credorSienge = item.Sienge_Credor || '';
+            const credorLimpo = cleanAndToStr(credorSienge.split('-')[0]);
+
             const costCenterKey = `${numeroLimpo}-${credorLimpo}`;
-            if (costCenterMap) {
-                item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
+            if (costCenterMap && costCenterMap.has(costCenterKey)) {
+                item['Centro de Custo'] = costCenterMap.get(costCenterKey);
+            } else {
+                item['Centro de Custo'] = 'N/A';
             }
 
-            const accountingKey = `${cleanAndToStr(item.Sienge_Documento)}-${item.Sienge_Credor}`;
-            if (accountingMap) {
-                item['Contabilização'] = accountingMap.get(accountingKey)?.account || 'N/A';
+            const accountingKey = `${numeroLimpo}-${credorSienge}`;
+            if (accountingMap && accountingMap.has(accountingKey)) {
+                const accInfo = accountingMap.get(accountingKey);
+                item['Contabilização'] = `${accInfo?.account} - ${accInfo?.description}`;
+            } else {
+                item['Contabilização'] = 'N/A';
             }
         });
         
@@ -587,15 +593,14 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
     }
 
     return siengeData.map(item => {
-        const numDoc = cleanAndToStr(item[h.documento!]);
+        const docNumber = item[h.documento!] ? cleanAndToStr(String(item[h.documento!])) : '';
         const credorName = String(item[h.credor!] || '');
         const credorCode = cleanAndToStr(credorName.split('-')[0]);
         const credorNameOnly = credorName.includes('-') ? credorName.substring(credorName.indexOf('-') + 1).trim() : credorName;
 
-
         return { 
-            "Chave de Depuração (Centro de Custo)": `${numDoc}-${credorCode}`,
-            "Chave de Depuração (Contabilização)": `${numDoc}-${credorNameOnly}`,
+            "Chave de Depuração (Centro de Custo)": `${docNumber}-${credorCode}`,
+            "Chave de Depuração (Contabilização)": `${docNumber}-${credorNameOnly}`,
             "Documento (Original)": item[h.documento!],
             "Credor (Original)": credorName,
         };
@@ -682,30 +687,33 @@ export function processAccountingData(accountingSheetData: any[][]): {
 
         const credorRaw = String(row[credorIndex] || '').trim();
         const documentoRaw = String(row[docIndex] || '').trim();
+        const docNumberClean = cleanAndToStr(documentoRaw);
 
-        const isDataRow = credorRaw && documentoRaw && !credorRaw.toLowerCase().startsWith('total do dia') && !credorRaw.toLowerCase().startsWith('data de vencimento');
+        const isDataRow = credorRaw && documentoRaw && docNumberClean && !credorRaw.toLowerCase().startsWith('total do dia');
 
         if (isDataRow) {
-            const key = `${cleanAndToStr(documentoRaw)}-${credorRaw}`;
+            const accountingKey = `${docNumberClean}-${credorRaw}`;
             
             let accountInfo = '';
             
-            if (i + 1 < accountingSheetData.length) {
-                const nextRow = accountingSheetData[i + 1];
-                const apropriacaoText = String(nextRow[0] || '').trim();
-                if (apropriacaoText.toLowerCase().startsWith('apropriações:')) {
-                    for (let j = nextRow.length - 1; j >= 0; j--) {
-                        const cellValue = String(nextRow[j] || '').trim();
+            // Look for 'Apropriações:' in the next few lines
+            for (let j = 1; j <= 3 && (i + j) < accountingSheetData.length; j++) {
+                const nextRow = accountingSheetData[i + j];
+                if (nextRow && String(nextRow[0] || '').trim().toLowerCase().startsWith('apropriações:')) {
+                    // Find the account code in the same row
+                    for (let k = nextRow.length - 1; k >= 0; k--) {
+                        const cellValue = String(nextRow[k] || '').trim();
                         if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
                             accountInfo = cellValue;
-                            break;
+                            break; // Found account, stop searching this row
                         }
                     }
+                    break; // Found appropriations line, stop searching for it
                 }
             }
 
             accountingDebugKeys.push({
-                'Chave de Depuração': key,
+                'Chave de Depuração': accountingKey,
                 'Coluna Credor': credorRaw,
                 'Coluna Documento': documentoRaw,
                 'Conta Encontrada': accountInfo || 'Nenhuma',
@@ -716,7 +724,7 @@ export function processAccountingData(accountingSheetData: any[][]): {
                 const parts = accountInfo.split(' - ');
                 const account = parts[0];
                 const description = parts.slice(1).join(' - ');
-                accountingMap.set(key, { account, description });
+                accountingMap.set(accountingKey, { account, description });
             }
         }
     }
