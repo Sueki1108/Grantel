@@ -528,8 +528,8 @@ export function runReconciliation(
             const costCenterKey = `${docNumberClean}-${credorCode}`;
             item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
             
-            // Accounting Mapping
-            const credorName = String(item['Fornecedor'] || '').trim();
+            // Accounting Mapping - CORRECTED
+            const credorName = String(item['Sienge_Credor'] || '').trim();
             const accountingKey = `${docNumberClean}-${credorName}`;
             const accInfo = accountingMap?.get(accountingKey);
             item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
@@ -678,7 +678,6 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
         return { accountingMap, payableAccountingDebugKeys };
     }
     
-    // 1. Find header row to map columns dynamically
     let headerRowIndex = -1;
     let credorIndex = -1;
     let docIndex = -1;
@@ -694,11 +693,9 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
     }
 
     if (headerRowIndex === -1 || credorIndex === -1 || docIndex === -1) {
-        // Fallback or error if header is not found
         return { accountingMap, payableAccountingDebugKeys };
     }
 
-    // 2. Process rows after the header
     for (let i = headerRowIndex + 1; i < accountingSheetData.length; i++) {
         const currentRow = accountingSheetData[i];
         if (!Array.isArray(currentRow) || currentRow.length <= Math.max(credorIndex, docIndex)) {
@@ -708,7 +705,6 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
         const credorName = String(currentRow[credorIndex] || '').trim();
         const docValue = String(currentRow[docIndex] || '').trim();
         
-        // Skip header-like or empty rows
         if (!credorName || !docValue || normalizeKey(credorName) === 'credor') {
             continue;
         }
