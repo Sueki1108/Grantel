@@ -661,78 +661,58 @@ export function processAccountingData(accountingSheetData: any[][]): {
 } {
     const accountingMap = new Map<string, { account: string; description: string }>();
     const accountingDebugKeys: any[] = [];
-    if (!accountingSheetData || accountingSheetData.length < 10) return { accountingMap, accountingDebugKeys };
-
-    let currentCredor = '';
-    let currentDocumento = '';
+    if (!accountingSheetData || accountingSheetData.length < 1) return { accountingMap, accountingDebugKeys };
 
     for (let i = 0; i < accountingSheetData.length; i++) {
         const row = accountingSheetData[i];
         if (!Array.isArray(row) || row.length === 0) continue;
 
-        const colA = String(row[0] || '').trim();
-        const colC = String(row[2] || '').trim();
+        // Coluna A (Índice 0) para o Credor
+        const credorRaw = String(row[0] || '').trim();
+        // Coluna O (Índice 14) para o Documento
+        const lancamentoRaw = String(row[14] || '').trim();
 
-        const isNotaLine = colA && colC && !colA.startsWith('Data de vencimento') && !colA.startsWith('Total do dia') && !colA.startsWith('Apropriações:') && !colA.startsWith('Obs:');
+        // Validamos se a linha parece ser uma linha de dados principal
+        const isDataRow = credorRaw && lancamentoRaw && !credorRaw.toLowerCase().startsWith('total do dia') && !credorRaw.toLowerCase().startsWith('data de vencimento') && !credorRaw.toLowerCase().startsWith('credor');
 
-        if (isNotaLine) {
-            currentCredor = colA.split('-')[0].trim();
-            // A coluna C pode ter 'PPC. 12345' ou 'NFE. 12345'
-            const docParts = colC.split(/[\s.]+/);
-            currentDocumento = docParts.length > 1 ? docParts[1] : docParts[0];
+        if (isDataRow) {
+            const credor = credorRaw.split('-')[0].trim();
+            const lancamento = lancamentoRaw; // Não precisa de split, é o valor direto
 
-            // Apropriação pode estar na mesma linha ou na próxima
-            let apropriacaoRow = row;
-            let apropriacaoText = String(apropriacaoRow[0] || '').trim();
+            const key = `${cleanAndToStr(credor)}-${cleanAndToStr(lancamento)}`;
             
-            if (!apropriacaoText.startsWith('Apropriações:')) {
-                // Se não está na linha atual, verifica a próxima
-                if (i + 1 < accountingSheetData.length) {
-                    const nextRow = accountingSheetData[i+1];
-                    const nextColA = String(nextRow[0] || '').trim();
-                    if(nextColA.startsWith('Apropriações:')) {
-                        apropriacaoRow = nextRow;
-                        apropriacaoText = nextColA;
-                    } else {
-                        // Se não encontrou apropriação, pula para a próxima nota
-                        continue;
-                    }
-                } else {
-                    continue;
-                }
-            }
+            accountingDebugKeys.push({
+                'Chave de Depuração': key,
+                'Coluna A (Credor)': credorRaw,
+                'Coluna O (Lançamento)': lancamentoRaw,
+                'Linha': i + 11 // Assumindo que os dados começam na linha 11
+            });
 
-            // A conta contábil está mais para o final da linha
+            // Lógica para encontrar a conta contábil (pode ser ajustada)
+            // Por enquanto, vamos focar apenas na chave de depuração.
             let accountInfo = '';
-            for (let j = apropriacaoRow.length - 1; j >= 0; j--) {
-                const cellValue = String(apropriacaoRow[j] || '').trim();
-                // Procura por algo que se pareça com um código de conta (ex: 2.01.01.14)
-                if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
-                    accountInfo = cellValue;
-                    break;
+            // Procura apropriação na linha seguinte
+            if (i + 1 < accountingSheetData.length) {
+                const nextRow = accountingSheetData[i + 1];
+                const apropriacaoText = String(nextRow[0] || '').trim();
+                if (apropriacaoText.startsWith('Apropriações:')) {
+                    for (let j = nextRow.length - 1; j >= 0; j--) {
+                        const cellValue = String(nextRow[j] || '').trim();
+                        if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
+                            accountInfo = cellValue;
+                            break;
+                        }
+                    }
                 }
             }
-
             if (accountInfo) {
                 const parts = accountInfo.split(' - ');
                 const account = parts[0];
                 const description = parts.slice(1).join(' - ');
-                
-                const key = `${cleanAndToStr(currentDocumento)}-${cleanAndToStr(currentCredor)}`;
-                
-                if (key && account && !accountingMap.has(key)) {
-                    accountingMap.set(key, { account, description });
-                     accountingDebugKeys.push({
-                        'Chave de Comparação (Doc-Credor)': key,
-                        'Conta Contábil': account,
-                        'Descrição da Conta': description,
-                        'Documento (Original)': currentDocumento,
-                        'Credor (Original)': currentCredor,
-                        'Linha na Planilha': i + 11 // Assumindo que os dados começam na linha 11
-                    });
-                }
+                accountingMap.set(key, { account, description });
             }
         }
     }
+    
     return { accountingMap, accountingDebugKeys };
 }
