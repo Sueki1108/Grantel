@@ -665,37 +665,26 @@ export function processAccountingData(accountingSheetData: any[][]): {
 
     for (let i = 0; i < accountingSheetData.length; i++) {
         const row = accountingSheetData[i];
-        if (!Array.isArray(row) || row.length === 0) continue;
+        if (!Array.isArray(row) || row.length < 3) continue; // Precisa de pelo menos 3 colunas
 
-        // Coluna A (Índice 0) para o Credor
         const credorRaw = String(row[0] || '').trim();
-        // Coluna O (Índice 14) para o Documento
-        const lancamentoRaw = String(row[14] || '').trim();
+        const documentoRaw = String(row[2] || '').trim();
 
-        // Validamos se a linha parece ser uma linha de dados principal
-        const isDataRow = credorRaw && lancamentoRaw && !credorRaw.toLowerCase().startsWith('total do dia') && !credorRaw.toLowerCase().startsWith('data de vencimento') && !credorRaw.toLowerCase().startsWith('credor');
+        const isDataRow = credorRaw && documentoRaw && !credorRaw.toLowerCase().startsWith('total do dia') && !credorRaw.toLowerCase().startsWith('data de vencimento') && !credorRaw.toLowerCase().startsWith('credor');
 
         if (isDataRow) {
-            const credor = credorRaw.split('-')[0].trim();
-            const lancamento = lancamentoRaw; // Não precisa de split, é o valor direto
+            const credor = cleanAndToStr(credorRaw.split('-')[0]);
+            const documento = cleanAndToStr(documentoRaw);
 
-            const key = `${cleanAndToStr(credor)}-${cleanAndToStr(lancamento)}`;
+            const key = `${credor}-${documento}`;
             
-            accountingDebugKeys.push({
-                'Chave de Depuração': key,
-                'Coluna A (Credor)': credorRaw,
-                'Coluna O (Lançamento)': lancamentoRaw,
-                'Linha': i + 11 // Assumindo que os dados começam na linha 11
-            });
-
-            // Lógica para encontrar a conta contábil (pode ser ajustada)
-            // Por enquanto, vamos focar apenas na chave de depuração.
             let accountInfo = '';
             // Procura apropriação na linha seguinte
             if (i + 1 < accountingSheetData.length) {
                 const nextRow = accountingSheetData[i + 1];
                 const apropriacaoText = String(nextRow[0] || '').trim();
-                if (apropriacaoText.startsWith('Apropriações:')) {
+                if (apropriacaoText.toLowerCase().startsWith('apropriações:')) {
+                    // Itera da direita para a esquerda para encontrar a primeira célula com o formato de conta
                     for (let j = nextRow.length - 1; j >= 0; j--) {
                         const cellValue = String(nextRow[j] || '').trim();
                         if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
@@ -705,6 +694,15 @@ export function processAccountingData(accountingSheetData: any[][]): {
                     }
                 }
             }
+
+            accountingDebugKeys.push({
+                'Chave de Depuração': key,
+                'Coluna A (Credor)': credorRaw,
+                'Coluna C (Documento)': documentoRaw,
+                'Conta Encontrada': accountInfo || 'Nenhuma',
+                'Linha': i + 11 // Assumindo que os dados começam na linha 11
+            });
+            
             if (accountInfo) {
                 const parts = accountInfo.split(' - ');
                 const account = parts[0];
