@@ -6,18 +6,15 @@ import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Loader2, Download, Cpu, TicketPercent, Copy, Hash, Sigma, Coins, ClipboardCopy, X, UploadCloud, EyeOff, Ticket, ShieldCheck, TicketX } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { Loader2, Download, Cpu, TicketPercent, Coins, ShieldCheck, Ticket, EyeOff, TicketX } from 'lucide-react';
 import { DataTable } from '@/components/app/data-table';
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '../ui/dialog';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '../ui/tooltip';
-import { AllClassifications } from '@/lib/types';
-import { ReconciliationResults } from '@/lib/excel-processor';
-import { DifalStatus } from '@/lib/types';
+import type { AllClassifications, DifalStatus } from '@/lib/types';
+import type { ReconciliationResults } from '@/lib/excel-processor';
 
 
 // ===============================================================
@@ -246,7 +243,7 @@ export function DifalAnalysis({ reconciliationResults, allClassifications, onPer
                         <CardContent>
                             <div className="flex flex-col items-center justify-center p-4">
                                 <p className="text-muted-foreground mb-4 text-center">Clique no botão para carregar todos os itens classificados como "Correto" com CFOP 2551 ou 2556 da aba de Validação CFOP.</p>
-                                <Button onClick={handleLoadSubjects} disabled={isLoading}>
+                                <Button onClick={handleLoadSubjects} disabled={isLoading || !reconciliationResults}>
                                     {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Carregando...</> : <><Cpu className="mr-2 h-4 w-4" />Carregar Itens Sujeitos ao DIFAL</>}
                                 </Button>
                             </div>
