@@ -28,9 +28,15 @@ interface ReconciliationAnalysisProps {
     costCenterFile: File | null;
     onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearCostCenterFile: () => void;
-    accountingFiles: File[];
-    onAccountingFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onClearAccountingFile: () => void;
+    
+    payableAccountingFiles: File[];
+    onPayableAccountingFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onClearPayableAccountingFile: () => void;
+    
+    paidAccountingFiles: File[];
+    onPaidAccountingFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onClearPaidAccountingFile: () => void;
+
     allClassifications: AllClassifications;
     onPersistClassifications: (allData: AllClassifications) => void;
     competence: string | null;
@@ -47,9 +53,12 @@ export function ReconciliationAnalysis({
     costCenterFile,
     onCostCenterFileChange,
     onClearCostCenterFile,
-    accountingFiles,
-    onAccountingFileChange,
-    onClearAccountingFile,
+    payableAccountingFiles,
+    onPayableAccountingFileChange,
+    onClearPayableAccountingFile,
+    paidAccountingFiles,
+    onPaidAccountingFileChange,
+    onClearPaidAccountingFile,
     allClassifications,
     onPersistClassifications,
     competence,
@@ -91,7 +100,7 @@ export function ReconciliationAnalysis({
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
-                 <div className='grid grid-cols-1 md:grid-cols-3 gap-6 items-start'>
+                 <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start'>
                     <div className='space-y-2'>
                         <h3 className='font-medium'>Planilha do Sienge</h3>
                         <FileUploadForm
@@ -111,17 +120,29 @@ export function ReconciliationAnalysis({
                         onDownloadDebug={() => handleDownload(processedData?.costCenterDebugKeys || [], 'Depuracao_CentroCusto')}
                     />
                     <div className='space-y-2'>
-                         <h3 className='font-medium'>Planilha de Contabilização</h3>
+                         <h3 className='font-medium'>Contas a Pagar</h3>
                          <FileUploadForm
-                            displayName="Contabilização"
-                            formId="accounting"
-                            files={{ 'accounting': accountingFiles.length > 0 }}
-                            onFileChange={onAccountingFileChange}
-                            onClearFile={onClearAccountingFile}
+                            displayName="Contas a Pagar"
+                            formId="payable-accounting"
+                            files={{ 'payable-accounting': payableAccountingFiles.length > 0 }}
+                            onFileChange={onPayableAccountingFileChange}
+                            onClearFile={onClearPayableAccountingFile}
                             multiple={true}
-                            fileCount={accountingFiles.length}
+                            fileCount={payableAccountingFiles.length}
                         />
-                         <Button onClick={() => handleDownload(processedData?.accountingDebugKeys || [], 'Depuracao_Contabilizacao')} size="sm" variant="outline" disabled={!processedData?.accountingDebugKeys || processedData.accountingDebugKeys.length === 0}><Download className='h-4 w-4 mr-2' />Baixar Chaves de Depuração</Button>
+                         <Button onClick={() => handleDownload(processedData?.accountingDebugKeys || [], 'Depuracao_Contas_Pagar')} size="sm" variant="outline" disabled={!processedData?.accountingDebugKeys || processedData.accountingDebugKeys.length === 0}><Download className='h-4 w-4 mr-2' />Baixar Chaves de Depuração</Button>
+                    </div>
+                     <div className='space-y-2'>
+                         <h3 className='font-medium'>Contas Pagas</h3>
+                         <FileUploadForm
+                            displayName="Contas Pagas"
+                            formId="paid-accounting"
+                            files={{ 'paid-accounting': paidAccountingFiles.length > 0 }}
+                            onFileChange={onPaidAccountingFileChange}
+                            onClearFile={onClearPaidAccountingFile}
+                            multiple={true}
+                            fileCount={paidAccountingFiles.length}
+                        />
                     </div>
                 </div>
                 

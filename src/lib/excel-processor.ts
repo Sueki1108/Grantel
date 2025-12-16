@@ -1,4 +1,3 @@
-
 import { cfopDescriptions } from './cfop';
 import type { KeyCheckResult } from '@/components/app/key-checker';
 import type { AllClassifications } from '@/lib/types';
@@ -667,7 +666,7 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
     return { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows };
 }
 
-export function processAccountingData(accountingSheetData: any[][]): { 
+export function processPayableAccountingData(accountingSheetData: any[][]): { 
     accountingMap: Map<string, { account: string; description: string }>;
     accountingDebugKeys: any[];
 } {
@@ -677,27 +676,45 @@ export function processAccountingData(accountingSheetData: any[][]): {
     if (!accountingSheetData || accountingSheetData.length === 0) {
         return { accountingMap, accountingDebugKeys };
     }
+    
+    // Find header indices dynamically
+    const headerRowIndex = accountingSheetData.findIndex(row => 
+        row.some(cell => typeof cell === 'string' && normalizeKey(cell) === 'credor')
+    );
+    
+    if (headerRowIndex === -1) {
+        console.error("Cabeçalho 'Credor' não encontrado na planilha de Contas a Pagar.");
+        return { accountingMap, accountingDebugKeys };
+    }
+    
+    const headers = accountingSheetData[headerRowIndex].map(h => normalizeKey(h));
+    const credorIndex = headers.indexOf('credor');
+    const docIndex = headers.indexOf('documento');
 
-    for (let i = 0; i < accountingSheetData.length; i++) {
+    if (credorIndex === -1 || docIndex === -1) {
+        console.error("Colunas 'Credor' ou 'Documento' não encontradas no cabeçalho.");
+        return { accountingMap, accountingDebugKeys };
+    }
+
+    for (let i = headerRowIndex + 1; i < accountingSheetData.length; i++) {
         const currentRow = accountingSheetData[i];
-        if (!Array.isArray(currentRow) || currentRow.length < 3) continue;
+        if (!Array.isArray(currentRow) || currentRow.length <= Math.max(credorIndex, docIndex)) continue;
 
-        const credorRaw = String(currentRow[0] || '').trim();
-        const documentoRaw = String(currentRow[2] || '').trim();
+        const credorRaw = String(currentRow[credorIndex] || '').trim();
+        const documentoRaw = String(currentRow[docIndex] || '').trim();
         
-        // Verifica se é uma linha de nota válida (ignora cabeçalhos, totais, etc.)
-        if (credorRaw && documentoRaw && credorRaw.toLowerCase() !== 'credor') {
-            const nextRow = accountingSheetData[i + 1];
-            if (nextRow && Array.isArray(nextRow) && String(nextRow[0] || '').trim().toLowerCase().startsWith('apropriações:')) {
+        // Check if it's a valid data row and not a total/header line
+        if (credorRaw && documentoRaw && !credorRaw.toLowerCase().startsWith('total')) {
+            const appropriationsRow = accountingSheetData[i + 1];
+            if (appropriationsRow && Array.isArray(appropriationsRow) && String(appropriationsRow[0] || '').trim().toLowerCase().startsWith('apropriações:')) {
+                
                 const docNumberClean = cleanAndToStr(documentoRaw);
-                const credorName = credorRaw.includes('-') ? credorRaw.substring(credorRaw.indexOf('-') + 1).trim() : credorRaw;
-
+                const credorName = credorRaw; // Use the full name as is
                 const accountingKey = `${docNumberClean}-${credorName}`;
+                
                 let accountInfo = '';
-
-                // Procura a conta contábil na linha de apropriações
-                for (let k = nextRow.length - 1; k >= 0; k--) {
-                    const cellValue = String(nextRow[k] || '').trim();
+                for (let k = appropriationsRow.length - 1; k >= 0; k--) {
+                    const cellValue = String(appropriationsRow[k] || '').trim();
                     if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
                         accountInfo = cellValue;
                         break;
