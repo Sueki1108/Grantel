@@ -3,7 +3,6 @@
 
 import { ColumnDef } from "@tanstack/react-table"
 import { ArrowUpDown } from "lucide-react"
-import { Button } from "@/components/ui/button"
 
 type CustomCellRender<TData> = (row: { original: TData }, id: string) => React.ReactNode;
 
@@ -115,14 +114,55 @@ export function getColumnsForDivergentTabs<TData extends Record<string, any>>(da
         return [];
     }
 
-    const siengeSpecificHeaders = Object.keys(data[0]).filter(k => k.startsWith('Sienge_') || !['Chave de acesso', 'Número da Nota', 'Chave Unica', 'Item', 'Fornecedor', 'Emissão', 'Total'].includes(k));
-    const xmlSpecificHeaders = Object.keys(data[0]).filter(k => !k.startsWith('Sienge_'));
+    const allKeys = new Set(data.flatMap(row => Object.keys(row)));
+    const columns: ColumnDef<TData>[] = [];
 
-    const baseColumnsToShow: (keyof TData)[] = [
-        'Número da Nota', 'Fornecedor', 'Emissão', 'Total', 'Chave de Comparação'
+    // Manually define the order and headers for consistency
+    const desiredColumns: { key: keyof TData, header: string }[] = [
+        { key: 'Chave de Comparação', header: 'Chave de Comparação' },
+        { key: 'Fornecedor', header: 'Fornecedor' },
+        { key: 'Número da Nota', header: 'Número da Nota' },
+        { key: 'Emissão', header: 'Emissão' },
+        { key: 'Valor Total', header: 'Valor Total' },
+        { key: 'Sienge_Documento', header: 'Documento (Sienge)' },
+        { key: 'Sienge_Credor', header: 'Credor (Sienge)' },
+        { key: 'Sienge_Valor', header: 'Valor (Sienge)'},
     ];
-    
-    const relevantSiengeHeaders = siengeSpecificHeaders.filter(k => data.some(row => row[k] !== null && row[k] !== undefined && row[k] !== ''));
-    
-    return getColumns(data, [...baseColumnsToShow, ...relevantSiengeHeaders]);
+
+    desiredColumns.forEach(({ key, header }) => {
+        if (allKeys.has(String(key))) {
+            columns.push({
+                id: String(key), // Ensure unique ID
+                accessorKey: String(key),
+                header: ({ column }) => renderHeader(column, header),
+                cell: ({ row }) => {
+                    const value = row.original[key];
+                     if (value === null || typeof value === 'undefined') {
+                        return <span className="text-muted-foreground">N/A</span>;
+                    }
+                    return <div>{String(value)}</div>;
+                }
+            });
+        }
+    });
+
+    // Add any remaining keys not in the desired list
+    allKeys.forEach(key => {
+        if (!desiredColumns.some(c => c.key === key) && key !== '__itemKey') {
+             columns.push({
+                id: String(key),
+                accessorKey: String(key),
+                header: ({ column }) => renderHeader(column, String(key)),
+                cell: ({ row }) => {
+                    const value = row.original[key as keyof TData];
+                    if (value === null || typeof value === 'undefined') {
+                        return <span className="text-muted-foreground">N/A</span>;
+                    }
+                    return <div>{String(value)}</div>;
+                }
+            });
+        }
+    });
+
+    return columns;
 }
