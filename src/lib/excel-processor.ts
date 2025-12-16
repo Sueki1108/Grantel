@@ -528,9 +528,9 @@ export function runReconciliation(
             const costCenterKey = `${docNumberClean}-${credorCode}`;
             item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
             
-            // Accounting Mapping - CORRECTED
-            const credorName = String(item['Sienge_Credor'] || '').trim();
-            const accountingKey = `${docNumberClean}-${credorName}`;
+            // Accounting Mapping - CORRECTED LOGIC
+            const siengeCredorFullName = String(item['Sienge_Credor'] || '').trim();
+            const accountingKey = `${docNumberClean}-${siengeCredorFullName}`;
             const accInfo = accountingMap?.get(accountingKey);
             item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
             
