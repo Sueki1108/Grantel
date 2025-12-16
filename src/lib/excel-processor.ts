@@ -661,30 +661,65 @@ export function processAccountingData(accountingSheetData: any[][]): {
 } {
     const accountingMap = new Map<string, { account: string; description: string }>();
     const accountingDebugKeys: any[] = [];
-    if (!accountingSheetData) return { accountingMap, accountingDebugKeys };
+    if (!accountingSheetData || accountingSheetData.length < 10) return { accountingMap, accountingDebugKeys };
 
     let currentCredor = '';
     let currentDocumento = '';
 
-    accountingSheetData.forEach((row, rowIndex) => {
-        if (!Array.isArray(row) || row.length < 3) return;
+    for (let i = 0; i < accountingSheetData.length; i++) {
+        const row = accountingSheetData[i];
+        if (!Array.isArray(row) || row.length === 0) continue;
 
         const colA = String(row[0] || '').trim();
         const colC = String(row[2] || '').trim();
-        
-        if (colA && colC && !colA.startsWith('Apropriações:') && !colA.startsWith('Data de vencimento') && !colA.startsWith('Total do dia') && !colA.startsWith('Obs:')) {
-             currentCredor = colA.split('-')[0].trim();
-             currentDocumento = colC.split('.')[1] || colC.split('.')[0] || '';
-        }
-        
-        if (colA.startsWith('Apropriações:') && currentCredor && currentDocumento) {
-            const accountInfo = String(row[7] || row[8] || '').trim();
+
+        const isNotaLine = colA && colC && !colA.startsWith('Data de vencimento') && !colA.startsWith('Total do dia') && !colA.startsWith('Apropriações:') && !colA.startsWith('Obs:');
+
+        if (isNotaLine) {
+            currentCredor = colA.split('-')[0].trim();
+            // A coluna C pode ter 'PPC. 12345' ou 'NFE. 12345'
+            const docParts = colC.split(/[\s.]+/);
+            currentDocumento = docParts.length > 1 ? docParts[1] : docParts[0];
+
+            // Apropriação pode estar na mesma linha ou na próxima
+            let apropriacaoRow = row;
+            let apropriacaoText = String(apropriacaoRow[0] || '').trim();
+            
+            if (!apropriacaoText.startsWith('Apropriações:')) {
+                // Se não está na linha atual, verifica a próxima
+                if (i + 1 < accountingSheetData.length) {
+                    const nextRow = accountingSheetData[i+1];
+                    const nextColA = String(nextRow[0] || '').trim();
+                    if(nextColA.startsWith('Apropriações:')) {
+                        apropriacaoRow = nextRow;
+                        apropriacaoText = nextColA;
+                    } else {
+                        // Se não encontrou apropriação, pula para a próxima nota
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+            }
+
+            // A conta contábil está mais para o final da linha
+            let accountInfo = '';
+            for (let j = apropriacaoRow.length - 1; j >= 0; j--) {
+                const cellValue = String(apropriacaoRow[j] || '').trim();
+                // Procura por algo que se pareça com um código de conta (ex: 2.01.01.14)
+                if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
+                    accountInfo = cellValue;
+                    break;
+                }
+            }
+
             if (accountInfo) {
                 const parts = accountInfo.split(' - ');
                 const account = parts[0];
                 const description = parts.slice(1).join(' - ');
                 
                 const key = `${cleanAndToStr(currentDocumento)}-${cleanAndToStr(currentCredor)}`;
+                
                 if (key && account && !accountingMap.has(key)) {
                     accountingMap.set(key, { account, description });
                      accountingDebugKeys.push({
@@ -693,11 +728,11 @@ export function processAccountingData(accountingSheetData: any[][]): {
                         'Descrição da Conta': description,
                         'Documento (Original)': currentDocumento,
                         'Credor (Original)': currentCredor,
-                        'Linha na Planilha': rowIndex + 11 // Adjust for header rows
+                        'Linha na Planilha': i + 11 // Assumindo que os dados começam na linha 11
                     });
                 }
             }
         }
-    });
+    }
     return { accountingMap, accountingDebugKeys };
 }

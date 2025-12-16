@@ -375,18 +375,19 @@ export function AutomatorClientPage() {
                 if (!sheetName) throw new Error("A planilha de Contabilização não contém abas.");
                 
                 const worksheet = workbook.Sheets[sheetName];
-                const sheetDataAsArray: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 10 });
-                const { accountingMap, accountingDebugKeys } = processAccountingData(sheetDataAsArray);
+                const accountingSheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 10 });
+                const { accountingMap, accountingDebugKeys } = processAccountingData(accountingSheetData);
     
                 setProcessedData(prev => ({
                     ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, accountingDebugKeys: [] }),
                     accountingMap,
                     accountingDebugKeys,
                 }));
+
                 if (accountingMap) {
                      toast({ title: "Planilha de Contabilização Carregada", description: `${accountingMap.size} mapeamentos de contabilização encontrados.` });
                 } else {
-                     toast({ title: "Planilha de Contabilização Carregada", description: "Nenhum mapeamento encontrado." });
+                     toast({ title: "Planilha de Contabilização Carregada", description: "0 mapeamentos encontrados na planilha de contabilização." });
                 }
     
             } catch (err: any) {
@@ -627,7 +628,7 @@ export function AutomatorClientPage() {
         setError(null);
         setLogs([]);
         setProcessedData(prev => ({
-            ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, accountingDebugKeys: [] }),
+            ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, accountingDebugKeys: [] }),
             sheets: {}, // Clear only sheets, keep other state
         }));
         setIsPeriodModalOpen(false);
