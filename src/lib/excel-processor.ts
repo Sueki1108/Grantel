@@ -398,20 +398,20 @@ export function runReconciliation(
         }
         return undefined;
     };
-
+    
     const h = {
         credor: findHeader(siengeData, ['credor']),
-        documento: findHeader(siengeData, ['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
-        valor: findHeader(siengeData, ['valor', 'valor total', 'vlr total']),
+        documento: findHeader(siengeData, ['documento', 'número', 'numero', 'numerodanota', 'notafiscal']),
+        valor: findHeader(siengeData, ['valor', 'valortotal', 'vlrtotal']),
         esp: findHeader(siengeData, ['esp']),
         cfop: findHeader(siengeData, ['cfop']),
     };
 
-    if (!h.documento || !h.esp || !h.credor) {
-        throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Esp') na planilha Sienge.");
+    if (!h.documento || !h.esp || !h.credor || !h.valor) {
+        throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Esp', 'Valor') na planilha Sienge.");
     }
     
-     const enrichItem = (item: any) => {
+    const enrichItem = (item: any) => {
         if (!item || typeof item !== 'object') return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
 
         const siengeCredorRaw = item.Sienge_Credor || item[h.credor!];
@@ -428,7 +428,7 @@ export function runReconciliation(
             // 1. Centro de Custo Lookup
             if (credorCode && costCenterMap) {
                 const costCenterKey = `${docNumberClean}-${credorCode}`;
-                costCenter = costCenterMap.get(costCenterKey) || 'N/A';
+                costCenter = costCenterMap.get(costCenterKey) || 'N/A (Chave não encontrada)';
             }
             
             // 2. Contabilização Lookup
@@ -437,8 +437,13 @@ export function runReconciliation(
                  const accInfo = accountingMap.get(accountingKey);
                  if (accInfo) {
                      accounting = `${accInfo.account} - ${accInfo.description}`;
+                 } else {
+                     accounting = 'N/A (Chave não encontrada)';
                  }
             }
+        } else {
+            costCenter = 'N/A (Dados Sienge incompletos)';
+            accounting = 'N/A (Dados Sienge incompletos)';
         }
         
         item['Centro de Custo'] = costCenter;
@@ -448,12 +453,15 @@ export function runReconciliation(
         return item;
     };
 
-    const reconciliationPass = (
-        siengeItems: any[],
-        xmlItems: any[],
-        getSiengeKey: (item: any) => string | null,
-        getXmlKey: (item: any) => string | null,
-    ) => {
+    const createComparisonKey = (item: any, docKey: string, partnerKey: string, valueKey: string) => {
+        const docNum = cleanAndToStr(item[docKey]);
+        const partner = cleanAndToStr(item[partnerKey]);
+        const value = parseFloat(String(item[valueKey] || '0').replace(',', '.')).toFixed(2);
+        if (!docNum || !partner || value === 'NaN') return null;
+        return `${docNum}-${partner}-${value}`;
+    };
+
+    const reconciliationPass = (siengeItems: any[], xmlItems: any[], getSiengeKey: (item: any) => string | null, getXmlKey: (item: any) => string | null) => {
         const matchedInPass: any[] = [];
         const stillUnmatchedSienge: any[] = [];
         const xmlMap = new Map<string, any[]>();
@@ -472,7 +480,11 @@ export function runReconciliation(
                 const matchedXmlItems = xmlMap.get(key)!;
                 if (matchedXmlItems.length > 0) {
                     const matchedXmlItem = matchedXmlItems.shift()!;
-                    matchedInPass.push({ ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])) });
+                    const combined = { 
+                        ...matchedXmlItem, 
+                        ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v]))
+                    };
+                    matchedInPass.push(combined);
                     return;
                 }
             }
@@ -483,27 +495,19 @@ export function runReconciliation(
         return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
     };
 
-    const createKeyForPass = (item: any, docKey: string, partnerKey: string, valueKey: string) => {
-        const docNum = cleanAndToStr(item[docKey]);
-        const partner = cleanAndToStr(item[partnerKey]);
-        const value = parseFloat(String(item[valueKey] || '0').replace(',', '.')).toFixed(2);
-        if (!docNum || !partner || value === 'NaN') return null;
-        return `${docNum}-${partner}-${value}`;
-    };
+    const siengeCnpjKey = findHeader(siengeData, ['cpf/cnpj', 'cnpj']);
+    if (!siengeCnpjKey) throw new Error("Coluna 'CPF/CNPJ' não encontrada no Sienge.");
 
-    const siengeCpfCnpjKey = findHeader(siengeData, ['cpf/cnpj', 'cnpj']);
-    const siengeValueKey = h.valor;
-    if (!siengeCpfCnpjKey || !siengeValueKey) throw new Error("Colunas 'CPF/CNPJ' ou 'Valor' não encontradas no Sienge.");
-    
     let remainingXml = [...xmlItems, ...cteData];
     let remainingSienge = siengeData.filter(row => ['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()));
     let reconciled: any[] = [];
 
-    // PASS 1: Valor Total
+    // Pass 1: Valor Total
     let result = reconciliationPass(
-        remainingSienge, remainingXml,
-        (sItem) => createKeyForPass(sItem, h.documento!, siengeCpfCnpjKey, siengeValueKey),
-        (xItem) => createKeyForPass(xItem, xItem['Número da Nota'] ? 'Número da Nota' : 'Número', xItem['CPF/CNPJ do Emitente'] || xItem['CPF/CNPJ do Fornecedor'], xItem['Valor Total'] || xItem['Valor da Prestação'])
+        remainingSienge, 
+        remainingXml,
+        (sItem) => createComparisonKey(sItem, h.documento!, siengeCnpjKey, h.valor!),
+        (xItem) => createComparisonKey(xItem, (xItem['Número da Nota'] || xItem['Número']), (xItem['CPF/CNPJ do Emitente'] || xItem['CPF/CNPJ do Fornecedor']), (xItem['Valor Total'] || xItem['Valor da Prestação']))
     );
     reconciled.push(...result.matched);
     remainingSienge = result.remainingSienge;
