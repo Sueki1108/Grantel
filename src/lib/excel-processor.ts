@@ -387,16 +387,11 @@ export function runReconciliation(
     if (!siengeData || siengeData.length === 0) {
         return { ...emptyResult, onlyInXml: xmlItems };
     }
-
+    
     const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
         if (!data || data.length === 0 || !data[0]) return undefined;
         const headers = Object.keys(data[0]);
-        for (const name of possibleNames) {
-            const normalizedName = normalizeKey(name);
-            const found = headers.find(h => normalizeKey(h) === normalizedName);
-            if (found) return found;
-        }
-        return undefined;
+        return headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
     };
     
     const h = {
@@ -414,35 +409,27 @@ export function runReconciliation(
     }
     
     const enrichItem = (item: any) => {
-         if (!item || typeof item !== 'object') return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
-        
+        if (!item || typeof item !== 'object') return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
+    
         const siengeDocNumberRaw = item[`Sienge_${h.documento!}`];
         const siengeCredorRaw = item[`Sienge_${h.credor!}`];
-
+    
         if (siengeDocNumberRaw && siengeCredorRaw) {
             const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
-            const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
+            const credorCodeMatch = String(siengeCredorRaw).match(/^(\\d+)\\s*-/);
             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
-
-            if (costCenterMap && credorCode && docNumberClean) {
-                const costCenterKey = `${docNumberClean}-${credorCode}`;
-                item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
-            } else {
-                item['Centro de Custo'] = 'N/A';
-            }
-            
-            if (accountingMap && docNumberClean) {
-                const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
-                const accInfo = accountingMap.get(accountingKey);
-                item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
-            } else {
-                item['Contabilização'] = 'N/A';
-            }
+    
+            const costCenterKey = `${docNumberClean}-${credorCode}`;
+            item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
+    
+            const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
+            const accInfo = accountingMap?.get(accountingKey);
+            item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
         } else {
-             item['Centro de Custo'] = 'N/A';
-             item['Contabilização'] = 'N/A';
+            item['Centro de Custo'] = 'N/A';
+            item['Contabilização'] = 'N/A';
         }
-        
+    
         item['CFOP (Sienge)'] = (h.cfop && item[`Sienge_${h.cfop}`]) || 'N/A';
         return item;
     };
@@ -558,7 +545,7 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
     return siengeData.map(item => {
         const docNumberClean = cleanAndToStr(item[h.documento!]);
         const credorRaw = String(item[h.credor!] || '');
-        const credorCodeMatch = credorRaw.match(/^(\d+)\s*-/);
+        const credorCodeMatch = credorRaw.match(/^(\\d+)\\s*-/);
         const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
 
         return { 
@@ -605,7 +592,7 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
 
         const colB_credor_raw = String(row[1] || '').trim();
         const colD_documento = String(row[3] || '').trim();
-        const credorCodeMatch = colB_credor_raw.match(/^(\d+)\s*-/);
+        const credorCodeMatch = colB_credor_raw.match(/^(\\d+)\\s*-/);
         const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
         
         if (credorCode && colD_documento) {
@@ -686,7 +673,7 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
             let accountInfo = '';
             for (let k = appropriationsRow.length - 1; k >= 0; k--) {
                 const cellValue = String(appropriationsRow[k] || '').trim();
-                if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
+                if (cellValue.match(/^(\\d{1,2}\\.\\d{2}\\.\\d{2}\\.\\d{2})/)) {
                     accountInfo = cellValue;
                     break;
                 }
@@ -752,7 +739,7 @@ export function processPaidAccountingData(paidSheetData: any[][]): {
             let accountInfo = '';
             for (let k = appropriationsRow.length - 1; k >= 0; k--) {
                 const cellValue = String(appropriationsRow[k] || '').trim();
-                if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
+                if (cellValue.match(/^(\\d{1,2}\\.\\d{2}\\.\\d{2}\\.\\d{2})/)) {
                     accountInfo = cellValue;
                     break;
                 }
