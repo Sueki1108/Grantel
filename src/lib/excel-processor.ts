@@ -423,26 +423,31 @@ export function runReconciliation(
         if (!item || typeof item !== 'object') {
             return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
         }
+    
+        const siengeDocNumberRaw = item[`Sienge_${h.documento!}`];
+        const siengeCredorRaw = item[`Sienge_${h.credor!}`];
+    
+        if (siengeDocNumberRaw && siengeCredorRaw) {
+            const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
+    
+            // Key for Cost Center
+            const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
+            const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
+            const costCenterKey = `${docNumberClean}-${credorCode}`;
+    
+            // Key for Accounting
+            const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
+    
+            item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
+    
+            const accInfo = accountingMap?.get(accountingKey);
+            item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
+        } else {
+            item['Centro de Custo'] = 'N/A';
+            item['Contabilização'] = 'N/A';
+        }
         
-        const siengeDocNumberRaw = item.Sienge_Documento || item[h.documento!];
-        const siengeCredorRaw = item.Sienge_Credor || item[h.credor!];
-        
-        const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
-        
-        // Key for Cost Center
-        const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
-        const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
-        const costCenterKey = `${docNumberClean}-${credorCode}`;
-        
-        // Key for Accounting
-        const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
-
-        item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
-
-        const accInfo = accountingMap?.get(accountingKey);
-        item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
-        
-        item['CFOP (Sienge)'] = (h.cfop && (item[`Sienge_${h.cfop}`] || item[h.cfop])) || 'N/A';
+        item['CFOP (Sienge)'] = (h.cfop && item[`Sienge_${h.cfop}`]) || 'N/A';
         return item;
     };
     
@@ -491,13 +496,13 @@ export function runReconciliation(
 
     const passes = [
         { name: "Valor Total", getSiengeValue: (item: any) => item[h.valor!], getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
-        { name: "ICMS Outras", getSiengeValue: (item: any) => h.icmsOutras ? item[h.icmsOutras] : null, getXmlValue: (item: any) => item['Valor Total'] },
-        { name: "Valor Total + Desconto", getSiengeValue: (item: any) => (parseFloat(String(item[h.valor!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto!] || '0').replace(',', '.'))), getXmlValue: (item: any) => item['Valor Total'] },
-        { name: "Valor Total - Frete", getSiengeValue: (item: any) => (parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - parseFloat(String(item[h.frete!] || '0').replace(',', '.'))), getXmlValue: (item: any) => item['Valor Total'] },
-        { name: "Valor Total - IPI/ICMS ST", getSiengeValue: (item: any) => (parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0) - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)), getXmlValue: (item: any) => item['Valor Total'] },
-        { name: "Valor Total - Frete/IPI", getSiengeValue: (item: any) => (parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0)), getXmlValue: (item: any) => item['Valor Total'] },
-        { name: "Valor Total + Desc - Frete", getSiengeValue: (item: any) => (parseFloat(String(item[h.valor!] || '0').replace(',', '.')) + (h.desconto ? parseFloat(String(item[h.desconto] || '0').replace(',', '.')) : 0) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0)), getXmlValue: (item: any) => item['Valor Total'] },
-        { name: "Valor Total - Desp. Acess.", getSiengeValue: (item: any) => (h.despesasAcessorias ? parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - parseFloat(String(item[h.despesasAcessorias!] || '0').replace(',', '.')) : null), getXmlValue: (item: any) => item['Valor Total'] },
+        { name: "ICMS Outras", getSiengeValue: (item: any) => h.icmsOutras ? item[h.icmsOutras] : null, getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
+        { name: "Valor Total + Desconto", getSiengeValue: (item: any) => (h.desconto ? parseFloat(String(item[h.valor!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto!] || '0').replace(',', '.')) : null), getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
+        { name: "Valor Total - Frete", getSiengeValue: (item: any) => (h.frete ? parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - parseFloat(String(item[h.frete!] || '0').replace(',', '.')) : null), getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
+        { name: "Valor Total - IPI/ICMS ST", getSiengeValue: (item: any) => (parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0) - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)), getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
+        { name: "Valor Total - Frete/IPI", getSiengeValue: (item: any) => (parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0)), getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
+        { name: "Valor Total + Desc - Frete", getSiengeValue: (item: any) => ((h.desconto || h.frete) ? parseFloat(String(item[h.valor!] || '0').replace(',', '.')) + (h.desconto ? parseFloat(String(item[h.desconto] || '0').replace(',', '.')) : 0) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0) : null), getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
+        { name: "Valor Total - Desp. Acess.", getSiengeValue: (item: any) => (h.despesasAcessorias ? parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - parseFloat(String(item[h.despesasAcessorias!] || '0').replace(',', '.')) : null), getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
         { name: "Preço Unitário", getSiengeValue: (item: any) => h.precoUnitario ? item[h.precoUnitario] : null, getXmlValue: (item: any) => item['Valor Unitário'] },
     ];
     
