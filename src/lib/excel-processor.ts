@@ -424,11 +424,9 @@ export function runReconciliation(
         const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
         const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
 
-        // Centro de Custo Lookup
         const costCenterKey = `${docNumberClean}-${credorCode}`;
         item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
         
-        // Contabilização Lookup
         const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
         const accInfo = accountingMap?.get(accountingKey);
         item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
