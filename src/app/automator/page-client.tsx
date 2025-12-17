@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList, GitCompareArrows } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Building, History, Save, TicketPercent, ClipboardList, GitCompareArrows } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -693,7 +693,7 @@ export function AutomatorClientPage() {
                 
                 let dataToProcess: Record<string, any[]> = {};
                 let eventCanceledKeys = new Set<string>();
-
+                
                 log("Processando ficheiros XML...");
                 const allUploadedXml = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
                 const { nfe, cte, saidas, itens, itensSaidas, canceledKeys } = await processUploadedXmls(allUploadedXml);
@@ -708,10 +708,18 @@ export function AutomatorClientPage() {
                 log(`Processamento XML concluído: ${nfe.length} NF-e Entradas, ${saidas.length} NF-e Saídas, ${cte.length} CT-es.`);
                 
                 // Add data from manifesto spreadsheets. These will be used for filtering.
-                for (const fileName of requiredFiles) {
-                    if (files[fileName]) {
-                        dataToProcess[fileName] = files[fileName];
-                        log(`Usando dados da planilha de manifesto carregada: '${fileName}'.`);
+                for (const fileName in files) {
+                    const mappedName = fileMapping[fileName] || fileName;
+                    const isManifestoFile = [
+                        "NFE Operação Não Realizada", "NFE Operação Desconhecida", "CTE Desacordo de Serviço"
+                    ].includes(fileName);
+                    
+                    if (isManifestoFile) {
+                        dataToProcess[mappedName] = [...(dataToProcess[mappedName] || []), ...files[fileName]];
+                        log(`Adicionando dados da planilha de manifesto: '${fileName}'.`);
+                    } else if (!dataToProcess[mappedName] || dataToProcess[mappedName].length === 0) {
+                        dataToProcess[mappedName] = files[fileName];
+                        log(`Usando dados da planilha carregada (XML não fornecido): '${fileName}'.`);
                     }
                 }
                 
