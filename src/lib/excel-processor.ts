@@ -410,21 +410,21 @@ export function runReconciliation(
             cfop: findHeader(siengeData, ['cfop']),
         };
 
-        if (!h.numero || !h.esp || (!h.cpfCnpj && !h.credor)) {
-            throw new Error("Não foi possível encontrar as colunas essenciais ('CPF/CNPJ' ou 'Credor', 'Documento', 'Esp') na planilha Sienge.");
+        if (!h.numero || !h.esp || !h.credor) {
+            throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Esp') na planilha Sienge.");
         }
 
         const enrichItem = (item: any) => {
             if (!item || typeof item !== 'object') return item;
         
-            const siengeCredorRaw = item.Sienge_Credor || (h.credor ? item[h.credor] : '');
-            const siengeDocNumberRaw = item.Sienge_Documento || (h.numero ? item[h.numero] : '');
+            const siengeCredorRaw = item.Sienge_Credor || item[h.credor!];
+            const siengeDocNumberRaw = item.Sienge_Documento || item[h.numero!];
             
             if (siengeDocNumberRaw && siengeCredorRaw) {
+                const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
                 const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
                 const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
-                const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
-
+        
                 // Centro de Custo Lookup
                 const costCenterKey = `${docNumberClean}-${credorCode}`;
                 item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
@@ -433,16 +433,16 @@ export function runReconciliation(
                 const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
                 const accInfo = accountingMap?.get(accountingKey);
                 item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
-
             } else {
-                 item['Centro de Custo'] = 'N/A (Chave Incompleta)';
-                 item['Contabilização'] = 'N/A (Chave Incompleta)';
+                item['Centro de Custo'] = 'N/A (Chave Incompleta)';
+                item['Contabilização'] = 'N/A (Chave Incompleta)';
             }
             
             item['CFOP (Sienge)'] = (h.cfop && (item[`Sienge_${h.cfop}`] || item[h.cfop])) ? (item[`Sienge_${h.cfop}`] || item[h.cfop]) : 'N/A';
             
             return item;
-        }
+        };
+        
 
         const filteredSiengeData = siengeData.filter(row => {
             const espValue = row[h.esp!] ? String(row[h.esp!]).trim().toUpperCase() : '';
