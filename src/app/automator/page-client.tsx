@@ -34,11 +34,11 @@ const ResultsDisplay = dynamic(() => import('@/components/app/results-display').
 const LogDisplay = dynamic(() => import('@/components/app/log-display').then(mod => mod.LogDisplay), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const SaidasAnalysis = dynamic(() => import('@/components/app/saidas-analysis').then(mod => mod.SaidasAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const NfseAnalysis = dynamic(() => import('@/components/app/nfse-analysis').then(mod => mod.NfseAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
-const ImobilizadoAnalysis = dynamic(() => import('@/components/app/imobilizado-analysis').then(mod => mod.ImobilizadoAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
-const ReconciliationAnalysis = dynamic(() => import('@/components/app/reconciliation-analysis').then(mod => mod.ReconciliationAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const AdvancedAnalyses = dynamic(() => import('@/components/app/advanced-analyses').then(mod => mod.AdvancedAnalyses), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const ImobilizadoAnalysis = dynamic(() => import('@/components/app/imobilizado-analysis').then(mod => mod.ImobilizadoAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const PendingIssuesReport = dynamic(() => import('@/components/app/pending-issues-report').then(mod => mod.PendingIssuesReport), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const HistoryAnalysis = dynamic(() => import('@/components/app/history-analysis').then(mod => mod.HistoryAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const ReconciliationAnalysis = dynamic(() => import('@/components/app/reconciliation-analysis').then(mod => mod.ReconciliationAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const DifalAnalysis = dynamic(() => import('@/components/app/difal-analysis').then(mod => mod.DifalAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 
 
