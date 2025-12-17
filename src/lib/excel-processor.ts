@@ -394,7 +394,7 @@ export function runReconciliation(
         for (const name of possibleNames) {
             const normalizedName = normalizeKey(name);
             const found = headers.find(h => normalizeKey(h) === normalizedName);
-            if (found) return found;
+            if (found) return found.original;
         }
         return undefined;
     };
@@ -420,23 +420,27 @@ export function runReconciliation(
     }
     
     const enrichItem = (item: any) => {
-        if (!item || typeof item !== 'object') {
+        if (!item || typeof item !== 'object' || !h.documento || !h.credor) {
             return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
         }
     
-        const siengeDocNumberRaw = item[`Sienge_${h.documento!}`];
-        const siengeCredorRaw = item[`Sienge_${h.credor!}`];
+        const siengeDocNumberRaw = item[`Sienge_${h.documento}`];
+        const siengeCredorRaw = item[`Sienge_${h.credor}`];
     
         if (siengeDocNumberRaw && siengeCredorRaw) {
             const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
-    
-            // Key for Cost Center
+            
+            // Centro de Custo Lookup
             const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
-            const costCenterKey = `${docNumberClean}-${credorCode}`;
-            item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
+            if (credorCode) {
+                 const costCenterKey = `${docNumberClean}-${credorCode}`;
+                 item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
+            } else {
+                 item['Centro de Custo'] = 'N/A';
+            }
     
-            // Key for Accounting
+            // Accounting Lookup
             const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
             const accInfo = accountingMap?.get(accountingKey);
             item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
@@ -683,9 +687,17 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
         if (!credorName || !docValue || normalizeKey(credorName) === 'credor') {
             continue;
         }
+        
+        // A linha de apropriação pode estar na linha seguinte ou depois
+        let appropriationsRow = null;
+        if(i + 1 < accountingSheetData.length) {
+            const nextRow = accountingSheetData[i + 1];
+            if (nextRow && Array.isArray(nextRow) && String(nextRow[0] || '').trim().toLowerCase().startsWith('apropriações:')) {
+                appropriationsRow = nextRow;
+            }
+        }
 
-        const appropriationsRow = accountingSheetData[i + 1];
-        if (appropriationsRow && Array.isArray(appropriationsRow) && String(appropriationsRow[0] || '').trim().toLowerCase().startsWith('apropriações:')) {
+        if (appropriationsRow) {
             const docNumberClean = cleanAndToStr(docValue);
             const accountingKey = `${docNumberClean}-${credorName}`;
             
@@ -742,8 +754,16 @@ export function processPaidAccountingData(paidSheetData: any[][]): {
             continue;
         }
 
-        const appropriationsRow = paidSheetData[i + 1];
-        if (appropriationsRow && Array.isArray(appropriationsRow) && String(appropriationsRow[0] || '').trim().toLowerCase().startsWith('apropriações:')) {
+        // A linha de apropriação pode estar na linha seguinte
+        let appropriationsRow = null;
+        if (i + 1 < paidSheetData.length) {
+             const nextRow = paidSheetData[i + 1];
+            if (nextRow && Array.isArray(nextRow) && String(nextRow[0] || '').trim().toLowerCase().startsWith('apropriações:')) {
+                appropriationsRow = nextRow;
+            }
+        }
+
+        if (appropriationsRow) {
             const docNumberClean = cleanAndToStr(thirdCell);
             const credorName = firstCell;
             const accountingKey = `${docNumberClean}-${credorName}`;
