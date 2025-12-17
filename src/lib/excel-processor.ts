@@ -413,9 +413,7 @@ export function runReconciliation(
     }
     
     const enrichItem = (item: any) => {
-        if (!item || typeof item !== 'object') {
-            return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
-        }
+        if (!item || typeof item !== 'object') return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
     
         const siengeDocNumberRaw = item[`Sienge_${h.documento!}`];
         const siengeCredorRaw = item[`Sienge_${h.credor!}`];
@@ -424,22 +422,21 @@ export function runReconciliation(
             const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
             const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
-
-            if (costCenterMap && credorCode) {
-                 const costCenterKey = `${docNumberClean}-${credorCode}`;
-                 item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
+    
+            if (costCenterMap && credorCode && docNumberClean) {
+                const costCenterKey = `${docNumberClean}-${credorCode}`;
+                item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
             } else {
-                 item['Centro de Custo'] = 'N/A';
+                item['Centro de Custo'] = 'N/A';
             }
     
-            if (accountingMap) {
+            if (accountingMap && docNumberClean) {
                 const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
                 const accInfo = accountingMap.get(accountingKey);
                 item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
             } else {
-                 item['Contabilização'] = 'N/A';
+                item['Contabilização'] = 'N/A';
             }
-
         } else {
             item['Centro de Custo'] = 'N/A';
             item['Contabilização'] = 'N/A';
