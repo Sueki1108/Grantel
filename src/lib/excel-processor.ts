@@ -394,7 +394,7 @@ export function runReconciliation(
         for (const name of possibleNames) {
             const normalizedName = normalizeKey(name);
             const found = headers.find(h => normalizeKey(h) === normalizedName);
-            if (found) return found.original;
+            if (found) return found;
         }
         return undefined;
     };
@@ -424,15 +424,15 @@ export function runReconciliation(
             return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
         }
     
-        const siengeDocNumberRaw = item[`Sienge_${h.documento}`];
-        const siengeCredorRaw = item[`Sienge_${h.credor}`];
+        const siengeDocNumberRaw = item[`Sienge_${h.documento!}`];
+        const siengeCredorRaw = item[`Sienge_${h.credor!}`];
     
         if (siengeDocNumberRaw && siengeCredorRaw) {
             const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
-            
-            // Centro de Custo Lookup
             const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
+
+            // Centro de Custo Lookup
             if (credorCode) {
                  const costCenterKey = `${docNumberClean}-${credorCode}`;
                  item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
