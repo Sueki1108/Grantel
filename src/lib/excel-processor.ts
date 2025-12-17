@@ -411,35 +411,42 @@ export function runReconciliation(
         throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Esp') na planilha Sienge.");
     }
     
-    const enrichItem = (item: any) => {
+     const enrichItem = (item: any) => {
         if (!item || typeof item !== 'object') return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
-        
+
         const siengeCredorRaw = item.Sienge_Credor || item[h.credor!];
         const siengeDocNumberRaw = item.Sienge_Documento || item[h.documento!];
-    
+        
+        let costCenter = 'N/A';
+        let accounting = 'N/A';
+
         if (siengeDocNumberRaw && siengeCredorRaw) {
             const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
             const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
-    
-            // Centro de Custo
-            const costCenterKey = `${docNumberClean}-${credorCode}`;
-            item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
-    
-            // Contabilização
-            const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
-            const accInfo = accountingMap?.get(accountingKey);
-            item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
-        } else {
-            item['Centro de Custo'] = 'N/A';
-            item['Contabilização'] = 'N/A';
+            
+            // 1. Centro de Custo Lookup
+            if (credorCode && costCenterMap) {
+                const costCenterKey = `${docNumberClean}-${credorCode}`;
+                costCenter = costCenterMap.get(costCenterKey) || 'N/A';
+            }
+            
+            // 2. Contabilização Lookup
+            if (accountingMap) {
+                 const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
+                 const accInfo = accountingMap.get(accountingKey);
+                 if (accInfo) {
+                     accounting = `${accInfo.account} - ${accInfo.description}`;
+                 }
+            }
         }
         
-        item['CFOP (Sienge)'] = (h.cfop && (item[`Sienge_${h.cfop}`] || item[h.cfop])) ? (item[`Sienge_${h.cfop}`] || item[h.cfop]) : 'N/A';
+        item['Centro de Custo'] = costCenter;
+        item['Contabilização'] = accounting;
+        item['CFOP (Sienge)'] = (h.cfop && (item[`Sienge_${h.cfop}`] || item[h.cfop])) || 'N/A';
         
         return item;
     };
-
 
     const reconciliationPass = (
         siengeItems: any[],
