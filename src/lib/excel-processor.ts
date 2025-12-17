@@ -419,13 +419,12 @@ export function runReconciliation(
         const enrichItem = (item: any) => {
             if (!item || typeof item !== 'object') return item;
         
-            const siengeCredorRaw = String(item.Sienge_Credor || item[h.credor!] || '').trim();
+            const siengeCredorRaw = item.Sienge_Credor || item[h.credor!] || '';
             const siengeDocNumberRaw = item.Sienge_Documento || item[h.numero!];
             
             if (siengeDocNumberRaw && siengeCredorRaw) {
                 const credorCodeMatch = siengeCredorRaw.match(/^(\d+)\s*-/);
                 const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
-                const credorNameOnly = credorCodeMatch ? siengeCredorRaw.substring(credorCodeMatch[0].length).trim() : siengeCredorRaw;
                 const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
 
                 const costCenterKey = `${docNumberClean}-${credorCode}`;
@@ -493,7 +492,6 @@ export function runReconciliation(
         remainingXmlItems = Array.from(xmlMap.values()).flat();
         remainingSiengeItems = stillUnmatchedSienge;
         
-        // Enrich data for all sections
         reconciled = reconciled.map(enrichItem);
         for (const esp in otherSiengeItems) {
             otherSiengeItems[esp] = otherSiengeItems[esp].map(enrichItem);
@@ -637,7 +635,6 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
     let credorIndex = -1;
     let docIndex = -1;
 
-    // Achar a linha do cabeçalho dinamicamente
     for (let i = 0; i < accountingSheetData.length; i++) {
         const row = accountingSheetData[i];
         if (Array.isArray(row) && row.some(cell => typeof cell === 'string' && normalizeKey(cell) === 'credor')) {
