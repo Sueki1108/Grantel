@@ -384,7 +384,7 @@ export function runReconciliation(
 ): ReconciliationResults {
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], devolucoesEP: [], otherSiengeItems: {}, debug: { siengeKeys: [] } };
 
-    if (!siengeData) {
+    if (!siengeData || siengeData.length === 0) {
         return { ...emptyResult, onlyInXml: xmlItems };
     }
 
@@ -405,13 +405,6 @@ export function runReconciliation(
         valor: findHeader(siengeData, ['valor', 'valortotal', 'vlrtotal']),
         esp: findHeader(siengeData, ['esp']),
         cfop: findHeader(siengeData, ['cfop']),
-        icmsOutras: findHeader(siengeData, ['icms outras', 'icmsoutras']),
-        desconto: findHeader(siengeData, ['desconto']),
-        frete: findHeader(siengeData, ['frete']),
-        ipiDespesas: findHeader(siengeData, ['ipi despesas', 'ipidespesas']),
-        icmsSt: findHeader(siengeData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
-        despesasAcessorias: findHeader(siengeData, ['despesas acessórias', 'despesasacessorias', 'voutro']),
-        precoUnitario: findHeader(siengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
         produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
     };
 
@@ -420,7 +413,7 @@ export function runReconciliation(
     }
     
     const enrichItem = (item: any) => {
-        if (!item || typeof item !== 'object' || !h.documento || !h.credor) {
+        if (!item || typeof item !== 'object') {
             return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
         }
     
@@ -432,18 +425,21 @@ export function runReconciliation(
             const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
 
-            // Centro de Custo Lookup
-            if (credorCode) {
+            if (costCenterMap && credorCode) {
                  const costCenterKey = `${docNumberClean}-${credorCode}`;
-                 item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
+                 item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
             } else {
                  item['Centro de Custo'] = 'N/A';
             }
     
-            // Accounting Lookup
-            const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
-            const accInfo = accountingMap?.get(accountingKey);
-            item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
+            if (accountingMap) {
+                const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
+                const accInfo = accountingMap.get(accountingKey);
+                item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
+            } else {
+                 item['Contabilização'] = 'N/A';
+            }
+
         } else {
             item['Centro de Custo'] = 'N/A';
             item['Contabilização'] = 'N/A';
@@ -498,14 +494,6 @@ export function runReconciliation(
 
     const passes = [
         { name: "Valor Total", getSiengeValue: (item: any) => item[h.valor!], getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
-        { name: "ICMS Outras", getSiengeValue: (item: any) => h.icmsOutras ? item[h.icmsOutras] : null, getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
-        { name: "Valor Total + Desconto", getSiengeValue: (item: any) => (h.desconto ? parseFloat(String(item[h.valor!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto!] || '0').replace(',', '.')) : null), getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
-        { name: "Valor Total - Frete", getSiengeValue: (item: any) => (h.frete ? parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - parseFloat(String(item[h.frete!] || '0').replace(',', '.')) : null), getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
-        { name: "Valor Total - IPI/ICMS ST", getSiengeValue: (item: any) => (parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0) - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)), getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
-        { name: "Valor Total - Frete/IPI", getSiengeValue: (item: any) => (parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0) - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0)), getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
-        { name: "Valor Total + Desc - Frete", getSiengeValue: (item: any) => ((h.desconto || h.frete) ? parseFloat(String(item[h.valor!] || '0').replace(',', '.')) + (h.desconto ? parseFloat(String(item[h.desconto] || '0').replace(',', '.')) : 0) - (h.frete ? parseFloat(String(item[h.frete] || '0').replace(',', '.')) : 0) : null), getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
-        { name: "Valor Total - Desp. Acess.", getSiengeValue: (item: any) => (h.despesasAcessorias ? parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - parseFloat(String(item[h.despesasAcessorias!] || '0').replace(',', '.')) : null), getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
-        { name: "Preço Unitário", getSiengeValue: (item: any) => h.precoUnitario ? item[h.precoUnitario] : null, getXmlValue: (item: any) => item['Valor Unitário'] },
     ];
     
     for (const pass of passes) {
@@ -688,7 +676,6 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
             continue;
         }
         
-        // A linha de apropriação pode estar na linha seguinte ou depois
         let appropriationsRow = null;
         if(i + 1 < accountingSheetData.length) {
             const nextRow = accountingSheetData[i + 1];
@@ -754,7 +741,6 @@ export function processPaidAccountingData(paidSheetData: any[][]): {
             continue;
         }
 
-        // A linha de apropriação pode estar na linha seguinte
         let appropriationsRow = null;
         if (i + 1 < paidSheetData.length) {
              const nextRow = paidSheetData[i + 1];
