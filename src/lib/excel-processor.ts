@@ -400,36 +400,37 @@ export function runReconciliation(
     };
     
     const h = {
-        credor: findHeader(siengeData, ['credor']),
         documento: findHeader(siengeData, ['documento', 'número', 'numero', 'numerodanota', 'notafiscal']),
+        credor: findHeader(siengeData, ['credor']),
         valor: findHeader(siengeData, ['valor', 'valortotal', 'vlrtotal']),
         esp: findHeader(siengeData, ['esp']),
         cfop: findHeader(siengeData, ['cfop']),
         produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
+        cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cnpj']),
     };
 
-    if (!h.documento || !h.credor || !h.valor) {
-        throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Valor') na planilha Sienge.");
+    if (!h.documento || !h.credor || !h.valor || !h.cnpj) {
+        throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Valor', 'CPF/CNPJ') na planilha Sienge.");
     }
     
     const enrichItem = (item: any) => {
-        if (!item || typeof item !== 'object') return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
-    
+         if (!item || typeof item !== 'object') return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
+        
         const siengeDocNumberRaw = item[`Sienge_${h.documento!}`];
         const siengeCredorRaw = item[`Sienge_${h.credor!}`];
-    
+
         if (siengeDocNumberRaw && siengeCredorRaw) {
             const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
             const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
-    
+
             if (costCenterMap && credorCode && docNumberClean) {
                 const costCenterKey = `${docNumberClean}-${credorCode}`;
                 item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
             } else {
                 item['Centro de Custo'] = 'N/A';
             }
-    
+            
             if (accountingMap && docNumberClean) {
                 const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
                 const accInfo = accountingMap.get(accountingKey);
@@ -438,20 +439,20 @@ export function runReconciliation(
                 item['Contabilização'] = 'N/A';
             }
         } else {
-            item['Centro de Custo'] = 'N/A';
-            item['Contabilização'] = 'N/A';
+             item['Centro de Custo'] = 'N/A';
+             item['Contabilização'] = 'N/A';
         }
         
         item['CFOP (Sienge)'] = (h.cfop && item[`Sienge_${h.cfop}`]) || 'N/A';
         return item;
     };
     
-    const createComparisonKey = (item: any, docKey: string, partnerKey: string, value: number | string | null | undefined) => {
+    const createComparisonKey = (item: any, docKey: string, cnpjKey: string, value: number | string | null | undefined) => {
         const docNum = cleanAndToStr(item[docKey]);
-        const partner = cleanAndToStr(item[partnerKey]);
+        const cnpj = cleanAndToStr(item[cnpjKey]);
         const valueStr = (value !== null && value !== undefined) ? parseFloat(String(value).replace(',', '.')).toFixed(2) : '0.00';
-        if (!docNum || !partner || valueStr === 'NaN') return null;
-        return `${docNum}-${partner}-${valueStr}`;
+        if (!docNum || !cnpj || valueStr === 'NaN') return null;
+        return `${docNum}-${cnpj}-${valueStr}`;
     };
 
     const reconciliationPass = (siengeItems: any[], xmlItems: any[], getSiengeKey: (item: any) => string | null, getXmlKey: (item: any) => string | null, passName: string) => {
@@ -482,9 +483,6 @@ export function runReconciliation(
         return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
     };
 
-    const siengeCnpjKey = findHeader(siengeData, ['cpf/cnpj', 'cnpj']);
-    if (!siengeCnpjKey) throw new Error("Coluna 'CPF/CNPJ' não encontrada no Sienge.");
-
     let reconciled: any[] = [];
     let remainingXml = [...xmlItems, ...cteData];
     let remainingSienge = [...siengeData];
@@ -498,7 +496,7 @@ export function runReconciliation(
         const result = reconciliationPass(
             remainingSienge,
             remainingXml,
-            item => createComparisonKey(item, h.documento!, siengeCnpjKey!, pass.getSiengeValue(item)),
+            item => createComparisonKey(item, h.documento!, h.cnpj!, pass.getSiengeValue(item)),
             item => {
                 const isCte = !!item['Valor da Prestação'];
                 return createComparisonKey(item, isCte ? 'Número' : 'Número da Nota', isCte ? 'CPF/CNPJ do Fornecedor' : 'CPF/CNPJ do Emitente', pass.getXmlValue(item));
