@@ -407,8 +407,8 @@ export function runReconciliation(
         cfop: findHeader(siengeData, ['cfop']),
     };
 
-    if (!h.documento || !h.esp || !h.credor || !h.valor) {
-        throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Esp', 'Valor') na planilha Sienge.");
+    if (!h.documento || !h.credor || !h.valor) {
+        throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Valor') na planilha Sienge.");
     }
     
     const enrichItem = (item: any) => {
@@ -482,7 +482,7 @@ export function runReconciliation(
     if (!siengeCnpjKey) throw new Error("Coluna 'CPF/CNPJ' não encontrada no Sienge.");
 
     let remainingXml = [...xmlItems, ...cteData];
-    let remainingSienge = siengeData.filter(row => ['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()));
+    let remainingSienge = [...siengeData]; // Usar todos os dados do Sienge para reconciliação.
     let reconciled: any[] = [];
 
     // Pass 1: Valor Total
@@ -502,7 +502,9 @@ export function runReconciliation(
     remainingSienge = result.remainingSienge;
     remainingXml = result.remainingXml;
     
-    const otherSiengeItems = siengeData.filter(row => !['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()));
+    // Filtrar 'otherSiengeItems' apenas dos itens que sobraram da conciliação.
+    const otherSiengeItems = remainingSienge.filter(row => !['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()));
+    remainingSienge = remainingSienge.filter(row => ['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()));
 
     const devolucoesEP = xmlItems.filter(item => {
         const cfop = cleanAndToStr(item.CFOP);
