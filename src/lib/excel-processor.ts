@@ -419,26 +419,27 @@ export function runReconciliation(
         const enrichItem = (item: any) => {
             if (!item || typeof item !== 'object') return item;
         
-            const siengeDocNumber = cleanAndToStr(item[h.numero!]);
-            const siengeCredorRaw = String(item[`Sienge_${h.credor!}`] || item[h.credor!] || '');
+            const docNumberClean = cleanAndToStr(item[h.numero!]);
+            const siengeCredorRaw = String(item[h.credor!] || item[`Sienge_${h.credor!}`] || '').trim();
         
-            // Chave para Centro de Custo: Usa o código do credor
-            const credorCodeMatch = siengeCredorRaw.match(/^(\d+)\s*-/);
-            const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
-            if (siengeDocNumber && credorCode) {
-                 const costCenterKey = `${siengeDocNumber}-${credorCode}`;
-                 item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
-            } else {
-                 item['Centro de Custo'] = 'N/A';
-            }
-           
-            // Chave para Contabilização: Usa o nome completo do credor
-            if (siengeDocNumber && siengeCredorRaw) {
-                const accountingKey = `${siengeDocNumber}-${siengeCredorRaw}`;
-                const accInfo = accountingMap?.get(accountingKey);
+            if (docNumberClean && siengeCredorRaw) {
+                const credorCodeMatch = siengeCredorRaw.match(/^(\d+)\s*-/);
+                const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
+                const credorNameOnly = credorCodeMatch ? siengeCredorRaw.substring(credorCodeMatch[0].length).trim() : siengeCredorRaw;
+
+                // Centro de Custo
+                const costCenterKey = `${docNumberClean}-${credorCode}`;
+                item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
+
+                // Contabilização (tentar com nome completo e depois só nome)
+                const accountingKeyFull = `${docNumberClean}-${siengeCredorRaw}`;
+                const accountingKeyNameOnly = `${docNumberClean}-${credorNameOnly}`;
+                
+                const accInfo = accountingMap?.get(accountingKeyFull) || accountingMap?.get(accountingKeyNameOnly);
                 item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
             } else {
-                item['Contabilização'] = 'N/A';
+                 item['Centro de Custo'] = 'N/A';
+                 item['Contabilização'] = 'N/A';
             }
             
             item['CFOP (Sienge)'] = (h.cfop && (item[`Sienge_${h.cfop}`] || item[h.cfop])) ? (item[`Sienge_${h.cfop}`] || item[h.cfop]) : 'N/A';
@@ -662,7 +663,6 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
         const credorName = String(currentRow[credorIndex] || '').trim();
         const docValue = String(currentRow[docIndex] || '').trim();
         
-        // Ignora linhas que são cabeçalhos repetidos, rodapés ou vazias
         if (!credorName || !docValue || normalizeKey(credorName) === 'credor') {
             continue;
         }
