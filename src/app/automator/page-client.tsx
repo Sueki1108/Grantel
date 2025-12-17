@@ -707,19 +707,10 @@ export function AutomatorClientPage() {
                 
                 log(`Processamento XML concluído: ${nfe.length} NF-e Entradas, ${saidas.length} NF-e Saídas, ${cte.length} CT-es.`);
                 
-                // Add data from manifesto spreadsheets. These will be used for filtering.
-                for (const fileName in files) {
-                    const mappedName = fileMapping[fileName] || fileName;
-                    const isManifestoFile = [
-                        "NFE Operação Não Realizada", "NFE Operação Desconhecida", "CTE Desacordo de Serviço"
-                    ].includes(fileName);
-                    
-                    if (isManifestoFile) {
-                        dataToProcess[mappedName] = [...(dataToProcess[mappedName] || []), ...files[fileName]];
-                        log(`Adicionando dados da planilha de manifesto: '${fileName}'.`);
-                    } else if (!dataToProcess[mappedName] || dataToProcess[mappedName].length === 0) {
-                        dataToProcess[mappedName] = files[fileName];
-                        log(`Usando dados da planilha carregada (XML não fornecido): '${fileName}'.`);
+                for (const fileName of requiredFiles) {
+                    if (files[fileName]) {
+                        dataToProcess[fileName] = files[fileName];
+                        log(`Usando dados da planilha de manifesto carregada: '${fileName}'.`);
                     }
                 }
                 
