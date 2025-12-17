@@ -400,18 +400,16 @@ export function runReconciliation(
              }
              return undefined;
         };
-        
+
         const h = {
-            cpfCnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor']),
+            cpfCnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cnpj']),
             credor: findHeader(siengeData, ['credor']),
             numero: findHeader(siengeData, ['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
             valorTotal: findHeader(siengeData, ['valor', 'valor total', 'vlr total']),
             esp: findHeader(siengeData, ['esp']),
             cfop: findHeader(siengeData, ['cfop']),
-            precoUnitario: findHeader(siengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
-            produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
         };
-        
+
         if (!h.numero || !h.esp || (!h.cpfCnpj && !h.credor)) {
             throw new Error("Não foi possível encontrar as colunas essenciais ('CPF/CNPJ' ou 'Credor', 'Documento', 'Esp') na planilha Sienge.");
         }
@@ -419,23 +417,26 @@ export function runReconciliation(
         const enrichItem = (item: any) => {
             if (!item || typeof item !== 'object') return item;
         
-            const siengeCredorRaw = item.Sienge_Credor || item[h.credor!] || '';
-            const siengeDocNumberRaw = item.Sienge_Documento || item[h.numero!];
+            const siengeCredorRaw = item.Sienge_Credor || (h.credor ? item[h.credor] : '');
+            const siengeDocNumberRaw = item.Sienge_Documento || (h.numero ? item[h.numero] : '');
             
             if (siengeDocNumberRaw && siengeCredorRaw) {
-                const credorCodeMatch = siengeCredorRaw.match(/^(\d+)\s*-/);
+                const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
                 const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
                 const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
 
+                // Centro de Custo Lookup
                 const costCenterKey = `${docNumberClean}-${credorCode}`;
                 item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
-
+        
+                // Contabilização Lookup
                 const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
                 const accInfo = accountingMap?.get(accountingKey);
                 item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
+
             } else {
-                 item['Centro de Custo'] = 'N/A';
-                 item['Contabilização'] = 'N/A';
+                 item['Centro de Custo'] = 'N/A (Chave Incompleta)';
+                 item['Contabilização'] = 'N/A (Chave Incompleta)';
             }
             
             item['CFOP (Sienge)'] = (h.cfop && (item[`Sienge_${h.cfop}`] || item[h.cfop])) ? (item[`Sienge_${h.cfop}`] || item[h.cfop]) : 'N/A';
@@ -448,7 +449,7 @@ export function runReconciliation(
             return espValue === 'NFE' || espValue === 'NFSR' || espValue === 'CTE';
         });
 
-        let otherSiengeItems: { [esp: string]: any[] } = siengeData.filter(row => {
+        const otherSiengeItems: { [esp: string]: any[] } = siengeData.filter(row => {
             const espValue = row[h.esp!] ? String(row[h.esp!]).trim().toUpperCase() : '';
             return espValue !== 'NFE' && espValue !== 'NFSR' && espValue !== 'CTE';
         }).reduce((acc, item) => {
@@ -478,6 +479,7 @@ export function runReconciliation(
 
         const stillUnmatchedSienge: any[] = [];
         remainingSiengeItems.forEach(siengeItem => {
+            if(!h.cpfCnpj) return; // Should not happen due to check above, but for type safety
             const key = createKey(siengeItem, h.numero!, h.cpfCnpj!, h.valorTotal!);
             const matchedXmlItems = xmlMap.get(key);
             if (matchedXmlItems && matchedXmlItems.length > 0) {
@@ -513,7 +515,7 @@ export function runReconciliation(
             
         const finalOnlyInSienge = remainingSiengeItems.map(item => ({
             ...item,
-            "Chave de Comparação": createKey(item, h.numero!, h.cpfCnpj!, h.valorTotal!)
+            "Chave de Comparação": h.cpfCnpj ? createKey(item, h.numero!, h.cpfCnpj!, h.valorTotal!) : "N/A"
         }));
 
         const finalOnlyInXml = remainingXmlItems.map(item => ({
