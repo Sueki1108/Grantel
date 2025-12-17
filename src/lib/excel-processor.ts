@@ -384,8 +384,8 @@ export function runReconciliation(
 ): ReconciliationResults {
     const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: [], devolucoesEP: [], otherSiengeItems: {}, debug: { siengeKeys: [] } };
 
-    if (!siengeData || !xmlItems) {
-        return { ...emptyResult, onlyInSienge: siengeData || [], onlyInXml: xmlItems };
+    if (!siengeData) {
+        return { ...emptyResult, onlyInXml: xmlItems };
     }
 
     const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
@@ -413,41 +413,25 @@ export function runReconciliation(
     
     const enrichItem = (item: any) => {
         if (!item || typeof item !== 'object') return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
-
-        const siengeCredorRaw = item.Sienge_Credor || item[h.credor!];
+        
         const siengeDocNumberRaw = item.Sienge_Documento || item[h.documento!];
+        const siengeCredorRaw = item.Sienge_Credor || item[h.credor!];
         
-        let costCenter = 'N/A';
-        let accounting = 'N/A';
+        const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
+        
+        const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
+        const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
 
-        if (siengeDocNumberRaw && siengeCredorRaw) {
-            const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
-            const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
-            const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
-            
-            // 1. Centro de Custo Lookup
-            if (credorCode && costCenterMap) {
-                const costCenterKey = `${docNumberClean}-${credorCode}`;
-                costCenter = costCenterMap.get(costCenterKey) || 'N/A (Chave não encontrada)';
-            }
-            
-            // 2. Contabilização Lookup
-            if (accountingMap) {
-                 const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
-                 const accInfo = accountingMap.get(accountingKey);
-                 if (accInfo) {
-                     accounting = `${accInfo.account} - ${accInfo.description}`;
-                 } else {
-                     accounting = 'N/A (Chave não encontrada)';
-                 }
-            }
-        } else {
-            costCenter = 'N/A (Dados Sienge incompletos)';
-            accounting = 'N/A (Dados Sienge incompletos)';
-        }
-        
+        // Centro de Custo Lookup
+        const costCenterKey = `${docNumberClean}-${credorCode}`;
+        const costCenter = costCenterMap?.get(costCenterKey) || 'N/A';
         item['Centro de Custo'] = costCenter;
-        item['Contabilização'] = accounting;
+        
+        // Contabilização Lookup
+        const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
+        const accInfo = accountingMap?.get(accountingKey);
+        item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
+        
         item['CFOP (Sienge)'] = (h.cfop && (item[`Sienge_${h.cfop}`] || item[h.cfop])) || 'N/A';
         
         return item;
