@@ -423,26 +423,35 @@ export function runReconciliation(
         if (!item || typeof item !== 'object') {
             return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
         }
+        
         const siengeDocNumberRaw = item.Sienge_Documento || item[h.documento!];
         const siengeCredorRaw = item.Sienge_Credor || item[h.credor!];
+        
         const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
-        const credorCodeMatch = String(siengeCredorRaw).match(/^(\\d+)\\s*-/);
+        
+        // Key for Cost Center
+        const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
         const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
         const costCenterKey = `${docNumberClean}-${credorCode}`;
-        item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
+        
+        // Key for Accounting
         const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
+
+        item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
+
         const accInfo = accountingMap?.get(accountingKey);
         item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
+        
         item['CFOP (Sienge)'] = (h.cfop && (item[`Sienge_${h.cfop}`] || item[h.cfop])) || 'N/A';
         return item;
     };
     
-    const createComparisonKey = (item: any, docKey: string, partnerKey: string, valueKey: string) => {
+    const createComparisonKey = (item: any, docKey: string, partnerKey: string, value: number | string | null | undefined) => {
         const docNum = cleanAndToStr(item[docKey]);
         const partner = cleanAndToStr(item[partnerKey]);
-        const value = parseFloat(String(item[valueKey] || '0').replace(',', '.')).toFixed(2);
-        if (!docNum || !partner || value === 'NaN') return null;
-        return `${docNum}-${partner}-${value}`;
+        const valueStr = (value !== null && value !== undefined) ? parseFloat(String(value).replace(',', '.')).toFixed(2) : '0.00';
+        if (!docNum || !partner || valueStr === 'NaN') return null;
+        return `${docNum}-${partner}-${valueStr}`;
     };
 
     const reconciliationPass = (siengeItems: any[], xmlItems: any[], getSiengeKey: (item: any) => string | null, getXmlKey: (item: any) => string | null, passName: string) => {
@@ -559,7 +568,7 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
     return siengeData.map(item => {
         const docNumberClean = cleanAndToStr(item[h.documento!]);
         const credorRaw = String(item[h.credor!] || '');
-        const credorCodeMatch = credorRaw.match(/^(\\d+)\\s*-/);
+        const credorCodeMatch = credorRaw.match(/^(\d+)\s*-/);
         const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
 
         return { 
@@ -606,7 +615,7 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
 
         const colB_credor_raw = String(row[1] || '').trim();
         const colD_documento = String(row[3] || '').trim();
-        const credorCodeMatch = colB_credor_raw.match(/^(\\d+)\\s*-/);
+        const credorCodeMatch = colB_credor_raw.match(/^(\d+)\s*-/);
         const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
         
         if (credorCode && colD_documento) {
@@ -680,7 +689,7 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
             let accountInfo = '';
             for (let k = appropriationsRow.length - 1; k >= 0; k--) {
                 const cellValue = String(appropriationsRow[k] || '').trim();
-                if (cellValue.match(/^\\d{1,2}\\.\\d{2}\\.\\d{2}\\.\\d{2}/)) {
+                if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
                     accountInfo = cellValue;
                     break;
                 }
@@ -739,7 +748,7 @@ export function processPaidAccountingData(paidSheetData: any[][]): {
             let accountInfo = '';
             for (let k = appropriationsRow.length - 1; k >= 0; k--) {
                 const cellValue = String(appropriationsRow[k] || '').trim();
-                if (cellValue.match(/^\\d{1,2}\\.\\d{2}\\.\\d{2}\\.\\d{2}/)) {
+                if (cellValue.match(/^\d{1,2}\.\d{2}\.\d{2}\.\d{2}/)) {
                     accountInfo = cellValue;
                     break;
                 }
