@@ -412,8 +412,10 @@ export function runReconciliation(
     }
     
     const enrichItem = (item: any) => {
-        if (!item || typeof item !== 'object') return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
-        
+        if (!item || typeof item !== 'object') {
+            return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
+        }
+
         const siengeDocNumberRaw = item.Sienge_Documento || item[h.documento!];
         const siengeCredorRaw = item.Sienge_Credor || item[h.credor!];
         
@@ -424,8 +426,7 @@ export function runReconciliation(
 
         // Centro de Custo Lookup
         const costCenterKey = `${docNumberClean}-${credorCode}`;
-        const costCenter = costCenterMap?.get(costCenterKey) || 'N/A';
-        item['Centro de Custo'] = costCenter;
+        item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
         
         // Contabilização Lookup
         const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
@@ -436,6 +437,7 @@ export function runReconciliation(
         
         return item;
     };
+
 
     const createComparisonKey = (item: any, docKey: string, partnerKey: string, valueKey: string) => {
         const docNum = cleanAndToStr(item[docKey]);
