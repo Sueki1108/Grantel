@@ -693,10 +693,10 @@ export function AutomatorClientPage() {
                 
                 let dataToProcess: Record<string, any[]> = {};
                 let eventCanceledKeys = new Set<string>();
-                
-                log("Processando ficheiros XML...");
+
+                log("Processando ficheiros XML como fonte primária...");
                 const allUploadedXml = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
-                const { nfe, cte, saidas, itens, itensSaidas, canceledKeys } = await processUploadedXmls(allUploadedXml);
+                const { nfe, cte, saidas, itens, itensSaidas, canceledKeys } = await processUploadedXmls(allUploadedXml, log);
                 
                 dataToProcess["NFE"] = nfe;
                 dataToProcess["Itens"] = itens;
@@ -704,13 +704,14 @@ export function AutomatorClientPage() {
                 dataToProcess["Saídas"] = saidas;
                 dataToProcess["Itens Saídas"] = itensSaidas;
                 eventCanceledKeys = canceledKeys;
-                
                 log(`Processamento XML concluído: ${nfe.length} NF-e Entradas, ${saidas.length} NF-e Saídas, ${cte.length} CT-es.`);
-                
+
+                // Add data from manifesto files, if they exist, without overwriting XML data
                 for (const fileName of requiredFiles) {
-                    if (files[fileName]) {
-                        dataToProcess[fileName] = files[fileName];
-                        log(`Usando dados da planilha de manifesto carregada: '${fileName}'.`);
+                    if (files[fileName] && files[fileName].length > 0) {
+                        const mappedName = fileMapping[fileName] || fileName;
+                        dataToProcess[mappedName] = [...(dataToProcess[mappedName] || []), ...files[fileName]];
+                        log(`Adicionando dados da planilha de manifesto: '${fileName}'.`);
                     }
                 }
                 
@@ -719,6 +720,7 @@ export function AutomatorClientPage() {
                     log(`Aplicando filtro de período para: ${activePeriods.join(', ')}`);
                 
                     const filterByPeriod = (rows: any[]) => {
+                        if (!rows) return [];
                         return rows.filter(row => {
                             const emissionValue = row['Emissão'] || row['Data de Emissão'];
                             if (!emissionValue) return true;
@@ -734,14 +736,16 @@ export function AutomatorClientPage() {
                         });
                     };
                 
-                    Object.keys(dataToProcess).forEach(key => {
-                        if (['NFE', 'CTE', 'Saídas'].includes(key)) {
-                             const originalCount = dataToProcess[key].length;
-                             dataToProcess[key] = filterByPeriod(dataToProcess[key]);
-                             log(`- ${key}: ${dataToProcess[key].length}/${originalCount} registos mantidos após filtro.`);
-                        }
-                    });
-                     
+                    const originalCounts = {
+                        NFE: dataToProcess['NFE']?.length || 0,
+                        CTE: dataToProcess['CTE']?.length || 0,
+                        Saídas: dataToProcess['Saídas']?.length || 0
+                    };
+                    
+                    dataToProcess['NFE'] = filterByPeriod(dataToProcess['NFE']);
+                    dataToProcess['CTE'] = filterByPeriod(dataToProcess['CTE']);
+                    dataToProcess['Saídas'] = filterByPeriod(dataToProcess['Saídas']);
+                    
                     const chavesNfe = new Set(dataToProcess['NFE'].map(n => n['Chave Unica']));
                     const chavesCte = new Set(dataToProcess['CTE'].map(n => n['Chave Unica']));
                     const chavesSaidas = new Set(dataToProcess['Saídas'].map(n => n['Chave Unica']));
@@ -752,6 +756,8 @@ export function AutomatorClientPage() {
                      if(dataToProcess['Itens Saídas']) {
                         dataToProcess['Itens Saídas'] = (dataToProcess['Itens Saídas'] || []).filter(item => chavesSaidas.has(item['Chave Unica']));
                     }
+
+                    log(`Filtragem por período: NF-e (${dataToProcess['NFE'].length}/${originalCounts.NFE}), CT-e (${dataToProcess['CTE'].length}/${originalCounts.CTE}), Saídas (${dataToProcess['Saídas'].length}/${originalCounts.Saídas}).`);
                 }
 
                 const resultData = processDataFrames(dataToProcess, eventCanceledKeys, log);
