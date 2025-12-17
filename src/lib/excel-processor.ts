@@ -413,7 +413,7 @@ export function runReconciliation(
         if (!h.numero || !h.esp || !h.credor) {
             throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Esp') na planilha Sienge.");
         }
-
+        
         const enrichItem = (item: any) => {
             if (!item || typeof item !== 'object') return item;
         
@@ -425,14 +425,13 @@ export function runReconciliation(
                 const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
                 const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
         
-                // Centro de Custo Lookup
                 const costCenterKey = `${docNumberClean}-${credorCode}`;
                 item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
         
-                // Contabilização Lookup
                 const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
                 const accInfo = accountingMap?.get(accountingKey);
                 item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
+
             } else {
                 item['Centro de Custo'] = 'N/A (Chave Incompleta)';
                 item['Contabilização'] = 'N/A (Chave Incompleta)';
@@ -479,7 +478,7 @@ export function runReconciliation(
 
         const stillUnmatchedSienge: any[] = [];
         remainingSiengeItems.forEach(siengeItem => {
-            if(!h.cpfCnpj) return; // Should not happen due to check above, but for type safety
+            if(!h.cpfCnpj) return; 
             const key = createKey(siengeItem, h.numero!, h.cpfCnpj!, h.valorTotal!);
             const matchedXmlItems = xmlMap.get(key);
             if (matchedXmlItems && matchedXmlItems.length > 0) {
@@ -588,7 +587,7 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
 
         const colA = String(row[0] || '').trim();
         const colC = String(row[2] || '').trim(); 
-        const colB_credor = String(row[1] || '').trim();
+        const colB_credor_code = cleanAndToStr(String(row[1] || '').trim().split('-')[0]);
         const colD_documento = String(row[3] || '').trim();
 
         if (normalizeKey(colA) === normalizeKey('Centro de custo')) {
@@ -600,19 +599,18 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
             return; 
         }
 
-        if (colB_credor && colD_documento) {
+        if (colB_credor_code && colD_documento) {
             const docNumber = cleanAndToStr(colD_documento);
-            const credorCode = cleanAndToStr(colB_credor.split('-')[0]);
             
-            if (docNumber && credorCode) {
-                 const key = `${docNumber}-${credorCode}`;
+            if (docNumber && colB_credor_code) {
+                 const key = `${docNumber}-${colB_credor_code}`;
                  costCenterMap.set(key, currentCostCenter);
 
                 debugKeys.push({
                     'Chave de Comparação (Doc-Credor)': key,
                     'Centro de Custo': currentCostCenter,
                     'Documento (Coluna D)': docNumber,
-                    'Credor (Coluna B)': colB_credor,
+                    'Credor (Coluna B)': row[1],
                     'Linha na Planilha': rowIndex + 1,
                 });
             }
