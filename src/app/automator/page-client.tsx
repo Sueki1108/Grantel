@@ -696,21 +696,31 @@ export function AutomatorClientPage() {
 
                 log("Processando ficheiros XML...");
                 const allUploadedXml = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
-                const { nfe, cte, saidas, itens, itensSaidas, canceledKeys } = await processUploadedXmls(allUploadedXml);
+                if (allUploadedXml.length > 0) {
+                    const { nfe, cte, saidas, itens, itensSaidas, canceledKeys } = await processUploadedXmls(allUploadedXml);
+                    
+                    dataToProcess["NFE"] = nfe;
+                    dataToProcess["Itens"] = itens;
+                    dataToProcess["CTE"] = cte;
+                    dataToProcess["Saídas"] = saidas;
+                    dataToProcess["Itens Saídas"] = itensSaidas;
+                    eventCanceledKeys = canceledKeys;
+                    log(`Processamento XML concluído: ${nfe.length} NF-e Entradas, ${saidas.length} NF-e Saídas, ${cte.length} CT-es.`);
+                }
                 
-                dataToProcess["NFE"] = nfe;
-                dataToProcess["Itens"] = itens;
-                dataToProcess["CTE"] = cte;
-                dataToProcess["Saídas"] = saidas;
-                dataToProcess["Itens Saídas"] = itensSaidas;
-                eventCanceledKeys = canceledKeys;
+                 // Add data from spreadsheets. XML data takes precedence for main dataframes.
+                for (const fileName in files) {
+                    const mappedName = fileMapping[fileName] || fileName;
+                    const isManifestoFile = requiredFiles.includes(fileName);
 
-                log(`Processamento XML concluído: ${nfe.length} NF-e Entradas, ${saidas.length} NF-e Saídas, ${cte.length} CT-es.`);
-                
-                for (const fileName of requiredFiles) {
-                    if (files[fileName]) {
-                        dataToProcess[fileName] = files[fileName];
-                        log(`Usando dados da planilha de manifesto carregada: '${fileName}'.`);
+                    if (isManifestoFile) {
+                        dataToProcess[mappedName] = [...(dataToProcess[mappedName] || []), ...files[fileName]];
+                        log(`Adicionando dados da planilha de manifesto: '${fileName}'.`);
+                    } else if (!dataToProcess[mappedName] || dataToProcess[mappedName].length === 0) {
+                        dataToProcess[mappedName] = files[fileName];
+                        log(`Usando dados da planilha carregada: '${fileName}'.`);
+                    } else {
+                        log(`Dados de XML para '${mappedName}' encontrados, ignorando a planilha carregada: '${fileName}'.`);
                     }
                 }
                 
