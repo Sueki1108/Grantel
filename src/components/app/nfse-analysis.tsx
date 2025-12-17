@@ -351,10 +351,13 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
     const handleDisregardNote = () => {
         if (!noteInput.trim()) return;
         const newNotes = new Set(disregardedNotes);
-        noteInput.split(/\s+/).forEach(n => {
-            const trimmed = n.trim().replace(',', '');
+        
+        // Split by space, comma, or any whitespace and filter out empty strings
+        noteInput.split(/[\s,]+/).forEach(n => {
+            const trimmed = n.trim();
             if (trimmed) newNotes.add(trimmed);
         });
+
         onDisregardedNotesChange(newNotes);
         setNoteInput('');
         toast({ title: 'Notas desconsideradas', description: 'A análise foi atualizada.' });
