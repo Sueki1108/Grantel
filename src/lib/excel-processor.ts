@@ -396,7 +396,7 @@ export function runReconciliation(
         const headers = Object.keys(data[0]);
         return headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
     };
-
+    
     const h = {
         documento: findHeader(siengeData, ['documento', 'número', 'numero', 'numerodanota', 'notafiscal']),
         credor: findHeader(siengeData, ['credor']),
@@ -417,7 +417,7 @@ export function runReconciliation(
     if (!h.documento || !h.credor || !h.valor || !h.cnpj) {
         throw new Error("Não foi possível encontrar as colunas essenciais ('Credor', 'Documento', 'Valor', 'CPF/CNPJ') na planilha Sienge.");
     }
-    
+
     const enrichItem = (item: any) => {
         if (!item || typeof item !== 'object') return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
         
@@ -426,16 +426,12 @@ export function runReconciliation(
 
         if (siengeDocNumberRaw && siengeCredorRaw) {
             const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
-            const credorCodeMatch = String(siengeCredorRaw).match(/^(\\d+)\\s*-/);
+            const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
 
             // Busca pelo Centro de Custo
-            if (credorCode) {
-                const costCenterKey = `${docNumberClean}-${credorCode}`;
-                item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
-            } else {
-                 item['Centro de Custo'] = 'N/A';
-            }
+            const costCenterKey = `${docNumberClean}-${credorCode}`;
+            item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
             
             // Busca pela Contabilização
             const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
@@ -571,7 +567,7 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
     return siengeData.map(item => {
         const docNumberClean = cleanAndToStr(item[h.documento!]);
         const credorRaw = String(item[h.credor!] || '');
-        const credorCodeMatch = credorRaw.match(/^(\\d+)\\s*-/);
+        const credorCodeMatch = credorRaw.match(/^(\d+)\s*-/);
         const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
 
         return { 
@@ -618,7 +614,7 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
 
         const colB_credor_raw = String(row[1] || '').trim();
         const colD_documento = String(row[3] || '').trim();
-        const credorCodeMatch = colB_credor_raw.match(/^(\\d+)\\s*-/);
+        const credorCodeMatch = colB_credor_raw.match(/^(\d+)\s*-/);
         const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
         
         if (credorCode && colD_documento) {
@@ -699,7 +695,7 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
             let accountInfo = '';
             for (let k = appropriationsRow.length - 1; k >= 0; k--) {
                 const cellValue = String(appropriationsRow[k] || '').trim();
-                if (cellValue.match(/^(\\d{1,2}\\.\\d{2}\\.\\d{2}\\.\\d{2})/)) {
+                if (cellValue.match(/^(\d{1,2}\.\d{2}\.\d{2}\.\d{2})/)) {
                     accountInfo = cellValue;
                     break;
                 }
@@ -765,7 +761,7 @@ export function processPaidAccountingData(paidSheetData: any[][]): {
             let accountInfo = '';
             for (let k = appropriationsRow.length - 1; k >= 0; k--) {
                 const cellValue = String(appropriationsRow[k] || '').trim();
-                if (cellValue.match(/^(\\d{1,2}\\.\\d{2}\\.\\d{2}\\.\\d{2})/)) {
+                if (cellValue.match(/^(\d{1,2}\.\d{2}\.\d{2}\.\d{2})/)) {
                     accountInfo = cellValue;
                     break;
                 }
