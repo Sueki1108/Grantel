@@ -490,7 +490,13 @@ export function runReconciliation(
         remainingSienge, 
         remainingXml,
         (sItem) => createComparisonKey(sItem, h.documento!, siengeCnpjKey, h.valor!),
-        (xItem) => createComparisonKey(xItem, (xItem['Número da Nota'] || xItem['Número']), (xItem['CPF/CNPJ do Emitente'] || xItem['CPF/CNPJ do Fornecedor']), (xItem['Valor Total'] || xItem['Valor da Prestação']))
+        (xItem) => {
+            const isCte = !!xItem['Valor da Prestação'];
+            const docKey = isCte ? 'Número' : 'Número da Nota';
+            const partnerKey = isCte ? 'CPF/CNPJ do Fornecedor' : 'CPF/CNPJ do Emitente';
+            const valueKey = isCte ? 'Valor da Prestação' : 'Valor Total';
+            return createComparisonKey(xItem, docKey, partnerKey, valueKey);
+        }
     );
     reconciled.push(...result.matched);
     remainingSienge = result.remainingSienge;
