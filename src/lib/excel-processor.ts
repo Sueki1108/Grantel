@@ -419,23 +419,20 @@ export function runReconciliation(
         const enrichItem = (item: any) => {
             if (!item || typeof item !== 'object') return item;
         
-            const docNumberClean = cleanAndToStr(item[h.numero!]);
-            const siengeCredorRaw = String(item[h.credor!] || item[`Sienge_${h.credor!}`] || '').trim();
-        
-            if (docNumberClean && siengeCredorRaw) {
+            const siengeCredorRaw = String(item.Sienge_Credor || item[h.credor!] || '').trim();
+            const siengeDocNumberRaw = item.Sienge_Documento || item[h.numero!];
+            
+            if (siengeDocNumberRaw && siengeCredorRaw) {
                 const credorCodeMatch = siengeCredorRaw.match(/^(\d+)\s*-/);
                 const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
                 const credorNameOnly = credorCodeMatch ? siengeCredorRaw.substring(credorCodeMatch[0].length).trim() : siengeCredorRaw;
+                const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
 
-                // Centro de Custo
                 const costCenterKey = `${docNumberClean}-${credorCode}`;
                 item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
 
-                // Contabilização (tentar com nome completo e depois só nome)
-                const accountingKeyFull = `${docNumberClean}-${siengeCredorRaw}`;
-                const accountingKeyNameOnly = `${docNumberClean}-${credorNameOnly}`;
-                
-                const accInfo = accountingMap?.get(accountingKeyFull) || accountingMap?.get(accountingKeyNameOnly);
+                const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
+                const accInfo = accountingMap?.get(accountingKey);
                 item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
             } else {
                  item['Centro de Custo'] = 'N/A';
@@ -556,7 +553,8 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
     return siengeData.map(item => {
         const docNumberClean = cleanAndToStr(item[h.documento!]);
         const credorRaw = String(item[h.credor!] || '');
-        const credorCode = cleanAndToStr(credorRaw.split('-')[0]);
+        const credorCodeMatch = credorRaw.match(/^(\d+)\s*-/);
+        const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
 
         return { 
             "Chave de Depuração (Centro de Custo)": `${docNumberClean}-${credorCode}`,
