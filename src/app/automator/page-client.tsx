@@ -303,10 +303,10 @@ export function AutomatorClientPage() {
                     ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
                     siengeSheetData,
                     siengeDebugKeys,
-                    reconciliationResults: null,
+                    // DO NOT reset reconciliation results here anymore. Let the user trigger it.
                 }));
                 
-                toast({ title: 'Planilha Sienge Carregada', description: 'Os dados foram lidos e estão prontos para as análises.' });
+                toast({ title: 'Planilha Sienge Carregada', description: 'Os dados foram lidos. Clique em "Executar Conciliação" para processar.' });
             } catch (err: any) {
                 toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
                 setSiengeFile(null);
