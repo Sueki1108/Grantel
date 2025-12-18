@@ -693,25 +693,33 @@ export function AutomatorClientPage() {
                 
                 let dataToProcess: Record<string, any[]> = {};
                 let eventCanceledKeys = new Set<string>();
-
+    
                 log("Processando ficheiros XML como fonte primária...");
                 const allUploadedXml = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
-                const { nfe, cte, saidas, itens, itensSaidas, canceledKeys } = await processUploadedXmls(allUploadedXml, log);
+                const xmlData = await processUploadedXmls(allUploadedXml, log);
                 
-                dataToProcess["NFE"] = nfe;
-                dataToProcess["Itens"] = itens;
-                dataToProcess["CTE"] = cte;
-                dataToProcess["Saídas"] = saidas;
-                dataToProcess["Itens Saídas"] = itensSaidas;
-                eventCanceledKeys = canceledKeys;
-                log(`Processamento XML concluído: ${nfe.length} NF-e Entradas, ${saidas.length} NF-e Saídas, ${cte.length} CT-es.`);
-
-                // Add data from manifesto files, if they exist, without overwriting XML data
-                for (const fileName of requiredFiles) {
-                    if (files[fileName] && files[fileName].length > 0) {
-                        const mappedName = fileMapping[fileName] || fileName;
+                dataToProcess["NFE"] = xmlData.nfe;
+                dataToProcess["Itens"] = xmlData.itens;
+                dataToProcess["CTE"] = xmlData.cte;
+                dataToProcess["Saídas"] = xmlData.saidas;
+                dataToProcess["Itens Saídas"] = xmlData.itensSaidas;
+                eventCanceledKeys = xmlData.canceledKeys;
+                log(`Processamento XML concluído: ${xmlData.nfe.length} NF-e Entradas, ${xmlData.saidas.length} NF-e Saídas, ${xmlData.cte.length} CT-es.`);
+    
+                for (const fileName in files) {
+                    const mappedName = fileMapping[fileName] || fileName;
+                    const isManifestoFile = [
+                        "NFE Operação Não Realizada", "NFE Operação Desconhecida", "CTE Desacordo de Serviço"
+                    ].includes(fileName);
+                    
+                    if (isManifestoFile) {
                         dataToProcess[mappedName] = [...(dataToProcess[mappedName] || []), ...files[fileName]];
-                        log(`Adicionando dados da planilha de manifesto: '${fileName}'.`);
+                         log(`Adicionando dados da planilha de manifesto: '${fileName}'.`);
+                    } else if (!dataToProcess[mappedName] || dataToProcess[mappedName].length === 0) {
+                        dataToProcess[mappedName] = files[fileName];
+                        log(`Usando dados da planilha carregada: '${fileName}' (sem XML correspondente).`);
+                    } else {
+                         log(`Dados de XML para '${mappedName}' encontrados, ignorando a planilha carregada: '${fileName}'.`);
                     }
                 }
                 
