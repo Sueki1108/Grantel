@@ -1,3 +1,4 @@
+
 "use client";
 
 import { clsx, type ClassValue } from "clsx"
@@ -17,8 +18,11 @@ export const formatCnpj = (cnpj: string) => {
 export const cleanAndToStr = (value: any): string => {
     if (value === null || typeof value === 'undefined') return "";
     let strValue = String(value).trim();
-    // Limpa strings que são representações de floats, como "1234.0"
-    if (/^\d+\.0+$/.test(strValue)) strValue = strValue.split('.')[0];
+    // Remove a parte decimal se for apenas .0 ou .00
+    if (/\.0+$/.test(strValue)) {
+        strValue = strValue.split('.')[0];
+    }
+    // Remove todos os caracteres não numéricos
     return strValue.replace(/\D/g, '');
 };
 
