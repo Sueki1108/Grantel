@@ -5,6 +5,7 @@ import type { KeyCheckResult } from '@/components/app/key-checker';
 import type { AllClassifications } from '@/lib/types';
 import { normalizeKey, cleanAndToStr } from './utils';
 import type { SpedDuplicate, SaidaItem } from './types';
+import * as XLSX from 'xlsx';
 
 
 // Types
@@ -455,13 +456,12 @@ export function runReconciliation(
     let remainingXml = [...xmlItems, ...cteData];
     let remainingSienge = [...siengeToReconcile];
     
-    // Multiple Reconciliation Passes
     const passes = [
         { name: 'Valor Total', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], item[h.valor!]), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação']) },
-        { name: 'Preço Unitário', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], item[h.precoUnitario!]), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Unitário']) },
-        { name: 'ICMS Outras', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], item[h.icmsOutras!]), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação']) },
-        { name: 'Valor Total + Desconto', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], parseFloat(String(item[h.valor!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto!] || '0').replace(',', '.'))), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
-        { name: 'Valor Total - Frete', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - parseFloat(String(item[h.frete!] || '0').replace(',', '.'))), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+        { name: 'Preço Unitário', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], item.precoUnitario), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Unitário']) },
+        { name: 'ICMS Outras', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], item.icmsOutras), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação']) },
+        { name: 'Valor Total + Desconto', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], parseFloat(String(item[h.valor!] || '0').replace(',', '.')) + parseFloat(String(item.desconto || '0').replace(',', '.'))), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+        { name: 'Valor Total - Frete', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - parseFloat(String(item.frete || '0').replace(',', '.'))), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
     ];
 
     for (const pass of passes) {
