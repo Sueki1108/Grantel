@@ -141,7 +141,7 @@ export function processDataFrames(
     dfs: DataFrames, 
     eventCanceledKeys: Set<string>, 
     log: LogFunction
-): Omit<ProcessedData, 'fileNames' | 'competence' | 'costCenterMap' | 'costCenterDebugKeys' | 'allCostCenters' | 'costCenterHeaderRows' | 'accountingMap' | 'payableAccountingDebugKeys' | 'paidAccountingDebugKeys' | 'siengeSheetData' | 'siengeDebugKeys' | 'resaleAnalysis' > {
+): Omit<ProcessedData, 'fileNames' | 'competence' | 'costCenterMap' | 'costCenterDebugKeys' | 'allCostCenters' | 'costCenterHeaderRows' | 'accountingMap' | 'payableAccountingDebugKeys' | 'paidAccountingDebugKeys' | 'siengeSheetData' | 'siengeDebugKeys' | 'resaleAnalysis' | 'reconciliationResults' > {
     
     log("Iniciando preparação dos dados no navegador...");
     const GRANTEL_CNPJ = "81732042000119";
@@ -175,26 +175,10 @@ export function processDataFrames(
     const itens = processedDfs["Itens"] || [];
     const saidas = processedDfs["Saídas"] || [];
     const itensSaidas = processedDfs["Itens Saídas"] || [];
-    const naoRealizada = processedDfs["NFE Operação Não Realizada"] || [];
-    const desconhecida = processedDfs["NFE Operação Desconhecida"] || [];
-    const desacordo = processedDfs["CTE Desacordo de Serviço"] || [];
-    const siengeData = processedDfs["Itens do Sienge"] || null;
 
     log("Coletando chaves de exceção (canceladas, manifesto)...");
     const chavesExcecao = new Set<string>(eventCanceledKeys);
     log(`- ${eventCanceledKeys.size} chaves de cancelamento por evento de XML adicionadas.`);
-    
-    const addExceptionsFromDf = (df: DataFrame, chaveKey: string) => {
-        df.forEach(row => {
-            if (!row) return;
-            const chave = cleanAndToStr(row[chaveKey]);
-            if (chave) chavesExcecao.add(chave);
-        });
-    };
-    
-    addExceptionsFromDf(naoRealizada, "Chave de acesso");
-    addExceptionsFromDf(desconhecida, "Chave de acesso");
-    addExceptionsFromDf(desacordo, "Chave de acesso");
     
     [...nfe, ...cte, ...saidas].forEach(row => {
         if (!row) return;
@@ -372,18 +356,14 @@ export function processDataFrames(
             finalSheetSet[name] = sheetData.map(addCfopDescriptionToRow);
         }
     });
-    log("Processamento primário concluído. Iniciando conciliação com dados do Sienge, se disponíveis.");
-
-    const reconciliationResults = siengeData ? runReconciliation(siengeData, itensValidos, notasValidas, [], null, null) : null;
-    if (reconciliationResults) {
-        log(`Conciliação concluída: ${reconciliationResults.reconciled.length} itens conciliados, ${reconciliationResults.onlyInSienge.length} apenas no Sienge, ${reconciliationResults.onlyInXml.length} apenas no XML.`);
-    }
-
+    log("Processamento primário concluído.");
+    
     return {
         sheets: finalSheetSet,
         spedInfo: null,
         keyCheckResults: null,
-        reconciliationResults: reconciliationResults,
+        spedCorrections: null,
+        spedDuplicates: null,
     };
 }
 

@@ -303,7 +303,6 @@ export function AutomatorClientPage() {
                     ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
                     siengeSheetData,
                     siengeDebugKeys,
-                    reconciliationResults: null, // Reset reconciliation results on new file
                 }));
                 
                 toast({ title: 'Planilha Sienge Carregada', description: 'Os dados foram lidos e estão prontos para as análises.' });
@@ -682,6 +681,7 @@ export function AutomatorClientPage() {
         setProcessedData(prev => ({
             ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
             sheets: {}, // Clear only sheets, keep other state
+            reconciliationResults: null, // Clear reconciliation results
         }));
         setIsPeriodModalOpen(false);
         setProcessing(true);
@@ -709,8 +709,11 @@ export function AutomatorClientPage() {
     
                 for (const fileName of requiredFiles) {
                     if (files[fileName]) {
-                        dataToProcess[fileName] = [...(dataToProcess[fileName] || []), ...files[fileName]];
+                        // Importante: Adiciona às exceções, não substitui os dados principais
                         log(`Adicionando dados da planilha de manifesto: '${fileName}'.`);
+                        const manifestData = files[fileName];
+                        const manifestKeys = new Set(manifestData.map(row => cleanAndToStr(row['Chave'] || row['Chave de acesso'])));
+                        manifestKeys.forEach(key => eventCanceledKeys.add(key));
                     }
                 }
                 
