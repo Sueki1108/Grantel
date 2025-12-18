@@ -681,7 +681,7 @@ export function AutomatorClientPage() {
         setProcessedData(prev => ({
             ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
             sheets: {}, // Clear only sheets, keep other state
-            reconciliationResults: null, // Clear reconciliation results
+            reconciliationResults: null,
         }));
         setIsPeriodModalOpen(false);
         setProcessing(true);
@@ -709,7 +709,6 @@ export function AutomatorClientPage() {
     
                 for (const fileName of requiredFiles) {
                     if (files[fileName]) {
-                        // Importante: Adiciona às exceções, não substitui os dados principais
                         log(`Adicionando dados da planilha de manifesto: '${fileName}'.`);
                         const manifestData = files[fileName];
                         const manifestKeys = new Set(manifestData.map(row => cleanAndToStr(row['Chave'] || row['Chave de acesso'])));
