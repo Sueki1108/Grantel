@@ -397,13 +397,6 @@ export function runReconciliation(
         cfop: findHeader(siengeData, ['cfop']),
         produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
         cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cnpj']),
-        icmsOutras: findHeader(siengeData, ['icms outras', 'icmsoutras']),
-        desconto: findHeader(siengeData, ['desconto']),
-        frete: findHeader(siengeData, ['frete']),
-        ipiDespesas: findHeader(siengeData, ['ipi despesas', 'ipidespesas']),
-        icmsSt: findHeader(siengeData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
-        despesasAcessorias: findHeader(siengeData, ['despesas acessórias', 'despesasacessorias', 'voutro']),
-        precoUnitario: findHeader(siengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
     };
 
     if (!h.documento || !h.credor || !h.valor || !h.cnpj) {
@@ -488,24 +481,16 @@ export function runReconciliation(
         return `${docNum}-${cnpj}-${valueStr}`;
     };
 
-    const passes = [
-        { name: "Valor Total", getSiengeValue: (item: any) => item[h.valor!], getXmlValue: (item: any) => item['Valor Total'] || item['Valor da Prestação'] },
-        { name: "Preço Unitário", getSiengeValue: (item: any) => h.precoUnitario ? item[h.precoUnitario!] : null, getXmlValue: (item: any) => item['Valor Unitário'] },
-    ];
-    
-    for (const pass of passes) {
-        if (remainingSienge.length === 0 || remainingXml.length === 0) break;
-        const result = reconciliationPass(
-            remainingSienge,
-            remainingXml,
-            item => createComparisonKey(item, h.documento!, h.cnpj!, pass.getSiengeValue(item)),
-            item => createComparisonKey(item, getXmlDocKey(item), getXmlCnpjKey(item), pass.getXmlValue(item)),
-            pass.name
-        );
-        reconciled.push(...result.matched);
-        remainingSienge = result.remainingSienge;
-        remainingXml = result.remainingXml;
-    }
+    const result = reconciliationPass(
+        remainingSienge,
+        remainingXml,
+        item => createComparisonKey(item, h.documento!, h.cnpj!, item[h.valor!]),
+        item => createComparisonKey(item, getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação']),
+        "Valor Total"
+    );
+    reconciled.push(...result.matched);
+    remainingSienge = result.remainingSienge;
+    remainingXml = result.remainingXml;
     
     const devolucoesEP = xmlItemsSaida.filter(item => {
         const natOp = (item['Natureza da Operação'] || '').toUpperCase();

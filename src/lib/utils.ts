@@ -1,3 +1,5 @@
+"use client";
+
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
@@ -14,7 +16,10 @@ export const formatCnpj = (cnpj: string) => {
 
 export const cleanAndToStr = (value: any): string => {
     if (value === null || typeof value === 'undefined') return "";
-    return String(value).replace(/\D/g, '');
+    let strValue = String(value).trim();
+    // Limpa strings que são representações de floats, como "1234.0"
+    if (/^\d+\.0+$/.test(strValue)) strValue = strValue.split('.')[0];
+    return strValue.replace(/\D/g, '');
 };
 
 

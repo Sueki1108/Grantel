@@ -90,12 +90,8 @@ export function ReconciliationAnalysis({
         XLSX.writeFile(workbook, fileName);
     };
 
-    const itemsToShowInOnlyXmlTab = useMemo(() => {
-        if (reconciliationResults) {
-            return reconciliationResults.onlyInXml;
-        }
-        return initialXmlItems || [];
-    }, [reconciliationResults, initialXmlItems]);
+    const itemsToShowInOnlyXmlTab = reconciliationResults?.onlyInXml ?? initialXmlItems;
+
 
     return (
          <Card>
