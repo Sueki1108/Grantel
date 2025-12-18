@@ -1,4 +1,5 @@
 
+
 import { cfopDescriptions } from './cfop';
 import type { KeyCheckResult } from '@/components/app/key-checker';
 import type { AllClassifications } from '@/lib/types';
@@ -395,13 +396,6 @@ export function runReconciliation(
         valor: findHeader(siengeData, ['valor', 'valortotal', 'vlr total']),
         cfop: findHeader(siengeData, ['cfop']),
         produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
-        icmsOutras: findHeader(siengeData, ['icms outras', 'icmsoutras']),
-        desconto: findHeader(siengeData, ['desconto']),
-        frete: findHeader(siengeData, ['frete']),
-        ipiDespesas: findHeader(siengeData, ['ipi despesas', 'ipidespesas']),
-        icmsSt: findHeader(siengeData, ['icms-st', 'icms st', 'valor icms st', 'vlr icms st', 'vlr icms subst']),
-        despesasAcessorias: findHeader(siengeData, ['despesas acessórias', 'despesasacessorias', 'voutro']),
-        precoUnitario: findHeader(siengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
     };
 
     if (!h.documento || !h.cnpj || !h.valor) {
@@ -426,7 +420,7 @@ export function runReconciliation(
         if (!cleanDoc || !cleanCnpj || cleanValue === 'NaN') return null;
         return `${cleanDoc}-${cleanCnpj}-${cleanValue}`;
     };
-
+    
     const reconciliationPass = (siengeItems: any[], xmlItems: any[], getSiengeKey: (item: any) => string | null, getXmlKey: (item: any) => string | null, passName: string) => {
         const matchedInPass: any[] = [];
         const stillUnmatchedSienge: any[] = [];
@@ -461,69 +455,23 @@ export function runReconciliation(
     let remainingXml = [...xmlItems, ...cteData];
     let remainingSienge = [...siengeToReconcile];
     
-    // Pass 1: Valor Total
-    let result = reconciliationPass(remainingSienge, remainingXml, 
-        item => createComparisonKey(item[h.documento!], item[h.cnpj!], item[h.valor!]),
-        item => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação']),
-        "Valor Total"
-    );
-    reconciled.push(...result.matched);
-    remainingSienge = result.remainingSienge;
-    remainingXml = result.remainingXml;
+    // Multiple Reconciliation Passes
+    const passes = [
+        { name: 'Valor Total', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], item[h.valor!]), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação']) },
+        { name: 'Preço Unitário', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], item[h.precoUnitario!]), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Unitário']) },
+        { name: 'ICMS Outras', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], item[h.icmsOutras!]), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação']) },
+        { name: 'Valor Total + Desconto', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], parseFloat(String(item[h.valor!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto!] || '0').replace(',', '.'))), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+        { name: 'Valor Total - Frete', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - parseFloat(String(item[h.frete!] || '0').replace(',', '.'))), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+    ];
 
-    // Pass 2: ICMS Outras
-    if (h.icmsOutras) {
-        result = reconciliationPass(remainingSienge, remainingXml, 
-           item => createComparisonKey(item[h.documento!], item[h.cnpj!], item[h.icmsOutras!]),
-           item => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação']),
-           "ICMS Outras"
-       );
-       reconciled.push(...result.matched);
-       remainingSienge = result.remainingSienge;
-       remainingXml = result.remainingXml;
+    for (const pass of passes) {
+        if(remainingSienge.length === 0 || remainingXml.length === 0) break;
+        const result = reconciliationPass(remainingSienge, remainingXml, pass.siengeKey, pass.xmlKey, pass.name);
+        reconciled.push(...result.matched);
+        remainingSienge = result.remainingSienge;
+        remainingXml = result.remainingXml;
     }
 
-    // Pass 3: Valor Total + Desconto
-    if (h.desconto) {
-        result = reconciliationPass(remainingSienge, remainingXml,
-            item => createComparisonKey(item[h.documento!], item[h.cnpj!], parseFloat(String(item[h.valor!] || '0').replace(',', '.')) + parseFloat(String(item[h.desconto!] || '0').replace(',', '.'))),
-            item => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação']),
-            "Valor Total + Desconto"
-        );
-        reconciled.push(...result.matched);
-        remainingSienge = result.remainingSienge;
-        remainingXml = result.remainingXml;
-    }
-    
-    // Pass 4: Valor Total - Frete
-    if (h.frete) {
-        result = reconciliationPass(remainingSienge, remainingXml,
-            item => createComparisonKey(item[h.documento!], item[h.cnpj!], parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - parseFloat(String(item[h.frete!] || '0').replace(',', '.'))),
-            item => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação']),
-            "Valor Total - Frete"
-        );
-        reconciled.push(...result.matched);
-        remainingSienge = result.remainingSienge;
-        remainingXml = result.remainingXml;
-    }
-    
-    // Pass 5: Valor Total - IPI Despesas - ICMS ST
-    if (h.ipiDespesas || h.icmsSt) {
-        result = reconciliationPass(remainingSienge, remainingXml,
-            item => createComparisonKey(
-                item[h.documento!], 
-                item[h.cnpj!], 
-                parseFloat(String(item[h.valor!] || '0').replace(',', '.')) 
-                - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0)
-                - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)
-            ),
-            item => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação']),
-            "Valor Total - IPI/ICMS ST"
-        );
-        reconciled.push(...result.matched);
-        remainingSienge = result.remainingSienge;
-        remainingXml = result.remainingXml;
-    }
 
     const enrichItem = (item: any) => {
         if (!item || typeof item !== 'object') return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };

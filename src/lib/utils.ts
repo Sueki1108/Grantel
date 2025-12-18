@@ -17,12 +17,15 @@ export const formatCnpj = (cnpj: string) => {
 
 export const cleanAndToStr = (value: any): string => {
     if (value === null || typeof value === 'undefined') return "";
+    // Primeiro, converte para string e remove espaços em branco
     let strValue = String(value).trim();
-    // Remove a parte decimal se for apenas .0 ou .00
+    
+    // Remove a parte decimal se for apenas .0 ou .00, etc.
     if (/\.0+$/.test(strValue)) {
         strValue = strValue.split('.')[0];
     }
-    // Remove todos os caracteres não numéricos
+    
+    // Remove todos os caracteres que não são dígitos
     return strValue.replace(/\D/g, '');
 };
 
