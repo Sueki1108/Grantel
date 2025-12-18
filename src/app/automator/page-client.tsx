@@ -626,7 +626,7 @@ export function AutomatorClientPage() {
                 setProcessedData({
                     ...resultData,
                     competence,
-                    reconciliationResults: null, // Start with null results
+                    reconciliationResults: null, 
                 });
 
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
@@ -657,7 +657,6 @@ export function AutomatorClientPage() {
         try {
             await new Promise(resolve => setTimeout(resolve, 50));
             
-            // Re-read file data here to ensure it's fresh
             const siengeSheetData = await (async () => {
                 const data = await siengeFile.arrayBuffer();
                 const workbook = XLSX.read(data, { type: 'array' });
@@ -686,7 +685,7 @@ export function AutomatorClientPage() {
             
             setProcessedData(prev => ({
                 ...prev!,
-                siengeSheetData, // Also update the sheet data in the main state
+                siengeSheetData, 
                 costCenterMap,
                 accountingMap: combinedAccountingMap,
                 reconciliationResults: newReconciliationResults,

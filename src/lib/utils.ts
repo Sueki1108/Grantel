@@ -14,7 +14,6 @@ export const formatCnpj = (cnpj: string) => {
 
 export const cleanAndToStr = (value: any): string => {
     if (value === null || typeof value === 'undefined') return "";
-    // Apenas remove caracteres que não são dígitos. Preserva zeros à esquerda.
     return String(value).replace(/\D/g, '');
 };
 
@@ -29,6 +28,5 @@ export const parseSpedDate = (dateStr: string): Date => {
 
 export const normalizeKey = (key: any): string => {
     if (key === null || typeof key === 'undefined') return '';
-    // Garante que o valor é uma string antes de chamar métodos de string
     return String(key).toLowerCase().replace(/[\s._\/-]/g, '');
 }
