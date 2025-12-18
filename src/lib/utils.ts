@@ -14,10 +14,8 @@ export const formatCnpj = (cnpj: string) => {
 
 export const cleanAndToStr = (value: any): string => {
     if (value === null || typeof value === 'undefined') return "";
-    let strValue = String(value).trim();
-    // Limpa strings que são representações de floats, como "1234.0"
-    if (/^\d+\.0+$/.test(strValue)) strValue = strValue.split('.')[0];
-    return strValue.replace(/\D/g, '');
+    // Apenas remove caracteres que não são dígitos. Preserva zeros à esquerda.
+    return String(value).replace(/\D/g, '');
 };
 
 
