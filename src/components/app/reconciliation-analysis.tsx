@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useMemo, useState, ChangeEvent } from 'react';
@@ -93,7 +94,11 @@ export function ReconciliationAnalysis({
         XLSX.writeFile(workbook, fileName);
     };
 
-    const itemsToShowInOnlyXmlTab = reconciliationResults ? reconciliationResults.onlyInXml : initialXmlItems;
+    // Correctly determine which items to show in the "Apenas no XML" tab.
+    // If reconciliation has run, use its results. Otherwise, use the initial valid items from the first processing step.
+    const itemsToShowInOnlyXmlTab = reconciliationResults 
+        ? reconciliationResults.onlyInXml 
+        : initialXmlItems;
 
 
     return (
