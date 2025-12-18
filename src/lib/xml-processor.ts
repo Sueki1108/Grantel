@@ -1,4 +1,3 @@
-
 // Types
 type LogFunction = (message: string) => void;
 
