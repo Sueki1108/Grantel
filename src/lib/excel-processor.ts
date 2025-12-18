@@ -67,12 +67,12 @@ export interface ProcessedData {
     resaleAnalysis?: { noteKeys: Set<string>; xmls: File[] } | null;
     spedCorrections?: SpedCorrectionResult[] | null;
     spedDuplicates?: SpedDuplicate[] | null;
-    costCenterMap?: Map<string, string>;
+    costCenterMap: Map<string, string> | null;
     siengeDebugKeys?: any[];
     costCenterDebugKeys?: any[];
     allCostCenters?: string[];
     costCenterHeaderRows?: any[][];
-    accountingMap?: Map<string, { account: string; description: string }>;
+    accountingMap: Map<string, { account: string; description: string }> | null;
     payableAccountingDebugKeys?: any[];
     paidAccountingDebugKeys?: any[];
     fileNames?: {
@@ -534,9 +534,9 @@ export function runReconciliation(
             const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
             const costCenterKey = `${docNumberClean}-${credorCode}`;
-            item['Centro de Custo'] = costCenterMap?.get(costCenterKey) || 'N/A';
+            item['Centro de Custo'] = (costCenterMap && costCenterMap.get(costCenterKey)) || 'N/A';
             const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
-            const accInfo = accountingMap?.get(accountingKey);
+            const accInfo = (accountingMap && accountingMap.get(accountingKey));
             item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
         } else {
             item['Centro de Custo'] = 'N/A'; item['Contabilização'] = 'N/A';

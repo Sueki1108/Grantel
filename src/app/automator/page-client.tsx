@@ -34,11 +34,11 @@ const ResultsDisplay = dynamic(() => import('@/components/app/results-display').
 const LogDisplay = dynamic(() => import('@/components/app/log-display').then(mod => mod.LogDisplay), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const SaidasAnalysis = dynamic(() => import('@/components/app/saidas-analysis').then(mod => mod.SaidasAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const NfseAnalysis = dynamic(() => import('@/components/app/nfse-analysis').then(mod => mod.NfseAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
+const ReconciliationAnalysis = dynamic(() => import('@/components/app/reconciliation-analysis').then(mod => mod.ReconciliationAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const AdvancedAnalyses = dynamic(() => import('@/components/app/advanced-analyses').then(mod => mod.AdvancedAnalyses), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const ImobilizadoAnalysis = dynamic(() => import('@/components/app/imobilizado-analysis').then(mod => mod.ImobilizadoAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const PendingIssuesReport = dynamic(() => import('@/components/app/pending-issues-report').then(mod => mod.PendingIssuesReport), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const HistoryAnalysis = dynamic(() => import('@/components/app/history-analysis').then(mod => mod.HistoryAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
-const ReconciliationAnalysis = dynamic(() => import('@/components/app/reconciliation-analysis').then(mod => mod.ReconciliationAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 const DifalAnalysis = dynamic(() => import('@/components/app/difal-analysis').then(mod => mod.DifalAnalysis), { loading: () => <Loader2 className="animate-spin mx-auto mt-4" /> });
 
 
@@ -58,6 +58,30 @@ const requiredFiles = [
 
 const IMOBILIZADO_STORAGE_KEY = 'imobilizadoClassifications_v2';
 const DISREGARDED_NFSE_STORAGE_KEY = 'disregardedNfseNotes';
+
+const initialProcessedDataState: ProcessedData = {
+    sheets: {},
+    spedInfo: null,
+    siengeSheetData: null,
+    keyCheckResults: null,
+    competence: null,
+    reconciliationResults: null,
+    resaleAnalysis: null,
+    spedCorrections: null,
+    spedDuplicates: null,
+    costCenterMap: null,
+    costCenterDebugKeys: [],
+    allCostCenters: [],
+    costCenterHeaderRows: [],
+    accountingMap: null,
+    payableAccountingDebugKeys: [],
+    paidAccountingDebugKeys: [],
+    siengeDebugKeys: [],
+    fileNames: {
+        nfeEntrada: [], cte: [], nfeSaida: [], nfse: [],
+        manifesto: [], sienge: null, sped: []
+    }
+};
 
 
 export function AutomatorClientPage() {
@@ -300,7 +324,7 @@ export function AutomatorClientPage() {
                 const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
     
                 setProcessedData(prev => ({
-                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
+                    ...(prev ?? initialProcessedDataState),
                     siengeSheetData,
                     siengeDebugKeys,
                     reconciliationResults: null, // Reset reconciliation results on new file
@@ -341,7 +365,7 @@ export function AutomatorClientPage() {
                 const { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows } = processCostCenterData(costCenterData);
                 
                 setProcessedData(prev => ({
-                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
+                    ...(prev ?? initialProcessedDataState),
                     costCenterMap,
                     costCenterDebugKeys: debugKeys,
                     allCostCenters,
@@ -358,7 +382,7 @@ export function AutomatorClientPage() {
             setProcessedData(prev => {
                 if (!prev) return null;
                 const { costCenterMap, costCenterDebugKeys, allCostCenters, costCenterHeaderRows, ...rest } = prev;
-                 return { ...rest, costCenterMap: undefined, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] } as ProcessedData;
+                 return { ...rest, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] } as ProcessedData;
             });
         }
     };
@@ -370,7 +394,7 @@ export function AutomatorClientPage() {
              setProcessedData(prev => {
                 if (!prev) return null;
                 const { accountingMap, payableAccountingDebugKeys, ...rest } = prev;
-                return { ...rest, accountingMap: undefined, payableAccountingDebugKeys: [] } as ProcessedData;
+                return { ...rest, accountingMap: null, payableAccountingDebugKeys: [] } as ProcessedData;
             });
             return;
         }
@@ -395,7 +419,7 @@ export function AutomatorClientPage() {
             const { accountingMap, payableAccountingDebugKeys } = processPayableAccountingData(combinedData);
 
             setProcessedData(prev => ({
-                ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
+                ...(prev ?? initialProcessedDataState),
                 accountingMap: new Map([...(prev?.accountingMap || []), ...accountingMap]),
                 payableAccountingDebugKeys: [...(prev?.payableAccountingDebugKeys || []), ...payableAccountingDebugKeys],
             }));
@@ -439,7 +463,7 @@ export function AutomatorClientPage() {
             const { accountingMap, paidAccountingDebugKeys } = processPaidAccountingData(combinedData);
 
             setProcessedData(prev => ({
-                ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
+                ...(prev ?? initialProcessedDataState),
                 accountingMap: new Map([...(prev?.accountingMap || []), ...accountingMap]),
                 paidAccountingDebugKeys: [...(prev?.paidAccountingDebugKeys || []), ...paidAccountingDebugKeys],
             }));
@@ -679,7 +703,10 @@ export function AutomatorClientPage() {
     const handleSubmit = () => {
         setError(null);
         setLogs([]);
-        setProcessedData(null); // Reset all processed data
+        setProcessedData(prev => ({
+            ...(prev ?? initialProcessedDataState),
+            sheets: {}, // Clear only sheets, keep other state
+        }));
         setIsPeriodModalOpen(false);
         setProcessing(true);
         
@@ -761,10 +788,11 @@ export function AutomatorClientPage() {
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
-                setProcessedData({
+                setProcessedData(prev => ({
+                    ...(prev ?? initialProcessedDataState),
                     ...resultData,
                     competence,
-                });
+                }));
 
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
 
@@ -797,7 +825,6 @@ export function AutomatorClientPage() {
             const newReconciliationResults = runReconciliation(
                 processedData.siengeSheetData!,
                 processedData.sheets['Itens Válidos'] || [],
-                processedData.sheets['Itens Válidos Saídas'] || [],
                 processedData.sheets['Notas Válidas'] || [],
                 processedData.sheets['CTEs Válidos'] || [],
                 processedData.costCenterMap,
@@ -820,7 +847,7 @@ export function AutomatorClientPage() {
     
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null, spedDuplicates: SpedDuplicate[] | null) => {
         setProcessedData(prevData => {
-            const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] };
+            const baseData = prevData ?? initialProcessedDataState;
             return { ...baseData, spedInfo, keyCheckResults, spedCorrections: spedCorrections ? [spedCorrections] : baseData.spedCorrections, spedDuplicates };
         });
     }, []);
@@ -964,7 +991,7 @@ export function AutomatorClientPage() {
                         <TabsContent value="reconciliation" className="mt-6">
                             { !reconciliationTabDisabled ? 
                             <ReconciliationAnalysis 
-                                processedData={processedData}
+                                processedData={processedData} 
                                 initialXmlItems={processedData?.sheets?.['Itens Válidos'] || []}
                                 siengeFile={siengeFile} 
                                 onSiengeFileChange={handleSiengeFileChange}
