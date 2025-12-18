@@ -370,7 +370,6 @@ export function processDataFrames(
 export function runReconciliation(
     siengeData: any[],
     xmlItems: any[],
-    xmlItemsSaida: any[],
     nfeEntradas: any[],
     cteData: any[],
     costCenterMap?: Map<string, string> | null,
@@ -411,7 +410,7 @@ export function runReconciliation(
     
     const siengeToReconcile = h.esp 
         ? siengeData.filter(row => ['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()))
-        : siengeData; // If 'Esp' not found, try to reconcile all rows
+        : siengeData;
     
     const otherSiengeItemsRaw = h.esp
         ? siengeData.filter(row => !['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()))
@@ -508,7 +507,23 @@ export function runReconciliation(
         remainingXml = result.remainingXml;
     }
     
-    // ... (outras passagens de reconciliação) ...
+    // Pass 5: Valor Total - IPI Despesas - ICMS ST
+    if (h.ipiDespesas || h.icmsSt) {
+        result = reconciliationPass(remainingSienge, remainingXml,
+            item => createComparisonKey(
+                item[h.documento!], 
+                item[h.cnpj!], 
+                parseFloat(String(item[h.valor!] || '0').replace(',', '.')) 
+                - (h.ipiDespesas ? parseFloat(String(item[h.ipiDespesas] || '0').replace(',', '.')) : 0)
+                - (h.icmsSt ? parseFloat(String(item[h.icmsSt] || '0').replace(',', '.')) : 0)
+            ),
+            item => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação']),
+            "Valor Total - IPI/ICMS ST"
+        );
+        reconciled.push(...result.matched);
+        remainingSienge = result.remainingSienge;
+        remainingXml = result.remainingXml;
+    }
 
     const enrichItem = (item: any) => {
         if (!item || typeof item !== 'object') return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
@@ -529,14 +544,15 @@ export function runReconciliation(
         item['CFOP (Sienge)'] = (h.cfop && item[`Sienge_${h.cfop}`]) || 'N/A';
         return item;
     };
-        
-    const devolucoesEP = xmlItemsSaida.filter(item => {
+    
+    // Devoluções EP: Itens de Saída cuja natureza da operação é devolução
+    const devolucoesEP = (nfeEntradas || []).filter(item => {
         const natOp = (item['Natureza da Operação'] || '').toUpperCase();
         return natOp.includes('DEVOLUCAO');
     }).map(item => ({
-        'Número da Nota de Devolução': item['Número da Nota'],
+        'Número da Nota de Devolução': item['Número'],
         'Fornecedor': item.Fornecedor,
-        'Valor': item['Valor Total'],
+        'Valor': item['Total'],
         'Data Emissão': item.Emissão,
         'Chave da Nota Original': cleanAndToStr(item['refNFe']) || 'Não encontrada no XML',
     }));
