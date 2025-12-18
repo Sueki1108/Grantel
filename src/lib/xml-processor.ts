@@ -43,10 +43,15 @@ const cleanAndToStr = (value: any): string => {
 const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | null => {
     const nfeProcList = xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'nfeProc');
     if (nfeProcList.length === 0 || !nfeProcList[0]) {
-        log("AVISO: Tag <nfeProc> não encontrada. O XML pode não ser um documento de NFe processado.");
-        return null;
+        // Fallback for XMLs without nfeProc wrapper
+        const nfeList = xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'NFe');
+        if (nfeList.length === 0) {
+            log("AVISO: Tag <nfeProc> ou <NFe> não encontrada. O XML pode não ser um documento de NFe válido.");
+            return null;
+        }
     }
-    const nfeProc = nfeProcList[0];
+
+    const nfeProc = nfeProcList[0] ?? xmlDoc.documentElement;
     
     const nfeList = nfeProc.getElementsByTagNameNS(NFE_NAMESPACE, 'NFe');
     if (nfeList.length === 0 || !nfeList[0]) {
@@ -94,7 +99,7 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     const destIE = getTagValue(dest, 'IE');
     const enderDest = dest.getElementsByTagNameNS(NFE_NAMESPACE, 'enderDest')[0];
     const destUF = getTagValue(enderDest, 'UF');
-    const infCpl = getTagValue(infAdic, 'infCpl');
+    const infCpl = infAdic ? getTagValue(infAdic, 'infCpl') : '';
 
 
     // Extract ICMS Totals
@@ -107,7 +112,8 @@ const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | nul
     
     let status = 'Autorizadas';
     if(infProt) {
-        status = getTagValue(infProt, 'cStat') === '100' ? 'Autorizadas' : 'Canceladas';
+        const cStat = getTagValue(infProt, 'cStat');
+        status = cStat === '100' || cStat === '150' ? 'Autorizadas' : 'Canceladas';
     }
 
 
@@ -418,7 +424,7 @@ export const processUploadedXmls = async (files: File[], log: LogFunction = () =
             
             if (xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'procEventoNFe').length > 0 || xmlDoc.getElementsByTagName('procEventoCTe').length > 0) {
                 parsedResult = parseCancelEvent(xmlDoc, log);
-            } else if (xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'nfeProc').length > 0) {
+            } else if (xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'nfeProc').length > 0 || xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'NFe').length > 0) {
                 parsedResult = parseNFe(xmlDoc, log);
             } else if (xmlDoc.getElementsByTagName('cteProc').length > 0) {
                 parsedResult = parseCTe(xmlDoc, log);
