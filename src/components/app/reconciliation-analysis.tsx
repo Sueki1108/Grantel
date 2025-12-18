@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useMemo, useState, ChangeEvent } from 'react';
@@ -72,16 +71,12 @@ export function ReconciliationAnalysis({
         setIsReconciliationRunning(false);
     };
 
-    const { reconciliationResults, siengeDataForTaxCheck, devolucoesEP, itensValidosSaidas, initialXmlItems } = useMemo(() => {
-        return {
-            reconciliationResults: processedData?.reconciliationResults,
-            siengeDataForTaxCheck: processedData?.siengeSheetData,
-            devolucoesEP: processedData?.reconciliationResults?.devolucoesEP,
-            itensValidosSaidas: processedData?.sheets?.['Itens Válidos Saídas'] || [],
-            initialXmlItems: processedData?.sheets?.['Itens Válidos'] || []
-        };
-    }, [processedData]);
-    
+    const reconciliationResults = processedData?.reconciliationResults;
+    const siengeDataForTaxCheck = processedData?.siengeSheetData;
+    const devolucoesEP = processedData?.reconciliationResults?.devolucoesEP;
+    const itensValidosSaidas = processedData?.sheets?.['Itens Válidos Saídas'] || [];
+    const initialXmlItems = processedData?.sheets?.['Itens Válidos'] || [];
+
     const handleDownload = async (data: any[], title: string) => {
         if (!data || data.length === 0) {
             toast({ title: "Nenhum dado para exportar", description: `Não há itens na aba "${title}".` });
