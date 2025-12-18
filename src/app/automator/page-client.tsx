@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -706,20 +707,12 @@ export function AutomatorClientPage() {
                 eventCanceledKeys = xmlData.canceledKeys;
                 log(`Processamento XML concluído: ${xmlData.nfe.length} NF-e Entradas, ${xmlData.saidas.length} NF-e Saídas, ${xmlData.cte.length} CT-es.`);
     
-                for (const fileName in files) {
-                    const mappedName = fileMapping[fileName] || fileName;
-                    const isManifestoFile = [
-                        "NFE Operação Não Realizada", "NFE Operação Desconhecida", "CTE Desacordo de Serviço"
-                    ].includes(fileName);
-                    
-                    if (isManifestoFile) {
+                // Processar apenas as planilhas de manifesto e adicioná-las aos dados existentes.
+                for (const fileName of requiredFiles) {
+                    if (files[fileName]) {
+                        log(`Adicionando dados da planilha de manifesto: '${fileName}'.`);
+                        const mappedName = fileMapping[fileName] || fileName;
                         dataToProcess[mappedName] = [...(dataToProcess[mappedName] || []), ...files[fileName]];
-                         log(`Adicionando dados da planilha de manifesto: '${fileName}'.`);
-                    } else if (!dataToProcess[mappedName] || dataToProcess[mappedName].length === 0) {
-                        dataToProcess[mappedName] = files[fileName];
-                        log(`Usando dados da planilha carregada: '${fileName}' (sem XML correspondente).`);
-                    } else {
-                         log(`Dados de XML para '${mappedName}' encontrados, ignorando a planilha carregada: '${fileName}'.`);
                     }
                 }
                 
@@ -1097,3 +1090,5 @@ export function AutomatorClientPage() {
         </div>
     );
 }
+
+    
