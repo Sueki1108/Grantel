@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -704,7 +705,7 @@ export function AutomatorClientPage() {
                     dataToProcess["Saídas"] = xmlData.saidas;
                     dataToProcess["Itens Saídas"] = xmlData.itensSaidas;
                     eventCanceledKeys = xmlData.canceledKeys;
-                    log(`Processamento XML concluído: ${xmlData.nfe.length} NF-e Entradas, ${xmlData.saidas.length} NF-e Saídas, ${xmlData.cte.length} CT-es.`);
+                    log(`Processamento XML concluído: ${xmlData.nfe.length} NF-e, ${xmlData.cte.length} CT-es, ${xmlData.saidas.length} Saídas, ${xmlData.itens.length + xmlData.itensSaidas.length} Itens.`);
                 }
     
                 // Processar as planilhas. As de manifesto são adicionadas, as outras servem de fallback.
