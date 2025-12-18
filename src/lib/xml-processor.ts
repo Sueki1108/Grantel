@@ -319,6 +319,9 @@ const readFileAsText = (file: File): Promise<string> => {
                     // Try UTF-8 first. It's the most common and robust.
                     const decoder = new TextDecoder('utf-8', { fatal: true });
                     const text = decoder.decode(buffer);
+                    if (text.includes('')) { // Check for the Unicode Replacement Character
+                        throw new Error("UTF-8 decoding resulted in replacement characters.");
+                    }
                     resolve(text);
                 } catch (e) {
                     try {
@@ -443,3 +446,5 @@ export const processUploadedXmls = async (files: File[], log: LogFunction = () =
     
     return combinedData;
 };
+
+    
