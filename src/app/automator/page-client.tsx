@@ -284,8 +284,40 @@ export function AutomatorClientPage() {
     const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         setSiengeFile(file || null);
+    
         if (file) {
-            toast({ title: 'Planilha Sienge Selecionada', description: 'Clique em "Executar Conciliação" para processar.' });
+            setProcessing(true);
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
+    
+                const siengeWorksheet = workbook.Sheets[sheetName];
+                if(!siengeWorksheet) throw new Error("Aba da planilha não encontrada.");
+
+                const siengeSheetData = XLSX.utils.sheet_to_json(siengeWorksheet, { defval: null });
+                const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
+    
+                setProcessedData(prev => ({
+                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
+                    siengeSheetData,
+                    siengeDebugKeys,
+                }));
+                
+                toast({ title: 'Planilha Sienge Carregada', description: 'Os dados foram lidos e estão prontos para as análises.' });
+            } catch (err: any) {
+                toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
+                setSiengeFile(null);
+            } finally {
+                setProcessing(false);
+            }
+        } else {
+            setProcessedData(prev => {
+                if (!prev) return null;
+                const { siengeSheetData, siengeDebugKeys, ...rest } = prev;
+                return { ...rest, siengeSheetData: null, siengeDebugKeys: [] } as ProcessedData;
+            });
         }
     };
     
@@ -293,8 +325,39 @@ export function AutomatorClientPage() {
     const handleCostCenterFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         setCostCenterFile(file || null);
-         if (file) {
-            toast({ title: 'Planilha de Centro de Custo Selecionada', description: 'Os dados serão usados na próxima conciliação.' });
+
+        if (file) {
+            setProcessing(true);
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
+                const worksheet = workbook.Sheets[sheetName];
+                const costCenterData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                const { costCenterMap, debugKeys, allCostCenters, costCenterHeaderRows } = processCostCenterData(costCenterData);
+                
+                setProcessedData(prev => ({
+                    ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
+                    costCenterMap,
+                    costCenterDebugKeys: debugKeys,
+                    allCostCenters,
+                    costCenterHeaderRows,
+                }));
+                toast({ title: "Planilha de Centro de Custo Carregada", description: `${costCenterMap.size} mapeamentos e ${allCostCenters.length} centros de custo foram encontrados.` });
+            } catch (err: any) {
+                toast({ variant: 'destructive', title: 'Erro ao Processar Centro de Custo', description: err.message });
+                setCostCenterFile(null);
+            } finally {
+                setProcessing(false);
+            }
+        } else {
+            setProcessedData(prev => {
+                if (!prev) return null;
+                const { costCenterMap, costCenterDebugKeys, allCostCenters, costCenterHeaderRows, ...rest } = prev;
+                 return { ...rest, costCenterMap: undefined, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [] } as ProcessedData;
+            });
         }
     };
 
@@ -302,10 +365,49 @@ export function AutomatorClientPage() {
         const selectedFiles = e.target.files;
         if (!selectedFiles || selectedFiles.length === 0) {
             setPayableAccountingFiles([]);
+             setProcessedData(prev => {
+                if (!prev) return null;
+                const { accountingMap, payableAccountingDebugKeys, ...rest } = prev;
+                return { ...rest, accountingMap: undefined, payableAccountingDebugKeys: [] } as ProcessedData;
+            });
             return;
         }
-        setPayableAccountingFiles(Array.from(selectedFiles));
-        toast({ title: 'Planilhas de Contas a Pagar Selecionadas', description: `${selectedFiles.length} ficheiros prontos para serem usados na conciliação.` });
+
+        const newFiles = Array.from(selectedFiles);
+        setPayableAccountingFiles(prev => [...prev, ...newFiles]);
+        setProcessing(true);
+
+        try {
+            const allSheetsData: any[][] = [];
+            for (const file of newFiles) {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                 workbook.SheetNames.forEach(sheetName => {
+                    const worksheet = workbook.Sheets[sheetName];
+                    const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    allSheetsData.push(sheetData);
+                });
+            }
+
+            const combinedData = allSheetsData.flat();
+            const { accountingMap, payableAccountingDebugKeys } = processPayableAccountingData(combinedData);
+
+            setProcessedData(prev => ({
+                ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
+                accountingMap: new Map([...(prev?.accountingMap || []), ...accountingMap]),
+                payableAccountingDebugKeys: [...(prev?.payableAccountingDebugKeys || []), ...payableAccountingDebugKeys],
+            }));
+
+            if (accountingMap) {
+                 toast({ title: "Contas a Pagar Carregadas", description: `${newFiles.length} ficheiro(s) processado(s), ${accountingMap.size} novos mapeamentos encontrados.` });
+            }
+
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Erro ao Processar Contas a Pagar', description: err.message });
+            setPayableAccountingFiles([]);
+        } finally {
+            setProcessing(false);
+        }
     };
     
      const handlePaidAccountingFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -314,8 +416,42 @@ export function AutomatorClientPage() {
             setPaidAccountingFiles([]);
             return;
         }
-        setPaidAccountingFiles(Array.from(selectedFiles));
-         toast({ title: 'Planilhas de Contas Pagas Selecionadas', description: `${selectedFiles.length} ficheiros prontos para serem usados na conciliação.` });
+
+        const newFiles = Array.from(selectedFiles);
+        setPaidAccountingFiles(prev => [...prev, ...newFiles]);
+        setProcessing(true);
+
+        try {
+            const allSheetsData: any[][] = [];
+            for (const file of newFiles) {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                workbook.SheetNames.forEach(sheetName => {
+                    const worksheet = workbook.Sheets[sheetName];
+                    const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    allSheetsData.push(sheetData);
+                });
+            }
+
+            const combinedData = allSheetsData.flat();
+            const { accountingMap, paidAccountingDebugKeys } = processPaidAccountingData(combinedData);
+
+            setProcessedData(prev => ({
+                ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
+                accountingMap: new Map([...(prev?.accountingMap || []), ...accountingMap]),
+                paidAccountingDebugKeys: [...(prev?.paidAccountingDebugKeys || []), ...paidAccountingDebugKeys],
+            }));
+
+            if (accountingMap.size > 0) {
+                toast({ title: "Contas Pagas Carregadas", description: `${newFiles.length} ficheiro(s) processado(s), ${accountingMap.size} novos mapeamentos encontrados.` });
+            }
+
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Erro ao Processar Contas Pagas', description: err.message });
+            setPaidAccountingFiles([]);
+        } finally {
+            setProcessing(false);
+        }
     };
 
 
@@ -657,37 +793,18 @@ export function AutomatorClientPage() {
         try {
             await new Promise(resolve => setTimeout(resolve, 50));
             
-            const siengeSheetData = await (async () => {
-                const data = await siengeFile.arrayBuffer();
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
-                const worksheet = workbook.Sheets[sheetName];
-                return XLSX.utils.sheet_to_json(worksheet, { range: 8, defval: null });
-            })();
-
-            const costCenterMap = costCenterFile ? (await processCostCenterFile(costCenterFile)).costCenterMap : undefined;
-            
-            const { accountingMap: payableMap } = payableAccountingFiles.length > 0 ? await processAccountingFiles(payableAccountingFiles, processPayableAccountingData) : { accountingMap: new Map(), debugKeys: [] };
-            const { accountingMap: paidMap } = paidAccountingFiles.length > 0 ? await processAccountingFiles(paidAccountingFiles, processPaidAccountingData) : { accountingMap: new Map(), debugKeys: [] };
-
-            const combinedAccountingMap = new Map([...(payableMap || []), ...(paidMap || [])]);
-
             const newReconciliationResults = runReconciliation(
-                siengeSheetData,
+                processedData.siengeSheetData!,
                 processedData.sheets['Itens Válidos'] || [],
                 processedData.sheets['Itens Válidos Saídas'] || [],
                 processedData.sheets['Notas Válidas'] || [],
                 processedData.sheets['CTEs Válidos'] || [],
-                costCenterMap,
-                combinedAccountingMap,
+                processedData.costCenterMap,
+                processedData.accountingMap,
             );
             
             setProcessedData(prev => ({
                 ...prev!,
-                siengeSheetData, 
-                costCenterMap,
-                accountingMap: combinedAccountingMap,
                 reconciliationResults: newReconciliationResults,
             }));
             
@@ -699,32 +816,7 @@ export function AutomatorClientPage() {
             setProcessing(false);
         }
     };
-
-    // Helper for processing accounting files
-    const processAccountingFiles = async (files: File[], processor: (data: any[][]) => { accountingMap: Map<string, { account: string; description: string }>; [key:string]: any } ) => {
-        const allSheetsData: any[][] = [];
-        for (const file of files) {
-            const data = await file.arrayBuffer();
-            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-             workbook.SheetNames.forEach(sheetName => {
-                const worksheet = workbook.Sheets[sheetName];
-                allSheetsData.push(XLSX.utils.sheet_to_json(worksheet, { header: 1 }));
-            });
-        }
-        return processor(allSheetsData.flat());
-    };
     
-    const processCostCenterFile = async (file: File) => {
-        const data = await file.arrayBuffer();
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        if (!sheetName) throw new Error("A planilha de Centro de Custo não contém abas.");
-        const worksheet = workbook.Sheets[sheetName];
-        const costCenterData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-        return processCostCenterData(costCenterData);
-    };
-
-
     const handleSpedProcessed = useCallback((spedInfo: SpedInfo | null, keyCheckResults: KeyCheckResult | null, spedCorrections: SpedCorrectionResult | null, spedDuplicates: SpedDuplicate[] | null) => {
         setProcessedData(prevData => {
             const baseData = prevData ?? { sheets: {}, siengeSheetData: null, spedInfo: null, keyCheckResults: null, spedCorrections: null, competence: null, resaleAnalysis: null, reconciliationResults: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] };
