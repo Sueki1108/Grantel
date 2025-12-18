@@ -541,10 +541,7 @@ export function AutomatorClientPage() {
     const handleSubmit = () => {
         setError(null);
         setLogs([]);
-        setProcessedData(prev => ({
-            ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
-            sheets: {},
-        }));
+        setProcessedData(null); // Reset all processed data
         setIsPeriodModalOpen(false);
         setProcessing(true);
         
@@ -626,21 +623,18 @@ export function AutomatorClientPage() {
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
 
-                setProcessedData(prev => ({
-                    ...prev,
-                    ...resultData, 
+                setProcessedData({
+                    ...resultData,
                     competence,
-                }));
+                    reconciliationResults: { reconciled: [], onlyInSienge: [], onlyInXml: resultData.sheets['Itens Válidos'] || [], devolucoesEP: [], otherSiengeItems: {}, debug: { siengeKeys: [] } }
+                });
 
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
 
             } catch (err: any) {
                 const errorMessage = err.message || "Ocorreu um erro desconhecido durante o processamento.";
                 setError(errorMessage);
-                setProcessedData(prev => ({
-                    ...(prev || { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
-                    sheets: {},
-                }));
+                setProcessedData(null);
                 setLogs(prev => [...prev, `[ERRO FATAL] ${errorMessage}`]);
                 toast({ variant: "destructive", title: "Erro no Processamento", description: errorMessage });
             } finally {
@@ -892,6 +886,7 @@ export function AutomatorClientPage() {
                                 onPaidAccountingFileChange={handlePaidAccountingFileChange}
                                 onClearPaidAccountingFile={() => setPaidAccountingFiles([])}
                                 onRunReconciliation={handleRunReconciliation}
+                                isReconciliationRunning={processing}
                                 allClassifications={allClassifications}
                                 onPersistClassifications={handlePersistClassifications}
                                 competence={competence}
@@ -995,5 +990,3 @@ export function AutomatorClientPage() {
         </div>
     );
 }
-
-    

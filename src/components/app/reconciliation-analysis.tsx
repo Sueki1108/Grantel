@@ -36,6 +36,7 @@ interface ReconciliationAnalysisProps {
     onClearPaidAccountingFile: () => void;
 
     onRunReconciliation: () => Promise<void>;
+    isReconciliationRunning: boolean;
 
     allClassifications: AllClassifications;
     onPersistClassifications: (allData: AllClassifications) => void;
@@ -58,24 +59,21 @@ export function ReconciliationAnalysis({
     onPaidAccountingFileChange,
     onClearPaidAccountingFile,
     onRunReconciliation,
+    isReconciliationRunning,
     allClassifications,
     onPersistClassifications,
     competence,
 }: ReconciliationAnalysisProps) {
     const { toast } = useToast();
-    const [isReconciliationRunning, setIsReconciliationRunning] = useState(false);
     
     const handleRunReconciliation = async () => {
-        setIsReconciliationRunning(true);
         await onRunReconciliation();
-        setIsReconciliationRunning(false);
     };
 
     const reconciliationResults = processedData?.reconciliationResults;
     const siengeDataForTaxCheck = processedData?.siengeSheetData;
     const devolucoesEP = processedData?.reconciliationResults?.devolucoesEP;
     const itensValidosSaidas = processedData?.sheets?.['Itens Válidos Saídas'] || [];
-    const initialXmlItems = processedData?.sheets?.['Itens Válidos'] || [];
 
     const handleDownload = async (data: any[], title: string) => {
         if (!data || data.length === 0) {
@@ -88,13 +86,6 @@ export function ReconciliationAnalysis({
         const fileName = `Grantel - Conciliação ${title}.xlsx`;
         XLSX.writeFile(workbook, fileName);
     };
-
-    // Correctly determine which items to show in the "Apenas no XML" tab.
-    // If reconciliation has run, use its results. Otherwise, use the initial valid items from the first processing step.
-    const itemsToShowInOnlyXmlTab = reconciliationResults 
-        ? reconciliationResults.onlyInXml 
-        : initialXmlItems;
-
 
     return (
          <Card>
@@ -184,7 +175,7 @@ export function ReconciliationAnalysis({
                                 <TabsList className="grid w-full grid-cols-4">
                                     <TabsTrigger value="reconciled">Conciliados ({reconciliationResults?.reconciled.length || 0})</TabsTrigger>
                                     <TabsTrigger value="onlyInSienge">Apenas no Sienge ({reconciliationResults?.onlyInSienge.length || 0})</TabsTrigger>
-                                    <TabsTrigger value="onlyInXml">Apenas no XML ({itemsToShowInOnlyXmlTab?.length || 0})</TabsTrigger>
+                                    <TabsTrigger value="onlyInXml">Apenas no XML ({reconciliationResults?.onlyInXml.length || 0})</TabsTrigger>
                                     <TabsTrigger value="otherSiengeItems">Outros Lançamentos Sienge</TabsTrigger>
                                 </TabsList>
                                 <div className="mt-4">
@@ -197,8 +188,8 @@ export function ReconciliationAnalysis({
                                         <DataTable columns={getColumnsForDivergentTabs(reconciliationResults?.onlyInSienge || [])} data={reconciliationResults?.onlyInSienge || []} />
                                     </TabsContent>
                                     <TabsContent value="onlyInXml">
-                                        <Button onClick={() => handleDownload(itemsToShowInOnlyXmlTab || [], 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={!itemsToShowInOnlyXmlTab || itemsToShowInOnlyXmlTab.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                        <DataTable columns={getColumnsForDivergentTabs(itemsToShowInOnlyXmlTab || [])} data={itemsToShowInOnlyXmlTab || []} />
+                                        <Button onClick={() => handleDownload(reconciliationResults?.onlyInXml || [], 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={!reconciliationResults || reconciliationResults.onlyInXml.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                        <DataTable columns={getColumnsForDivergentTabs(reconciliationResults?.onlyInXml || [])} data={reconciliationResults?.onlyInXml || []} />
                                     </TabsContent>
                                     <TabsContent value="otherSiengeItems">
                                          <Tabs defaultValue={Object.keys(reconciliationResults?.otherSiengeItems || {})[0]} className="w-full">
@@ -253,5 +244,3 @@ export function ReconciliationAnalysis({
          </Card>
     );
 }
-
-    
