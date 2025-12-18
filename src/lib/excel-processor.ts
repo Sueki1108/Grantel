@@ -1,4 +1,3 @@
-
 import { cfopDescriptions } from './cfop';
 import type { KeyCheckResult } from '@/components/app/key-checker';
 import type { AllClassifications } from '@/lib/types';
@@ -370,6 +369,7 @@ export function processDataFrames(
 export function runReconciliation(
     siengeData: any[] | null,
     xmlItems: any[],
+    xmlItemsSaida: any[],
     nfeEntradas: any[],
     cteData: any[],
     costCenterMap?: Map<string, string> | null,
@@ -510,10 +510,9 @@ export function runReconciliation(
     const otherSiengeItems = remainingSienge.filter(row => !['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()));
     remainingSienge = remainingSienge.filter(row => ['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()));
 
-    const devolucoesEP = xmlItems.filter(item => {
-        const cfop = cleanAndToStr(item.CFOP);
+    const devolucoesEP = xmlItemsSaida.filter(item => {
         const natOp = (item['Natureza da Operação'] || '').toUpperCase();
-        return (cfop.startsWith('5') || cfop.startsWith('6')) && natOp.includes('DEVOLUCAO');
+        return natOp.includes('DEVOLUCAO');
     }).map(item => ({
         'Número da Nota de Devolução': item['Número da Nota'],
         'Fornecedor': item.Fornecedor,

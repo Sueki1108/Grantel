@@ -303,6 +303,7 @@ export function AutomatorClientPage() {
                     ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
                     siengeSheetData,
                     siengeDebugKeys,
+                    reconciliationResults: null,
                 }));
                 
                 toast({ title: 'Planilha Sienge Carregada', description: 'Os dados foram lidos e estão prontos para as análises.' });
@@ -681,7 +682,6 @@ export function AutomatorClientPage() {
         setProcessedData(prev => ({
             ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
             sheets: {},
-            reconciliationResults: null,
         }));
         setIsPeriodModalOpen(false);
         setProcessing(true);
@@ -710,9 +710,7 @@ export function AutomatorClientPage() {
                 for (const fileName of requiredFiles) {
                     if (files[fileName]) {
                         log(`Adicionando dados da planilha de manifesto: '${fileName}'.`);
-                        const manifestData = files[fileName];
-                        const manifestKeys = new Set(manifestData.map(row => cleanAndToStr(row['Chave'] || row['Chave de acesso'])));
-                        manifestKeys.forEach(key => eventCanceledKeys.add(key));
+                        dataToProcess[fileName] = files[fileName];
                     }
                 }
                 
@@ -790,10 +788,6 @@ export function AutomatorClientPage() {
     };
 
     const handleRunReconciliation = async () => {
-        if (!processedData?.siengeSheetData) {
-            toast({ variant: 'destructive', title: 'Ficheiro Sienge em falta', description: 'Por favor, carregue a planilha "Itens do Sienge".' });
-            return;
-        }
         if (!processedData || !processedData.sheets['Itens Válidos']) {
             toast({ variant: 'destructive', title: 'Dados XML em falta', description: 'Por favor, execute a "Validação de Documentos" primeiro.' });
             return;
@@ -806,6 +800,7 @@ export function AutomatorClientPage() {
             const newReconciliationResults = runReconciliation(
                 processedData.siengeSheetData,
                 processedData.sheets['Itens Válidos'] || [],
+                processedData.sheets['Itens Válidos Saídas'] || [],
                 processedData.sheets['Notas Válidas'] || [],
                 processedData.sheets['CTEs Válidos'] || [],
                 processedData.costCenterMap,
@@ -986,7 +981,6 @@ export function AutomatorClientPage() {
                                 onPaidAccountingFileChange={handlePaidAccountingFileChange}
                                 onClearPaidAccountingFile={() => setPaidAccountingFiles([])}
                                 onRunReconciliation={handleRunReconciliation}
-                                isReconciliationRunning={processing}
                                 allClassifications={allClassifications}
                                 onPersistClassifications={handlePersistClassifications}
                                 competence={competence}
