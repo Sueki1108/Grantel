@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -694,25 +693,33 @@ export function AutomatorClientPage() {
                 
                 let dataToProcess: Record<string, any[]> = {};
                 let eventCanceledKeys = new Set<string>();
-    
+
                 log("Processando ficheiros XML como fonte primária...");
                 const allUploadedXml = [...xmlFiles.nfeEntrada, ...xmlFiles.cte, ...xmlFiles.nfeSaida];
-                const xmlData = await processUploadedXmls(allUploadedXml, log);
-                
-                dataToProcess["NFE"] = xmlData.nfe;
-                dataToProcess["Itens"] = xmlData.itens;
-                dataToProcess["CTE"] = xmlData.cte;
-                dataToProcess["Saídas"] = xmlData.saidas;
-                dataToProcess["Itens Saídas"] = xmlData.itensSaidas;
-                eventCanceledKeys = xmlData.canceledKeys;
-                log(`Processamento XML concluído: ${xmlData.nfe.length} NF-e Entradas, ${xmlData.saidas.length} NF-e Saídas, ${xmlData.cte.length} CT-es.`);
+                if (allUploadedXml.length > 0) {
+                    const xmlData = await processUploadedXmls(allUploadedXml, log);
+                    dataToProcess["NFE"] = xmlData.nfe;
+                    dataToProcess["Itens"] = xmlData.itens;
+                    dataToProcess["CTE"] = xmlData.cte;
+                    dataToProcess["Saídas"] = xmlData.saidas;
+                    dataToProcess["Itens Saídas"] = xmlData.itensSaidas;
+                    eventCanceledKeys = xmlData.canceledKeys;
+                    log(`Processamento XML concluído: ${xmlData.nfe.length} NF-e Entradas, ${xmlData.saidas.length} NF-e Saídas, ${xmlData.cte.length} CT-es.`);
+                }
     
-                // Processar apenas as planilhas de manifesto e adicioná-las aos dados existentes.
-                for (const fileName of requiredFiles) {
-                    if (files[fileName]) {
+                // Processar as planilhas. As de manifesto são adicionadas, as outras servem de fallback.
+                for (const fileName in files) {
+                    const mappedName = fileMapping[fileName] || fileName;
+                    const isManifestoFile = requiredFiles.includes(fileName);
+
+                    if (isManifestoFile) {
                         log(`Adicionando dados da planilha de manifesto: '${fileName}'.`);
-                        const mappedName = fileMapping[fileName] || fileName;
                         dataToProcess[mappedName] = [...(dataToProcess[mappedName] || []), ...files[fileName]];
+                    } else if (!dataToProcess[mappedName] || dataToProcess[mappedName].length === 0) {
+                        dataToProcess[mappedName] = files[fileName];
+                        log(`Usando dados da planilha carregada (fallback): '${fileName}'.`);
+                    } else {
+                        log(`Dados de XML para '${mappedName}' encontrados, ignorando a planilha de fallback: '${fileName}'.`);
                     }
                 }
                 
@@ -1090,5 +1097,3 @@ export function AutomatorClientPage() {
         </div>
     );
 }
-
-    
