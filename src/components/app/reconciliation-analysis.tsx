@@ -107,7 +107,7 @@ export function ReconciliationAnalysis({
                             <CardDescription>Carregue as planilhas Sienge, Contabilização e de Centro de Custo para cruzar informações com os XMLs processados.</CardDescription>
                         </div>
                     </div>
-                     <Button onClick={handleRunReconciliation} disabled={isReconciliationRunning}>
+                     <Button onClick={handleRunReconciliation} disabled={isReconciliationRunning || !siengeFile}>
                         {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/>A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Executar Conciliação</>}
                     </Button>
                 </div>

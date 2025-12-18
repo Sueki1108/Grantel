@@ -303,7 +303,6 @@ export function AutomatorClientPage() {
                     ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
                     siengeSheetData,
                     siengeDebugKeys,
-                    // DO NOT reset reconciliation results here anymore. Let the user trigger it.
                 }));
                 
                 toast({ title: 'Planilha Sienge Carregada', description: 'Os dados foram lidos. Clique em "Executar Conciliação" para processar.' });
@@ -788,6 +787,10 @@ export function AutomatorClientPage() {
     };
 
     const handleRunReconciliation = async () => {
+        if (!processedData?.siengeSheetData) {
+            toast({ variant: 'destructive', title: 'Ficheiro Sienge em falta', description: 'Por favor, carregue a planilha "Itens do Sienge".' });
+            return;
+        }
         if (!processedData || !processedData.sheets['Itens Válidos']) {
             toast({ variant: 'destructive', title: 'Dados XML em falta', description: 'Por favor, execute a "Validação de Documentos" primeiro.' });
             return;
