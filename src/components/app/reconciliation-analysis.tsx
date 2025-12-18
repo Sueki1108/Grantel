@@ -24,8 +24,6 @@ interface ReconciliationAnalysisProps {
     siengeFile: File | null;
     onSiengeFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearSiengeFile: () => void;
-    onRunReconciliation: () => void;
-    isReconciliationRunning: boolean;
     costCenterFile: File | null;
     onCostCenterFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearCostCenterFile: () => void;
@@ -49,8 +47,6 @@ export function ReconciliationAnalysis({
     siengeFile, 
     onSiengeFileChange, 
     onClearSiengeFile,
-    onRunReconciliation,
-    isReconciliationRunning,
     costCenterFile,
     onCostCenterFileChange,
     onClearCostCenterFile,
@@ -148,12 +144,6 @@ export function ReconciliationAnalysis({
                     </div>
                 </div>
                 
-                 <div className="flex flex-col sm:flex-row gap-2 pt-4">
-                     <Button onClick={onRunReconciliation} disabled={isReconciliationRunning || !siengeFile || !processedData?.sheets['Itens Válidos']}>
-                        {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Conciliando...</> : <><Cpu className="mr-2 h-4 w-4"/>Conciliar XML vs Sienge</>}
-                    </Button>
-                </div>
-                
                 <Tabs defaultValue="reconciliation">
                     <TabsList className="grid w-full grid-cols-4">
                         <TabsTrigger value="reconciliation" disabled={!reconciliationResults}>Conciliação de Itens</TabsTrigger>
@@ -216,7 +206,7 @@ export function ReconciliationAnalysis({
                         ) : (
                             <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
                                 <FileSearch className="h-12 w-12 text-primary" />
-                                <p className="mt-4 text-center">Carregue as planilhas e clique no botão "Conciliar XML vs Sienge" para ver os resultados.</p>
+                                <p className="mt-4 text-center">Os resultados da conciliação aparecerão aqui após a conclusão da "Validação".</p>
                             </div>
                         )}
                     </TabsContent>

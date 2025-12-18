@@ -137,7 +137,11 @@ const renameChaveColumn = (df: DataFrame): DataFrame => {
 // MAIN PROCESSING FUNCTION
 // =================================================================
 
-export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string>, log: LogFunction): Omit<ProcessedData, 'fileNames' | 'competence' | 'siengeSheetData' | 'reconciliationResults' | 'spedDuplicates' | 'spedCorrections' | 'resaleAnalysis' | 'costCenterMap' | 'siengeDebugKeys' | 'costCenterDebugKeys' | 'allCostCenters' | 'costCenterHeaderRows' | 'accountingMap' | 'payableAccountingDebugKeys' | 'paidAccountingDebugKeys'> {
+export function processDataFrames(
+    dfs: DataFrames, 
+    eventCanceledKeys: Set<string>, 
+    log: LogFunction
+): Omit<ProcessedData, 'fileNames' | 'competence' | 'costCenterMap' | 'costCenterDebugKeys' | 'allCostCenters' | 'costCenterHeaderRows' | 'accountingMap' | 'payableAccountingDebugKeys' | 'paidAccountingDebugKeys' | 'siengeSheetData' | 'siengeDebugKeys' | 'resaleAnalysis' > {
     
     log("Iniciando preparação dos dados no navegador...");
     const GRANTEL_CNPJ = "81732042000119";
@@ -147,7 +151,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const allSheetNames = [
         "NFE", "CTE", "Itens", "Saídas", "Itens Saídas",
         "NFE Operação Não Realizada", "NFE Operação Desconhecida", 
-        "CTE Desacordo de Serviço",
+        "CTE Desacordo de Serviço", "Itens do Sienge"
     ];
 
     allSheetNames.forEach(name => {
@@ -174,6 +178,7 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
     const naoRealizada = processedDfs["NFE Operação Não Realizada"] || [];
     const desconhecida = processedDfs["NFE Operação Desconhecida"] || [];
     const desacordo = processedDfs["CTE Desacordo de Serviço"] || [];
+    const siengeData = processedDfs["Itens do Sienge"] || null;
 
     log("Coletando chaves de exceção (canceladas, manifesto)...");
     const chavesExcecao = new Set<string>(eventCanceledKeys);
@@ -367,15 +372,20 @@ export function processDataFrames(dfs: DataFrames, eventCanceledKeys: Set<string
             finalSheetSet[name] = sheetData.map(addCfopDescriptionToRow);
         }
     });
-    log("Processamento concluído. Resultados estão prontos para as próximas etapas.");
+    log("Processamento primário concluído. Iniciando conciliação com dados do Sienge, se disponíveis.");
+
+    const reconciliationResults = siengeData ? runReconciliation(siengeData, itensValidos, notasValidas, [], null, null) : null;
+    if (reconciliationResults) {
+        log(`Conciliação concluída: ${reconciliationResults.reconciled.length} itens conciliados, ${reconciliationResults.onlyInSienge.length} apenas no Sienge, ${reconciliationResults.onlyInXml.length} apenas no XML.`);
+    }
 
     return {
         sheets: finalSheetSet,
         spedInfo: null,
         keyCheckResults: null,
+        reconciliationResults: reconciliationResults,
     };
 }
-
 
 export function runReconciliation(
     siengeData: any[] | null,
