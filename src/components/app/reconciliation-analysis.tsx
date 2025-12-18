@@ -36,6 +36,9 @@ interface ReconciliationAnalysisProps {
     onPaidAccountingFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearPaidAccountingFile: () => void;
 
+    onRunReconciliation: () => Promise<void>;
+    isReconciliationRunning: boolean;
+
     allClassifications: AllClassifications;
     onPersistClassifications: (allData: AllClassifications) => void;
     competence: string | null;
@@ -56,6 +59,8 @@ export function ReconciliationAnalysis({
     paidAccountingFiles,
     onPaidAccountingFileChange,
     onClearPaidAccountingFile,
+    onRunReconciliation,
+    isReconciliationRunning,
     allClassifications,
     onPersistClassifications,
     competence,
@@ -94,6 +99,9 @@ export function ReconciliationAnalysis({
                             <CardDescription>Carregue as planilhas Sienge, Contabilização e de Centro de Custo para cruzar informações com os XMLs processados.</CardDescription>
                         </div>
                     </div>
+                     <Button onClick={onRunReconciliation} disabled={isReconciliationRunning}>
+                        {isReconciliationRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/>A Conciliar...</> : <><Cpu className="mr-2 h-4 w-4"/>Executar Conciliação</>}
+                    </Button>
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -206,7 +214,7 @@ export function ReconciliationAnalysis({
                         ) : (
                             <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
                                 <FileSearch className="h-12 w-12 text-primary" />
-                                <p className="mt-4 text-center">Os resultados da conciliação aparecerão aqui após a conclusão da "Validação".</p>
+                                <p className="mt-4 text-center">Os resultados da conciliação aparecerão aqui após clicar em "Executar Conciliação".</p>
                             </div>
                         )}
                     </TabsContent>
