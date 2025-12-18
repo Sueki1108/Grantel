@@ -707,11 +707,10 @@ export function AutomatorClientPage() {
                     log(`Processamento XML concluído: ${xmlData.nfe.length} NF-e, ${xmlData.cte.length} CT-es, ${xmlData.saidas.length} Saídas, ${xmlData.itens.length + xmlData.itensSaidas.length} Itens.`);
                 }
     
-                // Adiciona dados de manifesto SEMPRE, sem substituir.
                 for (const fileName of requiredFiles) {
                     if (files[fileName]) {
-                        log(`Adicionando dados da planilha de manifesto: '${fileName}'.`);
                         dataToProcess[fileName] = [...(dataToProcess[fileName] || []), ...files[fileName]];
+                        log(`Adicionando dados da planilha de manifesto: '${fileName}'.`);
                     }
                 }
                 
