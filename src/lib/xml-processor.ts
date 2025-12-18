@@ -320,12 +320,12 @@ const readFileAsText = (file: File): Promise<string> => {
             if (event.target && event.target.result instanceof ArrayBuffer) {
                 const buffer = event.target.result;
                 try {
-                    // Try UTF-8 first.
+                    // Try UTF-8 first. It's the most common and standard.
                     const decoder = new TextDecoder('utf-8', { fatal: true });
                     resolve(decoder.decode(buffer));
                 } catch (e) {
                     try {
-                        // Fallback to ISO-8859-1 if UTF-8 fails
+                        // Fallback to ISO-8859-1 (latin1) if UTF-8 fails.
                         const decoder = new TextDecoder('iso-8859-1');
                         resolve(decoder.decode(buffer));
                     } catch (e2) {
