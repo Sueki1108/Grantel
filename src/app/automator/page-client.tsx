@@ -626,7 +626,7 @@ export function AutomatorClientPage() {
                 setProcessedData({
                     ...resultData,
                     competence,
-                    reconciliationResults: { reconciled: [], onlyInSienge: [], onlyInXml: resultData.sheets['Itens Válidos'] || [], devolucoesEP: [], otherSiengeItems: {}, debug: { siengeKeys: [] } }
+                    reconciliationResults: null, // Start with null results
                 });
 
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
@@ -872,7 +872,8 @@ export function AutomatorClientPage() {
                         <TabsContent value="reconciliation" className="mt-6">
                             { !reconciliationTabDisabled ? 
                             <ReconciliationAnalysis 
-                                processedData={processedData} 
+                                processedData={processedData}
+                                initialXmlItems={processedData?.sheets?.['Itens Válidos'] || []}
                                 siengeFile={siengeFile} 
                                 onSiengeFileChange={handleSiengeFileChange}
                                 onClearSiengeFile={() => setSiengeFile(null)}
@@ -886,7 +887,6 @@ export function AutomatorClientPage() {
                                 onPaidAccountingFileChange={handlePaidAccountingFileChange}
                                 onClearPaidAccountingFile={() => setPaidAccountingFiles([])}
                                 onRunReconciliation={handleRunReconciliation}
-                                isReconciliationRunning={processing}
                                 allClassifications={allClassifications}
                                 onPersistClassifications={handlePersistClassifications}
                                 competence={competence}
