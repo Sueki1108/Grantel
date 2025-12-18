@@ -384,7 +384,8 @@ export function runReconciliation(
     const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
         if (!data || data.length === 0 || !data[0]) return undefined;
         const headers = Object.keys(data[0]);
-        return headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
+        const header = headers.find(h => possibleNames.some(p => normalizeKey(h) === normalizeKey(p)));
+        return header;
     };
     
     const h = {
