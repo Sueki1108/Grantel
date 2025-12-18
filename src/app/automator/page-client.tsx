@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
-import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Building, History, Save, TicketPercent, ClipboardList, GitCompareArrows } from "lucide-react";
+import { Sheet, UploadCloud, Cpu, Home, Trash2, AlertCircle, Terminal, Copy, Loader2, FileSearch, CheckCircle, AlertTriangle, FileUp, Filter, TrendingUp, FilePieChart, Settings, Building, History, Save, TicketPercent, ClipboardList, GitCompareArrows } from "lucide-react";
 import JSZip from "jszip";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -708,20 +708,11 @@ export function AutomatorClientPage() {
                     log(`Processamento XML concluído: ${xmlData.nfe.length} NF-e, ${xmlData.cte.length} CT-es, ${xmlData.saidas.length} Saídas, ${xmlData.itens.length + xmlData.itensSaidas.length} Itens.`);
                 }
     
-                // Processar as planilhas. As de manifesto são adicionadas, as outras servem de fallback.
-                for (const fileName in files) {
-                    const mappedName = fileMapping[fileName] || fileName;
-                    const isManifestoFile = requiredFiles.includes(fileName);
-
-                    if (isManifestoFile) {
+                // Adiciona dados de manifesto SEMPRE, sem substituir.
+                for (const fileName of requiredFiles) {
+                    if (files[fileName]) {
                         log(`Adicionando dados da planilha de manifesto: '${fileName}'.`);
-                        // Append manifesto data to existing XML data if it exists
-                        dataToProcess[mappedName] = [...(dataToProcess[mappedName] || []), ...files[fileName]];
-                    } else if (!dataToProcess[mappedName] || dataToProcess[mappedName].length === 0) {
-                        dataToProcess[mappedName] = files[fileName];
-                        log(`Usando dados da planilha carregada (fallback): '${fileName}'.`);
-                    } else {
-                        log(`Dados de XML para '${mappedName}' encontrados, ignorando a planilha de fallback: '${fileName}'.`);
+                        dataToProcess[fileName] = [...(dataToProcess[fileName] || []), ...files[fileName]];
                     }
                 }
                 

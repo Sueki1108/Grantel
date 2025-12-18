@@ -43,30 +43,26 @@ const cleanAndToStr = (value: any): string => {
 
 const parseNFe = (xmlDoc: XMLDocument, log: LogFunction): Partial<XmlData> | null => {
     const nfeProcList = xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'nfeProc');
-    if (nfeProcList.length === 0 || !nfeProcList[0]) {
-        // Fallback for XMLs without nfeProc wrapper
-        const nfeList = xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'NFe');
-        if (nfeList.length === 0) {
-            log("AVISO: Tag <nfeProc> ou <NFe> não encontrada. O XML pode não ser um documento de NFe válido.");
-            return null;
-        }
-    }
-
-    const nfeProc = nfeProcList[0] ?? xmlDoc.documentElement;
+    const nfeList = xmlDoc.getElementsByTagNameNS(NFE_NAMESPACE, 'NFe');
     
-    const nfeList = nfeProc.getElementsByTagNameNS(NFE_NAMESPACE, 'NFe');
-    if (nfeList.length === 0 || !nfeList[0]) {
-        log("AVISO: Tag <NFe> não encontrada no nfeProc.");
+    if (nfeProcList.length === 0 && nfeList.length === 0) {
+        log("AVISO: Tag <nfeProc> ou <NFe> não encontrada. O XML pode não ser um documento de NFe válido.");
         return null;
     }
-    const nfe = nfeList[0];
+
+    const nfeRoot = nfeList[0] ?? nfeProcList[0]?.getElementsByTagNameNS(NFE_NAMESPACE, 'NFe')[0];
+    const nfeProc = nfeProcList[0] ?? xmlDoc.documentElement;
+
+    if (!nfeRoot) {
+        log("AVISO: Estrutura NFe não encontrada no XML.");
+        return null;
+    }
     
-    const infNFeList = nfe.getElementsByTagNameNS(NFE_NAMESPACE, 'infNFe');
-    if (infNFeList.length === 0 || !infNFeList[0]) {
+    const infNFe = nfeRoot.getElementsByTagNameNS(NFE_NAMESPACE, 'infNFe')[0];
+    if (!infNFe) {
         log("AVISO: Tag <infNFe> não encontrada na NFe.");
         return null;
     }
-    const infNFe = infNFeList[0];
 
     const ide = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'ide')[0];
     const emit = infNFe.getElementsByTagNameNS(NFE_NAMESPACE, 'emit')[0];
@@ -448,4 +444,3 @@ export const processUploadedXmls = async (files: File[], log: LogFunction = () =
     
     return combinedData;
 };
-
