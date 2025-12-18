@@ -1,3 +1,4 @@
+
 import { cfopDescriptions } from './cfop';
 import type { KeyCheckResult } from '@/components/app/key-checker';
 import type { AllClassifications } from '@/lib/types';
