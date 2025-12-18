@@ -389,11 +389,11 @@ export function runReconciliation(
     };
     
     const h = {
-        esp: findHeader(siengeData, ['esp']),
+        esp: findHeader(siengeData, ['esp', 'especie']),
         documento: findHeader(siengeData, ['documento', 'número', 'numero', 'numerodanota', 'notafiscal']),
-        credor: findHeader(siengeData, ['credor']),
+        credor: findHeader(siengeData, ['credor', 'fornecedor']),
         cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cnpj']),
-        valor: findHeader(siengeData, ['valor', 'valortotal', 'vlrtotal']),
+        valor: findHeader(siengeData, ['valor', 'valortotal', 'vlr total']),
         cfop: findHeader(siengeData, ['cfop']),
         produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
         icmsOutras: findHeader(siengeData, ['icms outras', 'icmsoutras']),
@@ -405,12 +405,17 @@ export function runReconciliation(
         precoUnitario: findHeader(siengeData, ['preço unitário', 'preco unitario', 'valor unitario', 'vlr unitario']),
     };
 
-    if (!h.documento || !h.cnpj || !h.valor || !h.esp) {
-        throw new Error("Não foi possível encontrar as colunas essenciais ('Esp', 'Documento', 'CPF/CNPJ', 'Valor') na planilha Sienge.");
+    if (!h.documento || !h.cnpj || !h.valor) {
+        throw new Error("Não foi possível encontrar as colunas essenciais ('Documento', 'CPF/CNPJ', 'Valor') na planilha Sienge.");
     }
     
-    const filteredSiengeData = siengeData.filter(row => ['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()));
-    const otherSiengeItemsRaw = siengeData.filter(row => !['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()));
+    const siengeToReconcile = h.esp 
+        ? siengeData.filter(row => ['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()))
+        : siengeData; // If 'Esp' not found, try to reconcile all rows
+    
+    const otherSiengeItemsRaw = h.esp
+        ? siengeData.filter(row => !['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()))
+        : [];
     
     const getXmlDocKey = (item: any) => item['Número da Nota'] || item['Número'];
     const getXmlCnpjKey = (item: any) => item['CPF/CNPJ do Emitente'] || item['CPF/CNPJ do Fornecedor'];
@@ -455,7 +460,7 @@ export function runReconciliation(
 
     let reconciled: any[] = [];
     let remainingXml = [...xmlItems, ...cteData];
-    let remainingSienge = [...filteredSiengeData];
+    let remainingSienge = [...siengeToReconcile];
     
     // Pass 1: Valor Total
     let result = reconciliationPass(remainingSienge, remainingXml, 
