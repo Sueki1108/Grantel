@@ -714,6 +714,7 @@ export function AutomatorClientPage() {
 
                     if (isManifestoFile) {
                         log(`Adicionando dados da planilha de manifesto: '${fileName}'.`);
+                        // Append manifesto data to existing XML data if it exists
                         dataToProcess[mappedName] = [...(dataToProcess[mappedName] || []), ...files[fileName]];
                     } else if (!dataToProcess[mappedName] || dataToProcess[mappedName].length === 0) {
                         dataToProcess[mappedName] = files[fileName];
