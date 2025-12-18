@@ -296,13 +296,14 @@ export function AutomatorClientPage() {
                 const siengeWorksheet = workbook.Sheets[sheetName];
                 if(!siengeWorksheet) throw new Error("Aba da planilha não encontrada.");
 
-                const siengeSheetData = XLSX.utils.sheet_to_json(siengeWorksheet, { defval: null });
+                const siengeSheetData = XLSX.utils.sheet_to_json(siengeWorksheet, { range: 8, defval: null });
                 const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
     
                 setProcessedData(prev => ({
                     ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
                     siengeSheetData,
                     siengeDebugKeys,
+                    reconciliationResults: null, // Reset reconciliation results on new file
                 }));
                 
                 toast({ title: 'Planilha Sienge Carregada', description: 'Os dados foram lidos e estão prontos para as análises.' });
@@ -313,10 +314,11 @@ export function AutomatorClientPage() {
                 setProcessing(false);
             }
         } else {
+            // Clear Sienge data if file is removed
             setProcessedData(prev => {
                 if (!prev) return null;
-                const { siengeSheetData, siengeDebugKeys, ...rest } = prev;
-                return { ...rest, siengeSheetData: null, siengeDebugKeys: [] } as ProcessedData;
+                const { siengeSheetData, reconciliationResults, siengeDebugKeys, ...rest } = prev;
+                return { ...rest, siengeSheetData: null, siengeDebugKeys: [], reconciliationResults: null } as ProcessedData;
             });
         }
     };
@@ -762,7 +764,6 @@ export function AutomatorClientPage() {
                 setProcessedData({
                     ...resultData,
                     competence,
-                    reconciliationResults: null, 
                 });
 
                 toast({ title: "Validação concluída", description: "Prossiga para as próximas etapas. Pode guardar a sessão no histórico na última aba." });
