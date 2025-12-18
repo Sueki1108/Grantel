@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -317,8 +316,8 @@ export function AutomatorClientPage() {
             // Clear Sienge data if file is removed
             setProcessedData(prev => {
                 if (!prev) return null;
-                const { siengeSheetData, reconciliationResults, siengeDebugKeys, ...rest } = prev;
-                return { ...rest, siengeSheetData: null, siengeDebugKeys: [], reconciliationResults: null } as ProcessedData;
+                const { siengeSheetData, siengeDebugKeys, ...rest } = prev;
+                return { ...rest, siengeSheetData: null, siengeDebugKeys: [] } as ProcessedData;
             });
         }
     };
@@ -681,7 +680,7 @@ export function AutomatorClientPage() {
         setLogs([]);
         setProcessedData(prev => ({
             ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
-            sheets: {}, // Clear only sheets, keep other state
+            sheets: {},
             reconciliationResults: null,
         }));
         setIsPeriodModalOpen(false);
