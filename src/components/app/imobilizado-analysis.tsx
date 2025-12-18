@@ -90,9 +90,9 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
 
         const hSienge = {
             numero: findSiengeHeader(['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
-            cpfCnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpfcnpj']),
-            cfop: findHeader(siengeData, ['cfop']),
-            produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
+            cpfCnpj: findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpfcnpj']),
+            cfop: findSiengeHeader(['cfop']),
+            produtoFiscal: findSiengeHeader(['produto fiscal', 'descrição do item', 'descrição']),
         };
 
         const siengeItemMap = new Map<string, any[]>();
@@ -468,7 +468,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         return baseColumns;
     }, [enrichedItems, activeTab, allPersistedData, competence, toast]);
 
-
     if (!initialAllItems || initialAllItems.length === 0) {
         return (
             <Card>
@@ -603,3 +602,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         </div>
     );
 }
+
+
+    
