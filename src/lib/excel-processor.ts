@@ -1,4 +1,3 @@
-
 import { cfopDescriptions } from './cfop';
 import type { KeyCheckResult } from '@/components/app/key-checker';
 import type { AllClassifications } from '@/lib/types';
@@ -385,7 +384,7 @@ export function runReconciliation(
     
     const h = {
         esp: findHeader(siengeSheetData, ['esp', 'especie']),
-        documento: findHeader(siengeSheetData, ['documento', 'número', 'numero', 'numerodanota', 'notafiscal']),
+        documento: findHeader(siengeSheetData, ['documento', 'número', 'numero', 'numerodanota', 'nota fiscal']),
         credor: findHeader(siengeSheetData, ['credor', 'fornecedor']),
         cnpj: findHeader(siengeSheetData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cnpj']),
         valor: findHeader(siengeSheetData, ['valor', 'valortotal', 'vlr total']),
@@ -398,11 +397,11 @@ export function runReconciliation(
     }
     
     const siengeToReconcile = h.esp 
-        ? siengeSheetData.filter(row => ['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()))
+        ? siengeSheetData.filter(row => ['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).trim().toUpperCase()))
         : siengeSheetData;
     
     const otherSiengeItemsRaw = h.esp
-        ? siengeSheetData.filter(row => !['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()))
+        ? siengeSheetData.filter(row => !['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).trim().toUpperCase()))
         : [];
     
     const getXmlDocKey = (item: any) => item['Número da Nota'] || item['Número'];
@@ -532,7 +531,7 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
     };
 
     const h = {
-        documento: findHeader(siengeData, ['documento', 'número', 'numero', 'numerodanota', 'notafiscal']),
+        documento: findHeader(siengeData, ['documento', 'número', 'numero', 'numerodanota', 'nota fiscal']),
         credor: findHeader(siengeData, ['credor']),
     };
     
