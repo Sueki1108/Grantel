@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -307,43 +308,40 @@ export function AutomatorClientPage() {
     
     const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        setSiengeFile(file || null);
-    
-        if (file) {
-            setProcessing(true);
-            try {
-                const data = await file.arrayBuffer();
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
-    
-                const siengeWorksheet = workbook.Sheets[sheetName];
-                if(!siengeWorksheet) throw new Error("Aba da planilha não encontrada.");
+        if (!file) {
+            setSiengeFile(null);
+            setProcessedData(prev => ({ ...(prev ?? initialProcessedDataState), siengeSheetData: null, siengeDebugKeys: [], reconciliationResults: null }));
+            return;
+        }
 
-                const siengeSheetData = XLSX.utils.sheet_to_json(siengeWorksheet, { range: 8, defval: null });
-                const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
-    
-                setProcessedData(prev => ({
-                    ...(prev ?? initialProcessedDataState),
-                    siengeSheetData,
-                    siengeDebugKeys,
-                    reconciliationResults: null, // Reset reconciliation results on new file
-                }));
-                
-                toast({ title: 'Planilha Sienge Carregada', description: 'Os dados foram lidos e estão prontos para as análises.' });
-            } catch (err: any) {
-                toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
-                setSiengeFile(null);
-            } finally {
-                setProcessing(false);
-            }
-        } else {
-            // Clear Sienge data if file is removed
-            setProcessedData(prev => {
-                if (!prev) return null;
-                const { siengeSheetData, reconciliationResults, siengeDebugKeys, ...rest } = prev;
-                return { ...rest, siengeSheetData: null, siengeDebugKeys: [], reconciliationResults: null } as ProcessedData;
-            });
+        setSiengeFile(file);
+        setProcessing(true);
+        
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
+            const siengeWorksheet = workbook.Sheets[sheetName];
+            if (!siengeWorksheet) throw new Error("Aba da planilha não encontrada.");
+            
+            const header = XLSX.utils.sheet_to_json(siengeWorksheet, { header: 1, range: 'A9:AZ9' })[0] as string[];
+            const siengeSheetData = XLSX.utils.sheet_to_json(siengeWorksheet, { header: header, range: 9, defval: null });
+            const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
+
+            setProcessedData(prev => ({
+                ...(prev ?? initialProcessedDataState),
+                siengeSheetData,
+                siengeDebugKeys,
+                reconciliationResults: null, // Reset reconciliation results on new file
+            }));
+            
+            toast({ title: 'Planilha Sienge Carregada', description: `${siengeSheetData.length} itens lidos e prontos para as análises.` });
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
+            setSiengeFile(null);
+        } finally {
+            setProcessing(false);
         }
     };
     
