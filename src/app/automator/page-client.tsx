@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent, useMemo } from "react";
@@ -326,8 +325,10 @@ const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const siengeWorksheet = workbook.Sheets[sheetName];
         if (!siengeWorksheet) throw new Error("Aba da planilha não encontrada.");
         
-        const dataAsArray: any[][] = XLSX.utils.sheet_to_json(siengeWorksheet, { header: 1 });
+        // 1. Read the sheet as an array of arrays to have full control.
+        const dataAsArray: any[][] = XLSX.utils.sheet_to_json(siengeWorksheet, { header: 1, defval: null });
         
+        // 2. Find the header row by looking for a set of known column names.
         let headerRowIndex = -1;
         const possibleHeaders = ['numero', 'documento', 'data entrada', 'credor', 'cpf/cnpj'];
         for (let i = 0; i < dataAsArray.length; i++) {
@@ -342,19 +343,24 @@ const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
             throw new Error("Não foi possível encontrar a linha de cabeçalho (procurando por 'Número', 'Documento', 'Credor', etc.).");
         }
         
+        // 3. Get header names from the found row
         const header = dataAsArray[headerRowIndex];
         const dataRows = dataAsArray.slice(headerRowIndex + 1);
 
+        // 4. Find where the data ends by looking for the "Totais" section
         const lastDataRowIndex = dataRows.findIndex(row => 
             row.some(cell => typeof cell === 'string' && normalizeKey(cell).startsWith('totaispor'))
         );
 
         const finalDataRows = lastDataRowIndex === -1 ? dataRows : dataRows.slice(0, lastDataRowIndex);
 
+        // 5. Convert rows to objects using the found header
         const siengeSheetData = finalDataRows.map(row => {
             const rowObject: { [key: string]: any } = {};
             header.forEach((h, index) => {
-                rowObject[h] = row[index];
+                if(h) { // Only add if header is not null/empty
+                    rowObject[String(h)] = row[index];
+                }
             });
             return rowObject;
         });
@@ -1141,4 +1147,3 @@ const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         </div>
     );
 }
-
