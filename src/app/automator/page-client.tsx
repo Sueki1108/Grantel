@@ -23,7 +23,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { KeyCheckResult } from "@/components/app/key-checker";
-import { cn } from "@/lib/utils";
+import { cn, normalizeKey } from "@/lib/utils";
 import type { AllClassifications } from "@/lib/types";
 import type { SessionData } from "@/components/app/history-analysis";
 import { Switch } from "@/components/ui/switch";
@@ -313,7 +313,7 @@ export function AutomatorClientPage() {
             setProcessedData(prev => ({ ...(prev ?? initialProcessedDataState), siengeSheetData: null, siengeDebugKeys: [], reconciliationResults: null }));
             return;
         }
-
+    
         setSiengeFile(file);
         setProcessing(true);
         
@@ -322,22 +322,51 @@ export function AutomatorClientPage() {
             const workbook = XLSX.read(data, { type: 'array' });
             const sheetName = workbook.SheetNames[0];
             if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
+    
             const siengeWorksheet = workbook.Sheets[sheetName];
             if (!siengeWorksheet) throw new Error("Aba da planilha não encontrada.");
             
-            const header = XLSX.utils.sheet_to_json(siengeWorksheet, { header: 1, range: 'A9:AZ9' })[0] as string[];
-            const siengeSheetData = XLSX.utils.sheet_to_json(siengeWorksheet, { header: header, range: 9, defval: null });
-            const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
-
+            // 1. Read as array of arrays to find header row index
+            const dataAsArray: any[][] = XLSX.utils.sheet_to_json(siengeWorksheet, { header: 1 });
+            
+            let headerRowIndex = -1;
+            for (let i = 0; i < dataAsArray.length; i++) {
+                const row = dataAsArray[i];
+                if (row.some(cell => typeof cell === 'string' && normalizeKey(cell) === 'numero')) {
+                    headerRowIndex = i;
+                    break;
+                }
+            }
+    
+            if (headerRowIndex === -1) {
+                throw new Error("Não foi possível encontrar a linha de cabeçalho (procurando por 'Número').");
+            }
+            
+            // 2. Get header names from the found row
+            const header = dataAsArray[headerRowIndex];
+            
+            // 3. Read the rest of the sheet as JSON, using the correct header and skipping rows before it
+            const siengeSheetData = XLSX.utils.sheet_to_json(siengeWorksheet, { header, range: headerRowIndex + 1 });
+            
+            // 4. Remove summary rows at the end
+            const lastDataRowIndex = siengeSheetData.findIndex((row: any) => 
+                typeof row['Número'] === 'string' && normalizeKey(row['Número']).startsWith('totaispor')
+            );
+    
+            const finalData = lastDataRowIndex === -1 ? siengeSheetData : siengeSheetData.slice(0, lastDataRowIndex);
+    
+            const siengeDebugKeys = generateSiengeDebugKeys(finalData);
+    
             setProcessedData(prev => ({
                 ...(prev ?? initialProcessedDataState),
-                siengeSheetData,
+                siengeSheetData: finalData,
                 siengeDebugKeys,
                 reconciliationResults: null, // Reset reconciliation results on new file
             }));
             
-            toast({ title: 'Planilha Sienge Carregada', description: `${siengeSheetData.length} itens lidos e prontos para as análises.` });
+            toast({ title: 'Planilha Sienge Carregada', description: `${finalData.length} itens lidos e prontos para as análises.` });
         } catch (err: any) {
+            console.error("Sienge processing error:", err);
             toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
             setSiengeFile(null);
         } finally {
@@ -547,7 +576,7 @@ export function AutomatorClientPage() {
         setFiles({});
         setFileStatus({});
         setXmlFiles({ nfeEntrada: [], cte: [], nfeSaida: [], nfse: [] });
-        setProcessedData(null);
+        setProcessedData(initialProcessedDataState);
         setError(null);
         setLogs([]);
         setSpedFiles([]);
@@ -1107,3 +1136,5 @@ export function AutomatorClientPage() {
         </div>
     );
 }
+
+    
