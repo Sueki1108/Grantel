@@ -369,19 +369,14 @@ export function processDataFrames(
 }
 
 export function runReconciliation(
-    siengeData: any[],
+    siengeSheetData: any[],
     xmlItems: any[],
     nfeEntradas: any[],
     cteData: any[],
     costCenterMap?: Map<string, string> | null,
     accountingMap?: Map<string, { account: string; description: string }> | null,
 ): ReconciliationResults {
-    const emptyResult = { reconciled: [], onlyInSienge: [], onlyInXml: xmlItems, devolucoesEP: [], otherSiengeItems: {}, debug: { siengeKeys: [] } };
-
-    if (!siengeData || siengeData.length === 0) {
-        return { ...emptyResult, onlyInXml: xmlItems };
-    }
-
+    
     const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
         if (!data || data.length === 0 || !data[0]) return undefined;
         const headers = Object.keys(data[0]);
@@ -389,13 +384,13 @@ export function runReconciliation(
     };
     
     const h = {
-        esp: findHeader(siengeData, ['esp', 'especie']),
-        documento: findHeader(siengeData, ['documento', 'número', 'numero', 'numerodanota', 'notafiscal']),
-        credor: findHeader(siengeData, ['credor', 'fornecedor']),
-        cnpj: findHeader(siengeData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cnpj']),
-        valor: findHeader(siengeData, ['valor', 'valortotal', 'vlr total']),
-        cfop: findHeader(siengeData, ['cfop']),
-        produtoFiscal: findHeader(siengeData, ['produto fiscal', 'descrição do item', 'descrição']),
+        esp: findHeader(siengeSheetData, ['esp', 'especie']),
+        documento: findHeader(siengeSheetData, ['documento', 'número', 'numero', 'numerodanota', 'notafiscal']),
+        credor: findHeader(siengeSheetData, ['credor', 'fornecedor']),
+        cnpj: findHeader(siengeSheetData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cnpj']),
+        valor: findHeader(siengeSheetData, ['valor', 'valortotal', 'vlr total']),
+        cfop: findHeader(siengeSheetData, ['cfop']),
+        produtoFiscal: findHeader(siengeSheetData, ['produto fiscal', 'descrição do item', 'descrição']),
     };
 
     if (!h.documento || !h.cnpj || !h.valor) {
@@ -403,11 +398,11 @@ export function runReconciliation(
     }
     
     const siengeToReconcile = h.esp 
-        ? siengeData.filter(row => ['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()))
-        : siengeData;
+        ? siengeSheetData.filter(row => ['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()))
+        : siengeSheetData;
     
     const otherSiengeItemsRaw = h.esp
-        ? siengeData.filter(row => !['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()))
+        ? siengeSheetData.filter(row => !['NFE', 'NFSR', 'CTE'].includes(String(row[h.esp!]).toUpperCase()))
         : [];
     
     const getXmlDocKey = (item: any) => item['Número da Nota'] || item['Número'];
@@ -474,29 +469,29 @@ export function runReconciliation(
 
     const enrichItem = (item: any) => {
         if (!item || typeof item !== 'object') return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
+        
         const siengeDocNumberRaw = item[`Sienge_${h.documento!}`];
         const siengeCredorRaw = item[`Sienge_${h.credor!}`];
-        if (siengeDocNumberRaw && siengeCredorRaw) {
+
+        if (costCenterMap && siengeDocNumberRaw && siengeCredorRaw) {
             const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
             const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
             const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
             const costCenterKey = `${docNumberClean}-${credorCode}`;
-            if (costCenterMap) {
-                item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
-            } else {
-                 item['Centro de Custo'] = 'N/A';
-            }
-            
-            const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
-            if (accountingMap) {
-                const accInfo = accountingMap.get(accountingKey);
-                item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
-            } else {
-                 item['Contabilização'] = 'N/A';
-            }
+            item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
         } else {
-            item['Centro de Custo'] = 'N/A'; item['Contabilização'] = 'N/A';
+            item['Centro de Custo'] = 'N/A';
         }
+        
+        if (accountingMap && siengeDocNumberRaw && siengeCredorRaw) {
+            const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
+            const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
+            const accInfo = accountingMap.get(accountingKey);
+            item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
+        } else {
+            item['Contabilização'] = 'N/A';
+        }
+        
         item['CFOP (Sienge)'] = (h.cfop && item[`Sienge_${h.cfop}`]) || 'N/A';
         return item;
     };
@@ -537,7 +532,7 @@ export function generateSiengeDebugKeys(siengeData: any[]) {
     };
 
     const h = {
-        documento: findHeader(siengeData, ['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
+        documento: findHeader(siengeData, ['documento', 'número', 'numero', 'numerodanota', 'notafiscal']),
         credor: findHeader(siengeData, ['credor']),
     };
     
