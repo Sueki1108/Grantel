@@ -89,8 +89,12 @@ export function ReconciliationAnalysis({
         const fileName = `Grantel - Conciliação ${title}.xlsx`;
         XLSX.writeFile(workbook, fileName);
     };
-
-    const itemsToShowInOnlyXmlTab = reconciliationResults?.onlyInXml ?? initialXmlItems;
+    
+    // This logic ensures we always have something to show in the "Apenas no XML" tab.
+    // If reconciliation has run, we use its results. If not, we use the initial items passed down.
+    const itemsToShowInOnlyXmlTab = useMemo(() => {
+        return reconciliationResults?.onlyInXml ?? initialXmlItems ?? [];
+    }, [reconciliationResults, initialXmlItems]);
 
 
     return (
