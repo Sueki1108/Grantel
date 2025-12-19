@@ -90,7 +90,7 @@ export function AutomatorClientPage() {
     const [xmlFiles, setXmlFiles] = useState<{ nfeEntrada: File[], cte: File[], nfeSaida: File[], nfse: File[] }>({ nfeEntrada: [], cte: [], nfeSaida: [], nfse: [] });
     const [fileStatus, setFileStatus] = useState<Record<string, boolean>>({});
     const [processing, setProcessing] = useState(false);
-    const [processedData, setProcessedData] = useState<ProcessedData | null>(null);
+    const [processedData, setProcessedData] = useState<ProcessedData | null>(initialProcessedDataState);
     const [error, setError] = useState<string | null>(null);
     const [logs, setLogs] = useState<string[]>([]);
     
@@ -306,73 +306,78 @@ export function AutomatorClientPage() {
         }
     };
     
-    const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) {
-            setSiengeFile(null);
-            setProcessedData(prev => ({ ...(prev ?? initialProcessedDataState), siengeSheetData: null, siengeDebugKeys: [], reconciliationResults: null }));
-            return;
-        }
-    
-        setSiengeFile(file);
-        setProcessing(true);
+const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+        setSiengeFile(null);
+        setProcessedData(prev => ({ ...(prev ?? initialProcessedDataState), siengeSheetData: null, siengeDebugKeys: [], reconciliationResults: null }));
+        return;
+    }
+
+    setSiengeFile(file);
+    setProcessing(true);
+
+    try {
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
+
+        const siengeWorksheet = workbook.Sheets[sheetName];
+        if (!siengeWorksheet) throw new Error("Aba da planilha não encontrada.");
         
-        try {
-            const data = await file.arrayBuffer();
-            const workbook = XLSX.read(data, { type: 'array' });
-            const sheetName = workbook.SheetNames[0];
-            if (!sheetName) throw new Error("A planilha Sienge não contém abas.");
-    
-            const siengeWorksheet = workbook.Sheets[sheetName];
-            if (!siengeWorksheet) throw new Error("Aba da planilha não encontrada.");
-            
-            // 1. Read as array of arrays to find header row index
-            const dataAsArray: any[][] = XLSX.utils.sheet_to_json(siengeWorksheet, { header: 1 });
-            
-            let headerRowIndex = -1;
-            for (let i = 0; i < dataAsArray.length; i++) {
-                const row = dataAsArray[i];
-                if (row.some(cell => typeof cell === 'string' && normalizeKey(cell) === 'numero')) {
-                    headerRowIndex = i;
-                    break;
-                }
+        const dataAsArray: any[][] = XLSX.utils.sheet_to_json(siengeWorksheet, { header: 1 });
+        
+        let headerRowIndex = -1;
+        const possibleHeaders = ['numero', 'documento', 'data entrada', 'credor', 'cpf/cnpj'];
+        for (let i = 0; i < dataAsArray.length; i++) {
+            const row = dataAsArray[i];
+            if (row && row.some(cell => typeof cell === 'string' && possibleHeaders.includes(normalizeKey(cell)))) {
+                headerRowIndex = i;
+                break;
             }
-    
-            if (headerRowIndex === -1) {
-                throw new Error("Não foi possível encontrar a linha de cabeçalho (procurando por 'Número').");
-            }
-            
-            // 2. Get header names from the found row
-            const header = dataAsArray[headerRowIndex];
-            
-            // 3. Read the rest of the sheet as JSON, using the correct header and skipping rows before it
-            const siengeSheetData = XLSX.utils.sheet_to_json(siengeWorksheet, { header, range: headerRowIndex + 1 });
-            
-            // 4. Remove summary rows at the end
-            const lastDataRowIndex = siengeSheetData.findIndex((row: any) => 
-                typeof row['Número'] === 'string' && normalizeKey(row['Número']).startsWith('totaispor')
-            );
-    
-            const finalData = lastDataRowIndex === -1 ? siengeSheetData : siengeSheetData.slice(0, lastDataRowIndex);
-    
-            const siengeDebugKeys = generateSiengeDebugKeys(finalData);
-    
-            setProcessedData(prev => ({
-                ...(prev ?? initialProcessedDataState),
-                siengeSheetData: finalData,
-                siengeDebugKeys,
-                reconciliationResults: null, // Reset reconciliation results on new file
-            }));
-            
-            toast({ title: 'Planilha Sienge Carregada', description: `${finalData.length} itens lidos e prontos para as análises.` });
-        } catch (err: any) {
-            console.error("Sienge processing error:", err);
-            toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
-            setSiengeFile(null);
-        } finally {
-            setProcessing(false);
         }
-    };
+
+        if (headerRowIndex === -1) {
+            throw new Error("Não foi possível encontrar a linha de cabeçalho (procurando por 'Número', 'Documento', 'Credor', etc.).");
+        }
+        
+        const header = dataAsArray[headerRowIndex];
+        const dataRows = dataAsArray.slice(headerRowIndex + 1);
+
+        const lastDataRowIndex = dataRows.findIndex(row => 
+            row.some(cell => typeof cell === 'string' && normalizeKey(cell).startsWith('totaispor'))
+        );
+
+        const finalDataRows = lastDataRowIndex === -1 ? dataRows : dataRows.slice(0, lastDataRowIndex);
+
+        const siengeSheetData = finalDataRows.map(row => {
+            const rowObject: { [key: string]: any } = {};
+            header.forEach((h, index) => {
+                rowObject[h] = row[index];
+            });
+            return rowObject;
+        });
+
+        const siengeDebugKeys = generateSiengeDebugKeys(siengeSheetData);
+
+        setProcessedData(prev => ({
+            ...(prev ?? initialProcessedDataState),
+            siengeSheetData: siengeSheetData,
+            siengeDebugKeys,
+            reconciliationResults: null,
+        }));
+        
+        toast({ title: 'Planilha Sienge Carregada', description: `${siengeSheetData.length} itens lidos e prontos para as análises.` });
+    } catch (err: any) {
+        console.error("Sienge processing error:", err);
+        toast({ variant: 'destructive', title: 'Erro ao Processar Sienge', description: err.message });
+        setSiengeFile(null);
+    } finally {
+        setProcessing(false);
+    }
+};
+
     
     
     const handleCostCenterFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -1137,4 +1142,3 @@ export function AutomatorClientPage() {
     );
 }
 
-    
