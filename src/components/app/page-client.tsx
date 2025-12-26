@@ -736,15 +736,15 @@ export function AutomatorClientPage() {
                 
                     Object.keys(dataToProcess).forEach(key => {
                         if (['NFE', 'CTE', 'Saídas'].includes(key)) {
-                             const originalCount = dataToProcess[key].length;
-                             dataToProcess[key] = filterByPeriod(dataToProcess[key]);
-                             log(`- ${key}: ${dataToProcess[key].length}/${originalCount} registos mantidos após filtro.`);
+                             const originalCount = (dataToProcess[key] || []).length;
+                             dataToProcess[key] = filterByPeriod(dataToProcess[key] || []);
+                             log(`- ${key}: ${(dataToProcess[key] || []).length}/${originalCount} registos mantidos após filtro.`);
                         }
                     });
                      
-                    const chavesNfe = new Set(dataToProcess['NFE'].map(n => n['Chave Unica']));
-                    const chavesCte = new Set(dataToProcess['CTE'].map(n => n['Chave Unica']));
-                    const chavesSaidas = new Set(dataToProcess['Saídas'].map(n => n['Chave Unica']));
+                    const chavesNfe = new Set((dataToProcess['NFE'] || []).map(n => n['Chave Unica']));
+                    const chavesCte = new Set((dataToProcess['CTE'] || []).map(n => n['Chave Unica']));
+                    const chavesSaidas = new Set((dataToProcess['Saídas'] || []).map(n => n['Chave Unica']));
                     
                      if(dataToProcess['Itens']) {
                         dataToProcess['Itens'] = (dataToProcess['Itens'] || []).filter(item => chavesNfe.has(item['Chave Unica']) || chavesCte.has(item['Chave Unica']));

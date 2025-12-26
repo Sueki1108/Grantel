@@ -61,7 +61,7 @@ export function getColumns<TData extends Record<string, any>>(data: TData[]): Co
         header: ({ column }) => renderHeader(column, columnId),
         cell: ({ row }) => {
             const value = row.getValue(columnId);
-            if (value === null || typeof value === 'undefined') {
+            if (value === null || value === undefined) {
               return <span className="text-muted-foreground">N/A</span>;
             }
             return <div>{String(value)}</div>;

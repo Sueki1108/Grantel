@@ -46,6 +46,8 @@ export type TabFilters = {
     xmlCsts: Set<string>;
     xmlPicms: Set<string>;
     xmlCfops: Set<string>;
+    contabilizacao: Set<string>;
+    centroCusto: Set<string>;
 };
 
 type BulkActionState = {
@@ -64,12 +66,14 @@ const FilterDialog: React.FC<{
     setTabFilters: React.Dispatch<React.SetStateAction<Record<string, TabFilters>>>;
 }> = ({ siengeCfop, items, tabFilters, setTabFilters }) => {
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
-    const [localFilters, setLocalFilters] = React.useState<TabFilters>({ xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set() });
+    const [localFilters, setLocalFilters] = React.useState<TabFilters>({ xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set(), contabilizacao: new Set(), centroCusto: new Set() });
 
     const availableOptions = useMemo(() => {
         const xmlCsts = new Set<string>();
         const xmlPicms = new Set<string>();
         const xmlCfops = new Set<string>();
+        const contabilizacoes = new Set<string>();
+        const centrosCusto = new Set<string>();
         items.forEach(item => {
             const cstCode = String(item['CST do ICMS'] || '');
             if(cstCode) {
@@ -85,11 +89,23 @@ const FilterDialog: React.FC<{
                 const combined = `${cfopCode}: ${fullDescription}`;
                 xmlCfops.add(combined);
             }
+
+            const contabilizacao = item['Contabilização'] || 'N/A';
+            if (contabilizacao && contabilizacao !== 'N/A') {
+                contabilizacoes.add(String(contabilizacao));
+            }
+
+            const centroCusto = item['Centro de Custo'] || 'N/A';
+            if (centroCusto && centroCusto !== 'N/A') {
+                centrosCusto.add(String(centroCusto));
+            }
         });
         return {
             xmlCsts: Array.from(xmlCsts).sort(),
             xmlPicms: Array.from(xmlPicms).sort((a,b) => parseFloat(a) - parseFloat(b)),
             xmlCfops: Array.from(xmlCfops).sort(),
+            contabilizacao: Array.from(contabilizacoes).sort(),
+            centroCusto: Array.from(centrosCusto).sort(),
         };
     }, [items]);
     
@@ -99,21 +115,27 @@ const FilterDialog: React.FC<{
                 xmlCsts: new Set(availableOptions.xmlCsts),
                 xmlPicms: new Set(availableOptions.xmlPicms),
                 xmlCfops: new Set(availableOptions.xmlCfops),
+                contabilizacao: new Set(availableOptions.contabilizacao),
+                centroCusto: new Set(availableOptions.centroCusto),
             };
              // Deep copy to prevent unintended mutations
             const deepCopiedFilters = {
-                xmlCsts: new Set(currentGlobalFilters.xmlCsts),
-                xmlPicms: new Set(currentGlobalFilters.xmlPicms),
-                xmlCfops: new Set(currentGlobalFilters.xmlCfops),
+                xmlCsts: new Set(currentGlobalFilters.xmlCsts || availableOptions.xmlCsts),
+                xmlPicms: new Set(currentGlobalFilters.xmlPicms || availableOptions.xmlPicms),
+                xmlCfops: new Set(currentGlobalFilters.xmlCfops || availableOptions.xmlCfops),
+                contabilizacao: new Set(currentGlobalFilters.contabilizacao || availableOptions.contabilizacao),
+                centroCusto: new Set(currentGlobalFilters.centroCusto || availableOptions.centroCusto),
             };
             setLocalFilters(deepCopiedFilters);
         }
     }, [isDialogOpen, tabFilters, siengeCfop, availableOptions]);
     
-    const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set() };
+    const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set(), contabilizacao: new Set(), centroCusto: new Set() };
     const isFilterActive = filters.xmlCsts?.size < availableOptions.xmlCsts.length ||
                            filters.xmlPicms?.size < availableOptions.xmlPicms.length ||
-                           filters.xmlCfops?.size < availableOptions.xmlCfops.length;
+                           filters.xmlCfops?.size < availableOptions.xmlCfops.length ||
+                           filters.contabilizacao?.size < availableOptions.contabilizacao.length ||
+                           filters.centroCusto?.size < availableOptions.centroCusto.length;
 
 
     const handleFilterChange = (type: keyof TabFilters, value: string, checked: boolean) => {
@@ -156,10 +178,12 @@ const FilterDialog: React.FC<{
                     <DialogDescription>Desmarque os itens que deseja ocultar da visualização.</DialogDescription>
                 </DialogHeader>
                  <Tabs defaultValue='cfop' className='w-full'>
-                    <TabsList className='grid grid-cols-3 w-full'>
+                    <TabsList className='grid grid-cols-5 w-full'>
                         <TabsTrigger value='cfop'>CFOP (XML)</TabsTrigger>
                         <TabsTrigger value='cst'>CST ICMS (XML)</TabsTrigger>
                         <TabsTrigger value='picms'>Alíquota ICMS (XML)</TabsTrigger>
+                        <TabsTrigger value='contabilizacao'>Contabilização</TabsTrigger>
+                        <TabsTrigger value='centroCusto'>Centro de Custo</TabsTrigger>
                     </TabsList>
                     <div className="mt-4">
                         <TabsContent value='cfop'>
@@ -200,6 +224,34 @@ const FilterDialog: React.FC<{
                                     <div key={`picms-${opt}`} className="flex items-center space-x-2 mb-2">
                                         <Checkbox id={`picms-${opt}`} checked={localFilters?.xmlPicms.has(opt)} onCheckedChange={checked => handleFilterChange('xmlPicms', opt, !!checked)} />
                                         <Label htmlFor={`picms-${opt}`} className="text-sm font-normal">{parseFloat(opt).toFixed(2)}%</Label>
+                                    </div>
+                                ))}
+                            </ScrollArea>
+                        </TabsContent>
+                        <TabsContent value='contabilizacao'>
+                            <div className="flex justify-end gap-2 mb-2">
+                                <Button variant="ghost" size="sm" onClick={() => handleSelectAllForTab('contabilizacao', 'all')}>Marcar Todos</Button>
+                                <Button variant="ghost" size="sm" onClick={() => handleSelectAllForTab('contabilizacao', 'none')}>Desmarcar Todos</Button>
+                            </div>
+                            <ScrollArea className='h-96 border rounded-md p-4'>
+                                {availableOptions.contabilizacao.map(opt => (
+                                    <div key={`contabilizacao-${opt}`} className="flex items-start space-x-2 mb-2">
+                                        <Checkbox id={`contabilizacao-${opt}`} checked={localFilters?.contabilizacao.has(opt)} onCheckedChange={checked => handleFilterChange('contabilizacao', opt, !!checked)} />
+                                        <Label htmlFor={`contabilizacao-${opt}`} className="text-sm font-normal cursor-pointer">{opt}</Label>
+                                    </div>
+                                ))}
+                            </ScrollArea>
+                        </TabsContent>
+                        <TabsContent value='centroCusto'>
+                            <div className="flex justify-end gap-2 mb-2">
+                                <Button variant="ghost" size="sm" onClick={() => handleSelectAllForTab('centroCusto', 'all')}>Marcar Todos</Button>
+                                <Button variant="ghost" size="sm" onClick={() => handleSelectAllForTab('centroCusto', 'none')}>Desmarcar Todos</Button>
+                            </div>
+                            <ScrollArea className='h-96 border rounded-md p-4'>
+                                {availableOptions.centroCusto.map(opt => (
+                                    <div key={`centroCusto-${opt}`} className="flex items-start space-x-2 mb-2">
+                                        <Checkbox id={`centroCusto-${opt}`} checked={localFilters?.centroCusto.has(opt)} onCheckedChange={checked => handleFilterChange('centroCusto', opt, !!checked)} />
+                                        <Label htmlFor={`centroCusto-${opt}`} className="text-sm font-normal cursor-pointer">{opt}</Label>
                                     </div>
                                 ))}
                             </ScrollArea>
@@ -730,12 +782,16 @@ export function CfopValidator(props: CfopValidatorProps) {
                                             const cfopCode = item['CFOP'];
                                             const cstCode = String(item['CST do ICMS'] || '');
                                             const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
+                                            const contabilizacao = item['Contabilização'] || 'N/A';
+                                            const centroCusto = item['Centro de Custo'] || 'N/A';
 
-                                            const cfopMatch = currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(`${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}`);
-                                            const cstMatch = currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(`${cstCode}: ${getCstDescription(cstCode)}`);
-                                            const picmsMatch = currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(picmsValue);
+                                            const cfopMatch = !currentFilters.xmlCfops || currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(`${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}`);
+                                            const cstMatch = !currentFilters.xmlCsts || currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(`${cstCode}: ${getCstDescription(cstCode)}`);
+                                            const picmsMatch = !currentFilters.xmlPicms || currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(picmsValue);
+                                            const contabilizacaoMatch = !currentFilters.contabilizacao || currentFilters.contabilizacao.size === 0 || currentFilters.contabilizacao.has(String(contabilizacao));
+                                            const centroCustoMatch = !currentFilters.centroCusto || currentFilters.centroCusto.size === 0 || currentFilters.centroCusto.has(String(centroCusto));
 
-                                            return cfopMatch && cstMatch && picmsMatch;
+                                            return cfopMatch && cstMatch && picmsMatch && contabilizacaoMatch && centroCustoMatch;
                                         });
 
                                         return (

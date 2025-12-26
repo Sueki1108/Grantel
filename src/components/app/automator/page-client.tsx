@@ -638,9 +638,9 @@ export function AutomatorClientPage() {
                         }
                     });
                      
-                    const chavesNfe = new Set(dataToProcess['NFE'].map(n => n['Chave Unica']));
-                    const chavesCte = new Set(dataToProcess['CTE'].map(n => n['Chave Unica']));
-                    const chavesSaidas = new Set(dataToProcess['Saídas'].map(n => n['Chave Unica']));
+                    const chavesNfe = new Set((dataToProcess['NFE'] || []).map(n => n['Chave Unica']));
+                    const chavesCte = new Set((dataToProcess['CTE'] || []).map(n => n['Chave Unica']));
+                    const chavesSaidas = new Set((dataToProcess['Saídas'] || []).map(n => n['Chave Unica']));
                     
                      if(dataToProcess['Itens']) {
                         dataToProcess['Itens'] = (dataToProcess['Itens'] || []).filter(item => chavesNfe.has(item['Chave Unica']) || chavesCte.has(item['Chave Unica']));

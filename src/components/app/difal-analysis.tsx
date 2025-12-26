@@ -69,8 +69,10 @@ export function DifalAnalysis({ reconciliationResults, allClassifications, onPer
             const items = allReconciledItems.filter(item => {
                 const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
                 const isCorrect = cfopValidations[uniqueKey]?.classification === 'correct';
-                const cfop = String(item.CFOP);
-                const isDifalCfop = cfop === '2551' || cfop === '2556';
+                // Verifica tanto o CFOP do XML quanto o CFOP do Sienge
+                const cfopXml = String(item.CFOP || '');
+                const cfopSienge = String(item['Sienge_CFOP'] || item['CFOP (Sienge)'] || '');
+                const isDifalCfop = cfopXml === '2551' || cfopXml === '2556' || cfopSienge === '2551' || cfopSienge === '2556';
                 return isCorrect && isDifalCfop;
             });
 
