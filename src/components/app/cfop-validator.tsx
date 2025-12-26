@@ -244,9 +244,28 @@ const FilterDialog: React.FC<{
                 </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl">
-                 <DialogHeader>
-                    <DialogTitle>Filtros Avançados para CFOP {siengeCfop}</DialogTitle>
-                    <DialogDescription>Desmarque os itens que deseja ocultar da visualização.</DialogDescription>
+                 <DialogHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <DialogTitle>Filtros Avançados para CFOP {siengeCfop}</DialogTitle>
+                        <DialogDescription>Desmarque os itens que deseja ocultar da visualização.</DialogDescription>
+                    </div>
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => {
+                            const allSelected = 
+                                localFilters.xmlCsts.size === availableOptions.xmlCsts.length &&
+                                localFilters.xmlPicms.size === availableOptions.xmlPicms.length &&
+                                localFilters.xmlCfops.size === availableOptions.xmlCfops.length &&
+                                localFilters.contabilizacao.size === availableOptions.contabilizacao.length &&
+                                localFilters.centroCusto.size === availableOptions.centroCusto.length;
+                            
+                            handleGlobalSelectAll(allSelected ? 'none' : 'all');
+                        }}
+                        title="Marcar/Desmarcar Todos"
+                    >
+                        <LucideIcons.CheckSquare className="h-5 w-5" />
+                    </Button>
                 </DialogHeader>
                  <Tabs defaultValue='cfop' className='w-full'>
                     <TabsList className='grid grid-cols-5 w-full'>
@@ -952,6 +971,24 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 </div>
                             )}]} data={difalAnalysisData.difalItems} />
                         </TabsContent>
+                        <TabsContent value="beneficio-fiscal" className="mt-4">
+                             <DataTable columns={columns} data={difalAnalysisData.beneficioFiscalItems} />
+                        </TabsContent>
+                        <TabsContent value="desconsiderados" className="mt-4">
+                            <DataTable columns={[...columns, { id: 'difal-actions', header: 'Ações DIFAL', cell: ({row}) => (
+                                <div className="flex justify-center gap-1">
+                                    <TooltipProvider>
+                                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([row.original], 'difal')}><TicketX className="h-4 w-4" /> Reverter para DIFAL</Button></TooltipTrigger><TooltipContent><p>Reverter e Marcar como DIFAL</p></TooltipContent></Tooltip>
+                                    </TooltipProvider>
+                                </div>
+                            )}]} data={difalAnalysisData.desconsideradosItems} />
+                        </TabsContent>
+                    </Tabs>
+                </TabsContent>
+            </Tabs>
+        </div>
+    );
+}
                         <TabsContent value="beneficio-fiscal" className="mt-4">
                              <DataTable columns={columns} data={difalAnalysisData.beneficioFiscalItems} />
                         </TabsContent>
