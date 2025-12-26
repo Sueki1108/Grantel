@@ -989,21 +989,3 @@ export function CfopValidator(props: CfopValidatorProps) {
         </div>
     );
 }
-                        <TabsContent value="beneficio-fiscal" className="mt-4">
-                             <DataTable columns={columns} data={difalAnalysisData.beneficioFiscalItems} />
-                        </TabsContent>
-                        <TabsContent value="desconsiderados" className="mt-4">
-                            <DataTable columns={[...columns, { id: 'difal-actions', header: 'Ações DIFAL', cell: ({row}) => (
-                                <div className="flex justify-center gap-1">
-                                    <TooltipProvider>
-                                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([row.original], 'difal')}><TicketX className="h-4 w-4" /> Reverter para DIFAL</Button></TooltipTrigger><TooltipContent><p>Reverter e Marcar como DIFAL</p></TooltipContent></Tooltip>
-                                    </TooltipProvider>
-                                </div>
-                            )}]} data={difalAnalysisData.desconsideradosItems} />
-                        </TabsContent>
-                    </Tabs>
-                </TabsContent>
-            </Tabs>
-        </div>
-    );
-}
