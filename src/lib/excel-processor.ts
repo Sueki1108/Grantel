@@ -384,12 +384,15 @@ export function runReconciliation(
     
     const h = {
         esp: findHeader(siengeSheetData, ['esp', 'especie']),
-        documento: findHeader(siengeSheetData, ['documento', 'número', 'numero', 'numerodanota', 'nota fiscal']),
+        documento: findHeader(siengeSheetData, ['documento', 'número', 'numero', 'numerodanota', 'nota fiscal', 'nota']),
         credor: findHeader(siengeSheetData, ['credor', 'fornecedor']),
-        cnpj: findHeader(siengeSheetData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cnpj']),
-        valor: findHeader(siengeSheetData, ['valor', 'valortotal', 'vlr total']),
+        cnpj: findHeader(siengeSheetData, ['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cnpj', 'cpfcnpj']),
+        valor: findHeader(siengeSheetData, ['valor', 'valortotal', 'vlr total', 'valor total', 'total']),
         cfop: findHeader(siengeSheetData, ['cfop']),
         produtoFiscal: findHeader(siengeSheetData, ['produto fiscal', 'descrição do item', 'descrição']),
+        desconto: findHeader(siengeSheetData, ['desconto']),
+        frete: findHeader(siengeSheetData, ['frete']),
+        ipi: findHeader(siengeSheetData, ['ipi']),
     };
 
     if (!h.documento || !h.cnpj || !h.valor) {
@@ -411,29 +414,70 @@ export function runReconciliation(
         const matchedInPass: any[] = [];
         const stillUnmatchedSienge: any[] = [];
         const xmlMap = new Map<string, any[]>();
-        xmlItems.forEach(item => {
+        const matchedXmlIndices = new Set<number>();
+        
+        // Indexa XMLs por chave
+        xmlItems.forEach((item, index) => {
             const key = getXmlKey(item);
             if (key) {
                 if (!xmlMap.has(key)) xmlMap.set(key, []);
-                xmlMap.get(key)!.push(item);
+                xmlMap.get(key)!.push({ item, index });
             }
         });
 
         siengeItems.forEach(siengeItem => {
             const key = getSiengeKey(siengeItem);
             if (key && xmlMap.has(key)) {
-                const matchedXmlItems = xmlMap.get(key)!;
-                if (matchedXmlItems.length > 0) {
-                    const matchedXmlItem = matchedXmlItems.shift()!;
-                    const combined = { ...matchedXmlItem, ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 'Observações': `Conciliado via ${passName}`};
-                    matchedInPass.push(combined);
-                    return;
+                const matchedXmlEntries = xmlMap.get(key)!;
+                
+                if (matchedXmlEntries.length > 0) {
+                    let bestMatch: { item: any; index: number } | null = null;
+                    
+                    // Se há múltiplos matches, tenta encontrar o melhor baseado na proximidade de valores
+                    if (matchedXmlEntries.length > 1 && h.valor) {
+                        const siengeValue = normalizeValue(siengeItem[h.valor!]);
+                        let minDiff = Infinity;
+                        
+                        matchedXmlEntries.forEach(({ item: xmlItem, index }) => {
+                            if (matchedXmlIndices.has(index)) return; // Já foi usado
+                            
+                            const xmlValue = normalizeValue(xmlItem['Valor Total'] || xmlItem['Valor da Prestação'] || 0);
+                            const diff = Math.abs(siengeValue - xmlValue);
+                            
+                            if (diff < minDiff) {
+                                minDiff = diff;
+                                bestMatch = { item: xmlItem, index };
+                            }
+                        });
+                    }
+                    
+                    // Se não encontrou melhor match ou só há um, usa o primeiro disponível
+                    if (!bestMatch) {
+                        for (const { item: xmlItem, index } of matchedXmlEntries) {
+                            if (!matchedXmlIndices.has(index)) {
+                                bestMatch = { item: xmlItem, index };
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (bestMatch) {
+                        matchedXmlIndices.add(bestMatch.index);
+                        const combined = { 
+                            ...bestMatch.item, 
+                            ...Object.fromEntries(Object.entries(siengeItem).map(([k, v]) => [`Sienge_${k}`, v])), 
+                            'Observações': `Conciliado via ${passName}`
+                        };
+                        matchedInPass.push(combined);
+                        return;
+                    }
                 }
             }
             stillUnmatchedSienge.push(siengeItem);
         });
 
-        const stillUnmatchedXml = Array.from(xmlMap.values()).flat();
+        // Remove XMLs que foram pareados
+        const stillUnmatchedXml = xmlItems.filter((_, index) => !matchedXmlIndices.has(index));
         return { matched: matchedInPass, remainingSienge: stillUnmatchedSienge, remainingXml: stillUnmatchedXml };
     };
 
@@ -441,20 +485,73 @@ export function runReconciliation(
     let remainingXml = [...xmlItems, ...cteData];
     let remainingSienge = [...siengeToReconcile];
 
+    const normalizeValue = (value: any): number => {
+        if (value === null || value === undefined) return 0;
+        const strValue = String(value).trim().replace(/\./g, '').replace(',', '.');
+        const numValue = parseFloat(strValue);
+        return isNaN(numValue) ? 0 : numValue;
+    };
+
     const createComparisonKey = (docNum: any, cnpj: any, value: any): string | null => {
         const cleanDoc = cleanAndToStr(docNum);
         const cleanCnpj = cleanAndToStr(cnpj);
-        const cleanValue = (value !== null && value !== undefined) ? parseFloat(String(value).replace(',', '.')).toFixed(2) : '0.00';
-        if (!cleanDoc || !cleanCnpj || cleanValue === 'NaN') return null;
-        return `${cleanDoc}-${cleanCnpj}-${cleanValue}`;
+        if (!cleanDoc || !cleanCnpj) return null;
+        if (value !== null && value !== undefined) {
+            const cleanValue = normalizeValue(value).toFixed(2);
+            if (cleanValue === 'NaN') return null;
+            return `${cleanDoc}-${cleanCnpj}-${cleanValue}`;
+        }
+        return `${cleanDoc}-${cleanCnpj}`;
     };
 
+    const createDocCnpjKey = (docNum: any, cnpj: any): string | null => {
+        const cleanDoc = cleanAndToStr(docNum);
+        const cleanCnpj = cleanAndToStr(cnpj);
+        if (!cleanDoc || !cleanCnpj) return null;
+        return `${cleanDoc}-${cleanCnpj}`;
+    };
+
+    // Passes de conciliação - do mais específico para o mais genérico
     const passes = [
+        // Pass 1: Valor Total exato
         { name: 'Valor Total', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], item[h.valor!]), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação']) },
+        
+        // Pass 2: Preço Unitário
         { name: 'Preço Unitário', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], item.precoUnitario), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Unitário']) },
+        
+        // Pass 3: ICMS Outras
         { name: 'ICMS Outras', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], item.icmsOutras), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação']) },
-        { name: 'Valor Total + Desconto', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], parseFloat(String(item[h.valor!] || '0').replace(',', '.')) + parseFloat(String(item.desconto || '0').replace(',', '.'))), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
-        { name: 'Valor Total - Frete', siengeKey: (item: any) => createComparisonKey(item[h.documento!], item[h.cnpj!], parseFloat(String(item[h.valor!] || '0').replace(',', '.')) - parseFloat(String(item.frete || '0').replace(',', '.'))), xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+        
+        // Pass 4: Valor Total + Desconto
+        { name: 'Valor Total + Desconto', siengeKey: (item: any) => {
+            const valorBase = normalizeValue(item[h.valor!]);
+            const desconto = h.desconto ? normalizeValue(item[h.desconto]) : normalizeValue(item.desconto);
+            return createComparisonKey(item[h.documento!], item[h.cnpj!], valorBase + desconto);
+        }, xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+        
+        // Pass 5: Valor Total - Frete
+        { name: 'Valor Total - Frete', siengeKey: (item: any) => {
+            const valorBase = normalizeValue(item[h.valor!]);
+            const frete = h.frete ? normalizeValue(item[h.frete]) : normalizeValue(item.frete);
+            return createComparisonKey(item[h.documento!], item[h.cnpj!], valorBase - frete);
+        }, xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+        
+        // Pass 6: Valor Total + IPI
+        { name: 'Valor Total + IPI', siengeKey: (item: any) => {
+            const valorBase = normalizeValue(item[h.valor!]);
+            const ipi = h.ipi ? normalizeValue(item[h.ipi]) : normalizeValue(item.ipi);
+            return createComparisonKey(item[h.documento!], item[h.cnpj!], valorBase + ipi);
+        }, xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+        
+        // Pass 7: Valor Total - IPI
+        { name: 'Valor Total - IPI', siengeKey: (item: any) => {
+            const valorBase = normalizeValue(item[h.valor!]);
+            const ipi = h.ipi ? normalizeValue(item[h.ipi]) : normalizeValue(item.ipi);
+            return createComparisonKey(item[h.documento!], item[h.cnpj!], valorBase - ipi);
+        }, xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+        
+        // Pass 8: Apenas Documento + CNPJ (sem valor) - mais flexível
+        { name: 'Documento + CNPJ', siengeKey: (item: any) => createDocCnpjKey(item[h.documento!], item[h.cnpj!]), xmlKey: (item: any) => createDocCnpjKey(getXmlDocKey(item), getXmlCnpjKey(item)) },
     ];
 
     for (const pass of passes) {
