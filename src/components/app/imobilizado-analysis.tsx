@@ -37,6 +37,7 @@ interface ImobilizadoAnalysisProps {
     competence: string | null; 
     onPersistData: (allData: AllClassifications) => void;
     allPersistedData: AllClassifications;
+    reconciliationResults?: any; // Para enriquecer com Contabilização e Centro de Custo
 }
 
 interface ClassificationTableProps {
@@ -66,14 +67,18 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
 }
 
 
-export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, competence, onPersistData, allPersistedData }: ImobilizadoAnalysisProps) {
+export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, competence, onPersistData, allPersistedData, reconciliationResults }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
     const containerRef = React.useRef<HTMLDivElement>(null);
     const [activeTab, setActiveTab] = useState<Classification>('unclassified');
     const [cfopFilter, setCfopFilter] = useState<Set<string>>(new Set());
+    const [contabilizacaoFilter, setContabilizacaoFilter] = useState<Set<string>>(new Set());
+    const [centroCustoFilter, setCentroCustoFilter] = useState<Set<string>>(new Set());
+    const [fornecedorFilter, setFornecedorFilter] = useState<Set<string>>(new Set());
     const [isCfopModalOpen, setIsCfopModalOpen] = useState(false);
+    const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [enrichedItems, setEnrichedItems] = useState<any[]>([]);
 
     useEffect(() => {
@@ -130,13 +135,51 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 }
             }
             
+            // Enriquecer com dados da conciliação se disponível
+            let contabilizacao = 'N/A';
+            let centroCusto = 'N/A';
+            
+            if (reconciliationResults?.reconciled) {
+                // Tenta encontrar o item reconciliado correspondente
+                const reconciledItem = reconciliationResults.reconciled.find((ri: any) => {
+                    const itemChaveUnica = item['Chave Unica'] || '';
+                    const itemItem = item['Item'] || '';
+                    const riChaveUnica = ri['Chave Unica'] || '';
+                    const riItem = ri['Item'] || '';
+                    
+                    // Match por Chave Unica e Item
+                    if (itemChaveUnica && itemItem && riChaveUnica && riItem) {
+                        return itemChaveUnica === riChaveUnica && String(itemItem) === String(riItem);
+                    }
+                    
+                    // Fallback: match por número da nota e código do produto
+                    const itemNumero = item['Número da Nota'] || '';
+                    const itemCodigo = item['Código'] || '';
+                    const riNumero = ri['Número da Nota'] || ri['Número'] || '';
+                    const riCodigo = ri['Código'] || '';
+                    
+                    if (itemNumero && itemCodigo && riNumero && riCodigo) {
+                        return cleanAndToStr(itemNumero) === cleanAndToStr(riNumero) && 
+                               cleanAndToStr(itemCodigo) === cleanAndToStr(riCodigo);
+                    }
+                    
+                    return false;
+                });
+                if (reconciledItem) {
+                    contabilizacao = reconciledItem['Contabilização'] || 'N/A';
+                    centroCusto = reconciledItem['Centro de Custo'] || 'N/A';
+                }
+            }
+            
             return {
                 ...item,
                 'CFOP (Sienge)': siengeCfopValue,
+                'Contabilização': contabilizacao,
+                'Centro de Custo': centroCusto,
             };
         });
         setEnrichedItems(newItems);
-    }, [initialAllItems, siengeData]);
+    }, [initialAllItems, siengeData, reconciliationResults]);
 
 
     const handlePersistClassifications = (competence: string, classifications: { [uniqueItemId: string]: { classification: Classification } }) => {
@@ -221,6 +264,35 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         });
         return Array.from(cfops).sort();
     }, [enrichedItems]);
+
+    const allContabilizacoes = useMemo(() => {
+        const contabilizacoes = new Set<string>();
+        enrichedItems.forEach(item => {
+            const contabilizacao = item['Contabilização'] || 'N/A';
+            contabilizacoes.add(String(contabilizacao));
+        });
+        return Array.from(contabilizacoes).sort();
+    }, [enrichedItems]);
+
+    const allCentrosCusto = useMemo(() => {
+        const centrosCusto = new Set<string>();
+        enrichedItems.forEach(item => {
+            const centroCusto = item['Centro de Custo'] || 'N/A';
+            centrosCusto.add(String(centroCusto));
+        });
+        return Array.from(centrosCusto).sort();
+    }, [enrichedItems]);
+
+    const allFornecedores = useMemo(() => {
+        const fornecedores = new Set<string>();
+        enrichedItems.forEach(item => {
+            const fornecedor = item['Fornecedor'] || 'N/A';
+            if (fornecedor && fornecedor !== 'N/A') {
+                fornecedores.add(String(fornecedor));
+            }
+        });
+        return Array.from(fornecedores).sort();
+    }, [enrichedItems]);
     
     useEffect(() => {
         try {
@@ -235,6 +307,24 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             setCfopFilter(new Set(allCfops));
         }
     }, [allCfops]);
+
+    useEffect(() => {
+        if (contabilizacaoFilter.size === 0 && allContabilizacoes.length > 0) {
+            setContabilizacaoFilter(new Set(allContabilizacoes));
+        }
+    }, [allContabilizacoes]);
+
+    useEffect(() => {
+        if (centroCustoFilter.size === 0 && allCentrosCusto.length > 0) {
+            setCentroCustoFilter(new Set(allCentrosCusto));
+        }
+    }, [allCentrosCusto]);
+
+    useEffect(() => {
+        if (fornecedorFilter.size === 0 && allFornecedores.length > 0) {
+            setFornecedorFilter(new Set(allFornecedores));
+        }
+    }, [allFornecedores]);
 
     const handleSaveCfopFilter = () => {
         try {
@@ -266,9 +356,25 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         
         const persistedForCompetence = (competence && allPersistedData[competence]?.classifications) || {};
 
-        const itemsToProcess = cfopFilter.size === 0
-            ? enrichedItems
-            : enrichedItems.filter(item => cfopFilter.has(String(item['CFOP'])));
+        const itemsToProcess = enrichedItems.filter(item => {
+            // Filtro por CFOP
+            if (cfopFilter.size > 0 && !cfopFilter.has(String(item['CFOP']))) {
+                return false;
+            }
+            // Filtro por Contabilização
+            if (contabilizacaoFilter.size > 0 && !contabilizacaoFilter.has(String(item['Contabilização'] || 'N/A'))) {
+                return false;
+            }
+            // Filtro por Centro de Custo
+            if (centroCustoFilter.size > 0 && !centroCustoFilter.has(String(item['Centro de Custo'] || 'N/A'))) {
+                return false;
+            }
+            // Filtro por Fornecedor
+            if (fornecedorFilter.size > 0 && !fornecedorFilter.has(String(item['Fornecedor'] || 'N/A'))) {
+                return false;
+            }
+            return true;
+        });
 
         itemsToProcess.forEach(item => {
             let classification: Classification = 'unclassified';
@@ -282,7 +388,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         });
         
         return categories;
-    }, [enrichedItems, competence, allPersistedData, cfopFilter]);
+    }, [enrichedItems, competence, allPersistedData, cfopFilter, contabilizacaoFilter, centroCustoFilter, fornecedorFilter]);
     
     const handleDownload = (data: any[], classification: Classification) => {
         if (data.length === 0) {
@@ -335,7 +441,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             </div>
         );
     
-        const columnsToShow = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'CFOP (Sienge)', 'CST do ICMS', 'Valor Unitário', 'Valor Total'];
+        const columnsToShow = ['Fornecedor', 'Número da Nota', 'Descrição', 'CFOP', 'CFOP (Sienge)', 'CST do ICMS', 'Valor Unitário', 'Valor Total', 'Contabilização', 'Centro de Custo'];
     
         const baseColumns = getColumnsWithCustomRender(
             enrichedItems,
@@ -525,40 +631,130 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                                 categories={allPersistedData.supplierCategories || []} 
                                 onSave={handleSaveSupplierCategories}
                             />
-                            <Dialog open={isCfopModalOpen} onOpenChange={setIsCfopModalOpen}>
+                            <Dialog open={isFilterModalOpen} onOpenChange={setIsFilterModalOpen}>
                                 <DialogTrigger asChild>
                                     <Button variant="outline" size="sm">
-                                        <ListFilter className="mr-2 h-4 w-4" />Filtrar por CFOP ({cfopFilter.size > 0 ? cfopFilter.size : "Todos"})
+                                        <ListFilter className="mr-2 h-4 w-4" />Filtros Avançados
                                     </Button>
                                 </DialogTrigger>
                                 <DialogContent className="max-w-4xl">
                                     <DialogHeader>
-                                        <DialogTitle>Filtrar por CFOP (do XML)</DialogTitle>
-                                        <DialogDescription>Selecione os CFOPs que deseja visualizar na tabela. Se nada for selecionado, todos serão exibidos.</DialogDescription>
+                                        <DialogTitle>Filtros Avançados</DialogTitle>
+                                        <DialogDescription>Selecione os filtros que deseja aplicar. Se nada for selecionado, todos serão exibidos.</DialogDescription>
                                     </DialogHeader>
-                                    <div className="flex gap-2 my-2">
-                                        <Button size="sm" variant="secondary" onClick={() => setCfopFilter(new Set(allCfops))}>Marcar Todos</Button>
-                                        <Button size="sm" variant="secondary" onClick={() => setCfopFilter(new Set())}>Limpar Seleção</Button>
-                                    </div>
-                                    <ScrollArea className='h-[60vh] border rounded-md p-4'>
-                                        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2'>
-                                            {allCfops.map(cfop => (
-                                                <div key={cfop} className="flex items-start space-x-2">
-                                                    <Checkbox
-                                                        id={`cfop-filter-${cfop}`}
-                                                        checked={cfopFilter.has(cfop)}
-                                                        onCheckedChange={(checked) => handleCfopFilterChange(cfop, !!checked)}
-                                                    />
-                                                    <Label htmlFor={`cfop-filter-${cfop}`} className="text-sm font-normal cursor-pointer">
-                                                        {cfop}: {(cfopDescriptions[parseInt(cfop, 10)] || "Descrição não encontrada")}
-                                                    </Label>
+                                    <Tabs defaultValue="cfop" className="w-full">
+                                        <TabsList className="grid w-full grid-cols-4">
+                                            <TabsTrigger value="cfop">CFOP</TabsTrigger>
+                                            <TabsTrigger value="contabilizacao">Contabilização</TabsTrigger>
+                                            <TabsTrigger value="centroCusto">Centro de Custo</TabsTrigger>
+                                            <TabsTrigger value="fornecedor">Fornecedor</TabsTrigger>
+                                        </TabsList>
+                                        <TabsContent value="cfop" className="mt-4">
+                                            <div className="flex gap-2 mb-2">
+                                                <Button size="sm" variant="secondary" onClick={() => setCfopFilter(new Set(allCfops))}>Marcar Todos</Button>
+                                                <Button size="sm" variant="secondary" onClick={() => setCfopFilter(new Set())}>Limpar Seleção</Button>
+                                            </div>
+                                            <ScrollArea className='h-[60vh] border rounded-md p-4'>
+                                                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2'>
+                                                    {allCfops.map(cfop => (
+                                                        <div key={cfop} className="flex items-start space-x-2">
+                                                            <Checkbox
+                                                                id={`cfop-filter-${cfop}`}
+                                                                checked={cfopFilter.has(cfop)}
+                                                                onCheckedChange={(checked) => handleCfopFilterChange(cfop, !!checked)}
+                                                            />
+                                                            <Label htmlFor={`cfop-filter-${cfop}`} className="text-sm font-normal cursor-pointer">
+                                                                {cfop}: {(cfopDescriptions[parseInt(cfop, 10)] || "Descrição não encontrada")}
+                                                            </Label>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            ))}
-                                        </div>
-                                    </ScrollArea>
+                                            </ScrollArea>
+                                        </TabsContent>
+                                        <TabsContent value="contabilizacao" className="mt-4">
+                                            <div className="flex gap-2 mb-2">
+                                                <Button size="sm" variant="secondary" onClick={() => setContabilizacaoFilter(new Set(allContabilizacoes))}>Marcar Todos</Button>
+                                                <Button size="sm" variant="secondary" onClick={() => setContabilizacaoFilter(new Set())}>Limpar Seleção</Button>
+                                            </div>
+                                            <ScrollArea className='h-[60vh] border rounded-md p-4'>
+                                                {allContabilizacoes.map(contabilizacao => (
+                                                    <div key={contabilizacao} className="flex items-start space-x-2 mb-2">
+                                                        <Checkbox
+                                                            id={`contabilizacao-filter-${contabilizacao}`}
+                                                            checked={contabilizacaoFilter.has(contabilizacao)}
+                                                            onCheckedChange={(checked) => {
+                                                                setContabilizacaoFilter(prev => {
+                                                                    const newSet = new Set(prev);
+                                                                    if (checked) newSet.add(contabilizacao);
+                                                                    else newSet.delete(contabilizacao);
+                                                                    return newSet;
+                                                                });
+                                                            }}
+                                                        />
+                                                        <Label htmlFor={`contabilizacao-filter-${contabilizacao}`} className="text-sm font-normal cursor-pointer">
+                                                            {contabilizacao}
+                                                        </Label>
+                                                    </div>
+                                                ))}
+                                            </ScrollArea>
+                                        </TabsContent>
+                                        <TabsContent value="centroCusto" className="mt-4">
+                                            <div className="flex gap-2 mb-2">
+                                                <Button size="sm" variant="secondary" onClick={() => setCentroCustoFilter(new Set(allCentrosCusto))}>Marcar Todos</Button>
+                                                <Button size="sm" variant="secondary" onClick={() => setCentroCustoFilter(new Set())}>Limpar Seleção</Button>
+                                            </div>
+                                            <ScrollArea className='h-[60vh] border rounded-md p-4'>
+                                                {allCentrosCusto.map(centroCusto => (
+                                                    <div key={centroCusto} className="flex items-start space-x-2 mb-2">
+                                                        <Checkbox
+                                                            id={`centroCusto-filter-${centroCusto}`}
+                                                            checked={centroCustoFilter.has(centroCusto)}
+                                                            onCheckedChange={(checked) => {
+                                                                setCentroCustoFilter(prev => {
+                                                                    const newSet = new Set(prev);
+                                                                    if (checked) newSet.add(centroCusto);
+                                                                    else newSet.delete(centroCusto);
+                                                                    return newSet;
+                                                                });
+                                                            }}
+                                                        />
+                                                        <Label htmlFor={`centroCusto-filter-${centroCusto}`} className="text-sm font-normal cursor-pointer">
+                                                            {centroCusto}
+                                                        </Label>
+                                                    </div>
+                                                ))}
+                                            </ScrollArea>
+                                        </TabsContent>
+                                        <TabsContent value="fornecedor" className="mt-4">
+                                            <div className="flex gap-2 mb-2">
+                                                <Button size="sm" variant="secondary" onClick={() => setFornecedorFilter(new Set(allFornecedores))}>Marcar Todos</Button>
+                                                <Button size="sm" variant="secondary" onClick={() => setFornecedorFilter(new Set())}>Limpar Seleção</Button>
+                                            </div>
+                                            <ScrollArea className='h-[60vh] border rounded-md p-4'>
+                                                {allFornecedores.map(fornecedor => (
+                                                    <div key={fornecedor} className="flex items-start space-x-2 mb-2">
+                                                        <Checkbox
+                                                            id={`fornecedor-filter-${fornecedor}`}
+                                                            checked={fornecedorFilter.has(fornecedor)}
+                                                            onCheckedChange={(checked) => {
+                                                                setFornecedorFilter(prev => {
+                                                                    const newSet = new Set(prev);
+                                                                    if (checked) newSet.add(fornecedor);
+                                                                    else newSet.delete(fornecedor);
+                                                                    return newSet;
+                                                                });
+                                                            }}
+                                                        />
+                                                        <Label htmlFor={`fornecedor-filter-${fornecedor}`} className="text-sm font-normal cursor-pointer">
+                                                            {fornecedor}
+                                                        </Label>
+                                                    </div>
+                                                ))}
+                                            </ScrollArea>
+                                        </TabsContent>
+                                    </Tabs>
                                     <DialogFooter>
-                                         <Button variant="outline" onClick={() => setIsCfopModalOpen(false)}>Cancelar</Button>
-                                         <Button onClick={handleSaveCfopFilter}><Save className='mr-2 h-4 w-4' />Guardar Filtro</Button>
+                                         <Button variant="outline" onClick={() => setIsFilterModalOpen(false)}>Fechar</Button>
                                     </DialogFooter>
                                 </DialogContent>
                             </Dialog>

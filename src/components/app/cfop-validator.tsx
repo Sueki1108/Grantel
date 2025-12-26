@@ -91,14 +91,10 @@ const FilterDialog: React.FC<{
             }
 
             const contabilizacao = item['Contabilização'] || 'N/A';
-            if (contabilizacao && contabilizacao !== 'N/A') {
-                contabilizacoes.add(String(contabilizacao));
-            }
+            contabilizacoes.add(String(contabilizacao));
 
             const centroCusto = item['Centro de Custo'] || 'N/A';
-            if (centroCusto && centroCusto !== 'N/A') {
-                centrosCusto.add(String(centroCusto));
-            }
+            centrosCusto.add(String(centroCusto));
         });
         return {
             xmlCsts: Array.from(xmlCsts).sort(),
@@ -654,9 +650,16 @@ export function CfopValidator(props: CfopValidatorProps) {
         const difalValidations = (competence && allPersistedData[competence]?.difalValidations?.classifications) || {};
         const correctItems = Object.values(itemsByStatus.correct).flat();
         
-        const sujeitosAoDifal = correctItems.filter(item => 
-            item['CFOP'] === '2551' || item['CFOP'] === '2556'
-        ).map(item => ({...item, __itemKey: `${item['Chave de acesso']}-${item['Item']}`}));
+        const sujeitosAoDifal = correctItems.filter(item => {
+            const cfopXml = String(item['CFOP'] || '').trim();
+            const cfopSienge = String(item['Sienge_CFOP'] || item['CFOP (Sienge)'] || '').trim();
+            // Verifica tanto o CFOP do XML quanto o CFOP do Sienge (com e sem espaços)
+            const isDifalCfop = cfopXml === '2551' || cfopXml === '2556' || 
+                               cfopSienge === '2551' || cfopSienge === '2556' ||
+                               cfopXml.startsWith('2551') || cfopXml.startsWith('2556') ||
+                               cfopSienge.startsWith('2551') || cfopSienge.startsWith('2556');
+            return isDifalCfop;
+        }).map(item => ({...item, __itemKey: `${item['Chave de acesso']}-${item['Item']}`}));
 
         const difalItems = [];
         const desconsideradosItems = [];
@@ -843,6 +846,17 @@ export function CfopValidator(props: CfopValidatorProps) {
                             <TabsTrigger value="desconsiderados">Desconsiderados ({difalAnalysisData.desconsideradosItems.length})</TabsTrigger>
                         </TabsList>
                          <TabsContent value="sujeitos" className="mt-4">
+                            <div className="mb-4 flex justify-end">
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => {
+                                        toast({ title: "Lista atualizada", description: `${difalAnalysisData.sujeitosAoDifal.length} itens sujeitos a DIFAL encontrados.` });
+                                    }}
+                                >
+                                    <RefreshCw className="mr-2 h-4 w-4" /> Atualizar Lista
+                                </Button>
+                            </div>
                             <DataTable columns={[...columns, { id: 'difal-actions', header: 'Ações DIFAL', cell: ({row}) => (
                                 <div className="flex justify-center gap-1">
                                     <TooltipProvider>
