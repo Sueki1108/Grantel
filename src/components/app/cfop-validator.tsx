@@ -107,24 +107,79 @@ const FilterDialog: React.FC<{
     
      useEffect(() => {
         if (isDialogOpen) {
-            const currentGlobalFilters = tabFilters[siengeCfop] || {
-                xmlCsts: new Set(availableOptions.xmlCsts),
-                xmlPicms: new Set(availableOptions.xmlPicms),
-                xmlCfops: new Set(availableOptions.xmlCfops),
-                contabilizacao: new Set(availableOptions.contabilizacao),
-                centroCusto: new Set(availableOptions.centroCusto),
-            };
-             // Deep copy to prevent unintended mutations
-            const deepCopiedFilters = {
-                xmlCsts: new Set(currentGlobalFilters.xmlCsts || availableOptions.xmlCsts),
-                xmlPicms: new Set(currentGlobalFilters.xmlPicms || availableOptions.xmlPicms),
-                xmlCfops: new Set(currentGlobalFilters.xmlCfops || availableOptions.xmlCfops),
-                contabilizacao: new Set(currentGlobalFilters.contabilizacao || availableOptions.contabilizacao),
-                centroCusto: new Set(currentGlobalFilters.centroCusto || availableOptions.centroCusto),
-            };
-            setLocalFilters(deepCopiedFilters);
+            const currentGlobalFilters = tabFilters[siengeCfop];
+            
+            if (!currentGlobalFilters) {
+                const deepCopiedFilters = {
+                    xmlCsts: new Set(availableOptions.xmlCsts),
+                    xmlPicms: new Set(availableOptions.xmlPicms),
+                    xmlCfops: new Set(availableOptions.xmlCfops),
+                    contabilizacao: new Set(availableOptions.contabilizacao),
+                    centroCusto: new Set(availableOptions.centroCusto),
+                };
+                setLocalFilters(deepCopiedFilters);
+            } else {
+                // Filter items based on current global filters to determine which options should be checked
+                const filteredItems = items.filter(item => {
+                    const cfopCode = item['CFOP'];
+                    const cstCode = String(item['CST do ICMS'] || '');
+                    const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
+                    const contabilizacao = item['Contabilização'] || 'N/A';
+                    const centroCusto = item['Centro de Custo'] || 'N/A';
+
+                    const cfopFull = cfopCode ? `${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}` : '';
+                    const cstFull = cstCode ? `${cstCode}: ${getCstDescription(cstCode)}` : '';
+
+                    const cfopMatch = !currentGlobalFilters.xmlCfops || currentGlobalFilters.xmlCfops.size === 0 || (cfopFull && currentGlobalFilters.xmlCfops.has(cfopFull));
+                    const cstMatch = !currentGlobalFilters.xmlCsts || currentGlobalFilters.xmlCsts.size === 0 || (cstFull && currentGlobalFilters.xmlCsts.has(cstFull));
+                    const picmsMatch = !currentGlobalFilters.xmlPicms || currentGlobalFilters.xmlPicms.size === 0 || currentGlobalFilters.xmlPicms.has(picmsValue);
+                    const contabilizacaoMatch = !currentGlobalFilters.contabilizacao || currentGlobalFilters.contabilizacao.size === 0 || currentGlobalFilters.contabilizacao.has(String(contabilizacao));
+                    const centroCustoMatch = !currentGlobalFilters.centroCusto || currentGlobalFilters.centroCusto.size === 0 || currentGlobalFilters.centroCusto.has(String(centroCusto));
+
+                    return cfopMatch && cstMatch && picmsMatch && contabilizacaoMatch && centroCustoMatch;
+                });
+
+                const newXmlCsts = new Set<string>();
+                const newXmlPicms = new Set<string>();
+                const newXmlCfops = new Set<string>();
+                const newContabilizacao = new Set<string>();
+                const newCentroCusto = new Set<string>();
+
+                filteredItems.forEach(item => {
+                    const cstCode = String(item['CST do ICMS'] || '');
+                    if(cstCode) {
+                        const cstDesc = getCstDescription(cstCode);
+                        newXmlCsts.add(`${cstCode}: ${cstDesc}`);
+                    }
+
+                    if (item['Alíq. ICMS (%)'] !== undefined && item['Alíq. ICMS (%)'] !== null) {
+                        newXmlPicms.add(String(item['Alíq. ICMS (%)']));
+                    }
+                    
+                    const cfopCode = item['CFOP']; 
+                    if (cfopCode) {
+                        const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
+                        const combined = `${cfopCode}: ${fullDescription}`;
+                        newXmlCfops.add(combined);
+                    }
+
+                    const contabilizacao = item['Contabilização'] || 'N/A';
+                    newContabilizacao.add(String(contabilizacao));
+
+                    const centroCusto = item['Centro de Custo'] || 'N/A';
+                    newCentroCusto.add(String(centroCusto));
+                });
+
+                setLocalFilters({
+                    xmlCsts: newXmlCsts,
+                    xmlPicms: newXmlPicms,
+                    xmlCfops: newXmlCfops,
+                    contabilizacao: newContabilizacao,
+                    centroCusto: newCentroCusto,
+                });
+            }
         }
-    }, [isDialogOpen, tabFilters, siengeCfop, availableOptions]);
+    }, [isDialogOpen, tabFilters, siengeCfop, availableOptions, items]);
     
     const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set(), contabilizacao: new Set(), centroCusto: new Set() };
     const isFilterActive = filters.xmlCsts?.size < availableOptions.xmlCsts.length ||
@@ -151,6 +206,26 @@ const FilterDialog: React.FC<{
             const newSet = type === 'all' ? new Set(availableOptions[filterKey as keyof typeof availableOptions]) : new Set<string>();
             return { ...prev, [filterKey]: newSet };
         });
+    };
+
+    const handleGlobalSelectAll = (type: 'all' | 'none') => {
+        const newFilters: TabFilters = {
+            xmlCsts: new Set(),
+            xmlPicms: new Set(),
+            xmlCfops: new Set(),
+            contabilizacao: new Set(),
+            centroCusto: new Set()
+        };
+
+        if (type === 'all') {
+            newFilters.xmlCsts = new Set(availableOptions.xmlCsts);
+            newFilters.xmlPicms = new Set(availableOptions.xmlPicms);
+            newFilters.xmlCfops = new Set(availableOptions.xmlCfops);
+            newFilters.contabilizacao = new Set(availableOptions.contabilizacao);
+            newFilters.centroCusto = new Set(availableOptions.centroCusto);
+        }
+
+        setLocalFilters(newFilters);
     };
     
     const handleApplyFilters = () => {
