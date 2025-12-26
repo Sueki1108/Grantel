@@ -2,6 +2,8 @@
 const nextConfig = {
   /* config options here */
   output: 'export',
+  basePath: '/Grantel',
+  assetPrefix: '/Grantel/',
   typescript: {
     ignoreBuildErrors: true,
   },
