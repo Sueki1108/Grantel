@@ -32,6 +32,13 @@ const nextConfig = {
         'xlsx': 'commonjs xlsx'
       });
     }
+    
+    // Resolver paths do TypeScript
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': require('path').resolve(__dirname, 'src'),
+    };
+    
     return config;
   },
 };
