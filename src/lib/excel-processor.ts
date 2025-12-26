@@ -543,14 +543,96 @@ export function runReconciliation(
             return createComparisonKey(item[h.documento!], item[h.cnpj!], valorBase + ipi);
         }, xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
         
-        // Pass 7: Valor Total - IPI
+        // Pass 5: Valor Total - Desconto (caso desconto esteja sendo somado incorretamente)
+        { name: 'Valor Total - Desconto', siengeKey: (item: any) => {
+            const valorBase = normalizeValue(item[h.valor!]);
+            const desconto = h.desconto ? normalizeValue(item[h.desconto]) : normalizeValue(item.desconto);
+            return createComparisonKey(item[h.documento!], item[h.cnpj!], valorBase - desconto);
+        }, xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+        
+        // Pass 6: Valor Total - Frete
+        { name: 'Valor Total - Frete', siengeKey: (item: any) => {
+            const valorBase = normalizeValue(item[h.valor!]);
+            const frete = h.frete ? normalizeValue(item[h.frete]) : normalizeValue(item.frete);
+            return createComparisonKey(item[h.documento!], item[h.cnpj!], valorBase - frete);
+        }, xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+        
+        // Pass 7: Valor Total + Frete
+        { name: 'Valor Total + Frete', siengeKey: (item: any) => {
+            const valorBase = normalizeValue(item[h.valor!]);
+            const frete = h.frete ? normalizeValue(item[h.frete]) : normalizeValue(item.frete);
+            return createComparisonKey(item[h.documento!], item[h.cnpj!], valorBase + frete);
+        }, xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+        
+        // Pass 8: Valor Total + IPI
+        { name: 'Valor Total + IPI', siengeKey: (item: any) => {
+            const valorBase = normalizeValue(item[h.valor!]);
+            const ipi = h.ipi ? normalizeValue(item[h.ipi]) : normalizeValue(item.ipi);
+            return createComparisonKey(item[h.documento!], item[h.cnpj!], valorBase + ipi);
+        }, xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+        
+        // Pass 9: Valor Total - IPI
         { name: 'Valor Total - IPI', siengeKey: (item: any) => {
             const valorBase = normalizeValue(item[h.valor!]);
             const ipi = h.ipi ? normalizeValue(item[h.ipi]) : normalizeValue(item.ipi);
             return createComparisonKey(item[h.documento!], item[h.cnpj!], valorBase - ipi);
         }, xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
         
-        // Pass 8: Apenas Documento + CNPJ (sem valor) - mais flexível
+        // Pass 10: Valor Total + Frete + Desconto
+        { name: 'Valor Total + Frete + Desconto', siengeKey: (item: any) => {
+            const valorBase = normalizeValue(item[h.valor!]);
+            const frete = h.frete ? normalizeValue(item[h.frete]) : normalizeValue(item.frete);
+            const desconto = h.desconto ? normalizeValue(item[h.desconto]) : normalizeValue(item.desconto);
+            return createComparisonKey(item[h.documento!], item[h.cnpj!], valorBase + frete + desconto);
+        }, xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+        
+        // Pass 11: Valor Total - Frete - Desconto
+        { name: 'Valor Total - Frete - Desconto', siengeKey: (item: any) => {
+            const valorBase = normalizeValue(item[h.valor!]);
+            const frete = h.frete ? normalizeValue(item[h.frete]) : normalizeValue(item.frete);
+            const desconto = h.desconto ? normalizeValue(item[h.desconto]) : normalizeValue(item.desconto);
+            return createComparisonKey(item[h.documento!], item[h.cnpj!], valorBase - frete - desconto);
+        }, xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+        
+        // Pass 12: Valor Total + IPI + Frete
+        { name: 'Valor Total + IPI + Frete', siengeKey: (item: any) => {
+            const valorBase = normalizeValue(item[h.valor!]);
+            const ipi = h.ipi ? normalizeValue(item[h.ipi]) : normalizeValue(item.ipi);
+            const frete = h.frete ? normalizeValue(item[h.frete]) : normalizeValue(item.frete);
+            return createComparisonKey(item[h.documento!], item[h.cnpj!], valorBase + ipi + frete);
+        }, xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+        
+        // Pass 13: Valor Total - IPI - Frete
+        { name: 'Valor Total - IPI - Frete', siengeKey: (item: any) => {
+            const valorBase = normalizeValue(item[h.valor!]);
+            const ipi = h.ipi ? normalizeValue(item[h.ipi]) : normalizeValue(item.ipi);
+            const frete = h.frete ? normalizeValue(item[h.frete]) : normalizeValue(item.frete);
+            return createComparisonKey(item[h.documento!], item[h.cnpj!], valorBase - ipi - frete);
+        }, xmlKey: (item: any) => createComparisonKey(getXmlDocKey(item), getXmlCnpjKey(item), item['Valor Total'] || item['Valor da Prestação'])},
+        
+        // Pass 14: Documento + Valor Total (sem CNPJ)
+        { name: 'Documento + Valor Total', siengeKey: (item: any) => {
+            const cleanDoc = cleanAndToStr(item[h.documento!]);
+            const cleanValue = normalizeValue(item[h.valor!]).toFixed(2);
+            return cleanDoc && cleanValue !== 'NaN' ? `${cleanDoc}-${cleanValue}` : null;
+        }, xmlKey: (item: any) => {
+            const cleanDoc = cleanAndToStr(getXmlDocKey(item));
+            const cleanValue = normalizeValue(item['Valor Total'] || item['Valor da Prestação'] || 0).toFixed(2);
+            return cleanDoc && cleanValue !== 'NaN' ? `${cleanDoc}-${cleanValue}` : null;
+        }},
+        
+        // Pass 15: CNPJ + Valor Total (sem Documento)
+        { name: 'CNPJ + Valor Total', siengeKey: (item: any) => {
+            const cleanCnpj = cleanAndToStr(item[h.cnpj!]);
+            const cleanValue = normalizeValue(item[h.valor!]).toFixed(2);
+            return cleanCnpj && cleanValue !== 'NaN' ? `${cleanCnpj}-${cleanValue}` : null;
+        }, xmlKey: (item: any) => {
+            const cleanCnpj = cleanAndToStr(getXmlCnpjKey(item));
+            const cleanValue = normalizeValue(item['Valor Total'] || item['Valor da Prestação'] || 0).toFixed(2);
+            return cleanCnpj && cleanValue !== 'NaN' ? `${cleanCnpj}-${cleanValue}` : null;
+        }},
+        
+        // Pass 16: Apenas Documento + CNPJ (sem valor) - mais flexível
         { name: 'Documento + CNPJ', siengeKey: (item: any) => createDocCnpjKey(item[h.documento!], item[h.cnpj!]), xmlKey: (item: any) => createDocCnpjKey(getXmlDocKey(item), getXmlCnpjKey(item)) },
     ];
 
