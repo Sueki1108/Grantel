@@ -1,14 +1,10 @@
 {
   "hosting": {
-    "public": ".next",
-    "rewrites": [
-      {
-        "source": "**",
-        "function": "server"
-      }
-    ],
-    "predeploy": [
-      "npm --prefix . run build"
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
     ]
   },
   "functions": [

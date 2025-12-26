@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "grantel-1oth2"
-  }
+    "default": "grantel-2"
+  },
+  "targets": {},
+  "etags": {}
 }
