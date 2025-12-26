@@ -484,8 +484,31 @@ export function runReconciliation(
         
         if (accountingMap && siengeDocNumberRaw && siengeCredorRaw) {
             const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
-            const accountingKey = `${docNumberClean}-${siengeCredorRaw}`;
-            const accInfo = accountingMap.get(accountingKey);
+            const credorNormalized = String(siengeCredorRaw).trim();
+            // Tenta buscar com o credor completo primeiro
+            let accountingKey = `${docNumberClean}-${credorNormalized}`;
+            let accInfo = accountingMap.get(accountingKey);
+            
+            // Se não encontrar, tenta apenas com o código do credor (formato "123 - Nome")
+            if (!accInfo) {
+                const credorCodeMatch = credorNormalized.match(/^(\d+)\s*-/);
+                if (credorCodeMatch) {
+                    const credorCode = credorCodeMatch[1];
+                    accountingKey = `${docNumberClean}-${credorCode}`;
+                    accInfo = accountingMap.get(accountingKey);
+                }
+            }
+            
+            // Se ainda não encontrar, tenta buscar por qualquer chave que comece com o documento
+            if (!accInfo) {
+                for (const [key, value] of accountingMap.entries()) {
+                    if (key.startsWith(`${docNumberClean}-`)) {
+                        accInfo = value;
+                        break;
+                    }
+                }
+            }
+            
             item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
         } else {
             item['Contabilização'] = 'N/A';
@@ -665,7 +688,9 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
 
         if (appropriationsRow) {
             const docNumberClean = cleanAndToStr(docValue);
-            const accountingKey = `${docNumberClean}-${credorName}`;
+            const credorNormalized = credorName.trim();
+            // Cria chave com credor normalizado
+            const accountingKey = `${docNumberClean}-${credorNormalized}`;
             
             let accountInfo = '';
             for (let k = appropriationsRow.length - 1; k >= 0; k--) {
@@ -680,7 +705,16 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
                 const parts = accountInfo.split(' - ');
                 const account = parts[0];
                 const description = parts.slice(1).join(' - ');
+                // Armazena com a chave normalizada
                 accountingMap.set(accountingKey, { account, description });
+                
+                // Também armazena com apenas o código do credor se houver (formato "123 - Nome")
+                const credorCodeMatch = credorNormalized.match(/^(\d+)\s*-/);
+                if (credorCodeMatch) {
+                    const credorCode = credorCodeMatch[1];
+                    const accountingKeyCode = `${docNumberClean}-${credorCode}`;
+                    accountingMap.set(accountingKeyCode, { account, description });
+                }
 
                 payableAccountingDebugKeys.push({
                     'Chave de Depuração': accountingKey,
@@ -731,7 +765,9 @@ export function processPaidAccountingData(paidSheetData: any[][]): {
         if (appropriationsRow) {
             const docNumberClean = cleanAndToStr(thirdCell);
             const credorName = firstCell;
-            const accountingKey = `${docNumberClean}-${credorName}`;
+            const credorNormalized = credorName.trim();
+            // Cria chave com credor normalizado
+            const accountingKey = `${docNumberClean}-${credorNormalized}`;
             
             let accountInfo = '';
             for (let k = appropriationsRow.length - 1; k >= 0; k--) {
@@ -746,7 +782,16 @@ export function processPaidAccountingData(paidSheetData: any[][]): {
                 const parts = accountInfo.split(' - ');
                 const account = parts[0];
                 const description = parts.slice(1).join(' - ');
+                // Armazena com a chave normalizada
                 accountingMap.set(accountingKey, { account, description });
+                
+                // Também armazena com apenas o código do credor se houver (formato "123 - Nome")
+                const credorCodeMatch = credorNormalized.match(/^(\d+)\s*-/);
+                if (credorCodeMatch) {
+                    const credorCode = credorCodeMatch[1];
+                    const accountingKeyCode = `${docNumberClean}-${credorCode}`;
+                    accountingMap.set(accountingKeyCode, { account, description });
+                }
 
                 paidAccountingDebugKeys.push({
                     'Chave de Depuração': accountingKey,
