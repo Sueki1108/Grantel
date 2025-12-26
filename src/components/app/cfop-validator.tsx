@@ -313,7 +313,7 @@ const FilterDialog: React.FC<{
                                 {availableOptions.xmlPicms.map(opt => (
                                     <div key={`picms-${opt}`} className="flex items-center space-x-2 mb-2">
                                         <Checkbox id={`picms-${opt}`} checked={localFilters?.xmlPicms.has(opt)} onCheckedChange={checked => handleFilterChange('xmlPicms', opt, !!checked)} />
-                                        <Label htmlFor={`picms-${opt}`} className="text-sm font-normal">{parseFloat(opt).toFixed(2)}%</Label>
+                                        <Label htmlFor={`picms-${opt}`} className="text-sm font-normal">{opt === 'N/A' ? 'N/A' : `${parseFloat(opt).toFixed(2)}%`}</Label>
                                     </div>
                                 ))}
                             </ScrollArea>
