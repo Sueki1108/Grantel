@@ -21,7 +21,7 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans antialiased h-full`} suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="light"
           enableSystem
           disableTransitionOnChange
         >
