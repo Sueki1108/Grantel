@@ -924,7 +924,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                             {allCfopsForStatus.length > 0 ? (
                                 <Tabs 
                                     value={activeCfopTabs[status] || allCfopsForStatus[0]} 
-                                    onValueChange={(val) => setActiveCfopTabs(prev => ({...prev, [status]: val}))}
+                                    onValueChange={(val) => { setActiveCfopTabs(prev => ({...prev, [status]: val})); setRowSelection({}); setBulkActionState({ classification: null }); }}
                                     className="w-full"
                                 >
                                     <div className='flex justify-between items-center mb-2'>
