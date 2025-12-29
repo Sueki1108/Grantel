@@ -137,7 +137,7 @@ const FilterDialog: React.FC<{
                     const centroCustoMatch = !currentGlobalFilters.centroCusto || currentGlobalFilters.centroCusto.size === 0 || currentGlobalFilters.centroCusto.has(String(centroCusto));
 
                     return cfopMatch && cstMatch && picmsMatch && contabilizacaoMatch && centroCustoMatch;
-                });
+                });;
 
                 const newXmlCsts = new Set<string>();
                 const newXmlPicms = new Set<string>();
@@ -884,7 +884,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                 </div>
             )}
             
-            <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as ValidationStatus | 'faturamento-entrega' | 'difal-analysis')} className="w-full">
+            <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as ValidationStatus | 'faturamento-entrega' | 'difal-analysis' | 'contabilizacao-error')} className="w-full">
                  <div className="flex justify-between items-center mb-2">
                     <TabsList className="grid w-full grid-cols-8">
                         {statusTabs.map(({status, label}) => {
