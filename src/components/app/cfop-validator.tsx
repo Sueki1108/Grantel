@@ -966,7 +966,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                             )}
                         </TabsContent>
                     )
-                })
+                })}
                 <TabsContent value="contabilizacao-error" className="mt-4">
                     <DataTable columns={columns} data={contabilizacaoErroItems} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
                 </TabsContent>
