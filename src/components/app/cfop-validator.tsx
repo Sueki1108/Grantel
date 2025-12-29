@@ -936,7 +936,12 @@ export function CfopValidator(props: CfopValidatorProps) {
                 </div>
                 {statusTabs.map(({ status }) => {
                     const cfopGroupsForStatus = itemsByStatus[status] || {};
-                    const allCfopsForStatus = Object.keys(cfopGroupsForStatus).sort((a,b) => parseInt(a,10) - parseInt(b,10));
+                    const allCfopsForStatus = Object.keys(cfopGroupsForStatus).sort((a,b) => {
+                        const na = parseInt(a, 10);
+                        const nb = parseInt(b, 10);
+                        if (Number.isNaN(na) || Number.isNaN(nb)) return a.localeCompare(b);
+                        return na - nb;
+                    });
                     
                     return (
                         <TabsContent key={status} value={status} className="mt-4">
