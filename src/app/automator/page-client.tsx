@@ -454,16 +454,21 @@ const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
             }
 
             const combinedData = allSheetsData.flat();
-            const { accountingMap, payableAccountingDebugKeys } = processPayableAccountingData(combinedData);
+            const { accountingMap: newAccountingMap, payableAccountingDebugKeys: newDebugKeys } = processPayableAccountingData(combinedData);
 
-            setProcessedData(prev => ({
-                ...(prev ?? initialProcessedDataState),
-                accountingMap: new Map([...(prev?.accountingMap || []), ...accountingMap]),
-                payableAccountingDebugKeys: [...(prev?.payableAccountingDebugKeys || []), ...payableAccountingDebugKeys],
-            }));
+            setProcessedData(prev => {
+                const currentMap = prev?.accountingMap instanceof Map ? prev.accountingMap : new Map();
+                const mergedMap = new Map([...currentMap, ...newAccountingMap]);
+                
+                return {
+                    ...(prev ?? initialProcessedDataState),
+                    accountingMap: mergedMap,
+                    payableAccountingDebugKeys: [...(prev?.payableAccountingDebugKeys || []), ...newDebugKeys],
+                };
+            });
 
-            if (accountingMap) {
-                 toast({ title: "Contas a Pagar Carregadas", description: `${newFiles.length} ficheiro(s) processado(s), ${accountingMap.size} novos mapeamentos encontrados.` });
+            if (newAccountingMap.size > 0) {
+                 toast({ title: "Contas a Pagar Carregadas", description: `${newFiles.length} ficheiro(s) processado(s), ${newAccountingMap.size} novos mapeamentos encontrados.` });
             }
 
         } catch (err: any) {
@@ -498,16 +503,21 @@ const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
             }
 
             const combinedData = allSheetsData.flat();
-            const { accountingMap, paidAccountingDebugKeys } = processPaidAccountingData(combinedData);
+            const { accountingMap: newAccountingMap, paidAccountingDebugKeys: newDebugKeys } = processPaidAccountingData(combinedData);
 
-            setProcessedData(prev => ({
-                ...(prev ?? initialProcessedDataState),
-                accountingMap: new Map([...(prev?.accountingMap || []), ...accountingMap]),
-                paidAccountingDebugKeys: [...(prev?.paidAccountingDebugKeys || []), ...paidAccountingDebugKeys],
-            }));
+            setProcessedData(prev => {
+                const currentMap = prev?.accountingMap instanceof Map ? prev.accountingMap : new Map();
+                const mergedMap = new Map([...currentMap, ...newAccountingMap]);
+                
+                return {
+                    ...(prev ?? initialProcessedDataState),
+                    accountingMap: mergedMap,
+                    paidAccountingDebugKeys: [...(prev?.paidAccountingDebugKeys || []), ...newDebugKeys],
+                };
+            });
 
-            if (accountingMap.size > 0) {
-                toast({ title: "Contas Pagas Carregadas", description: `${newFiles.length} ficheiro(s) processado(s), ${accountingMap.size} novos mapeamentos encontrados.` });
+            if (newAccountingMap && newAccountingMap.size > 0) {
+                toast({ title: "Contas Pagas Carregadas", description: `${newFiles.length} ficheiro(s) processado(s), ${newAccountingMap.size} novos mapeamentos encontrados.` });
             }
 
         } catch (err: any) {
@@ -821,7 +831,13 @@ const handleSiengeFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
                     log(`Filtragem por período: NF-e (${dataToProcess['NFE'].length}/${originalCounts.NFE}), CT-e (${dataToProcess['CTE'].length}/${originalCounts.CTE}), Saídas (${dataToProcess['Saídas'].length}/${originalCounts.Saídas}).`);
                 }
 
-                const resultData = processDataFrames(dataToProcess, eventCanceledKeys, log);
+                const resultData = processDataFrames(
+                    dataToProcess, 
+                    eventCanceledKeys, 
+                    log,
+                    processedData?.costCenterMap,
+                    processedData?.accountingMap
+                );
                 setLogs(localLogs);
 
                 if (!resultData) throw new Error("O processamento não retornou dados.");
