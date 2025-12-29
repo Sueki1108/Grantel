@@ -942,7 +942,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                         <TabsContent key={status} value={status} className="mt-4">
                             {allCfopsForStatus.length > 0 ? (
                                 <Tabs 
-                                    value={activeCfopTabs[status] || allCfopsForStatus[0]} 
+                                    value={allCfopsForStatus.includes(activeCfopTabs[status] || '') ? (activeCfopTabs[status] as string) : allCfopsForStatus[0]} 
                                     onValueChange={(val) => { setActiveCfopTabs(prev => ({...prev, [status]: val})); setRowSelection({}); setBulkActionState({ classification: null }); }}
                                     className="w-full"
                                 >
