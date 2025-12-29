@@ -140,7 +140,9 @@ const renameChaveColumn = (df: DataFrame): DataFrame => {
 export function processDataFrames(
     dfs: DataFrames, 
     eventCanceledKeys: Set<string>, 
-    log: LogFunction
+    log: LogFunction,
+    costCenterMap?: Map<string, string> | null,
+    accountingMap?: Map<string, { account: string; description: string }> | null
 ): Omit<ProcessedData, 'fileNames' | 'competence' | 'costCenterMap' | 'costCenterDebugKeys' | 'allCostCenters' | 'costCenterHeaderRows' | 'accountingMap' | 'payableAccountingDebugKeys' | 'paidAccountingDebugKeys' | 'siengeSheetData' | 'siengeDebugKeys' | 'resaleAnalysis' | 'reconciliationResults' > {
     
     log("Iniciando preparação dos dados no navegador...");
@@ -253,6 +255,27 @@ export function processDataFrames(
     const itensValidosSaidas = itensSaidas.filter(item => chavesSaidasValidas.has(item["Chave Unica"]));
     log(`- ${itensValidosSaidas.length} itens de saída válidos correspondentes.`);
     
+    // Executa uma conciliação interna para poder enriquecer os itens de imobilizado
+    let reconciledMap = new Map();
+    try {
+        const internalReconciliation = runReconciliation(
+            processedDfs["Itens do Sienge"] || [],
+            itensValidos,
+            notasValidas,
+            cte,
+            costCenterMap,
+            accountingMap
+        );
+
+        // Mapeia os resultados da conciliação para busca rápida por Chave Única e Item
+        internalReconciliation.reconciled.forEach(item => {
+            const key = `${item['Chave Unica']}-${item['Item']}`;
+            reconciledMap.set(key, item);
+        });
+    } catch (e) {
+        log("Aviso: Não foi possível realizar a conciliação interna para imobilizados. Usando busca direta.");
+    }
+
     log("Identificando itens para análise de imobilizado a partir dos itens válidos...");
     const nfeHeaderMap = new Map(notasValidas.map(n => [n['Chave Unica'], n]));
 
@@ -263,16 +286,121 @@ export function processDataFrames(
         }).map((item) => {
             const header = nfeHeaderMap.get(item['Chave Unica']);
             const emitenteCnpj = header?.['CPF/CNPJ do Fornecedor'] || item['CPF/CNPJ do Emitente'] || '';
-            const codigoProduto = item['Código'] || '';
+            const docNumber = item['Número da Nota'] || item['Número'] || header?.['Número'] || '';
+            const credorName = item['Fornecedor'] || item['Emitente'] || header?.Fornecedor || 'N/A';
+            const docNumberClean = cleanAndToStr(docNumber).replace(/^0+/, '');
+            const credorCnpjClean = cleanAndToStr(emitenteCnpj);
+            const normalizedCredor = normalizeKey(credorName);
+            const credorCodeMatch = credorName.match(/^(\d+)\s*-/);
+            const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
+
+            // Tenta primeiro pegar os dados já conciliados (que têm o CFOP Sienge e outros dados)
+            const reconciledItem = reconciledMap.get(`${item['Chave Unica']}-${item['Item']}`);
+            
+            let centroCusto = reconciledItem?.['Centro de Custo'] || 'N/A';
+            let contabilizacao = reconciledItem?.['Contabilização'] || 'N/A';
+            let cfopSienge = reconciledItem?.['CFOP (Sienge)'] || 'N/A';
+
+            // Se não encontrou via conciliação ou está N/A, tenta a busca direta nos mapas
+            if (centroCusto === 'N/A' && costCenterMap) {
+                // 1. Busca por Documento + Credor (várias combinações)
+                centroCusto = (
+                    (credorCode ? costCenterMap.get(`${docNumberClean}-${credorCode}`) : null) ||
+                    costCenterMap.get(`${docNumberClean}-${credorName}`) || 
+                    costCenterMap.get(`${docNumberClean}-${normalizedCredor}`) ||
+                    (credorCnpjClean ? costCenterMap.get(`${docNumberClean}-${credorCnpjClean}`) : null)
+                ) || 'N/A';
+
+                // 2. Busca sem a parcela do documento (se houver /)
+                if (centroCusto === 'N/A' && String(docNumberClean).includes('/')) {
+                    const docBase = docNumberClean.split('/')[0].replace(/^0+/, '');
+                    centroCusto = (
+                        (credorCode ? costCenterMap.get(`${docBase}-${credorCode}`) : null) ||
+                        costCenterMap.get(`${docBase}-${credorName}`) || 
+                        costCenterMap.get(`${docBase}-${normalizedCredor}`) ||
+                        (credorCnpjClean ? costCenterMap.get(`${docBase}-${credorCnpjClean}`) : null)
+                    ) || 'N/A';
+                }
+
+                // 3. FALLBACK: Tenta apenas pelo Credor (Código, Nome ou CNPJ) se o documento falhar
+                if (centroCusto === 'N/A') {
+                    const nameOnly = credorName.replace(/^\d+\s*-\s*/, '').trim();
+                    centroCusto = (
+                        (credorCode ? costCenterMap.get(credorCode) : null) ||
+                        costCenterMap.get(normalizeKey(nameOnly)) ||
+                        costCenterMap.get(normalizedCredor) ||
+                        (credorCnpjClean ? costCenterMap.get(credorCnpjClean) : null)
+                    ) || 'N/A';
+                    
+                    // Se ainda N/A, busca parcial nas chaves do mapa
+                    if (centroCusto === 'N/A') {
+                        for (const [key, value] of costCenterMap.entries()) {
+                            const normalizedKeyStr = normalizeKey(key);
+                            if (normalizedKeyStr.includes(normalizedCredor) || (credorCnpjClean && normalizedKeyStr.includes(credorCnpjClean))) {
+                                centroCusto = value;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (contabilizacao === 'N/A' && accountingMap) {
+                // 1. Busca por Documento + Credor
+                let accInfo = (
+                    accountingMap.get(`${docNumberClean}-${credorName}`) ||
+                    accountingMap.get(`${docNumberClean}-${normalizedCredor}`) ||
+                    (credorCode ? accountingMap.get(`${docNumberClean}-${credorCode}`) : null) ||
+                    (credorCnpjClean ? accountingMap.get(`${docNumberClean}-${credorCnpjClean}`) : null)
+                );
+                
+                // 2. Busca sem parcela
+                if (!accInfo && String(docNumberClean).includes('/')) {
+                    const docBase = docNumberClean.split('/')[0].replace(/^0+/, '');
+                    accInfo = (
+                        accountingMap.get(`${docBase}-${credorName}`) ||
+                        accountingMap.get(`${docBase}-${normalizedCredor}`) ||
+                        (credorCode ? accountingMap.get(`${docBase}-${credorCode}`) : null) ||
+                        (credorCnpjClean ? accountingMap.get(`${docBase}-${credorCnpjClean}`) : null)
+                    );
+                }
+
+                // 3. FALLBACK: Apenas Credor
+                if (!accInfo) {
+                    const nameOnly = credorName.replace(/^\d+\s*-\s*/, '').trim();
+                    accInfo = (
+                        (credorCode ? accountingMap.get(credorCode) : null) ||
+                        accountingMap.get(normalizeKey(nameOnly)) ||
+                        accountingMap.get(normalizedCredor) ||
+                        (credorCnpjClean ? accountingMap.get(credorCnpjClean) : null)
+                    ) as any;
+
+                    if (!accInfo) {
+                        for (const [key, value] of accountingMap.entries()) {
+                            const normalizedKeyStr = normalizeKey(key);
+                            if (normalizedKeyStr.includes(normalizedCredor) || (credorCnpjClean && normalizedKeyStr.includes(credorCnpjClean))) {
+                                accInfo = value as any;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                contabilizacao = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
+            }
 
             return {
                 ...item,
                 id: `${item['Chave Unica'] || ''}-${item['Item'] || ''}`,
-                uniqueItemId: `${cleanAndToStr(emitenteCnpj)}-${cleanAndToStr(codigoProduto)}`,
-                Fornecedor: header?.Fornecedor || 'N/A',
-                'CPF/CNPJ do Emitente': emitenteCnpj,
+                uniqueItemId: `${cleanAndToStr(emitenteCnpj)}-${cleanAndToStr(item['Código'] || '')}`,
+                Fornecedor: credorName,
+                'CPF/CNPJ do Fornecedor': emitenteCnpj,
                 destUF: header?.destUF || '',
-                'Alíq. ICMS (%)': item['Alíq. ICMS (%)'] === undefined ? null : item['Alíq. ICMS (%)']
+                'Alíq. ICMS (%)': item['Alíq. ICMS (%)'] === undefined ? null : item['Alíq. ICMS (%)'],
+                'Centro de Custo': centroCusto,
+                'Contabilização': contabilizacao,
+                'CFOP (Sienge)': cfopSienge,
+                'Descricao CFOP': item['Descricao CFOP'] || 'N/A'
             };
         });
     log(`- ${imobilizados.length} itens com valor unitário > R$ 1.200 encontrados para análise de imobilizado.`);
@@ -353,7 +481,19 @@ export function processDataFrames(
     displayOrder.forEach(name => {
         let sheetData = sheets[name];
         if (sheetData && sheetData.length > 0) {
-            finalSheetSet[name] = sheetData.map(addCfopDescriptionToRow);
+            // Se for a aba de Imobilizados, garante que os campos enriquecidos estão lá
+            if (name === "Imobilizados") {
+                finalSheetSet[name] = sheetData.map(row => {
+                    const rowWithCfop = addCfopDescriptionToRow(row);
+                    return {
+                        ...rowWithCfop,
+                        'Centro de Custo': row['Centro de Custo'] || 'N/A',
+                        'Contabilização': row['Contabilização'] || 'N/A'
+                    };
+                });
+            } else {
+                finalSheetSet[name] = sheetData.map(addCfopDescriptionToRow);
+            }
         }
     });
     log("Processamento primário concluído.");
@@ -648,42 +788,107 @@ export function runReconciliation(
     const enrichItem = (item: any) => {
         if (!item || typeof item !== 'object') return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
         
-        const siengeDocNumberRaw = item[`Sienge_${h.documento!}`];
-        const siengeCredorRaw = item[`Sienge_${h.credor!}`];
+        const siengeDocNumberRaw = item[`Sienge_${h.documento!}`] || item['Número da Nota'] || item['Número'] || '';
+        const siengeCredorRaw = item[`Sienge_${h.credor!}`] || item['Fornecedor'] || item['Emitente'] || '';
+        const emitenteCnpj = item['CPF/CNPJ do Emitente'] || item['emitCNPJ'] || '';
 
-        if (costCenterMap && siengeDocNumberRaw && siengeCredorRaw) {
-            const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
-            const credorCodeMatch = String(siengeCredorRaw).match(/^(\d+)\s*-/);
-            const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
-            const costCenterKey = `${docNumberClean}-${credorCode}`;
-            item['Centro de Custo'] = costCenterMap.get(costCenterKey) || 'N/A';
+        const docNumberClean = cleanAndToStr(siengeDocNumberRaw || item['Número da Nota'] || item['Número']).replace(/^0+/, '');
+        const credorRaw = String(siengeCredorRaw).trim();
+        const credorCnpjClean = cleanAndToStr(emitenteCnpj);
+        const credorCodeMatch = credorRaw.match(/^(\d+)\s*-/);
+        const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
+        const normalizedCredor = normalizeKey(credorRaw);
+        const nameOnly = credorRaw.replace(/^\d+\s*-\s*/, '').trim();
+
+        if (costCenterMap) {
+            // Tenta várias combinações para encontrar o match
+            let cc = (
+                (docNumberClean && credorCode ? costCenterMap.get(`${docNumberClean}-${credorCode}`) : null) ||
+                (docNumberClean ? costCenterMap.get(`${docNumberClean}-${credorRaw}`) : null) ||
+                (docNumberClean ? costCenterMap.get(`${docNumberClean}-${normalizedCredor}`) : null) ||
+                (docNumberClean && credorCnpjClean ? costCenterMap.get(`${docNumberClean}-${credorCnpjClean}`) : null)
+            );
+            
+            // Tenta com nome sem código
+            if (!cc && docNumberClean) {
+                cc = costCenterMap.get(`${docNumberClean}-${normalizeKey(nameOnly)}`) ||
+                     costCenterMap.get(`${docNumberClean}-${nameOnly}`);
+            }
+            
+            // Se ainda não achou e o documento tem barra, tenta sem a parcela
+            if ((!cc || cc === 'N/A') && docNumberClean.includes('/')) {
+                const docBase = docNumberClean.split('/')[0].replace(/^0+/, '');
+                cc = (
+                    (credorCode ? costCenterMap.get(`${docBase}-${credorCode}`) : null) ||
+                    costCenterMap.get(`${docBase}-${credorRaw}`) ||
+                    costCenterMap.get(`${docBase}-${normalizedCredor}`)
+                );
+            }
+
+            // NOVO FALLBACK: Tenta apenas pelo Credor (Código, Nome ou CNPJ) se o documento falhar
+            if (!cc || cc === 'N/A') {
+                cc = (
+                    (credorCode ? costCenterMap.get(credorCode) : null) ||
+                    costCenterMap.get(normalizeKey(nameOnly)) ||
+                    costCenterMap.get(normalizedCredor) ||
+                    (credorCnpjClean ? costCenterMap.get(credorCnpjClean) : null)
+                );
+                
+                if (!cc || cc === 'N/A') {
+                    for (const [key, value] of costCenterMap.entries()) {
+                        const normalizedKeyStr = normalizeKey(key);
+                        if (normalizedKeyStr.includes(normalizedCredor) || (credorCnpjClean && normalizedKeyStr.includes(credorCnpjClean))) {
+                            cc = value;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            item['Centro de Custo'] = cc || 'N/A';
         } else {
             item['Centro de Custo'] = 'N/A';
         }
         
-        if (accountingMap && siengeDocNumberRaw && siengeCredorRaw) {
-            const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
-            const credorNormalized = String(siengeCredorRaw).trim();
-            // Tenta buscar com o credor completo primeiro
-            let accountingKey = `${docNumberClean}-${credorNormalized}`;
-            let accInfo = accountingMap.get(accountingKey);
-            
-            // Se não encontrar, tenta apenas com o código do credor (formato "123 - Nome")
-            if (!accInfo) {
-                const credorCodeMatch = credorNormalized.match(/^(\d+)\s*-/);
-                if (credorCodeMatch) {
-                    const credorCode = credorCodeMatch[1];
-                    accountingKey = `${docNumberClean}-${credorCode}`;
-                    accInfo = accountingMap.get(accountingKey);
-                }
+        if (accountingMap) {
+            // Tenta várias combinações para encontrar o match
+            let accInfo = (
+                (docNumberClean ? accountingMap.get(`${docNumberClean}-${credorRaw}`) : null) ||
+                (docNumberClean ? accountingMap.get(`${docNumberClean}-${normalizedCredor}`) : null) ||
+                (docNumberClean && credorCode ? accountingMap.get(`${docNumberClean}-${credorCode}`) : null) ||
+                (docNumberClean && credorCnpjClean ? accountingMap.get(`${docNumberClean}-${credorCnpjClean}`) : null)
+            );
+
+            // Tenta com nome sem código
+            if (!accInfo && docNumberClean) {
+                accInfo = accountingMap.get(`${docNumberClean}-${normalizeKey(nameOnly)}`) ||
+                          accountingMap.get(`${docNumberClean}-${nameOnly}`);
             }
-            
-            // Se ainda não encontrar, tenta buscar por qualquer chave que comece com o documento
+
+            // Se ainda não achou e o documento tem barra (ex: 1234/1), tenta buscar sem a parcela
+            if (!accInfo && docNumberClean.includes('/')) {
+                const docBase = docNumberClean.split('/')[0].replace(/^0+/, '');
+                accInfo = accountingMap.get(`${docBase}-${credorRaw}`) ||
+                          accountingMap.get(`${docBase}-${normalizedCredor}`) ||
+                          (credorCode ? accountingMap.get(`${docBase}-${credorCode}`) : null);
+            }
+
+            // NOVO FALLBACK: Tenta apenas pelo Credor se o documento falhar
             if (!accInfo) {
-                for (const [key, value] of accountingMap.entries()) {
-                    if (key.startsWith(`${docNumberClean}-`)) {
-                        accInfo = value;
-                        break;
+                accInfo = (
+                    (credorCode ? accountingMap.get(credorCode) : null) ||
+                    accountingMap.get(normalizeKey(nameOnly)) ||
+                    accountingMap.get(normalizedCredor) ||
+                    (credorCnpjClean ? accountingMap.get(credorCnpjClean) : null)
+                ) as any;
+
+                if (!accInfo) {
+                    for (const [key, value] of accountingMap.entries()) {
+                        const normalizedKeyStr = normalizeKey(key);
+                        if (normalizedKeyStr.includes(normalizedCredor) || (credorCnpjClean && normalizedKeyStr.includes(credorCnpjClean))) {
+                            accInfo = value as any;
+                            break;
+                        }
                     }
                 }
             }
@@ -793,22 +998,43 @@ export function processCostCenterData(costCenterSheetData: any[][]): {
         const colD_documento = String(row[3] || '').trim();
         const credorCodeMatch = colB_credor_raw.match(/^(\d+)\s*-/);
         const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
+        const nameOnly = colB_credor_raw.replace(/^\d+\s*-\s*/, '').trim();
+
+        // 1. Indexar apenas pelo credor (sempre, mesmo sem documento)
+        if (colB_credor_raw) {
+            costCenterMap.set(normalizeKey(nameOnly), currentCostCenter);
+            costCenterMap.set(normalizeKey(colB_credor_raw), currentCostCenter);
+            if (credorCode) costCenterMap.set(credorCode, currentCostCenter);
+        }
         
-        if (credorCode && colD_documento) {
-            const docNumber = cleanAndToStr(colD_documento);
+        if (colD_documento) {
+            const docNumber = cleanAndToStr(colD_documento).replace(/^0+/, '');
             
-            if (docNumber && credorCode) {
+            // 2. Indexar pelo Código do Credor + Doc
+            if (credorCode) {
                  const key = `${docNumber}-${credorCode}`;
                  costCenterMap.set(key, currentCostCenter);
-
-                debugKeys.push({
-                    'Chave de Comparação (Doc-Credor)': key,
-                    'Centro de Custo': currentCostCenter,
-                    'Documento (Coluna D)': docNumber,
-                    'Credor (Coluna B)': colB_credor_raw,
-                    'Linha na Planilha': rowIndex + 1,
-                });
             }
+
+            // 3. Indexar pelo Nome Completo + Doc
+            costCenterMap.set(`${docNumber}-${colB_credor_raw}`, currentCostCenter);
+            
+            // 4. Indexar pelo Nome Normalizado + Doc
+            costCenterMap.set(`${docNumber}-${normalizeKey(nameOnly)}`, currentCostCenter);
+            costCenterMap.set(`${docNumber}-${normalizeKey(colB_credor_raw)}`, currentCostCenter);
+
+            // 5. Indexar pelo Nome sem o Código + Doc
+            if (nameOnly !== colB_credor_raw) {
+                costCenterMap.set(`${docNumber}-${nameOnly}`, currentCostCenter);
+            }
+
+            debugKeys.push({
+                'Chave de Comparação (Doc-Credor)': `${docNumber}-${credorCode || colB_credor_raw}`,
+                'Centro de Custo': currentCostCenter,
+                'Documento (Coluna D)': docNumber,
+                'Credor (Coluna B)': colB_credor_raw,
+                'Linha na Planilha': rowIndex + 1,
+            });
         }
     });
 
@@ -828,81 +1054,143 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
     
     let headerRowIndex = -1;
     let credorIndex = -1;
+    let codeIndex = -1;
     let docIndex = -1;
 
     for (let i = 0; i < accountingSheetData.length; i++) {
         const row = accountingSheetData[i];
-        if (Array.isArray(row) && row.some(cell => typeof cell === 'string' && normalizeKey(cell) === 'credor')) {
-            headerRowIndex = i;
-            credorIndex = row.findIndex(cell => normalizeKey(cell) === 'credor');
-            docIndex = row.findIndex(cell => normalizeKey(cell) === 'documento');
-            break;
-        }
-    }
-
-    if (headerRowIndex === -1 || credorIndex === -1 || docIndex === -1) {
-        return { accountingMap, payableAccountingDebugKeys };
-    }
-
-    for (let i = headerRowIndex + 1; i < accountingSheetData.length; i++) {
-        const currentRow = accountingSheetData[i];
-        if (!Array.isArray(currentRow) || currentRow.length <= Math.max(credorIndex, docIndex)) {
-            continue;
-        }
-
-        const credorName = String(currentRow[credorIndex] || '').trim();
-        const docValue = String(currentRow[docIndex] || '').trim();
-        
-        if (!credorName || !docValue || normalizeKey(credorName) === 'credor') {
-            continue;
-        }
-        
-        let appropriationsRow = null;
-        if(i + 1 < accountingSheetData.length) {
-            const nextRow = accountingSheetData[i + 1];
-            if (nextRow && Array.isArray(nextRow) && String(nextRow[0] || '').trim().toLowerCase().startsWith('apropriações:')) {
-                appropriationsRow = nextRow;
-            }
-        }
-
-        if (appropriationsRow) {
-            const docNumberClean = cleanAndToStr(docValue);
-            const credorNormalized = credorName.trim();
-            // Cria chave com credor normalizado
-            const accountingKey = `${docNumberClean}-${credorNormalized}`;
+        if (Array.isArray(row)) {
+            // Use Array.from to handle sparse arrays and ensure all elements are processed by normalizeKey
+            const rowKeys = Array.from(row).map(cell => normalizeKey(cell));
+            const hasCredor = rowKeys.some(k => k === 'credor');
+            const hasDoc = rowKeys.some(k => k && (k === 'documento' || k.includes('documento') || k.includes('numerodanota')));
             
-            let accountInfo = '';
-            for (let k = appropriationsRow.length - 1; k >= 0; k--) {
-                const cellValue = String(appropriationsRow[k] || '').trim();
-                if (cellValue.match(/^(\d{1,2}\.\d{2}\.\d{2}\.\d{2})/)) {
-                    accountInfo = cellValue;
-                    break;
+            if (hasCredor && hasDoc) {
+                headerRowIndex = i;
+                credorIndex = rowKeys.findIndex(k => k === 'credor');
+                codeIndex = rowKeys.findIndex(k => k && (k.includes('cdcred') || k.includes('codcredor')));
+                docIndex = rowKeys.findIndex(k => k && (k === 'documento' || k.includes('documento') || k.includes('numerodanota')));
+                break;
+            }
+        }
+    }
+
+    // Fallback se não encontrar cabeçalhos
+    const useIndices = headerRowIndex === -1;
+    const startIdx = useIndices ? 0 : headerRowIndex + 1;
+    const finalCredorIdx = (useIndices || credorIndex === -1) ? 0 : credorIndex;
+    const finalCodeIdx = (useIndices || codeIndex === -1) ? 1 : codeIndex;
+    const finalDocIdx = (useIndices || docIndex === -1) ? 2 : docIndex;
+
+    for (let i = startIdx; i < accountingSheetData.length; i++) {
+        const currentRow = accountingSheetData[i];
+        if (!Array.isArray(currentRow)) continue;
+        
+        // Garante que o array tenha o tamanho necessário antes de acessar
+        const maxIdx = Math.max(finalCredorIdx, finalDocIdx, finalCodeIdx);
+        if (currentRow.length <= maxIdx) continue;
+
+        const credorName = String(currentRow[finalCredorIdx] || '').trim();
+        const credorCode = finalCodeIdx !== -1 ? String(currentRow[finalCodeIdx] || '').trim() : '';
+        const docValue = String(currentRow[finalDocIdx] || '').trim();
+        
+        const isHeader = ["empresa", "período", "credor", "documento"].some(keyword => normalizeKey(credorName).startsWith(keyword));
+        if (!credorName || isHeader) {
+            continue;
+        }
+        
+        const appropriations: { account: string; description: string }[] = [];
+        let nextRowIdx = i + 1;
+        
+        while (nextRowIdx < accountingSheetData.length) {
+            const nextRow = accountingSheetData[nextRowIdx];
+            if (!nextRow || !Array.isArray(nextRow)) break;
+            
+            // Procura "Apropriações:" em qualquer lugar da linha
+            const hasAppropriationLabel = nextRow.some(cell => 
+                String(cell || '').trim().toLowerCase().includes('apropriações:')
+            );
+            
+            // Se a primeira célula for vazia mas a linha tiver conteúdo, pode ser continuação de apropriação
+            const isEmptyFirstCell = String(nextRow[0] || '').trim() === '' && nextRow.some(cell => String(cell || '').trim() !== '');
+            
+            if (hasAppropriationLabel || isEmptyFirstCell) {
+                let accountInfo = '';
+                for (let k = 0; k < nextRow.length; k++) {
+                    const cellValue = String(nextRow[k] || '').trim();
+                    // Regex para conta contábil (ex: 2.01.06.09)
+                    if (cellValue.match(/^(\d{1,2}\.\d{2}\.\d{2}\.\d{2})/)) {
+                        accountInfo = cellValue;
+                        break;
+                    }
                 }
+
+                if (accountInfo) {
+                    const parts = accountInfo.split(' - ');
+                    const account = parts[0];
+                    const description = parts.slice(1).join(' - ');
+                    if (!appropriations.some(a => a.account === account)) {
+                        appropriations.push({ account, description });
+                    }
+                }
+                nextRowIdx++;
+            } else {
+                break;
+            }
+        }
+
+        if (appropriations.length > 0) {
+            const docNumberClean = cleanAndToStr(docValue).replace(/^0+/, '');
+            const consolidatedAccount = appropriations.map(a => a.account).join(' / ');
+            const consolidatedDesc = appropriations.map(a => a.description).join(' / ');
+            const accInfo = { account: consolidatedAccount, description: consolidatedDesc };
+
+            // 1. Chave com Nome Original e Normalizado
+            accountingMap.set(`${docNumberClean}-${credorName.trim()}`, accInfo);
+            
+            // Nome sem código para normalização
+            const nameOnly = credorName.replace(/^\d+\s*-\s*/, '').trim();
+            accountingMap.set(`${docNumberClean}-${normalizeKey(nameOnly)}`, accInfo);
+            accountingMap.set(`${docNumberClean}-${normalizeKey(credorName)}`, accInfo);
+
+            // 2. Indexar apenas pelo credor (para fallbacks sem documento)
+            accountingMap.set(normalizeKey(nameOnly), accInfo as any);
+            accountingMap.set(normalizeKey(credorName), accInfo as any);
+            if (credorCode) accountingMap.set(credorCode, accInfo as any);
+            
+            // 2. Tentar extrair partes do nome (separadas por " - ")
+            const parts = credorName.split(/\s*-\s*/);
+            parts.forEach(part => {
+                const trimmed = part.trim();
+                if (trimmed) {
+                    accountingMap.set(`${docNumberClean}-${trimmed}`, accInfo);
+                    accountingMap.set(`${docNumberClean}-${normalizeKey(trimmed)}`, accInfo);
+                }
+            });
+
+            // 3. Tentar remover sufixo de CNPJ/CPF (ex: " - 0001-39")
+            const nameWithoutCnpj = credorName.replace(/\s*-\s*(\d{2,4}-?\d{2}|\d{3}\.?\d{3}\.?\d{3}-?\d{2})$/, '');
+            if (nameWithoutCnpj !== credorName) {
+                accountingMap.set(`${docNumberClean}-${nameWithoutCnpj.trim()}`, accInfo);
+                accountingMap.set(`${docNumberClean}-${normalizeKey(nameWithoutCnpj)}`, accInfo);
+            }
+            
+            let finalCode = credorCode;
+            if (!finalCode) {
+                const match = credorName.match(/^(\d+)\s*-/);
+                if (match) finalCode = match[1];
+            }
+            
+            if (finalCode) {
+                accountingMap.set(`${docNumberClean}-${finalCode}`, accInfo);
             }
 
-            if (accountInfo) {
-                const parts = accountInfo.split(' - ');
-                const account = parts[0];
-                const description = parts.slice(1).join(' - ');
-                // Armazena com a chave normalizada
-                accountingMap.set(accountingKey, { account, description });
-                
-                // Também armazena com apenas o código do credor se houver (formato "123 - Nome")
-                const credorCodeMatch = credorNormalized.match(/^(\d+)\s*-/);
-                if (credorCodeMatch) {
-                    const credorCode = credorCodeMatch[1];
-                    const accountingKeyCode = `${docNumberClean}-${credorCode}`;
-                    accountingMap.set(accountingKeyCode, { account, description });
-                }
-
-                payableAccountingDebugKeys.push({
-                    'Chave de Depuração': accountingKey,
-                    'Coluna Credor': credorName,
-                    'Coluna Documento': docValue,
-                    'Conta Encontrada': accountInfo,
-                    'Linha': i + 1,
-                });
-            }
+            payableAccountingDebugKeys.push({
+                'Chave de Depuração': `${docNumberClean}-${finalCode || credorName}`,
+                'Coluna Credor': credorName,
+                'Coluna Documento': docValue,
+                'Contas Encontradas': consolidatedAccount,
+            });
         }
     }
     
@@ -921,65 +1209,140 @@ export function processPaidAccountingData(paidSheetData: any[][]): {
         return { accountingMap, paidAccountingDebugKeys };
     }
 
+    let headerRowIndex = -1;
+    let credorIndex = -1;
+    let codeIndex = -1;
+    let docIndex = -1;
+
     for (let i = 0; i < paidSheetData.length; i++) {
+        const row = paidSheetData[i];
+        if (Array.isArray(row)) {
+            // Use Array.from to handle sparse arrays and ensure all elements are processed by normalizeKey
+            const rowKeys = Array.from(row).map(cell => normalizeKey(cell));
+            const hasCredor = rowKeys.some(k => k === 'credor');
+            const hasDoc = rowKeys.some(k => k && (k === 'documento' || k.includes('documento') || k.includes('numerodanota')));
+            
+            if (hasCredor && hasDoc) {
+                headerRowIndex = i;
+                credorIndex = rowKeys.findIndex(k => k === 'credor');
+                codeIndex = rowKeys.findIndex(k => k && (k.includes('cdcred') || k.includes('codcredor')));
+                docIndex = rowKeys.findIndex(k => k && (k === 'documento' || k.includes('documento') || k.includes('numerodanota')));
+                break;
+            }
+        }
+    }
+
+    // Se não encontrou cabeçalho, tenta o formato padrão de índices
+    const useIndices = headerRowIndex === -1;
+    const startIdx = useIndices ? 0 : headerRowIndex + 1;
+    const finalCredorIdx = (useIndices || credorIndex === -1) ? 0 : credorIndex;
+    const finalCodeIdx = (useIndices || codeIndex === -1) ? 1 : codeIndex;
+    const finalDocIdx = (useIndices || docIndex === -1) ? 2 : docIndex;
+
+    for (let i = startIdx; i < paidSheetData.length; i++) {
         const currentRow = paidSheetData[i];
-        if (!Array.isArray(currentRow) || currentRow.length < 3) continue;
+        if (!Array.isArray(currentRow)) continue;
 
-        const firstCell = String(currentRow[0] || '').trim();
-        const thirdCell = String(currentRow[2] || '').trim();
+        // Garante que o array tenha o tamanho necessário antes de acessar
+        const maxIdx = Math.max(finalCredorIdx, finalDocIdx, finalCodeIdx);
+        if (currentRow.length <= maxIdx) continue;
 
-        const isHeaderOrFooter = ["empresa", "período", "credor", "data da baixa", "total do dia"].some(keyword => normalizeKey(firstCell).startsWith(keyword));
+        const firstCell = String(currentRow[finalCredorIdx] || '').trim();
+        const thirdCell = String(currentRow[finalDocIdx] || '').trim();
+
+        const isHeaderOrFooter = ["empresa", "período", "credor", "documento", "data da baixa", "total do dia"].some(keyword => normalizeKey(firstCell).startsWith(keyword));
         if (isHeaderOrFooter || !firstCell || !thirdCell) {
             continue;
         }
 
-        let appropriationsRow = null;
-        if (i + 1 < paidSheetData.length) {
-             const nextRow = paidSheetData[i + 1];
-            if (nextRow && Array.isArray(nextRow) && String(nextRow[0] || '').trim().toLowerCase().startsWith('apropriações:')) {
-                appropriationsRow = nextRow;
+        const appropriations: { account: string; description: string }[] = [];
+        let nextRowIdx = i + 1;
+        
+        while (nextRowIdx < paidSheetData.length) {
+            const nextRow = paidSheetData[nextRowIdx];
+            if (!nextRow || !Array.isArray(nextRow)) break;
+            
+            // Procura "Apropriações:" em qualquer lugar da linha
+            const hasAppropriationLabel = nextRow.some(cell => 
+                String(cell || '').trim().toLowerCase().includes('apropriações:')
+            );
+            
+            const isEmptyFirstCell = String(nextRow[0] || '').trim() === '' && nextRow.some(cell => String(cell || '').trim() !== '');
+            
+            if (hasAppropriationLabel || isEmptyFirstCell) {
+                let accountInfo = '';
+                for (let k = 0; k < nextRow.length; k++) {
+                    const cellValue = String(nextRow[k] || '').trim();
+                    if (cellValue.match(/^(\d{1,2}\.\d{2}\.\d{2}\.\d{2})/)) {
+                        accountInfo = cellValue;
+                        break;
+                    }
+                }
+
+                if (accountInfo) {
+                    const parts = accountInfo.split(' - ');
+                    const account = parts[0];
+                    const description = parts.slice(1).join(' - ');
+                    if (!appropriations.some(a => a.account === account)) {
+                        appropriations.push({ account, description });
+                    }
+                }
+                nextRowIdx++;
+            } else {
+                break;
             }
         }
 
-        if (appropriationsRow) {
-            const docNumberClean = cleanAndToStr(thirdCell);
+        if (appropriations.length > 0) {
+            const docNumberClean = cleanAndToStr(thirdCell).replace(/^0+/, '');
             const credorName = firstCell;
-            const credorNormalized = credorName.trim();
-            // Cria chave com credor normalizado
-            const accountingKey = `${docNumberClean}-${credorNormalized}`;
+            const credorCode = finalCodeIdx !== -1 ? String(currentRow[finalCodeIdx] || '').trim() : '';
             
-            let accountInfo = '';
-            for (let k = appropriationsRow.length - 1; k >= 0; k--) {
-                const cellValue = String(appropriationsRow[k] || '').trim();
-                if (cellValue.match(/^(\d{1,2}\.\d{2}\.\d{2}\.\d{2})/)) {
-                    accountInfo = cellValue;
-                    break;
+            const consolidatedAccount = appropriations.map(a => a.account).join(' / ');
+            const consolidatedDesc = appropriations.map(a => a.description).join(' / ');
+            const accInfo = { account: consolidatedAccount, description: consolidatedDesc };
+
+            // 1. Chave com Nome Original e Normalizado
+            accountingMap.set(`${docNumberClean}-${credorName.trim()}`, accInfo);
+            accountingMap.set(`${docNumberClean}-${normalizeKey(credorName)}`, accInfo);
+
+            // 2. Chave com Código (se disponível)
+            let finalCode = credorCode;
+            if (!finalCode) {
+                const match = credorName.match(/^(\d+)\s*-/);
+                if (match) finalCode = match[1];
+            }
+            if (finalCode) {
+                accountingMap.set(`${docNumberClean}-${finalCode}`, accInfo);
+            }
+
+            // 3. Chave com Nome sem o Código (se houver código)
+            const nameMatch = credorName.match(/^(\d+)\s*-\s*(.*)$/);
+            let nameOnly = credorName;
+            if (nameMatch) {
+                nameOnly = nameMatch[2].trim();
+                accountingMap.set(`${docNumberClean}-${nameOnly}`, accInfo);
+                accountingMap.set(`${docNumberClean}-${normalizeKey(nameOnly)}`, accInfo);
+            } else {
+                // Tenta remover sufixos comuns de CNPJ se existirem
+                nameOnly = credorName.split(' - ')[0].trim();
+                if (nameOnly !== credorName) {
+                    accountingMap.set(`${docNumberClean}-${nameOnly}`, accInfo);
+                    accountingMap.set(`${docNumberClean}-${normalizeKey(nameOnly)}`, accInfo);
                 }
             }
 
-            if (accountInfo) {
-                const parts = accountInfo.split(' - ');
-                const account = parts[0];
-                const description = parts.slice(1).join(' - ');
-                // Armazena com a chave normalizada
-                accountingMap.set(accountingKey, { account, description });
-                
-                // Também armazena com apenas o código do credor se houver (formato "123 - Nome")
-                const credorCodeMatch = credorNormalized.match(/^(\d+)\s*-/);
-                if (credorCodeMatch) {
-                    const credorCode = credorCodeMatch[1];
-                    const accountingKeyCode = `${docNumberClean}-${credorCode}`;
-                    accountingMap.set(accountingKeyCode, { account, description });
-                }
+            // 4. Indexar apenas pelo credor (para fallbacks sem documento)
+            accountingMap.set(normalizeKey(nameOnly), accInfo as any);
+            accountingMap.set(normalizeKey(credorName), accInfo as any);
+            if (finalCode) accountingMap.set(finalCode, accInfo as any);
 
-                paidAccountingDebugKeys.push({
-                    'Chave de Depuração': accountingKey,
-                    'Coluna Credor': credorName,
-                    'Coluna Documento': thirdCell,
-                    'Conta Encontrada': accountInfo,
-                    'Linha': i + 1,
-                });
-            }
+            paidAccountingDebugKeys.push({
+                'Chave de Depuração': `${docNumberClean}-${finalCode || credorName}`,
+                'Coluna Credor': credorName,
+                'Coluna Documento': thirdCell,
+                'Contas Encontradas': consolidatedAccount,
+            });
         }
     }
 
