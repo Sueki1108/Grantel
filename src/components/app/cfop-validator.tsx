@@ -377,6 +377,10 @@ export function CfopValidator(props: CfopValidatorProps) {
     const [itemsSimplesFaturamento, setItemsSimplesFaturamento] = useState<any[]>([]);
     const [isLoadingSpecialCfops, setIsLoadingSpecialCfops] = useState(false);
 
+    useEffect(() => {
+        setRowSelection({});
+        setBulkActionState({ classification: null });
+    }, [activeTab]);
 
     useEffect(() => {
         if (!initialItems) {
@@ -480,7 +484,15 @@ export function CfopValidator(props: CfopValidatorProps) {
     
     const handleBulkAction = () => {
         const activeTableItems = itemsByStatus[activeTab as ValidationStatus]?.[activeCfopTabs[activeTab]] || [];
-        const selectedItemKeys = Object.keys(rowSelection).map(index => activeTableItems[parseInt(index)].__itemKey);
+        if (!activeTableItems || activeTableItems.length === 0) {
+            setBulkActionState({ classification: null });
+            setRowSelection({});
+            return;
+        }
+        const selectedItemKeys = Object.keys(rowSelection).map(index => {
+            const item = activeTableItems[parseInt(index)];
+            return item && item.__itemKey;
+        }).filter(Boolean) as string[];
 
         if (selectedItemKeys.length === 0) return;
         
