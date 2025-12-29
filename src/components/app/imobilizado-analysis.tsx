@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Settings2, Copy, HelpCircle, Tag, ListFilter, Save } from "lucide-react";
+import { Building, Download, List, Factory, Wrench, HardHat, RotateCw, Settings2, Copy, HelpCircle, Tag, ListFilter, Save, AlertTriangle, CheckCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -72,7 +72,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
     
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
     const containerRef = React.useRef<HTMLDivElement>(null);
-    const [activeTab, setActiveTab] = useState<Classification>('unclassified');
+    const [activeTab, setActiveTab] = useState<string>('unclassified');
     const [cfopFilter, setCfopFilter] = useState<Set<string>>(new Set());
     const [contabilizacaoFilter, setContabilizacaoFilter] = useState<Set<string>>(new Set());
     const [centroCustoFilter, setCentroCustoFilter] = useState<Set<string>>(new Set());
@@ -254,6 +254,20 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         onPersistData(updatedPersistedData);
     };
 
+    const handleToggleContabilizacaoError = (uniqueItemId: string, marked: boolean) => {
+        if (!competence) return;
+        const updatedData = JSON.parse(JSON.stringify(allPersistedData));
+        if (!updatedData[competence]) updatedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {}}, supplierClassifications: {}, contabilizacaoErrors: {} };
+        if (!updatedData[competence].contabilizacaoErrors) updatedData[competence].contabilizacaoErrors = {};
+        updatedData[competence].contabilizacaoErrors[uniqueItemId] = marked;
+        onPersistData(updatedData);
+    };
+
+    const handleCorrigido = (uniqueItemId: string) => {
+        handleToggleContabilizacaoError(uniqueItemId, false);
+        toast({ title: 'Erro de contabilização corrigido' });
+    };
+
 
     const allCfops = useMemo(() => {
         const cfops = new Set<string>();
@@ -390,6 +404,11 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         return categories;
     }, [enrichedItems, competence, allPersistedData, cfopFilter, contabilizacaoFilter, centroCustoFilter, fornecedorFilter]);
     
+    const contabilizacaoErroItems = useMemo(() => {
+        const errors = (competence && allPersistedData[competence]?.contabilizacaoErrors) || {};
+        return enrichedItems.filter(item => !!errors[item.uniqueItemId]);
+    }, [enrichedItems, competence, allPersistedData]);
+    
     const handleDownload = (data: any[], classification: Classification) => {
         if (data.length === 0) {
             toast({ title: 'Nenhum dado para exportar', variant: 'destructive' });
@@ -433,6 +452,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         const persistedAccountCodes = (competence && allPersistedData[competence]?.accountCodes) || {};
         const supplierCategories = allPersistedData.supplierCategories || [];
         const supplierClassifications = (competence && allPersistedData[competence]?.supplierClassifications) || {};
+        const contabilizacaoErrors = (competence && allPersistedData[competence]?.contabilizacaoErrors) || {};
     
         const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
             <div className="flex items-center justify-between gap-1 group">
@@ -508,6 +528,23 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                         id
                     );
                 }
+
+                if (id === 'Contabilização') {
+                    const isMarked = !!contabilizacaoErrors[item.uniqueItemId];
+                    return (
+                        <div className={cn("flex items-center gap-2 group/row", value === null || value === undefined ? 'text-muted-foreground' : '')}>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleToggleContabilizacaoError(item.uniqueItemId, !isMarked); }}>
+                                        <AlertTriangle className={cn("h-4 w-4", isMarked ? "text-destructive" : "text-muted-foreground")} />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent><p>{isMarked ? "Erro de contabilização" : "Marcar erro de contabilização"}</p></TooltipContent>
+                            </Tooltip>
+                            {renderCellWithCopy(<span>{summarizedValue}</span>, String(value ?? 'N/A'), "Contabilização")}
+                        </div>
+                    );
+                }
                 
                 return <div className={cn("truncate max-w-xs", isIncorrectCfop && "text-red-500", value === null || value === undefined ? 'text-muted-foreground' : '')}>{String(value ?? 'N/A')}</div>;
             }
@@ -563,6 +600,16 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                                             <RotateCw className="h-5 w-5 text-destructive" />
                                         </Button>
                                     </TooltipTrigger><TooltipContent><p>Reverter para Não Classificado</p></TooltipContent>
+                                </Tooltip>
+                            )}
+                            {activeTab === 'erro-contabilizacao' && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleCorrigido(originalItem.uniqueItemId)}>
+                                            <CheckCircle className="h-5 w-5 text-green-600" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>Corrigido</p></TooltipContent>
                                 </Tooltip>
                             )}
                         </div>
@@ -763,13 +810,14 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 </CardHeader>
                 <CardContent>
                     <TooltipProvider>
-                        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Classification)} className="w-full">
-                            <TabsList className="grid w-full grid-cols-5">
+                        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value)} className="w-full">
+                            <TabsList className="grid w-full grid-cols-6">
                                 <TabsTrigger value="unclassified" className="flex gap-2"><List />Não Classificados ({filteredItems.unclassified.length})</TabsTrigger>
                                 <TabsTrigger value="imobilizado" className="flex gap-2"><Factory />Imobilizado ({filteredItems.imobilizado.length})</TabsTrigger>
                                 <TabsTrigger value="uso-consumo" className="flex gap-2"><Wrench />Uso e Consumo ({filteredItems['uso-consumo'].length})</TabsTrigger>
                                 <TabsTrigger value="utilizado-em-obra" className="flex gap-2"><HardHat />Utilizado em Obra ({filteredItems['utilizado-em-obra'].length})</TabsTrigger>
                                 <TabsTrigger value="verify" className="flex gap-2"><HelpCircle />A Verificar ({filteredItems.verify.length})</TabsTrigger>
+                                <TabsTrigger value="erro-contabilizacao" className="flex gap-2"><AlertTriangle />Erro de Contabilização ({contabilizacaoErroItems.length})</TabsTrigger>
                             </TabsList>
                             
                              <TabsContent value="unclassified" className="mt-6">
@@ -790,6 +838,9 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                              <TabsContent value="verify" className="mt-6">
                                 <Button onClick={() => handleDownload(filteredItems.verify, 'a-verificar')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
                                 <ClassificationTable data={filteredItems.verify} columns={columns} {...{rowSelection, setRowSelection, tableRef}} />
+                            </TabsContent>
+                            <TabsContent value="erro-contabilizacao" className="mt-6">
+                                <ClassificationTable data={contabilizacaoErroItems} columns={columns} {...{rowSelection, setRowSelection, tableRef}} />
                             </TabsContent>
                         </Tabs>
                     </TooltipProvider>

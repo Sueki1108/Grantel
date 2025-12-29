@@ -121,3 +121,6 @@ Certifique-se de configurar as variáveis de ambiente necessárias no Firebase H
 - `npm run deploy:functions` - Deploy apenas das Cloud Functions
 - `npm run deploy:all` - Deploy completo (hosting + functions)
 
+
+
+
