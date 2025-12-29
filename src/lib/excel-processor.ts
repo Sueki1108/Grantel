@@ -386,7 +386,7 @@ export function processDataFrames(
                     }
                 }
 
-                contabilizacao = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
+                contabilizacao = accInfo ? (accInfo.formattedFull || `${accInfo.account} - ${accInfo.description}`) : 'N/A';
             }
 
             return {
@@ -893,7 +893,7 @@ export function runReconciliation(
                 }
             }
             
-            item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
+            item['Contabilização'] = accInfo ? (accInfo.formattedFull || `${accInfo.account} - ${accInfo.description}`) : 'N/A';
         } else {
             item['Contabilização'] = 'N/A';
         }
@@ -1141,9 +1141,17 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
 
         if (appropriations.length > 0) {
             const docNumberClean = cleanAndToStr(docValue).replace(/^0+/, '');
+            
+            // Formata cada conta com sua respectiva descrição individualmente
             const consolidatedAccount = appropriations.map(a => a.account).join(' / ');
             const consolidatedDesc = appropriations.map(a => a.description).join(' / ');
-            const accInfo = { account: consolidatedAccount, description: consolidatedDesc };
+            const formattedFull = appropriations.map(a => `${a.account} - ${a.description}`).join(' / ');
+            
+            const accInfo = { 
+                account: consolidatedAccount, 
+                description: consolidatedDesc,
+                formattedFull: formattedFull // Nova propriedade com o formato desejado
+            };
 
             // 1. Chave com Nome Original e Normalizado
             accountingMap.set(`${docNumberClean}-${credorName.trim()}`, accInfo);
