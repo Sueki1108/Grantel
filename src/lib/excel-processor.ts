@@ -661,13 +661,14 @@ export function runReconciliation(
             item['Centro de Custo'] = 'N/A';
         }
         
-        const espVal = h.esp ? String(item[`Sienge_${h.esp}`] || '').trim().toUpperCase() : '';
-        const allowedSpecies = !h.esp || espVal === 'NFE' || espVal === 'NFSR';
-        if (accountingMap && siengeDocNumberRaw && siengeCredorRaw && allowedSpecies) {
+        if (accountingMap && siengeDocNumberRaw && siengeCredorRaw) {
             const docNumberClean = cleanAndToStr(siengeDocNumberRaw);
             const credorNormalized = String(siengeCredorRaw).trim();
+            // Tenta buscar com o credor completo primeiro
             let accountingKey = `${docNumberClean}-${credorNormalized}`;
             let accInfo = accountingMap.get(accountingKey);
+            
+            // Se não encontrar, tenta apenas com o código do credor (formato "123 - Nome")
             if (!accInfo) {
                 const credorCodeMatch = credorNormalized.match(/^(\d+)\s*-/);
                 if (credorCodeMatch) {
@@ -676,11 +677,17 @@ export function runReconciliation(
                     accInfo = accountingMap.get(accountingKey);
                 }
             }
+            
+            // Se ainda não encontrar, tenta buscar por qualquer chave que comece com o documento
             if (!accInfo) {
                 for (const [key, value] of accountingMap.entries()) {
-                    if (key.startsWith(`${docNumberClean}-`)) { accInfo = value; break; }
+                    if (key.startsWith(`${docNumberClean}-`)) {
+                        accInfo = value;
+                        break;
+                    }
                 }
             }
+            
             item['Contabilização'] = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
         } else {
             item['Contabilização'] = 'N/A';
@@ -822,7 +829,6 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
     let headerRowIndex = -1;
     let credorIndex = -1;
     let docIndex = -1;
-    let espIndex = -1;
 
     for (let i = 0; i < accountingSheetData.length; i++) {
         const row = accountingSheetData[i];
@@ -830,7 +836,6 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
             headerRowIndex = i;
             credorIndex = row.findIndex(cell => normalizeKey(cell) === 'credor');
             docIndex = row.findIndex(cell => normalizeKey(cell) === 'documento');
-            espIndex = row.findIndex(cell => ['esp','especie'].includes(normalizeKey(cell)));
             break;
         }
     }
@@ -851,10 +856,6 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
         if (!credorName || !docValue || normalizeKey(credorName) === 'credor') {
             continue;
         }
-        
-        const speciesVal = espIndex !== -1 ? String(currentRow[espIndex] || '').trim().toUpperCase() : '';
-        const isNfeOrNfsr = speciesVal === 'NFE' || speciesVal === 'NFSR' || /(^|\s)(NFE|NFSR)(\s|$)/i.test(docValue);
-        if (!isNfeOrNfsr) continue;
         
         let appropriationsRow = null;
         if(i + 1 < accountingSheetData.length) {
@@ -931,12 +932,7 @@ export function processPaidAccountingData(paidSheetData: any[][]): {
         if (isHeaderOrFooter || !firstCell || !thirdCell) {
             continue;
         }
-        
-        const isNfeOrNfsr = /(^|\s)(NFE|NFSR)(\s|$)/i.test(thirdCell);
-        if (!isNfeOrNfsr) {
-            continue;
-        }
-        
+
         let appropriationsRow = null;
         if (i + 1 < paidSheetData.length) {
              const nextRow = paidSheetData[i + 1];

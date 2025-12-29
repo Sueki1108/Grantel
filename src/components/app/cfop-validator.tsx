@@ -376,9 +376,109 @@ export function CfopValidator(props: CfopValidatorProps) {
     const [itemsEntregaFutura, setItemsEntregaFutura] = useState<any[]>([]);
     const [itemsSimplesFaturamento, setItemsSimplesFaturamento] = useState<any[]>([]);
     const [isLoadingSpecialCfops, setIsLoadingSpecialCfops] = useState(false);
-    const itemsByStatusRef = useRef<Record<ValidationStatus, Record<string, any[]>>>({ all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {} });
 
+    const itemsByStatus = useMemo(() => {
+        const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
+        
+        const statusResult: Record<ValidationStatus, Record<string, any[]>> = {
+            all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}
+        };
+        
+        enrichedItems.forEach(item => {
+            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const validation = cfopValidations[uniqueKey];
+            const classification = validation?.classification || 'unvalidated';
+            const itemWithKey = { ...item };
+            const siengeCfop = String(item['CFOP (Sienge)']) || 'N/A';
 
+            if (!statusResult.all[siengeCfop]) statusResult.all[siengeCfop] = [];
+            statusResult.all[siengeCfop].push(itemWithKey);
+
+            if (!statusResult[classification][siengeCfop]) statusResult[classification][siengeCfop] = [];
+            statusResult[classification][siengeCfop].push(itemWithKey);
+        });
+        return statusResult;
+    }, [enrichedItems, competence, allPersistedData]);
+
+    const contabilizacaoErroItems = useMemo(() => {
+        const errors = (competence && allPersistedData[competence]?.contabilizacaoErrors) || {};
+        return enrichedItems.filter(item => {
+            const key = item['Chave de acesso'] && item['Item'] ? `${item['Chave de acesso']}-${item['Item']}` : `${item['Chave Unica']}-${item['Item']}`;
+            return !!errors[key];
+        });
+    }, [enrichedItems, competence, allPersistedData]);
+
+    const difalAnalysisData = useMemo(() => {
+        const difalValidations = (competence && allPersistedData[competence]?.difalValidations?.classifications) || {};
+        const correctItems = Object.values(itemsByStatus.correct).flat();
+        
+        const sujeitosAoDifal = correctItems.filter(item => {
+            const cfopXml = String(item['CFOP'] || '').trim();
+            const cfopSienge = String(item['Sienge_CFOP'] || item['CFOP (Sienge)'] || '').trim();
+            // Verifica tanto o CFOP do XML quanto o CFOP do Sienge (com e sem espaços)
+            const isDifalCfop = cfopXml === '2551' || cfopXml === '2556' || 
+                               cfopSienge === '2551' || cfopSienge === '2556' ||
+                               cfopXml.startsWith('2551') || cfopXml.startsWith('2556') ||
+                               cfopSienge.startsWith('2551') || cfopSienge.startsWith('2556');
+            return isDifalCfop;
+        }).map(item => ({...item, __itemKey: `${item['Chave de acesso']}-${item['Item']}`}));
+
+        const difalItems = [];
+        const desconsideradosItems = [];
+        const beneficioFiscalItems = [];
+        
+        sujeitosAoDifal.forEach(item => {
+            const itemKey = `${item['Chave de acesso']}-${item['Item']}`;
+            const status = difalValidations[itemKey]?.status;
+            switch(status) {
+                case 'difal':
+                    difalItems.push(item);
+                    break;
+                case 'disregard':
+                    desconsideradosItems.push(item);
+                    break;
+                case 'beneficio-fiscal':
+                    beneficioFiscalItems.push(item);
+                    break;
+                default:
+                    // fica nos sujeitos
+                    break;
+            }
+        });
+
+        // Filter out items that have been moved to other tabs
+        const finalSujeitos = sujeitosAoDifal.filter(item => {
+             const itemKey = `${item['Chave de acesso']}-${item['Item']}`;
+             return !difalValidations[itemKey];
+        });
+
+        return { sujeitosAoDifal: finalSujeitos, difalItems, desconsideradosItems, beneficioFiscalItems };
+
+    }, [itemsByStatus.correct, allPersistedData, competence]);
+
+    useEffect(() => {
+        setRowSelection({});
+        setBulkActionState({ classification: null });
+    }, [activeTab]);
+
+    useEffect(() => {
+        const status = activeTab as ValidationStatus;
+        const groups = itemsByStatus[status] || {};
+        const cfops = Object.keys(groups);
+        if (cfops.length > 0) {
+            const current = activeCfopTabs[status];
+            if (!current || !groups[current]) {
+                setActiveCfopTabs(prev => ({ ...prev, [status]: cfops[0] }));
+                setRowSelection({});
+                setBulkActionState({ classification: null });
+            }
+        }
+    }, [activeTab, itemsByStatus]);
+
+    useEffect(() => {
+        setRowSelection({});
+        setBulkActionState({ classification: null });
+    }, [activeTab]);
 
     useEffect(() => {
         if (!initialItems) {
@@ -481,8 +581,7 @@ export function CfopValidator(props: CfopValidatorProps) {
     };
     
     const handleBulkAction = () => {
-        const statusGroup = itemsByStatusRef.current[activeTab as ValidationStatus] || {};
-        const activeTableItems = statusGroup?.[activeCfopTabs[activeTab]] || [];
+        const activeTableItems = itemsByStatus[activeTab as ValidationStatus]?.[activeCfopTabs[activeTab]] || [];
         if (!activeTableItems || activeTableItems.length === 0) {
             setBulkActionState({ classification: null });
             setRowSelection({});
@@ -755,7 +854,19 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     <TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange([row.original], 'unvalidated')}><RotateCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Limpar Validação</p></TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>
-
+                            {activeTab === 'contabilizacao-error' && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
+                                            const key = row.original['Chave de acesso'] && row.original['Item'] ? `${row.original['Chave de acesso']}-${row.original['Item']}` : `${row.original['Chave Unica']}-${row.original['Item']}`;
+                                            handleCorrigido(key);
+                                        }}>
+                                            <CheckCircle className="h-4 w-4 text-green-600" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>Corrigido</p></TooltipContent>
+                                </Tooltip>
+                            )}
                         </div>
                     );
                 }
@@ -763,106 +874,11 @@ export function CfopValidator(props: CfopValidatorProps) {
         ]);
     }, [enrichedItems, allPersistedData, competence, toast]);
     
-    const itemsByStatus = useMemo(() => {
-        const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
-        
-        const statusResult: Record<ValidationStatus, Record<string, any[]>> = {
-            all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}
-        };
-        
-        enrichedItems.forEach(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
-            const validation = cfopValidations[uniqueKey];
-            const classification = validation?.classification || 'unvalidated';
-            const itemWithKey = { ...item };
-            const siengeCfop = String(item['CFOP (Sienge)']) || 'N/A';
-
-            if (!statusResult.all[siengeCfop]) statusResult.all[siengeCfop] = [];
-            statusResult.all[siengeCfop].push(itemWithKey);
-
-            if (!statusResult[classification][siengeCfop]) statusResult[classification][siengeCfop] = [];
-            statusResult[classification][siengeCfop].push(itemWithKey);
-        });
-        return statusResult;
-    }, [enrichedItems, competence, allPersistedData]);
-
-    useEffect(() => { itemsByStatusRef.current = itemsByStatus; }, [itemsByStatus]);
-
     useEffect(() => {
         setRowSelection({});
         setBulkActionState({ classification: null });
     }, [itemsByStatus]);
 
-    useEffect(() => {
-        setRowSelection({});
-        setBulkActionState({ classification: null });
-        const status = activeTab as ValidationStatus;
-        const groups = itemsByStatus[status] || {};
-        const cfops = Object.keys(groups);
-        if (cfops.length > 0) {
-            const current = activeCfopTabs[status];
-            if (!current || !groups[current]) {
-                setActiveCfopTabs(prev => ({ ...prev, [status]: cfops[0] }));
-            }
-        }
-    }, [activeTab, itemsByStatus]);
-
-    const contabilizacaoErroItems = useMemo(() => {
-        const errors = (competence && allPersistedData[competence]?.contabilizacaoErrors) || {};
-        return enrichedItems.filter(item => {
-            const key = item['Chave de acesso'] && item['Item'] ? `${item['Chave de acesso']}-${item['Item']}` : `${item['Chave Unica']}-${item['Item']}`;
-            return !!errors[key];
-        });
-    }, [enrichedItems, competence, allPersistedData]);
-
-
-    const difalAnalysisData = useMemo(() => {
-        const difalValidations = (competence && allPersistedData[competence]?.difalValidations?.classifications) || {};
-        const correctItems = Object.values(itemsByStatus.correct).flat();
-        
-        const sujeitosAoDifal = correctItems.filter(item => {
-            const cfopXml = String(item['CFOP'] || '').trim();
-            const cfopSienge = String(item['Sienge_CFOP'] || item['CFOP (Sienge)'] || '').trim();
-            // Verifica tanto o CFOP do XML quanto o CFOP do Sienge (com e sem espaços)
-            const isDifalCfop = cfopXml === '2551' || cfopXml === '2556' || 
-                               cfopSienge === '2551' || cfopSienge === '2556' ||
-                               cfopXml.startsWith('2551') || cfopXml.startsWith('2556') ||
-                               cfopSienge.startsWith('2551') || cfopSienge.startsWith('2556');
-            return isDifalCfop;
-        }).map(item => ({...item, __itemKey: `${item['Chave de acesso']}-${item['Item']}`}));
-
-        const difalItems = [];
-        const desconsideradosItems = [];
-        const beneficioFiscalItems = [];
-        
-        sujeitosAoDifal.forEach(item => {
-            const itemKey = `${item['Chave de acesso']}-${item['Item']}`;
-            const status = difalValidations[itemKey]?.status;
-            switch(status) {
-                case 'difal':
-                    difalItems.push(item);
-                    break;
-                case 'disregard':
-                    desconsideradosItems.push(item);
-                    break;
-                case 'beneficio-fiscal':
-                    beneficioFiscalItems.push(item);
-                    break;
-                default:
-                    // fica nos sujeitos
-                    break;
-            }
-        });
-
-        // Filter out items that have been moved to other tabs
-        const finalSujeitos = sujeitosAoDifal.filter(item => {
-             const itemKey = `${item['Chave de acesso']}-${item['Item']}`;
-             return !difalValidations[itemKey];
-        });
-
-        return { sujeitosAoDifal: finalSujeitos, difalItems, desconsideradosItems, beneficioFiscalItems };
-
-    }, [itemsByStatus.correct, allPersistedData, competence]);
 
 
     const numSelected = Object.keys(rowSelection).length;

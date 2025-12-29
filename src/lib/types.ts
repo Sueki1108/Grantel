@@ -67,9 +67,6 @@ export interface AllClassifications {
         supplierClassifications?: {
             [supplierCnpj: string]: string | null; // categoryId or null
         }
-        contabilizacaoErrors?: {
-            [uniqueItemId: string]: boolean;
-        }
     }
 }
 

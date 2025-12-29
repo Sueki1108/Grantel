@@ -38,8 +38,6 @@ interface ImobilizadoAnalysisProps {
     onPersistData: (allData: AllClassifications) => void;
     allPersistedData: AllClassifications;
     reconciliationResults?: any; // Para enriquecer com Contabilização e Centro de Custo
-    costCenterMap?: Map<string, string> | null;
-    accountingMap?: Map<string, { account: string; description: string }> | null;
 }
 
 interface ClassificationTableProps {
@@ -69,7 +67,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
 }
 
 
-export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, competence, onPersistData, allPersistedData, reconciliationResults, costCenterMap, accountingMap }: ImobilizadoAnalysisProps) {
+export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, competence, onPersistData, allPersistedData, reconciliationResults }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -98,7 +96,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         const hSienge = {
             numero: findSiengeHeader(['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
             cpfCnpj: findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpfcnpj']),
-            credor: findSiengeHeader(['credor', 'fornecedor']),
             cfop: findSiengeHeader(['cfop']),
             produtoFiscal: findSiengeHeader(['produto fiscal', 'descrição do item', 'descrição']),
         };
@@ -138,64 +135,39 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 }
             }
             
-            // Enriquecimento via mapas (Centro de Custo / Contabilização)
+            // Enriquecer com dados da conciliação se disponível
             let contabilizacao = 'N/A';
             let centroCusto = 'N/A';
             
-            const siengeMatch = (siengeMatches.length > 0 && hSienge.produtoFiscal) ? (
-                siengeMatches.find(si => {
-                    const xmlProdCode = cleanAndToStr(item['Código']);
-                    const siengeProdCode = cleanAndToStr(String(si[hSienge.produtoFiscal!]).split('-')[0]);
-                    return xmlProdCode === siengeProdCode;
-                }) || siengeMatches[0]
-            ) : undefined;
-            
-            if (siengeMatch && hSienge.numero && hSienge.credor) {
-                const docNumberClean = cleanAndToStr(siengeMatch[hSienge.numero!]);
-                const credorRaw = String(siengeMatch[hSienge.credor!] || '').trim();
-                const credorCodeMatch = credorRaw.match(/^(\d+)\s*-/);
-                const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
-                
-                if (costCenterMap) {
-                    const costCenterKey = `${docNumberClean}-${credorCode}`;
-                    centroCusto = costCenterMap.get(costCenterKey) || 'N/A';
-                }
-                
-                if (accountingMap) {
-                    let accInfo = accountingMap.get(`${docNumberClean}-${credorRaw}`) || (credorCode ? accountingMap.get(`${docNumberClean}-${credorCode}`) : undefined);
-                    if (!accInfo) {
-                        for (const [key, value] of accountingMap.entries()) {
-                            if (key.startsWith(`${docNumberClean}-`)) { accInfo = value; break; }
-                        }
-                    }
-                    contabilizacao = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
-                }
-            }
-            
-            // Fallback: usar resultados de conciliação se mapas não retornaram
-            if (reconciliationResults?.reconciled && (contabilizacao === 'N/A' || centroCusto === 'N/A')) {
+            if (reconciliationResults?.reconciled) {
+                // Tenta encontrar o item reconciliado correspondente
                 const reconciledItem = reconciliationResults.reconciled.find((ri: any) => {
                     const itemChaveUnica = item['Chave Unica'] || '';
                     const itemItem = item['Item'] || '';
                     const riChaveUnica = ri['Chave Unica'] || '';
                     const riItem = ri['Item'] || '';
-                    if (itemChaveUnica && itemItem && riChaveUnica && riItem) return itemChaveUnica === riChaveUnica && String(itemItem) === String(riItem);
+                    
+                    // Match por Chave Unica e Item
+                    if (itemChaveUnica && itemItem && riChaveUnica && riItem) {
+                        return itemChaveUnica === riChaveUnica && String(itemItem) === String(riItem);
+                    }
+                    
+                    // Fallback: match por número da nota e código do produto
                     const itemNumero = item['Número da Nota'] || '';
                     const itemCodigo = item['Código'] || '';
                     const riNumero = ri['Número da Nota'] || ri['Número'] || '';
                     const riCodigo = ri['Código'] || '';
-                    if (itemNumero && itemCodigo && riNumero && riCodigo) return cleanAndToStr(itemNumero) === cleanAndToStr(riNumero) && cleanAndToStr(itemCodigo) === cleanAndToStr(riCodigo);
+                    
+                    if (itemNumero && itemCodigo && riNumero && riCodigo) {
+                        return cleanAndToStr(itemNumero) === cleanAndToStr(riNumero) && 
+                               cleanAndToStr(itemCodigo) === cleanAndToStr(riCodigo);
+                    }
+                    
                     return false;
-                }) || reconciliationResults.reconciled.find((ri: any) => {
-                    const itemChaveAcesso = item['Chave de acesso'] || '';
-                    const itemItem = item['Item'] || '';
-                    const riChaveAcesso = ri['Chave de acesso'] || '';
-                    const riItem = ri['Item'] || '';
-                    return itemChaveAcesso && riChaveAcesso && itemItem && riItem && itemChaveAcesso === riChaveAcesso && String(itemItem) === String(riItem);
                 });
                 if (reconciledItem) {
-                    if (contabilizacao === 'N/A') contabilizacao = reconciledItem['Contabilização'] || 'N/A';
-                    if (centroCusto === 'N/A') centroCusto = reconciledItem['Centro de Custo'] || 'N/A';
+                    contabilizacao = reconciledItem['Contabilização'] || 'N/A';
+                    centroCusto = reconciledItem['Centro de Custo'] || 'N/A';
                 }
             }
             
@@ -207,7 +179,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             };
         });
         setEnrichedItems(newItems);
-    }, [initialAllItems, siengeData, reconciliationResults, costCenterMap, accountingMap]);
+    }, [initialAllItems, siengeData, reconciliationResults]);
 
 
     const handlePersistClassifications = (competence: string, classifications: { [uniqueItemId: string]: { classification: Classification } }) => {
@@ -280,20 +252,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         updatedPersistedData[competence].accountCodes[itemLineId] = { accountCode: code };
 
         onPersistData(updatedPersistedData);
-    };
-
-    const handleToggleContabilizacaoError = (uniqueItemId: string, marked: boolean) => {
-        if (!competence) return;
-        const updatedData = JSON.parse(JSON.stringify(allPersistedData));
-        if (!updatedData[competence]) updatedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {}}, supplierClassifications: {}, contabilizacaoErrors: {} };
-        if (!updatedData[competence].contabilizacaoErrors) updatedData[competence].contabilizacaoErrors = {};
-        updatedData[competence].contabilizacaoErrors[uniqueItemId] = marked;
-        onPersistData(updatedData);
-    };
-
-    const handleCorrigido = (uniqueItemId: string) => {
-        handleToggleContabilizacaoError(uniqueItemId, false);
-        toast({ title: 'Erro de contabilização corrigido' });
     };
 
 
@@ -432,7 +390,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         return categories;
     }, [enrichedItems, competence, allPersistedData, cfopFilter, contabilizacaoFilter, centroCustoFilter, fornecedorFilter]);
     
-
     const handleDownload = (data: any[], classification: Classification) => {
         if (data.length === 0) {
             toast({ title: 'Nenhum dado para exportar', variant: 'destructive' });
@@ -476,7 +433,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         const persistedAccountCodes = (competence && allPersistedData[competence]?.accountCodes) || {};
         const supplierCategories = allPersistedData.supplierCategories || [];
         const supplierClassifications = (competence && allPersistedData[competence]?.supplierClassifications) || {};
-        const contabilizacaoErrors = (competence && allPersistedData[competence]?.contabilizacaoErrors) || {};
     
         const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
             <div className="flex items-center justify-between gap-1 group">
@@ -552,7 +508,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                         id
                     );
                 }
-
+                
                 return <div className={cn("truncate max-w-xs", isIncorrectCfop && "text-red-500", value === null || value === undefined ? 'text-muted-foreground' : '')}>{String(value ?? 'N/A')}</div>;
             }
         );
@@ -609,7 +565,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                                     </TooltipTrigger><TooltipContent><p>Reverter para Não Classificado</p></TooltipContent>
                                 </Tooltip>
                             )}
-
                         </div>
                     </TooltipProvider>
                 );
@@ -808,7 +763,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 </CardHeader>
                 <CardContent>
                     <TooltipProvider>
-                        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Classification)} className="w-full">
+                        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value)} className="w-full">
                             <TabsList className="grid w-full grid-cols-5">
                                 <TabsTrigger value="unclassified" className="flex gap-2"><List />Não Classificados ({filteredItems.unclassified.length})</TabsTrigger>
                                 <TabsTrigger value="imobilizado" className="flex gap-2"><Factory />Imobilizado ({filteredItems.imobilizado.length})</TabsTrigger>
