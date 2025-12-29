@@ -38,6 +38,8 @@ interface ImobilizadoAnalysisProps {
     onPersistData: (allData: AllClassifications) => void;
     allPersistedData: AllClassifications;
     reconciliationResults?: any; // Para enriquecer com Contabilização e Centro de Custo
+    costCenterMap?: Map<string, string> | null;
+    accountingMap?: Map<string, { account: string; description: string }> | null;
 }
 
 interface ClassificationTableProps {
@@ -67,7 +69,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
 }
 
 
-export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, competence, onPersistData, allPersistedData, reconciliationResults }: ImobilizadoAnalysisProps) {
+export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, competence, onPersistData, allPersistedData, reconciliationResults, costCenterMap, accountingMap }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -96,6 +98,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         const hSienge = {
             numero: findSiengeHeader(['documento', 'número', 'numero', 'numero da nota', 'nota fiscal']),
             cpfCnpj: findSiengeHeader(['cpf/cnpj', 'cpf/cnpj do fornecedor', 'cpfcnpj']),
+            credor: findSiengeHeader(['credor', 'fornecedor']),
             cfop: findSiengeHeader(['cfop']),
             produtoFiscal: findSiengeHeader(['produto fiscal', 'descrição do item', 'descrição']),
         };
@@ -135,52 +138,64 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 }
             }
             
-            // Enriquecer com dados da conciliação se disponível
+            // Enriquecimento via mapas (Centro de Custo / Contabilização)
             let contabilizacao = 'N/A';
             let centroCusto = 'N/A';
             
-            if (reconciliationResults?.reconciled) {
-                // Tenta encontrar o item reconciliado correspondente
+            const siengeMatch = (siengeMatches.length > 0 && hSienge.produtoFiscal) ? (
+                siengeMatches.find(si => {
+                    const xmlProdCode = cleanAndToStr(item['Código']);
+                    const siengeProdCode = cleanAndToStr(String(si[hSienge.produtoFiscal!]).split('-')[0]);
+                    return xmlProdCode === siengeProdCode;
+                }) || siengeMatches[0]
+            ) : undefined;
+            
+            if (siengeMatch && hSienge.numero && hSienge.credor) {
+                const docNumberClean = cleanAndToStr(siengeMatch[hSienge.numero!]);
+                const credorRaw = String(siengeMatch[hSienge.credor!] || '').trim();
+                const credorCodeMatch = credorRaw.match(/^(\d+)\s*-/);
+                const credorCode = credorCodeMatch ? credorCodeMatch[1] : '';
+                
+                if (costCenterMap) {
+                    const costCenterKey = `${docNumberClean}-${credorCode}`;
+                    centroCusto = costCenterMap.get(costCenterKey) || 'N/A';
+                }
+                
+                if (accountingMap) {
+                    let accInfo = accountingMap.get(`${docNumberClean}-${credorRaw}`) || (credorCode ? accountingMap.get(`${docNumberClean}-${credorCode}`) : undefined);
+                    if (!accInfo) {
+                        for (const [key, value] of accountingMap.entries()) {
+                            if (key.startsWith(`${docNumberClean}-`)) { accInfo = value; break; }
+                        }
+                    }
+                    contabilizacao = accInfo ? `${accInfo.account} - ${accInfo.description}` : 'N/A';
+                }
+            }
+            
+            // Fallback: usar resultados de conciliação se mapas não retornaram
+            if (reconciliationResults?.reconciled && (contabilizacao === 'N/A' || centroCusto === 'N/A')) {
                 const reconciledItem = reconciliationResults.reconciled.find((ri: any) => {
                     const itemChaveUnica = item['Chave Unica'] || '';
                     const itemItem = item['Item'] || '';
                     const riChaveUnica = ri['Chave Unica'] || '';
                     const riItem = ri['Item'] || '';
-                    
-                    // Match por Chave Unica e Item
-                    if (itemChaveUnica && itemItem && riChaveUnica && riItem) {
-                        return itemChaveUnica === riChaveUnica && String(itemItem) === String(riItem);
-                    }
-                    
-                    // Fallback: match por número da nota e código do produto
+                    if (itemChaveUnica && itemItem && riChaveUnica && riItem) return itemChaveUnica === riChaveUnica && String(itemItem) === String(riItem);
                     const itemNumero = item['Número da Nota'] || '';
                     const itemCodigo = item['Código'] || '';
                     const riNumero = ri['Número da Nota'] || ri['Número'] || '';
                     const riCodigo = ri['Código'] || '';
-                    
-                    if (itemNumero && itemCodigo && riNumero && riCodigo) {
-                        return cleanAndToStr(itemNumero) === cleanAndToStr(riNumero) && 
-                               cleanAndToStr(itemCodigo) === cleanAndToStr(riCodigo);
-                    }
-                    
+                    if (itemNumero && itemCodigo && riNumero && riCodigo) return cleanAndToStr(itemNumero) === cleanAndToStr(riNumero) && cleanAndToStr(itemCodigo) === cleanAndToStr(riCodigo);
                     return false;
+                }) || reconciliationResults.reconciled.find((ri: any) => {
+                    const itemChaveAcesso = item['Chave de acesso'] || '';
+                    const itemItem = item['Item'] || '';
+                    const riChaveAcesso = ri['Chave de acesso'] || '';
+                    const riItem = ri['Item'] || '';
+                    return itemChaveAcesso && riChaveAcesso && itemItem && riItem && itemChaveAcesso === riChaveAcesso && String(itemItem) === String(riItem);
                 });
                 if (reconciledItem) {
-                    contabilizacao = reconciledItem['Contabilização'] || 'N/A';
-                    centroCusto = reconciledItem['Centro de Custo'] || 'N/A';
-                } else {
-                    // Match alternativo por Chave de acesso e Item
-                    const altMatch = reconciliationResults.reconciled.find((ri: any) => {
-                        const itemChaveAcesso = item['Chave de acesso'] || '';
-                        const itemItem = item['Item'] || '';
-                        const riChaveAcesso = ri['Chave de acesso'] || '';
-                        const riItem = ri['Item'] || '';
-                        return itemChaveAcesso && riChaveAcesso && itemItem && riItem && itemChaveAcesso === riChaveAcesso && String(itemItem) === String(riItem);
-                    });
-                    if (altMatch) {
-                        contabilizacao = altMatch['Contabilização'] || 'N/A';
-                        centroCusto = altMatch['Centro de Custo'] || 'N/A';
-                    }
+                    if (contabilizacao === 'N/A') contabilizacao = reconciledItem['Contabilização'] || 'N/A';
+                    if (centroCusto === 'N/A') centroCusto = reconciledItem['Centro de Custo'] || 'N/A';
                 }
             }
             
@@ -192,7 +207,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             };
         });
         setEnrichedItems(newItems);
-    }, [initialAllItems, siengeData, reconciliationResults]);
+    }, [initialAllItems, siengeData, reconciliationResults, costCenterMap, accountingMap]);
 
 
     const handlePersistClassifications = (competence: string, classifications: { [uniqueItemId: string]: { classification: Classification } }) => {

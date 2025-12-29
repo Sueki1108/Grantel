@@ -376,30 +376,9 @@ export function CfopValidator(props: CfopValidatorProps) {
     const [itemsEntregaFutura, setItemsEntregaFutura] = useState<any[]>([]);
     const [itemsSimplesFaturamento, setItemsSimplesFaturamento] = useState<any[]>([]);
     const [isLoadingSpecialCfops, setIsLoadingSpecialCfops] = useState(false);
+    const itemsByStatusRef = useRef<Record<ValidationStatus, Record<string, any[]>>>({ all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {} });
 
-    useEffect(() => {
-        setRowSelection({});
-        setBulkActionState({ classification: null });
-    }, [activeTab]);
 
-    useEffect(() => {
-        const status = activeTab as ValidationStatus;
-        const groups = itemsByStatus[status] || {};
-        const cfops = Object.keys(groups);
-        if (cfops.length > 0) {
-            const current = activeCfopTabs[status];
-            if (!current || !groups[current]) {
-                setActiveCfopTabs(prev => ({ ...prev, [status]: cfops[0] }));
-                setRowSelection({});
-                setBulkActionState({ classification: null });
-            }
-        }
-    }, [activeTab, itemsByStatus]);
-
-    useEffect(() => {
-        setRowSelection({});
-        setBulkActionState({ classification: null });
-    }, [activeTab]);
 
     useEffect(() => {
         if (!initialItems) {
@@ -502,7 +481,8 @@ export function CfopValidator(props: CfopValidatorProps) {
     };
     
     const handleBulkAction = () => {
-        const activeTableItems = itemsByStatus[activeTab as ValidationStatus]?.[activeCfopTabs[activeTab]] || [];
+        const statusGroup = itemsByStatusRef.current[activeTab as ValidationStatus] || {};
+        const activeTableItems = statusGroup?.[activeCfopTabs[activeTab]] || [];
         if (!activeTableItems || activeTableItems.length === 0) {
             setBulkActionState({ classification: null });
             setRowSelection({});
@@ -776,17 +756,19 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 </Tooltip>
                             </TooltipProvider>
                             {activeTab === 'contabilizacao-error' && (
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
-                                            const key = row.original['Chave de acesso'] && row.original['Item'] ? `${row.original['Chave de acesso']}-${row.original['Item']}` : `${row.original['Chave Unica']}-${row.original['Item']}`;
-                                            handleCorrigido(key);
-                                        }}>
-                                            <CheckCircle className="h-4 w-4 text-green-600" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent><p>Corrigido</p></TooltipContent>
-                                </Tooltip>
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
+                                                const key = row.original['Chave de acesso'] && row.original['Item'] ? `${row.original['Chave de acesso']}-${row.original['Item']}` : `${row.original['Chave Unica']}-${row.original['Item']}`;
+                                                handleCorrigido(key);
+                                            }}>
+                                                <CheckCircle className="h-4 w-4 text-green-600" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent><p>Corrigido</p></TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
                             )}
                         </div>
                     );
@@ -817,6 +799,27 @@ export function CfopValidator(props: CfopValidatorProps) {
         });
         return statusResult;
     }, [enrichedItems, competence, allPersistedData]);
+
+    useEffect(() => { itemsByStatusRef.current = itemsByStatus; }, [itemsByStatus]);
+
+    useEffect(() => {
+        setRowSelection({});
+        setBulkActionState({ classification: null });
+    }, [itemsByStatus]);
+
+    useEffect(() => {
+        setRowSelection({});
+        setBulkActionState({ classification: null });
+        const status = activeTab as ValidationStatus;
+        const groups = itemsByStatus[status] || {};
+        const cfops = Object.keys(groups);
+        if (cfops.length > 0) {
+            const current = activeCfopTabs[status];
+            if (!current || !groups[current]) {
+                setActiveCfopTabs(prev => ({ ...prev, [status]: cfops[0] }));
+            }
+        }
+    }, [activeTab, itemsByStatus]);
 
     const contabilizacaoErroItems = useMemo(() => {
         const errors = (competence && allPersistedData[competence]?.contabilizacaoErrors) || {};
@@ -892,7 +895,12 @@ export function CfopValidator(props: CfopValidatorProps) {
     
     const activeCfopTab = activeCfopTabs[activeTab as ValidationStatus];
     const cfopGroupsForStatus = itemsByStatus[activeTab as ValidationStatus] || {};
-    const allCfopsForStatus = Object.keys(cfopGroupsForStatus).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    const allCfopsForStatus = Object.keys(cfopGroupsForStatus).sort((a, b) => {
+        const na = parseInt(a, 10);
+        const nb = parseInt(b, 10);
+        if (Number.isNaN(na) || Number.isNaN(nb)) return a.localeCompare(b);
+        return na - nb;
+    });
 
     
     return (
