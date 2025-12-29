@@ -137,7 +137,7 @@ const FilterDialog: React.FC<{
                     const centroCustoMatch = !currentGlobalFilters.centroCusto || currentGlobalFilters.centroCusto.size === 0 || currentGlobalFilters.centroCusto.has(String(centroCusto));
 
                     return cfopMatch && cstMatch && picmsMatch && contabilizacaoMatch && centroCustoMatch;
-                });;
+                });;;
 
                 const newXmlCsts = new Set<string>();
                 const newXmlPicms = new Set<string>();
