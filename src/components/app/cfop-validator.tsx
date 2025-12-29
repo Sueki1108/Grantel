@@ -755,21 +755,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     <TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange([row.original], 'unvalidated')}><RotateCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Limpar Validação</p></TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>
-                            {activeTab === 'contabilizacao-error' && (
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
-                                                const key = row.original['Chave de acesso'] && row.original['Item'] ? `${row.original['Chave de acesso']}-${row.original['Item']}` : `${row.original['Chave Unica']}-${row.original['Item']}`;
-                                                handleCorrigido(key);
-                                            }}>
-                                                <CheckCircle className="h-4 w-4 text-green-600" />
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent><p>Corrigido</p></TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            )}
+
                         </div>
                     );
                 }
