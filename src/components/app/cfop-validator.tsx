@@ -383,6 +383,25 @@ export function CfopValidator(props: CfopValidatorProps) {
     }, [activeTab]);
 
     useEffect(() => {
+        const status = activeTab as ValidationStatus;
+        const groups = itemsByStatus[status] || {};
+        const cfops = Object.keys(groups);
+        if (cfops.length > 0) {
+            const current = activeCfopTabs[status];
+            if (!current || !groups[current]) {
+                setActiveCfopTabs(prev => ({ ...prev, [status]: cfops[0] }));
+                setRowSelection({});
+                setBulkActionState({ classification: null });
+            }
+        }
+    }, [activeTab, itemsByStatus]);
+
+    useEffect(() => {
+        setRowSelection({});
+        setBulkActionState({ classification: null });
+    }, [activeTab]);
+
+    useEffect(() => {
         if (!initialItems) {
             setEnrichedItems([]);
             return;
