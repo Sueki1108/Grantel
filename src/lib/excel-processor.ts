@@ -1308,7 +1308,12 @@ export function processPaidAccountingData(paidSheetData: any[][]): {
             
             const consolidatedAccount = appropriations.map(a => a.account).join(' / ');
             const consolidatedDesc = appropriations.map(a => a.description).join(' / ');
-            const accInfo = { account: consolidatedAccount, description: consolidatedDesc };
+            const formattedFull = appropriations.map(a => `${a.account} - ${a.description}`).join(' / ');
+            const accInfo = { 
+                account: consolidatedAccount, 
+                description: consolidatedDesc,
+                formattedFull: formattedFull
+            };
 
             // 1. Chave com Nome Original e Normalizado
             accountingMap.set(`${docNumberClean}-${credorName.trim()}`, accInfo);
