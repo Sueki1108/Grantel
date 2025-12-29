@@ -5,7 +5,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, X, HelpCircle, RotateCw, ListFilter, Copy, Download, Factory, Wrench, HardHat, Settings, Ticket, Tag, RefreshCw, ChevronDown, ChevronRight, MinusCircle, Cpu, EyeOff, ShieldCheck, TicketX } from "lucide-react";
+import { Check, X, HelpCircle, RotateCw, ListFilter, Copy, Download, Factory, Wrench, HardHat, Settings, Ticket, Tag, RefreshCw, ChevronDown, ChevronRight, MinusCircle, Cpu, EyeOff, ShieldCheck, TicketX, AlertTriangle, CheckCircle } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import type { AllClassifications, SupplierCategory, Classification, DifalStatus } from '@/lib/types';
 import {
@@ -368,7 +368,7 @@ export function CfopValidator(props: CfopValidatorProps) {
     const { toast } = useToast();
     
     const [enrichedItems, setEnrichedItems] = useState<any[]>([]);
-    const [activeTab, setActiveTab] = useState<ValidationStatus | 'faturamento-entrega' | 'difal-analysis'>('unvalidated');
+    const [activeTab, setActiveTab] = useState<ValidationStatus | 'faturamento-entrega' | 'difal-analysis' | 'contabilizacao-error'>('unvalidated');
     const [activeCfopTabs, setActiveCfopTabs] = useState<Record<string, string>>({});
     const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -462,6 +462,20 @@ export function CfopValidator(props: CfopValidatorProps) {
         });
 
         onPersistData(updatedPersistedData);
+    };
+
+    const handleToggleContabilizacaoError = (key: string, marked: boolean) => {
+        if (!competence) return;
+        const updatedData = JSON.parse(JSON.stringify(allPersistedData));
+        if (!updatedData[competence]) updatedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {}}, supplierClassifications: {}, contabilizacaoErrors: {} } as any;
+        if (!updatedData[competence].contabilizacaoErrors) updatedData[competence].contabilizacaoErrors = {} as any;
+        updatedData[competence].contabilizacaoErrors[key] = marked;
+        onPersistData(updatedData);
+    };
+
+    const handleCorrigido = (key: string) => {
+        handleToggleContabilizacaoError(key, false);
+        toast({ title: 'Erro de contabilização corrigido' });
     };
     
     const handleBulkAction = () => {
@@ -593,6 +607,7 @@ export function CfopValidator(props: CfopValidatorProps) {
         const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
         const supplierCategories = allPersistedData.supplierCategories || [];
         const supplierClassifications = (competence && allPersistedData[competence]?.supplierClassifications) || {};
+        const contabilizacaoErrors = (competence && allPersistedData[competence]?.contabilizacaoErrors) || {};
         
         return getColumnsWithCustomRender(
             enrichedItems,
@@ -665,6 +680,26 @@ export function CfopValidator(props: CfopValidatorProps) {
                 if (['Valor Total'].includes(id) && typeof value === 'number') {
                     return <div className="text-right">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>;
                 }
+
+                if (id === 'Contabilização') {
+                    const errorKey = item['Chave de acesso'] && item['Item'] ? `${item['Chave de acesso']}-${item['Item']}` : `${item['Chave Unica']}-${item['Item']}`;
+                    const isMarked = !!contabilizacaoErrors[errorKey];
+                    return (
+                        <div className="flex items-center gap-2">
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleToggleContabilizacaoError(errorKey, !isMarked); }}>
+                                            <AlertTriangle className={cn("h-4 w-4", isMarked ? "text-destructive" : "text-muted-foreground")} />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>{isMarked ? "Erro de contabilização" : "Marcar erro de contabilização"}</p></TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                            {renderCellWithCopy(String(value ?? 'N/A'), String(value ?? 'N/A'), 'Contabilização')}
+                        </div>
+                    );
+                }
                 
                 return <div>{String(value ?? '')}</div>;
             }
@@ -709,6 +744,19 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     <TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange([row.original], 'unvalidated')}><RotateCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Limpar Validação</p></TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>
+                            {activeTab === 'contabilizacao-error' && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
+                                            const key = row.original['Chave de acesso'] && row.original['Item'] ? `${row.original['Chave de acesso']}-${row.original['Item']}` : `${row.original['Chave Unica']}-${row.original['Item']}`;
+                                            handleCorrigido(key);
+                                        }}>
+                                            <CheckCircle className="h-4 w-4 text-green-600" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>Corrigido</p></TooltipContent>
+                                </Tooltip>
+                            )}
                         </div>
                     );
                 }
@@ -737,6 +785,14 @@ export function CfopValidator(props: CfopValidatorProps) {
             statusResult[classification][siengeCfop].push(itemWithKey);
         });
         return statusResult;
+    }, [enrichedItems, competence, allPersistedData]);
+
+    const contabilizacaoErroItems = useMemo(() => {
+        const errors = (competence && allPersistedData[competence]?.contabilizacaoErrors) || {};
+        return enrichedItems.filter(item => {
+            const key = item['Chave de acesso'] && item['Item'] ? `${item['Chave de acesso']}-${item['Item']}` : `${item['Chave Unica']}-${item['Item']}`;
+            return !!errors[key];
+        });
     }, [enrichedItems, competence, allPersistedData]);
 
 
@@ -830,13 +886,14 @@ export function CfopValidator(props: CfopValidatorProps) {
             
             <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as ValidationStatus | 'faturamento-entrega' | 'difal-analysis')} className="w-full">
                  <div className="flex justify-between items-center mb-2">
-                    <TabsList className="grid w-full grid-cols-7">
+                    <TabsList className="grid w-full grid-cols-8">
                         {statusTabs.map(({status, label}) => {
                             const count = Object.values(itemsByStatus[status] || {}).flat().length;
                             return <TabsTrigger key={status} value={status} disabled={count === 0}>{label} ({count})</TabsTrigger>
                         })}
-                         <TabsTrigger value="faturamento-entrega">Faturamento/Entrega</TabsTrigger>
-                         <TabsTrigger value="difal-analysis">Análise DIFAL</TabsTrigger>
+                        <TabsTrigger value="contabilizacao-error" className="flex gap-2"><AlertTriangle />Erros de Contabilização ({contabilizacaoErroItems.length})</TabsTrigger>
+                        <TabsTrigger value="faturamento-entrega">Faturamento/Entrega</TabsTrigger>
+                        <TabsTrigger value="difal-analysis">Análise DIFAL</TabsTrigger>
                     </TabsList>
                     <div className="flex gap-2 ml-4">
                         <Button onClick={handleEnrichData} variant="outline" size="sm"><RefreshCw className="mr-2 h-4 w-4" />Carregar ICMS/CEST do XML</Button>
@@ -909,7 +966,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                             )}
                         </TabsContent>
                     )
-                })}
+                })
+                <TabsContent value="contabilizacao-error" className="mt-4">
+                    <DataTable columns={columns} data={contabilizacaoErroItems} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
+                </TabsContent>
                 <TabsContent value="faturamento-entrega" className="mt-4">
                      <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-lg mb-6">
                         <p className="text-muted-foreground mb-4">Clique no botão para analisar as notas de Entrega Futura e Simples Faturamento dos itens de entrada (CFOPs do fornecedor).</p>
