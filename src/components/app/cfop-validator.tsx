@@ -540,7 +540,12 @@ export function CfopValidator(props: CfopValidatorProps) {
         if (!updatedPersistedData[competence].cfopValidations) updatedPersistedData[competence].cfopValidations = { classifications: {} };
         
         itemsToUpdate.forEach(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const cnpj = (item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
+            const productCode = item['Código'] || '';
+            const siengeCfop = item['Sienge_CFOP'] || '';
+            const contabilizacao = item['Contabilização'] || '';
+            
+            const uniqueKey = `${cnpj}-${productCode}-${siengeCfop}-${contabilizacao}`;
             const current = updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] || { isDifal: false };
             updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] = { ...current, classification: newClassification };
         });
@@ -608,7 +613,12 @@ export function CfopValidator(props: CfopValidatorProps) {
 
         selectedItems.forEach(item => {
             if (!item) return;
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const cnpj = (item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
+            const productCode = item['Código'] || '';
+            const siengeCfop = item['Sienge_CFOP'] || '';
+            const contabilizacao = item['Contabilização'] || '';
+            
+            const uniqueKey = `${cnpj}-${productCode}-${siengeCfop}-${contabilizacao}`;
             const current = { ...(newValidations[uniqueKey] || { classification: 'unvalidated' }) };
             let itemChanged = false;
 
