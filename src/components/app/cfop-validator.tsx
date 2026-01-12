@@ -385,7 +385,12 @@ export function CfopValidator(props: CfopValidatorProps) {
         };
         
         enrichedItems.forEach(item => {
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const cnpj = (item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
+            const productCode = item['Código'] || '';
+            const siengeCfop = item['Sienge_CFOP'] || '';
+            const contabilizacao = item['Contabilização'] || '';
+            
+            const uniqueKey = `${cnpj}-${productCode}-${siengeCfop}-${contabilizacao}`;
             const validation = cfopValidations[uniqueKey];
             const classification = validation?.classification || 'unvalidated';
             const itemWithKey = { ...item };
@@ -488,7 +493,12 @@ export function CfopValidator(props: CfopValidatorProps) {
 
         const newItems = initialItems.map(item => {
             const header = (nfeValidasData || []).find(n => n['Chave Unica'] === item['Chave Unica']);
-            const uniqueKey = `${(item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(item['Código'] || '')}-${item['Sienge_CFOP']}`;
+            const cnpj = (item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
+            const productCode = item['Código'] || '';
+            const siengeCfop = item['Sienge_CFOP'] || '';
+            const contabilizacao = item['Contabilização'] || '';
+            
+            const uniqueKey = `${cnpj}-${productCode}-${siengeCfop}-${contabilizacao}`;
             return {
                 ...item,
                 '__itemKey': `cfop-pending-${uniqueKey}`,
@@ -828,7 +838,12 @@ export function CfopValidator(props: CfopValidatorProps) {
                 id: 'actions',
                 header: 'Ações',
                 cell: ({ row }) => {
-                    const uniqueKey = `${(row.original['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '')}-${(row.original['Código'] || '')}-${row.original['Sienge_CFOP']}`;
+                    const cnpj = (row.original['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
+                    const productCode = row.original['Código'] || '';
+                    const siengeCfop = row.original['Sienge_CFOP'] || '';
+                    const contabilizacao = row.original['Contabilização'] || '';
+                    
+                    const uniqueKey = `${cnpj}-${productCode}-${siengeCfop}-${contabilizacao}`;
                     const validation = cfopValidations[uniqueKey];
                     const classification = validation?.classification || 'unvalidated';
 

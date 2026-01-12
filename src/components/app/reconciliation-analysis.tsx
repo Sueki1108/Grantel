@@ -183,38 +183,44 @@ export function ReconciliationAnalysis({
                         <div className="mt-6">
                             <Tabs defaultValue="reconciled">
                                 <TabsList className="grid w-full grid-cols-4">
-                                    <TabsTrigger value="reconciled">Conciliados ({reconciliationResults?.reconciled.length || 0})</TabsTrigger>
-                                    <TabsTrigger value="onlyInSienge">Apenas no Sienge ({reconciliationResults?.onlyInSienge.length || 0})</TabsTrigger>
-                                    <TabsTrigger value="onlyInXml">Apenas no XML ({itemsToShowInOnlyXmlTab.length || 0})</TabsTrigger>
-                                    <TabsTrigger value="otherSiengeItems">Outros Lançamentos Sienge</TabsTrigger>
+                                    <TabsTrigger value="reconciled">Conciliados ({reconciliationResults?.reconciled?.length || 0})</TabsTrigger>
+                                    <TabsTrigger value="onlyInSienge">Apenas no Sienge ({reconciliationResults?.onlyInSienge?.length || 0})</TabsTrigger>
+                                    <TabsTrigger value="onlyInXml">Apenas no XML ({itemsToShowInOnlyXmlTab?.length || 0})</TabsTrigger>
+                                    <TabsTrigger value="otherSiengeItems">Outros Lançamentos Sienge ({reconciliationResults?.otherSiengeItems ? Object.values(reconciliationResults.otherSiengeItems).reduce((acc, items) => acc + (items?.length || 0), 0) : 0})</TabsTrigger>
                                 </TabsList>
                                 <div className="mt-4">
                                     <TabsContent value="reconciled">
-                                        <Button onClick={() => handleDownload(reconciliationResults?.reconciled || [], 'Itens_Conciliados')} size="sm" className="mb-4" disabled={!reconciliationResults || reconciliationResults.reconciled.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                        <Button onClick={() => handleDownload(reconciliationResults?.reconciled || [], 'Itens_Conciliados')} size="sm" className="mb-4" disabled={!reconciliationResults?.reconciled?.length}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
                                         <DataTable columns={getColumns(reconciliationResults?.reconciled || [], ['Fornecedor', 'Número da Nota', 'Descrição', 'Valor Total', 'CFOP', 'CFOP (Sienge)', 'Centro de Custo', 'Contabilização', 'Observações'])} data={reconciliationResults?.reconciled || []} />
                                     </TabsContent>
                                     <TabsContent value="onlyInSienge">
-                                        <Button onClick={() => handleDownload(reconciliationResults?.onlyInSienge || [], 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={!reconciliationResults || reconciliationResults.onlyInSienge.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                        <Button onClick={() => handleDownload(reconciliationResults?.onlyInSienge || [], 'Itens_Apenas_Sienge')} size="sm" className="mb-4" disabled={!reconciliationResults?.onlyInSienge?.length}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
                                         <DataTable columns={getColumnsForDivergentTabs(reconciliationResults?.onlyInSienge || [])} data={reconciliationResults?.onlyInSienge || []} />
                                     </TabsContent>
                                     <TabsContent value="onlyInXml">
-                                        <Button onClick={() => handleDownload(itemsToShowInOnlyXmlTab, 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={itemsToShowInOnlyXmlTab.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                        <Button onClick={() => handleDownload(itemsToShowInOnlyXmlTab, 'Itens_Apenas_XML')} size="sm" className="mb-4" disabled={!itemsToShowInOnlyXmlTab?.length}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
                                         <DataTable columns={getColumnsForDivergentTabs(itemsToShowInOnlyXmlTab)} data={itemsToShowInOnlyXmlTab} />
                                     </TabsContent>
                                     <TabsContent value="otherSiengeItems">
-                                         <Tabs defaultValue={Object.keys(reconciliationResults?.otherSiengeItems || {})[0]} className="w-full">
-                                            <TabsList>
-                                                {Object.entries(reconciliationResults?.otherSiengeItems || {}).map(([esp, items]) => (
-                                                    <TabsTrigger key={esp} value={esp}>{esp} ({items.length})</TabsTrigger>
+                                         {reconciliationResults?.otherSiengeItems && Object.keys(reconciliationResults.otherSiengeItems).length > 0 ? (
+                                             <Tabs defaultValue={Object.keys(reconciliationResults.otherSiengeItems)[0]} className="w-full">
+                                                <TabsList>
+                                                    {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
+                                                        <TabsTrigger key={esp} value={esp}>{esp} ({items?.length || 0})</TabsTrigger>
+                                                    ))}
+                                                </TabsList>
+                                                {Object.entries(reconciliationResults.otherSiengeItems).map(([esp, items]) => (
+                                                    <TabsContent key={esp} value={esp} className='mt-4'>
+                                                         <Button onClick={() => handleDownload(items || [], `Outros_Sienge_${esp}`)} size="sm" className="mb-4" disabled={!items?.length}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
+                                                         <DataTable columns={getColumns(items || [], ['Credor', 'Documento', 'Data Emissão', 'Valor', 'Observações', 'Centro de Custo', 'Contabilização'])} data={items || []} />
+                                                    </TabsContent>
                                                 ))}
-                                            </TabsList>
-                                            {Object.entries(reconciliationResults?.otherSiengeItems || {}).map(([esp, items]) => (
-                                                <TabsContent key={esp} value={esp} className='mt-4'>
-                                                     <Button onClick={() => handleDownload(items, `Outros_Sienge_${esp}`)} size="sm" className="mb-4" disabled={items.length === 0}><Download className="mr-2 h-4 w-4"/> Baixar</Button>
-                                                     <DataTable columns={getColumns(items, ['Credor', 'Documento', 'Data Emissão', 'Valor', 'Observações', 'Centro de Custo', 'Contabilização'])} data={items} />
-                                                </TabsContent>
-                                            ))}
-                                        </Tabs>
+                                            </Tabs>
+                                         ) : (
+                                            <div className="flex flex-col items-center justify-center min-h-[200px] text-muted-foreground border-2 border-dashed rounded-lg p-8">
+                                                <p>Nenhum outro lançamento Sienge encontrado.</p>
+                                            </div>
+                                         )}
                                     </TabsContent>
                                 </div>
                             </Tabs>

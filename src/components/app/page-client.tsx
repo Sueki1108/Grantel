@@ -966,6 +966,7 @@ export function AutomatorClientPage() {
                             { !reconciliationTabDisabled ? 
                             <ReconciliationAnalysis 
                                 processedData={processedData} 
+                                initialXmlItems={processedData?.sheets?.['Notas Válidas'] || []}
                                 siengeFile={siengeFile} 
                                 onSiengeFileChange={handleSiengeFileChange}
                                 onClearSiengeFile={() => setSiengeFile(null)}
@@ -979,7 +980,6 @@ export function AutomatorClientPage() {
                                 onPaidAccountingFileChange={handlePaidAccountingFileChange}
                                 onClearPaidAccountingFile={() => setPaidAccountingFiles([])}
                                 onRunReconciliation={handleRunReconciliation}
-                                isReconciliationRunning={processing}
                                 allClassifications={allClassifications}
                                 onPersistClassifications={handlePersistClassifications}
                                 competence={competence}

@@ -114,7 +114,7 @@ export function getColumnsForDivergentTabs<TData extends Record<string, any>>(da
         return [];
     }
 
-    const allKeys = new Set(data.flatMap(row => Object.keys(row)));
+    const allKeys = new Set(data.filter(row => row && typeof row === 'object').flatMap(row => Object.keys(row)));
     const columns: ColumnDef<TData>[] = [];
 
     // Manually define the order and headers for consistency
