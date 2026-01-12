@@ -110,76 +110,26 @@ const FilterDialog: React.FC<{
             const currentGlobalFilters = tabFilters[siengeCfop];
             
             if (!currentGlobalFilters) {
-                const deepCopiedFilters = {
+                // Se não houver filtros, tudo começa selecionado
+                setLocalFilters({
                     xmlCsts: new Set(availableOptions.xmlCsts),
                     xmlPicms: new Set(availableOptions.xmlPicms),
                     xmlCfops: new Set(availableOptions.xmlCfops),
                     contabilizacao: new Set(availableOptions.contabilizacao),
                     centroCusto: new Set(availableOptions.centroCusto),
-                };
-                setLocalFilters(deepCopiedFilters);
+                });
             } else {
-                // Filter items based on current global filters to determine which options should be checked
-                const filteredItems = items.filter(item => {
-                    const cfopCode = item['CFOP'];
-                    const cstCode = String(item['CST do ICMS'] || '');
-                    const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
-                    const contabilizacao = item['Contabilização'] || 'N/A';
-                    const centroCusto = item['Centro de Custo'] || 'N/A';
-
-                    const cfopFull = cfopCode ? `${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}` : '';
-                    const cstFull = cstCode ? `${cstCode}: ${getCstDescription(cstCode)}` : '';
-
-                    const cfopMatch = !currentGlobalFilters.xmlCfops || currentGlobalFilters.xmlCfops.size === 0 || (cfopFull && currentGlobalFilters.xmlCfops.has(cfopFull));
-                    const cstMatch = !currentGlobalFilters.xmlCsts || currentGlobalFilters.xmlCsts.size === 0 || (cstFull && currentGlobalFilters.xmlCsts.has(cstFull));
-                    const picmsMatch = !currentGlobalFilters.xmlPicms || currentGlobalFilters.xmlPicms.size === 0 || currentGlobalFilters.xmlPicms.has(picmsValue);
-                    const contabilizacaoMatch = !currentGlobalFilters.contabilizacao || currentGlobalFilters.contabilizacao.size === 0 || currentGlobalFilters.contabilizacao.has(String(contabilizacao));
-                    const centroCustoMatch = !currentGlobalFilters.centroCusto || currentGlobalFilters.centroCusto.size === 0 || currentGlobalFilters.centroCusto.has(String(centroCusto));
-
-                    return cfopMatch && cstMatch && picmsMatch && contabilizacaoMatch && centroCustoMatch;
-                });
-
-                const newXmlCsts = new Set<string>();
-                const newXmlPicms = new Set<string>();
-                const newXmlCfops = new Set<string>();
-                const newContabilizacao = new Set<string>();
-                const newCentroCusto = new Set<string>();
-
-                filteredItems.forEach(item => {
-                    const cstCode = String(item['CST do ICMS'] || '');
-                    if(cstCode) {
-                        const cstDesc = getCstDescription(cstCode);
-                        newXmlCsts.add(`${cstCode}: ${cstDesc}`);
-                    }
-
-                    if (item['Alíq. ICMS (%)'] !== undefined && item['Alíq. ICMS (%)'] !== null) {
-                        newXmlPicms.add(String(item['Alíq. ICMS (%)']));
-                    }
-                    
-                    const cfopCode = item['CFOP']; 
-                    if (cfopCode) {
-                        const fullDescription = cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A";
-                        const combined = `${cfopCode}: ${fullDescription}`;
-                        newXmlCfops.add(combined);
-                    }
-
-                    const contabilizacao = item['Contabilização'] || 'N/A';
-                    newContabilizacao.add(String(contabilizacao));
-
-                    const centroCusto = item['Centro de Custo'] || 'N/A';
-                    newCentroCusto.add(String(centroCusto));
-                });
-
+                // Se houver filtros, carregamos exatamente o que está salvo globalmente
                 setLocalFilters({
-                    xmlCsts: newXmlCsts,
-                    xmlPicms: newXmlPicms,
-                    xmlCfops: newXmlCfops,
-                    contabilizacao: newContabilizacao,
-                    centroCusto: newCentroCusto,
+                    xmlCsts: new Set(currentGlobalFilters.xmlCsts),
+                    xmlPicms: new Set(currentGlobalFilters.xmlPicms),
+                    xmlCfops: new Set(currentGlobalFilters.xmlCfops),
+                    contabilizacao: new Set(currentGlobalFilters.contabilizacao),
+                    centroCusto: new Set(currentGlobalFilters.centroCusto),
                 });
             }
         }
-    }, [isDialogOpen, tabFilters, siengeCfop, availableOptions, items]);
+    }, [isDialogOpen, tabFilters, siengeCfop, availableOptions]);
     
     const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set(), contabilizacao: new Set(), centroCusto: new Set() };
     const isFilterActive = filters.xmlCsts?.size < availableOptions.xmlCsts.length ||
@@ -396,23 +346,71 @@ export function CfopValidator(props: CfopValidatorProps) {
         return {};
     });
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+    const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('grantel_cfop_columns');
+            if (saved) {
+                try {
+                    return JSON.parse(saved);
+                } catch (e) {
+                    console.error('Erro ao carregar colunas salvas:', e);
+                }
+            }
+        }
+        // Colunas padrão visíveis
+        return {
+            'Fornecedor': true,
+            'Número da Nota': true,
+            'Descrição': true,
+            'Centro de Custo': true,
+            'Contabilização': true,
+            'CFOP': true,
+            'CFOP (Sienge)': true,
+            'Valor Total': true,
+            'Ações': true
+        };
+    });
 
-    // Efeito para salvar filtros sempre que mudarem
+    // Salvar visibilidade das colunas
+    useEffect(() => {
+        localStorage.setItem('grantel_cfop_columns', JSON.stringify(columnVisibility));
+    }, [columnVisibility]);
+
+    // Efeito para salvar filtros sempre que mudarem de forma profunda
     useEffect(() => {
         if (Object.keys(tabFilters).length > 0) {
             const toSave: Record<string, any> = {};
             Object.keys(tabFilters).forEach(cfop => {
-                toSave[cfop] = {
-                    xmlCsts: Array.from(tabFilters[cfop].xmlCsts),
-                    xmlPicms: Array.from(tabFilters[cfop].xmlPicms),
-                    xmlCfops: Array.from(tabFilters[cfop].xmlCfops),
-                    contabilizacao: Array.from(tabFilters[cfop].contabilizacao),
-                    centroCusto: Array.from(tabFilters[cfop].centroCusto),
-                };
+                if (tabFilters[cfop]) {
+                    toSave[cfop] = {
+                        xmlCsts: Array.from(tabFilters[cfop].xmlCsts || []),
+                        xmlPicms: Array.from(tabFilters[cfop].xmlPicms || []),
+                        xmlCfops: Array.from(tabFilters[cfop].xmlCfops || []),
+                        contabilizacao: Array.from(tabFilters[cfop].contabilizacao || []),
+                        centroCusto: Array.from(tabFilters[cfop].centroCusto || []),
+                    };
+                }
             });
             localStorage.setItem('grantel_cfop_filters', JSON.stringify(toSave));
         }
     }, [tabFilters]);
+
+    const handleApplyFilters = (cfop: string, filters: TabFilters) => {
+        setTabFilters(prev => {
+            const newFilters = {
+                ...prev,
+                [cfop]: {
+                    xmlCsts: new Set(filters.xmlCsts),
+                    xmlPicms: new Set(filters.xmlPicms),
+                    xmlCfops: new Set(filters.xmlCfops),
+                    contabilizacao: new Set(filters.contabilizacao),
+                    centroCusto: new Set(filters.centroCusto),
+                }
+            };
+            return newFilters;
+        });
+        toast({ title: "Filtros aplicados e salvos!" });
+    };
     const [bulkActionState, setBulkActionState] = useState<BulkActionState>({ classification: null });
     const [itemsEntregaFutura, setItemsEntregaFutura] = useState<any[]>([]);
     const [itemsSimplesFaturamento, setItemsSimplesFaturamento] = useState<any[]>([]);
@@ -597,8 +595,16 @@ export function CfopValidator(props: CfopValidatorProps) {
             const contabilizacao = String(item['Contabilização'] || '').trim();
             
             const uniqueKey = normalizeKey(`${cnpj}-${productCode}-${siengeCfop}-${contabilizacao}`);
-            const current = updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] || { isDifal: false };
-            updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] = { ...current, classification: newClassification };
+            
+            if (newClassification === 'unvalidated') {
+                // Se estiver revertendo, removemos a classificação para que ele volte ao estado original
+                if (updatedPersistedData[competence].cfopValidations.classifications[uniqueKey]) {
+                    delete updatedPersistedData[competence].cfopValidations.classifications[uniqueKey];
+                }
+            } else {
+                const current = updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] || { isDifal: false };
+                updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] = { ...current, classification: newClassification };
+            }
         });
         
         onPersistData(updatedPersistedData);
@@ -774,7 +780,11 @@ export function CfopValidator(props: CfopValidatorProps) {
     const columns = useMemo(() => {
         if (!enrichedItems || enrichedItems.length === 0) return [];
         
-        const columnsToShow: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'Centro de Custo', 'Contabilização', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'CFOP (Sienge)', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
+        const allPossibleColumns: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'Centro de Custo', 'Contabilização', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'CFOP (Sienge)', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
+        
+        // Filtrar colunas baseadas na visibilidade
+        const columnsToShow = allPossibleColumns.filter(col => columnVisibility[col as string] !== false);
+        
         const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
         const supplierCategories = allPersistedData.supplierCategories || [];
         const supplierClassifications = (competence && allPersistedData[competence]?.supplierClassifications) || {};
@@ -857,7 +867,32 @@ export function CfopValidator(props: CfopValidatorProps) {
                     const isMarked = !!contabilizacaoErrors[errorKey];
                     return (
                         <div className="flex items-center gap-2">
-                            <TooltipProvider>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-8">
+                                <Columns className="mr-2 h-4 w-4" />
+                                Colunas
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuLabel>Alternar Colunas</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {['Fornecedor', 'Número da Nota', 'Descrição', 'Centro de Custo', 'Contabilização', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'CFOP (Sienge)', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'].map((column) => (
+                                <DropdownMenuCheckboxItem
+                                    key={column}
+                                    className="capitalize"
+                                    checked={columnVisibility[column] !== false}
+                                    onCheckedChange={(value) => 
+                                        setColumnVisibility(prev => ({ ...prev, [column]: !!value }))
+                                    }
+                                >
+                                    {column}
+                                </DropdownMenuCheckboxItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <Sheet>        <TooltipProvider>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleToggleContabilizacaoError(errorKey, !isMarked); }}>
