@@ -113,21 +113,13 @@ const FilterDialog: React.FC<{
         if (isDialogOpen) {
             const currentGlobalFilters = tabFilters[siengeCfop];
             
-            // Filtramos as seleções salvas para manter apenas o que ainda existe nos itens atuais da aba
-            const sanitizeSet = (savedSet: Set<string> | undefined, available: string[]) => {
-                if (!savedSet) return new Set(available);
-                const filtered = Array.from(savedSet).filter(val => available.includes(val));
-                // Se após filtrar não sobrar nada (ou se o filtro original estava vazio), 
-                // mas existem opções disponíveis, começamos com tudo selecionado para não esconder tudo por erro.
-                return filtered.length > 0 ? new Set(filtered) : new Set(available);
-            };
-
+            // Se não houver filtros salvos para este CFOP, começa com tudo selecionado
             setLocalFilters({
-                xmlCsts: sanitizeSet(currentGlobalFilters?.xmlCsts, availableOptions.xmlCsts),
-                xmlPicms: sanitizeSet(currentGlobalFilters?.xmlPicms, availableOptions.xmlPicms),
-                xmlCfops: sanitizeSet(currentGlobalFilters?.xmlCfops, availableOptions.xmlCfops),
-                contabilizacao: sanitizeSet(currentGlobalFilters?.contabilizacao, availableOptions.contabilizacao),
-                centroCusto: sanitizeSet(currentGlobalFilters?.centroCusto, availableOptions.centroCusto),
+                xmlCsts: currentGlobalFilters?.xmlCsts ? new Set(currentGlobalFilters.xmlCsts) : new Set(availableOptions.xmlCsts),
+                xmlPicms: currentGlobalFilters?.xmlPicms ? new Set(currentGlobalFilters.xmlPicms) : new Set(availableOptions.xmlPicms),
+                xmlCfops: currentGlobalFilters?.xmlCfops ? new Set(currentGlobalFilters.xmlCfops) : new Set(availableOptions.xmlCfops),
+                contabilizacao: currentGlobalFilters?.contabilizacao ? new Set(currentGlobalFilters.contabilizacao) : new Set(availableOptions.contabilizacao),
+                centroCusto: currentGlobalFilters?.centroCusto ? new Set(currentGlobalFilters.centroCusto) : new Set(availableOptions.centroCusto),
             });
         }
     }, [isDialogOpen, tabFilters, siengeCfop, availableOptions]);
@@ -341,55 +333,23 @@ export function CfopValidator(props: CfopValidatorProps) {
     const [enrichedItems, setEnrichedItems] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<ValidationStatus | 'faturamento-entrega' | 'difal-analysis' | 'contabilizacao-error'>('unvalidated');
     const [activeCfopTabs, setActiveCfopTabs] = useState<Record<string, string>>({});
-    const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('grantel_cfop_filters');
-            if (saved) {
-                try {
-                    const parsed = JSON.parse(saved);
-                    // Converter arrays de volta para Sets
-                    const restored: Record<string, TabFilters> = {};
-                    Object.keys(parsed).forEach(cfop => {
-                        restored[cfop] = {
-                            xmlCsts: parsed[cfop].xmlCsts ? new Set(parsed[cfop].xmlCsts) : undefined,
-                            xmlPicms: parsed[cfop].xmlPicms ? new Set(parsed[cfop].xmlPicms) : undefined,
-                            xmlCfops: parsed[cfop].xmlCfops ? new Set(parsed[cfop].xmlCfops) : undefined,
-                            contabilizacao: parsed[cfop].contabilizacao ? new Set(parsed[cfop].contabilizacao) : undefined,
-                            centroCusto: parsed[cfop].centroCusto ? new Set(parsed[cfop].centroCusto) : undefined,
-                        };
-                    });
-                    return restored;
-                } catch (e) {
-                    console.error('Erro ao carregar filtros salvos:', e);
-                }
-            }
-        }
-        return {};
-    });
+    const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-    const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('grantel_cfop_columns');
-            if (saved) {
-                try {
-                    return JSON.parse(saved);
-                } catch (e) {
-                    console.error('Erro ao carregar colunas salvas:', e);
-                }
-            }
-        }
-        // Colunas padrão visíveis
-        return {
-            'Fornecedor': true,
-            'Número da Nota': true,
-            'Descrição': true,
-            'Centro de Custo': true,
-            'Contabilização': true,
-            'CFOP': true,
-            'CFOP (Sienge)': true,
-            'Valor Total': true,
-            'Ações': true
-        };
+    const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({
+        'Fornecedor': true,
+        'Número da Nota': true,
+        'Descrição': true,
+        'Centro de Custo': true,
+        'Contabilização': true,
+        'CFOP': true,
+        'CFOP (Sienge)': true,
+        'Valor Total': true,
+        'Ações': true,
+        'Sienge_Esp': true,
+        'NCM': true,
+        'CEST': true,
+        'Alíq. ICMS (%)': true,
+        'CST do ICMS': true,
     });
 
     // Salvar visibilidade das colunas
@@ -785,12 +745,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                 return ENTREGA_FUTURA_CFOPS.includes(cfop);
             }).map((item, index) => ({
                 ...item, 
-                '__itemKey': `entrega-futura-${index}`,
-                // Garantir que as colunas Sienge apareçam mesmo se o cabeçalho for ligeiramente diferente
-                'Sienge_Esp': item['Sienge_Esp'] || item['Esp'] || 'N/A',
-                'CFOP (Sienge)': item['CFOP (Sienge)'] || item['Sienge_CFOP'] || 'N/A',
-                'Centro de Custo': item['Centro de Custo'] || 'N/A',
-                'Contabilização': item['Contabilização'] || 'N/A'
+                '__itemKey': `entrega-futura-${index}`
             }));
             
             const simplesFaturamento = enrichedItems.filter((item: any) => {
@@ -798,11 +753,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                 return SIMPLES_FATURAMENTO_CFOPS.includes(cfop);
             }).map((item, index) => ({
                 ...item, 
-                '__itemKey': `simples-faturamento-${index}`,
-                'Sienge_Esp': item['Sienge_Esp'] || item['Esp'] || 'N/A',
-                'CFOP (Sienge)': item['CFOP (Sienge)'] || item['Sienge_CFOP'] || 'N/A',
-                'Centro de Custo': item['Centro de Custo'] || 'N/A',
-                'Contabilização': item['Contabilização'] || 'N/A'
+                '__itemKey': `simples-faturamento-${index}`
             }));
 
             setItemsEntregaFutura(entregaFutura);
@@ -1146,11 +1097,12 @@ export function CfopValidator(props: CfopValidatorProps) {
                                             const cfopFull = cfopCode ? `${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}` : '';
                                             const cstFull = cstCode ? `${cstCode}: ${getCstDescription(cstCode)}` : '';
 
-                                            const cfopMatch = !currentFilters.xmlCfops || currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(cfopFull);
-                                            const cstMatch = !currentFilters.xmlCsts || currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(cstFull);
-                                            const picmsMatch = !currentFilters.xmlPicms || currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(picmsValue);
-                                            const contabilizacaoMatch = !currentFilters.contabilizacao || currentFilters.contabilizacao.size === 0 || currentFilters.contabilizacao.has(String(contabilizacao));
-                                            const centroCustoMatch = !currentFilters.centroCusto || currentFilters.centroCusto.size === 0 || currentFilters.centroCusto.has(String(centroCusto));
+                                            // Só filtra se houver uma seleção ativa (tamanho do set < total disponível)
+                                            const cfopMatch = !currentFilters.xmlCfops || currentFilters.xmlCfops.has(cfopFull);
+                                            const cstMatch = !currentFilters.xmlCsts || currentFilters.xmlCsts.has(cstFull);
+                                            const picmsMatch = !currentFilters.xmlPicms || currentFilters.xmlPicms.has(picmsValue);
+                                            const contabilizacaoMatch = !currentFilters.contabilizacao || currentFilters.contabilizacao.has(String(contabilizacao));
+                                            const centroCustoMatch = !currentFilters.centroCusto || currentFilters.centroCusto.has(String(centroCusto));
 
                                             return cfopMatch && cstMatch && picmsMatch && contabilizacaoMatch && centroCustoMatch;
                                         });
