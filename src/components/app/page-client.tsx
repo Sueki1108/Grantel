@@ -369,8 +369,8 @@ export function AutomatorClientPage() {
             setPayableAccountingFiles([]);
              setProcessedData(prev => {
                 if (!prev) return null;
-                const { accountingMap, payableAccountingDebugKeys, ...rest } = prev;
-                return { ...rest, accountingMap: undefined, payableAccountingDebugKeys: [] } as ProcessedData;
+                const { accountingMap, payableAccountingDebugKeys, reconciliationResults, ...rest } = prev;
+                return { ...rest, accountingMap: undefined, payableAccountingDebugKeys: [], reconciliationResults: null } as ProcessedData;
             });
             return;
         }
@@ -412,10 +412,15 @@ export function AutomatorClientPage() {
         }
     };
     
-     const handlePaidAccountingFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const handlePaidAccountingFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const selectedFiles = e.target.files;
         if (!selectedFiles || selectedFiles.length === 0) {
             setPaidAccountingFiles([]);
+            setProcessedData(prev => {
+                if (!prev) return null;
+                const { accountingMap, paidAccountingDebugKeys, reconciliationResults, ...rest } = prev;
+                return { ...rest, accountingMap: undefined, paidAccountingDebugKeys: [], reconciliationResults: null } as ProcessedData;
+            });
             return;
         }
 
@@ -442,6 +447,7 @@ export function AutomatorClientPage() {
                 ...(prev ?? { sheets: {}, spedInfo: null, keyCheckResults: null, competence: null, reconciliationResults: null, resaleAnalysis: null, spedCorrections: null, spedDuplicates: null, costCenterMap: null, costCenterDebugKeys: [], allCostCenters: [], costCenterHeaderRows: [], accountingMap: null, payableAccountingDebugKeys: [], paidAccountingDebugKeys: [] }),
                 accountingMap: new Map([...(prev?.accountingMap || []), ...accountingMap]),
                 paidAccountingDebugKeys: [...(prev?.paidAccountingDebugKeys || []), ...paidAccountingDebugKeys],
+                reconciliationResults: null, // Reset reconciliation on new data
             }));
 
             if (accountingMap.size > 0) {
