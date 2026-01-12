@@ -114,9 +114,22 @@ const FilterDialog: React.FC<{
     const itemsByContabilizacao = useMemo(() => {
         const groups: Record<string, any[]> = {};
         enrichedItems.forEach(item => {
-            const contab = String(item['Contabilização'] || 'N/A').trim();
-            if (!groups[contab]) groups[contab] = [];
-            groups[contab].push(item);
+            const rawContab = String(item['Contabilização'] || 'N/A').trim();
+            
+            // Normaliza a string tratando-a como uma lista de contas separadas por '/'
+            // 1. Divide pela barra
+            // 2. Remove espaços extras de cada conta
+            // 3. Ordena as contas alfabeticamente
+            // 4. Junta novamente com a barra padrão
+            const normalizedContab = rawContab
+                .split('/')
+                .map(part => part.trim())
+                .filter(Boolean)
+                .sort((a, b) => a.localeCompare(b))
+                .join(' / ');
+            
+            if (!groups[normalizedContab]) groups[normalizedContab] = [];
+            groups[normalizedContab].push(item);
         });
         return groups;
     }, [enrichedItems]);
