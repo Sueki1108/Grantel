@@ -878,18 +878,21 @@ export function AutomatorClientPage() {
                 </div>
             </header>
 
-            <main className="p-4 md:p-8">
-                <div className={cn("space-y-8", isWideMode ? "w-full" : "container mx-auto")}>
+            <main className={cn("p-4 md:p-6 transition-all duration-300", isWideMode ? "max-w-none w-full" : "container mx-auto")}>
+                <div className="space-y-8">
                     <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
                         <TabsList className="h-auto flex-wrap justify-start">
                              <TabsTrigger value="history" className="flex items-center gap-2">
                                 <History className="h-5 w-5" />Histórico
                             </TabsTrigger>
-                             <TabsTrigger value="nf-stock" className="flex items-center gap-2">
+                            <TabsTrigger value="nf-stock" className="flex items-center gap-2">
                                 1. Validação
                                 {((Object.keys(fileStatus).length > 0 || xmlFiles.nfeEntrada.length > 0 || xmlFiles.cte.length > 0 || xmlFiles.nfeSaida.length > 0) || (processedData)) && (
                                     processedData && Object.keys(processedData.sheets).length > 0 ? <CheckCircle className="h-5 w-5 text-green-600" /> : <AlertTriangle className="h-5 w-5 text-yellow-600" />
                                 )}
+                            </TabsTrigger>
+                            <TabsTrigger value="responses" disabled={!processedData && logs.length === 0} className="flex items-center gap-2">
+                                <ClipboardList className="h-5 w-5" />Respostas
                             </TabsTrigger>
                              <TabsTrigger value="reconciliation" disabled={reconciliationTabDisabled} className="flex items-center gap-2">
                                 2. XML VS Sienge
@@ -968,6 +971,75 @@ export function AutomatorClientPage() {
                             </div>
                         </TabsContent>
                         
+                        <TabsContent value="responses" className="mt-6">
+                            <div className="space-y-6">
+                                {error && (
+                                    <Alert variant="destructive">
+                                        <div className="flex justify-between items-start w-full">
+                                            <div className="flex">
+                                                <AlertCircle className="h-4 w-4" />
+                                                <div className="ml-3">
+                                                    <AlertTitle>Erro Identificado</AlertTitle>
+                                                    <AlertDescription>{error}</AlertDescription>
+                                                </div>
+                                            </div>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(error)}>
+                                                <Copy className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </Alert>
+                                )}
+
+                                {logs.length > 0 && (
+                                    <Card className="shadow-lg border-primary/20">
+                                        <CardHeader className="bg-primary/5">
+                                            <div className="flex items-center gap-3">
+                                                <Terminal className="h-6 w-6 text-primary" />
+                                                <div>
+                                                    <CardTitle className="text-xl">Logs de Processamento</CardTitle>
+                                                    <CardDescription>Histórico detalhado da execução atual.</CardDescription>
+                                                </div>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className="pt-6">
+                                            <LogDisplay logs={logs} />
+                                        </CardContent>
+                                    </Card>
+                                )}
+
+                                {processedData?.sheets && Object.keys(processedData.sheets).length > 0 ? (
+                                    <Card className="shadow-lg border-primary/20">
+                                        <CardHeader className="bg-primary/5">
+                                            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <CheckCircle className="h-6 w-6 text-primary" />
+                                                    <div>
+                                                        <CardTitle className="text-xl">Resultados Consolidados</CardTitle>
+                                                        <CardDescription>Visualize todas as abas processadas e valide os dados finais.</CardDescription>
+                                                    </div>
+                                                </div>
+                                                <Button onClick={handleDownloadExcel} className="w-full sm:w-auto">
+                                                    <Download className="mr-2 h-4 w-4" /> Baixar Planilha (.xlsx)
+                                                </Button>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className="pt-6">
+                                            <ResultsDisplay results={processedData.sheets} />
+                                        </CardContent>
+                                    </Card>
+                                ) : (
+                                    !error && logs.length === 0 && (
+                                        <Card className="p-12 text-center border-dashed">
+                                            <div className="flex flex-col items-center gap-4 text-muted-foreground">
+                                                <ClipboardList className="h-12 w-12 opacity-20" />
+                                                <p>Nenhuma resposta ou resultado disponível no momento. Processe os arquivos na aba de Validação.</p>
+                                            </div>
+                                        </Card>
+                                    )
+                                )}
+                            </div>
+                        </TabsContent>
+
                         <TabsContent value="reconciliation" className="mt-6">
                             { !reconciliationTabDisabled ? 
                             <ReconciliationAnalysis 
