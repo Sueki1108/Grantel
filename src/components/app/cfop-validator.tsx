@@ -404,7 +404,7 @@ export function CfopValidator(props: CfopValidatorProps) {
             enrichedItems.forEach(item => {
                 const cnpj = (item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
                 const productCode = String(item['Código'] || '').trim();
-                const siengeCfopValue = String(item['Sienge_CFOP'] || '').trim();
+                const siengeCfopValue = String(item['Sienge_CFOP'] || item['CFOP (Sienge)'] || '').trim();
                 const contabilizacaoValue = String(item['Contabilização'] || '').trim();
                 
                 const uniqueKey = normalizeKey(`${cnpj}-${productCode}-${siengeCfopValue}-${contabilizacaoValue}`);
@@ -510,17 +510,17 @@ export function CfopValidator(props: CfopValidatorProps) {
 
         const newItems = initialItems.map(item => {
             const header = (nfeValidasData || []).find(n => n['Chave Unica'] === item['Chave Unica']);
-            const cnpj = (item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
-            const productCode = String(item['Código'] || '').trim();
-            const siengeCfop = String(item['Sienge_CFOP'] || '').trim();
-            const contabilizacao = String(item['Contabilização'] || '').trim();
-            
-            const uniqueKey = normalizeKey(`${cnpj}-${productCode}-${siengeCfop}-${contabilizacao}`);
-            return {
-                ...item,
-                '__itemKey': `cfop-pending-${uniqueKey}`,
-                Fornecedor: header?.Fornecedor || item.Fornecedor || 'N/A',
-            };
+                const cnpj = (item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
+                const productCode = String(item['Código'] || '').trim();
+                const siengeCfopValue = String(item['Sienge_CFOP'] || item['CFOP (Sienge)'] || '').trim();
+                const contabilizacaoValue = String(item['Contabilização'] || '').trim();
+                
+                const uniqueKey = normalizeKey(`${cnpj}-${productCode}-${siengeCfopValue}-${contabilizacaoValue}`);
+                return {
+                    ...item,
+                    '__itemKey': `cfop-pending-${uniqueKey}`,
+                    Fornecedor: header?.Fornecedor || item.Fornecedor || 'N/A',
+                };
         });
         setEnrichedItems(newItems);
 
@@ -574,10 +574,10 @@ export function CfopValidator(props: CfopValidatorProps) {
         itemsToUpdate.forEach(item => {
             const cnpj = (item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
             const productCode = String(item['Código'] || '').trim();
-            const siengeCfop = String(item['Sienge_CFOP'] || item['CFOP (Sienge)'] || '').trim();
-            const contabilizacao = String(item['Contabilização'] || '').trim();
+            const siengeCfopValue = String(item['Sienge_CFOP'] || item['CFOP (Sienge)'] || '').trim();
+            const contabilizacaoValue = String(item['Contabilização'] || '').trim();
             
-            const uniqueKey = normalizeKey(`${cnpj}-${productCode}-${siengeCfop}-${contabilizacao}`);
+            const uniqueKey = normalizeKey(`${cnpj}-${productCode}-${siengeCfopValue}-${contabilizacaoValue}`);
             
             if (newClassification === 'unvalidated') {
                 // Se estiver revertendo, removemos a classificação para que ele volte ao estado original
