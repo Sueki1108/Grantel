@@ -626,23 +626,47 @@ export function CfopValidator(props: CfopValidatorProps) {
     };
     
     const handleBulkAction = () => {
-        const activeTableItems = itemsByStatus[activeTab as ValidationStatus]?.[activeCfopTabs[activeTab]] || [];
-        if (!activeTableItems || activeTableItems.length === 0) {
+        const status = activeTab as ValidationStatus;
+        const cfop = activeCfopTabs[status];
+        const allItemsInCfop = itemsByStatus[status]?.[cfop] || [];
+        
+        if (allItemsInCfop.length === 0) {
             setBulkActionState({ classification: null });
             setRowSelection({});
             return;
         }
-        const selectedItemKeys = Object.keys(rowSelection).map(index => {
-            const item = activeTableItems[parseInt(index)];
-            return item && item.__itemKey;
-        }).filter(Boolean) as string[];
 
-        if (selectedItemKeys.length === 0) return;
-        
-        const selectedItems = selectedItemKeys.map(itemKey => {
-            return enrichedItems.find(item => item.__itemKey === itemKey);
+        // Aplicar os mesmos filtros que a DataTable usa para garantir que os índices batam
+        const currentFilters = tabFilters[cfop];
+        const filteredItems = allItemsInCfop.filter(item => {
+            if (!currentFilters) return true;
+            
+            const cfopCode = item['CFOP'];
+            const cstCode = String(item['CST do ICMS'] || '');
+            const picmsValue = (item['Alíq. ICMS (%)'] !== undefined && item['Alíq. ICMS (%)'] !== null) 
+                ? String(item['Alíq. ICMS (%)']) 
+                : 'N/A';
+            const contabilizacao = item['Contabilização'] || 'N/A';
+            const centroCusto = item['Centro de Custo'] || 'N/A';
+
+            const cfopFull = cfopCode ? `${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}` : '';
+            const cstFull = cstCode ? `${cstCode}: ${getCstDescription(cstCode)}` : '';
+
+            const cfopMatch = !currentFilters.xmlCfops || currentFilters.xmlCfops.has(cfopFull);
+            const cstMatch = !currentFilters.xmlCsts || currentFilters.xmlCsts.has(cstFull);
+            const picmsMatch = !currentFilters.xmlPicms || currentFilters.xmlPicms.has(picmsValue);
+            const contabilizacaoMatch = !currentFilters.contabilizacao || currentFilters.contabilizacao.has(String(contabilizacao));
+            const centroCustoMatch = !currentFilters.centroCusto || currentFilters.centroCusto.has(String(centroCusto));
+
+            return cfopMatch && cstMatch && picmsMatch && contabilizacaoMatch && centroCustoMatch;
+        });
+
+        const selectedItems = Object.keys(rowSelection).map(index => {
+            return filteredItems[parseInt(index)];
         }).filter(Boolean);
 
+        if (selectedItems.length === 0) return;
+        
         let changedCount = 0;
         
         if (!competence) return;
@@ -655,21 +679,22 @@ export function CfopValidator(props: CfopValidatorProps) {
             if (!item) return;
             const cnpj = (item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
             const productCode = String(item['Código'] || '').trim();
-            const siengeCfop = String(item['Sienge_CFOP'] || item['CFOP (Sienge)'] || '').trim();
-            const contabilizacao = String(item['Contabilização'] || '').trim();
+            const siengeCfopValue = String(item['Sienge_CFOP'] || item['CFOP (Sienge)'] || '').trim();
+            const contabilizacaoValue = String(item['Contabilização'] || '').trim();
             
-            const uniqueKey = normalizeKey(`${cnpj}-${productCode}-${siengeCfop}-${contabilizacao}`);
-            const current = { ...(newValidations[uniqueKey] || { classification: 'unvalidated' }) };
-            let itemChanged = false;
-
-            if (bulkActionState.classification && current.classification !== bulkActionState.classification) {
-                current.classification = bulkActionState.classification;
-                itemChanged = true;
-            }
+            const uniqueKey = normalizeKey(`${cnpj}-${productCode}-${siengeCfopValue}-${contabilizacaoValue}`);
             
-            if (itemChanged) {
-                newValidations[uniqueKey] = current;
-                changedCount++;
+            if (bulkActionState.classification === 'unvalidated') {
+                if (newValidations[uniqueKey]) {
+                    delete newValidations[uniqueKey];
+                    changedCount++;
+                }
+            } else if (bulkActionState.classification) {
+                const current = newValidations[uniqueKey] || { isDifal: false };
+                if (current.classification !== bulkActionState.classification) {
+                    newValidations[uniqueKey] = { ...current, classification: bulkActionState.classification };
+                    changedCount++;
+                }
             }
         });
 
@@ -681,7 +706,7 @@ export function CfopValidator(props: CfopValidatorProps) {
         setRowSelection({});
         toast({
             title: "Ações em Massa Aplicadas",
-            description: `${changedCount} itens foram atualizados e guardados.`
+            description: `${changedCount} itens foram atualizados.`
         });
     };
 
