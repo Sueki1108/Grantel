@@ -22,6 +22,8 @@ import { Label } from '../ui/label';
 import { ScrollArea } from '../ui/scroll-area';
 import { Checkbox } from '../ui/checkbox';
 import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import { Card } from '../ui/card';
 import type { RowSelectionState } from '@tanstack/react-table';
 import { cn, cleanAndToStr, normalizeKey } from '@/lib/utils';
@@ -738,15 +740,56 @@ export function CfopValidator(props: CfopValidatorProps) {
         });
     };
 
-    const handleDownload = (data: any[], title: string) => {
+    const handleExport = (data: any[], title: string, format: 'excel' | 'pdf') => {
         if (!data || data.length === 0) {
             toast({ title: 'Nenhum dado para exportar', variant: 'destructive' });
             return;
         }
-        const worksheet = XLSX.utils.json_to_sheet(data);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, title.substring(0, 31));
-        XLSX.writeFile(workbook, `CFOP_Validacao_${title}.xlsx`);
+
+        // 1. Filtrar apenas as colunas que estão visíveis na interface
+        const visibleColumns = Object.keys(columnVisibility).filter(key => columnVisibility[key] && key !== 'Ações' && key !== 'actions' && key !== 'difal-actions');
+        
+        // 2. Preparar os dados para exportação (apenas colunas visíveis e formatadas)
+        const exportData = data.map(item => {
+            const row: Record<string, any> = {};
+            visibleColumns.forEach(col => {
+                let value = item[col];
+                // Formatação especial para valores monetários e porcentagens
+                if (col === 'Valor Total' && typeof value === 'number') {
+                    value = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                } else if (col === 'Alíq. ICMS (%)' && typeof value === 'number') {
+                    value = `${value.toFixed(2)}%`;
+                }
+                row[col] = value ?? 'N/A';
+            });
+            return row;
+        });
+
+        if (format === 'excel') {
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, title.substring(0, 31));
+            XLSX.writeFile(workbook, `Grantel_${title.replace(/\s+/g, '_')}.xlsx`);
+        } else {
+            const doc = new jsPDF('l', 'mm', 'a4');
+            const headers = [visibleColumns];
+            const body = exportData.map(row => visibleColumns.map(col => String(row[col])));
+
+            (doc as any).autoTable({
+                head: headers,
+                body: body,
+                startY: 20,
+                styles: { fontSize: 8, cellPadding: 2 },
+                headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+                margin: { top: 20 },
+                didDrawPage: (data: any) => {
+                    doc.text(`Grantel - ${title}`, 14, 15);
+                }
+            });
+            doc.save(`Grantel_${title.replace(/\s+/g, '_')}.pdf`);
+        }
+
+        toast({ title: `Exportação ${format.toUpperCase()} concluída!` });
     };
 
     const copyToClipboard = (text: string | number, type: string) => {
@@ -1096,9 +1139,14 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                 return <TabsTrigger key={`${status}-${cfop}`} value={cfop} disabled={totalItemsInCfop === 0}>{cfop} ({totalItemsInCfop})</TabsTrigger>
                                             })}
                                         </TabsList>
-                                         <Button onClick={() => handleDownload(Object.values(cfopGroupsForStatus).flat(), `Validacao_${status}`)} size="sm" variant="outline" disabled={Object.values(cfopGroupsForStatus).flat().length === 0}>
-                                            <Download className="mr-2 h-4 w-4" /> Baixar Aba ({Object.values(cfopGroupsForStatus).flat().length})
-                                        </Button>
+                                        <div className="flex gap-2">
+                                            <Button onClick={() => handleExport(Object.values(cfopGroupsForStatus).flat(), `Aba_${status}`, 'excel')} size="sm" variant="outline" className="text-emerald-600 border-emerald-200 hover:bg-emerald-50">
+                                                <Download className="mr-2 h-4 w-4" /> Excel ({Object.values(cfopGroupsForStatus).flat().length})
+                                            </Button>
+                                            <Button onClick={() => handleExport(Object.values(cfopGroupsForStatus).flat(), `Aba_${status}`, 'pdf')} size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
+                                                <Download className="mr-2 h-4 w-4" /> PDF
+                                            </Button>
+                                        </div>
                                     </div>
                                     {allCfopsForStatus.map(cfop => {
                                         const allItemsForCfop = cfopGroupsForStatus[cfop] || [];
@@ -1134,7 +1182,17 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                     <div className='text-lg font-bold'>
                                                         {cfopDescriptions[parseInt(cfop, 10) as keyof typeof cfopDescriptions] || "Descrição não encontrada"}
                                                     </div>
-                                                    <FilterDialog siengeCfop={cfop} items={allItemsForCfop} tabFilters={tabFilters} setTabFilters={setTabFilters} />
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
+                                                            <Button onClick={() => handleExport(currentCfopData, `CFOP_${cfop}_${status}`, 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                                                <Download className="mr-1 h-3 w-3" /> Excel
+                                                            </Button>
+                                                            <Button onClick={() => handleExport(currentCfopData, `CFOP_${cfop}_${status}`, 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                                                <Download className="mr-1 h-3 w-3" /> PDF
+                                                            </Button>
+                                                        </div>
+                                                        <FilterDialog siengeCfop={cfop} items={allItemsForCfop} tabFilters={tabFilters} setTabFilters={setTabFilters} />
+                                                    </div>
                                                 </div>
                                                 <DataTable columns={columns} data={currentCfopData} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
                                             </TabsContent>
