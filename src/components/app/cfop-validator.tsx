@@ -111,6 +111,16 @@ const FilterDialog: React.FC<{
         };
     }, [items]);
     
+    const itemsByContabilizacao = useMemo(() => {
+        const groups: Record<string, any[]> = {};
+        enrichedItems.forEach(item => {
+            const contab = String(item['Contabilização'] || 'N/A').trim();
+            if (!groups[contab]) groups[contab] = [];
+            groups[contab].push(item);
+        });
+        return groups;
+    }, [enrichedItems]);
+
     useEffect(() => {
         if (isDialogOpen) {
             const currentGlobalFilters = tabFilters[siengeCfop];
@@ -325,6 +335,40 @@ const FilterDialog: React.FC<{
                         </div>
                     </div>
                     <DataTable columns={columns} data={categorizedSupplierItems} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
+                </TabsContent>
+                <TabsContent value="contabilizacao-check" className="mt-4">
+                    <Tabs defaultValue={Object.keys(itemsByContabilizacao).sort()[0]}>
+                        <div className="flex flex-col gap-4">
+                            <TabsList className="flex flex-wrap h-auto gap-1 bg-transparent p-0">
+                                {Object.keys(itemsByContabilizacao).sort().map(contab => (
+                                    <TabsTrigger 
+                                        key={contab} 
+                                        value={contab}
+                                        className="border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                                    >
+                                        {contab} ({itemsByContabilizacao[contab].length})
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
+                            
+                            {Object.entries(itemsByContabilizacao).map(([contab, items]) => (
+                                <TabsContent key={contab} value={contab} className="mt-0">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <div className="text-lg font-bold">Contabilização: {contab}</div>
+                                        <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
+                                            <Button onClick={() => handleExport(items, `Contab_${contab.replace(/\s+/g, '_')}`, 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                                <Download className="mr-1 h-3 w-3" /> Excel
+                                            </Button>
+                                            <Button onClick={() => handleExport(items, `Contab_${contab.replace(/\s+/g, '_')}`, 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                                <Download className="mr-1 h-3 w-3" /> PDF
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <DataTable columns={columns} data={items} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
+                                </TabsContent>
+                            ))}
+                        </div>
+                    </Tabs>
                 </TabsContent>
             </Tabs>
                  <DialogFooter className="mt-4">
@@ -1118,9 +1162,9 @@ export function CfopValidator(props: CfopValidatorProps) {
                 </div>
             )}
             
-            <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as ValidationStatus | 'faturamento-entrega' | 'difal-analysis' | 'contabilizacao-error' | 'categorized-suppliers')} className="w-full">
+            <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as ValidationStatus | 'faturamento-entrega' | 'difal-analysis' | 'contabilizacao-error' | 'categorized-suppliers' | 'contabilizacao-check')} className="w-full">
                  <div className="flex justify-between items-center mb-2">
-                    <TabsList className="grid w-full grid-cols-9">
+                    <TabsList className="grid w-full grid-cols-10">
                         {statusTabs.map(({status, label}) => {
                             const count = Object.values(itemsByStatus[status] || {}).flat().length;
                             return <TabsTrigger key={status} value={status} disabled={count === 0}>{label} ({count})</TabsTrigger>
@@ -1129,6 +1173,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                         <TabsTrigger value="faturamento-entrega">Faturamento</TabsTrigger>
                         <TabsTrigger value="difal-analysis">DIFAL</TabsTrigger>
                         <TabsTrigger value="categorized-suppliers" className="flex gap-2"><Tag className="h-4 w-4" /> Fornecedores ({categorizedSupplierItems.length})</TabsTrigger>
+                        <TabsTrigger value="contabilizacao-check" className="flex gap-2"><BookOpen className="h-4 w-4" /> Contabilização</TabsTrigger>
                     </TabsList>
                     <div className="flex gap-2 ml-4">
                         <Button onClick={handleEnrichData} variant="outline" size="sm"><RefreshCw className="mr-2 h-4 w-4" />Carregar ICMS/CEST do XML</Button>
