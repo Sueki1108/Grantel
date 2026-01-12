@@ -565,12 +565,29 @@ export function CfopValidator(props: CfopValidatorProps) {
         itemsToUpdate: any[],
         newClassification: 'correct' | 'incorrect' | 'verify' | 'unvalidated'
     ) => {
-        if (!competence) return;
+        if (!competence) {
+            toast({ variant: 'destructive', title: "Erro", description: "Competência não definida." });
+            return;
+        }
 
         const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
-        if (!updatedPersistedData[competence]) updatedPersistedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }};
-        if (!updatedPersistedData[competence].cfopValidations) updatedPersistedData[competence].cfopValidations = { classifications: {} };
+        if (!updatedPersistedData[competence]) {
+            updatedPersistedData[competence] = { 
+                classifications: {}, 
+                accountCodes: {}, 
+                cfopValidations: { classifications: {} }
+            };
+        }
+        if (!updatedPersistedData[competence].cfopValidations) {
+            updatedPersistedData[competence].cfopValidations = { classifications: {} };
+        }
+        if (!updatedPersistedData[competence].cfopValidations.classifications) {
+            updatedPersistedData[competence].cfopValidations.classifications = {};
+        }
         
+        const classifications = updatedPersistedData[competence].cfopValidations.classifications;
+        let changedCount = 0;
+
         itemsToUpdate.forEach(item => {
             const cnpj = (item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
             const productCode = String(item['Código'] || '').trim();
@@ -580,17 +597,30 @@ export function CfopValidator(props: CfopValidatorProps) {
             const uniqueKey = normalizeKey(`${cnpj}-${productCode}-${siengeCfopValue}-${contabilizacaoValue}`);
             
             if (newClassification === 'unvalidated') {
-                // Se estiver revertendo, removemos a classificação para que ele volte ao estado original
-                if (updatedPersistedData[competence].cfopValidations.classifications[uniqueKey]) {
-                    delete updatedPersistedData[competence].cfopValidations.classifications[uniqueKey];
+                if (classifications[uniqueKey]) {
+                    delete classifications[uniqueKey];
+                    changedCount++;
                 }
             } else {
-                const current = updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] || { isDifal: false };
-                updatedPersistedData[competence].cfopValidations.classifications[uniqueKey] = { ...current, classification: newClassification };
+                const current = classifications[uniqueKey] || { isDifal: false };
+                if (current.classification !== newClassification) {
+                    classifications[uniqueKey] = { ...current, classification: newClassification };
+                    changedCount++;
+                }
             }
         });
         
-        onPersistData(updatedPersistedData);
+        if (changedCount > 0) {
+            onPersistData(updatedPersistedData);
+            toast({
+                title: "Sucesso",
+                description: `${changedCount} item(ns) atualizado(s) para ${
+                    newClassification === 'correct' ? 'Correto' : 
+                    newClassification === 'incorrect' ? 'Incorreto' : 
+                    newClassification === 'verify' ? 'A Verificar' : 'Não Validado'
+                }.`
+            });
+        }
     };
 
     const handleDifalStatusChange = (itemsToUpdate: any[], status: DifalStatus) => {
