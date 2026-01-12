@@ -370,8 +370,49 @@ export function CfopValidator(props: CfopValidatorProps) {
     const [enrichedItems, setEnrichedItems] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<ValidationStatus | 'faturamento-entrega' | 'difal-analysis' | 'contabilizacao-error'>('unvalidated');
     const [activeCfopTabs, setActiveCfopTabs] = useState<Record<string, string>>({});
-    const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
+    const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('grantel_cfop_filters');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    // Converter arrays de volta para Sets
+                    const restored: Record<string, TabFilters> = {};
+                    Object.keys(parsed).forEach(cfop => {
+                        restored[cfop] = {
+                            xmlCsts: new Set(parsed[cfop].xmlCsts),
+                            xmlPicms: new Set(parsed[cfop].xmlPicms),
+                            xmlCfops: new Set(parsed[cfop].xmlCfops),
+                            contabilizacao: new Set(parsed[cfop].contabilizacao),
+                            centroCusto: new Set(parsed[cfop].centroCusto),
+                        };
+                    });
+                    return restored;
+                } catch (e) {
+                    console.error('Erro ao carregar filtros salvos:', e);
+                }
+            }
+        }
+        return {};
+    });
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+
+    // Efeito para salvar filtros sempre que mudarem
+    useEffect(() => {
+        if (Object.keys(tabFilters).length > 0) {
+            const toSave: Record<string, any> = {};
+            Object.keys(tabFilters).forEach(cfop => {
+                toSave[cfop] = {
+                    xmlCsts: Array.from(tabFilters[cfop].xmlCsts),
+                    xmlPicms: Array.from(tabFilters[cfop].xmlPicms),
+                    xmlCfops: Array.from(tabFilters[cfop].xmlCfops),
+                    contabilizacao: Array.from(tabFilters[cfop].contabilizacao),
+                    centroCusto: Array.from(tabFilters[cfop].centroCusto),
+                };
+            });
+            localStorage.setItem('grantel_cfop_filters', JSON.stringify(toSave));
+        }
+    }, [tabFilters]);
     const [bulkActionState, setBulkActionState] = useState<BulkActionState>({ classification: null });
     const [itemsEntregaFutura, setItemsEntregaFutura] = useState<any[]>([]);
     const [itemsSimplesFaturamento, setItemsSimplesFaturamento] = useState<any[]>([]);

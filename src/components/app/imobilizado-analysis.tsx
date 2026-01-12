@@ -136,38 +136,26 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             }
             
             // Enriquecer com dados da conciliação se disponível
-            let contabilizacao = 'N/A';
-            let centroCusto = 'N/A';
+            let contabilizacao = item['Contabilização'] || 'N/A';
+            let centroCusto = item['Centro de Custo'] || 'N/A';
             
-            if (reconciliationResults?.reconciled) {
-                // Tenta encontrar o item reconciliado correspondente
+            // Se ainda for N/A, tenta buscar nos resultados da conciliação por Chave Única
+            if ((contabilizacao === 'N/A' || centroCusto === 'N/A') && reconciliationResults?.reconciled) {
                 const reconciledItem = reconciliationResults.reconciled.find((ri: any) => {
                     const itemChaveUnica = item['Chave Unica'] || '';
                     const itemItem = item['Item'] || '';
                     const riChaveUnica = ri['Chave Unica'] || '';
                     const riItem = ri['Item'] || '';
                     
-                    // Match por Chave Unica e Item
-                    if (itemChaveUnica && itemItem && riChaveUnica && riItem) {
-                        return itemChaveUnica === riChaveUnica && String(itemItem) === String(riItem);
+                    if (itemChaveUnica && riChaveUnica && itemChaveUnica === riChaveUnica) {
+                        return itemItem && riItem ? String(itemItem) === String(riItem) : true;
                     }
-                    
-                    // Fallback: match por número da nota e código do produto
-                    const itemNumero = item['Número da Nota'] || '';
-                    const itemCodigo = item['Código'] || '';
-                    const riNumero = ri['Número da Nota'] || ri['Número'] || '';
-                    const riCodigo = ri['Código'] || '';
-                    
-                    if (itemNumero && itemCodigo && riNumero && riCodigo) {
-                        return cleanAndToStr(itemNumero) === cleanAndToStr(riNumero) && 
-                               cleanAndToStr(itemCodigo) === cleanAndToStr(riCodigo);
-                    }
-                    
                     return false;
                 });
+
                 if (reconciledItem) {
-                    contabilizacao = reconciledItem['Contabilização'] || 'N/A';
-                    centroCusto = reconciledItem['Centro de Custo'] || 'N/A';
+                    if (contabilizacao === 'N/A') contabilizacao = reconciledItem['Contabilização'] || 'N/A';
+                    if (centroCusto === 'N/A') centroCusto = reconciledItem['Centro de Custo'] || 'N/A';
                 }
             }
             

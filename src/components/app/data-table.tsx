@@ -143,6 +143,18 @@ export function DataTable<TData, TValue>({
                                 header.getContext()
                             )
                         )}
+                        {header.column.getCanFilter() && (
+                          <div className="mt-1">
+                            <Input
+                              placeholder={`Filtrar...`}
+                              value={(header.column.getFilterValue() as string) ?? ""}
+                              onChange={(event) =>
+                                header.column.setFilterValue(event.target.value)
+                              }
+                              className="h-7 w-full text-xs font-normal"
+                            />
+                          </div>
+                        )}
                     </TableHead>
                   )
                 })}
