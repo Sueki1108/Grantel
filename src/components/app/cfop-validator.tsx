@@ -1206,6 +1206,17 @@ export function CfopValidator(props: CfopValidatorProps) {
                     )
                 })}
                 <TabsContent value="contabilizacao-error" className="mt-4">
+                    <div className="flex justify-between items-center mb-2">
+                        <div className="text-lg font-bold">Erros de Contabilização</div>
+                        <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
+                            <Button onClick={() => handleExport(contabilizacaoErroItems, 'Erros_Contabilizacao', 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                <Download className="mr-1 h-3 w-3" /> Excel
+                            </Button>
+                            <Button onClick={() => handleExport(contabilizacaoErroItems, 'Erros_Contabilizacao', 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                <Download className="mr-1 h-3 w-3" /> PDF
+                            </Button>
+                        </div>
+                    </div>
                     <DataTable columns={columns} data={contabilizacaoErroItems} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
                 </TabsContent>
                 <TabsContent value="faturamento-entrega" className="mt-4">
@@ -1222,9 +1233,31 @@ export function CfopValidator(props: CfopValidatorProps) {
                              <TabsTrigger value="simples-faturamento">Simples Faturamento ({itemsSimplesFaturamento.length})</TabsTrigger>
                         </TabsList>
                         <TabsContent value="entrega-futura" className="mt-4">
+                            <div className="flex justify-between items-center mb-2">
+                                <div className="text-lg font-bold">Entrega Futura</div>
+                                <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
+                                    <Button onClick={() => handleExport(itemsEntregaFutura, 'Entrega_Futura', 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                        <Download className="mr-1 h-3 w-3" /> Excel
+                                    </Button>
+                                    <Button onClick={() => handleExport(itemsEntregaFutura, 'Entrega_Futura', 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                        <Download className="mr-1 h-3 w-3" /> PDF
+                                    </Button>
+                                </div>
+                            </div>
                             <DataTable columns={columns} data={itemsEntregaFutura} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
                         </TabsContent>
                         <TabsContent value="simples-faturamento" className="mt-4">
+                            <div className="flex justify-between items-center mb-2">
+                                <div className="text-lg font-bold">Simples Faturamento</div>
+                                <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
+                                    <Button onClick={() => handleExport(itemsSimplesFaturamento, 'Simples_Faturamento', 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                        <Download className="mr-1 h-3 w-3" /> Excel
+                                    </Button>
+                                    <Button onClick={() => handleExport(itemsSimplesFaturamento, 'Simples_Faturamento', 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                        <Download className="mr-1 h-3 w-3" /> PDF
+                                    </Button>
+                                </div>
+                            </div>
                             <DataTable columns={columns} data={itemsSimplesFaturamento} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
                         </TabsContent>
                     </Tabs>
@@ -1238,16 +1271,27 @@ export function CfopValidator(props: CfopValidatorProps) {
                             <TabsTrigger value="desconsiderados">Desconsiderados ({difalAnalysisData.desconsideradosItems.length})</TabsTrigger>
                         </TabsList>
                          <TabsContent value="sujeitos" className="mt-4">
-                            <div className="mb-4 flex justify-end">
-                                <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    onClick={() => {
-                                        toast({ title: "Lista atualizada", description: `${difalAnalysisData.sujeitosAoDifal.length} itens sujeitos a DIFAL encontrados.` });
-                                    }}
-                                >
-                                    <RefreshCw className="mr-2 h-4 w-4" /> Atualizar Lista
-                                </Button>
+                            <div className="mb-4 flex justify-between items-center">
+                                <div className="text-lg font-bold">Sujeitos ao DIFAL</div>
+                                <div className="flex gap-2">
+                                    <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
+                                        <Button onClick={() => handleExport(difalAnalysisData.sujeitosAoDifal, 'Sujeitos_DIFAL', 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                            <Download className="mr-1 h-3 w-3" /> Excel
+                                        </Button>
+                                        <Button onClick={() => handleExport(difalAnalysisData.sujeitosAoDifal, 'Sujeitos_DIFAL', 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                            <Download className="mr-1 h-3 w-3" /> PDF
+                                        </Button>
+                                    </div>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        onClick={() => {
+                                            toast({ title: "Lista atualizada", description: `${difalAnalysisData.sujeitosAoDifal.length} itens sujeitos a DIFAL encontrados.` });
+                                        }}
+                                    >
+                                        <RefreshCw className="mr-2 h-4 w-4" /> Atualizar Lista
+                                    </Button>
+                                </div>
                             </div>
                             <DataTable columns={[...columns, { id: 'difal-actions', header: 'Ações DIFAL', cell: ({row}) => (
                                 <div className="flex justify-center gap-1">
@@ -1260,6 +1304,17 @@ export function CfopValidator(props: CfopValidatorProps) {
                             )}]} data={difalAnalysisData.sujeitosAoDifal} autoResetPageIndex={false} />
                         </TabsContent>
                          <TabsContent value="difal" className="mt-4">
+                            <div className="flex justify-between items-center mb-2">
+                                <div className="text-lg font-bold">Itens DIFAL</div>
+                                <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
+                                    <Button onClick={() => handleExport(difalAnalysisData.difalItems, 'Itens_DIFAL', 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                        <Download className="mr-1 h-3 w-3" /> Excel
+                                    </Button>
+                                    <Button onClick={() => handleExport(difalAnalysisData.difalItems, 'Itens_DIFAL', 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                        <Download className="mr-1 h-3 w-3" /> PDF
+                                    </Button>
+                                </div>
+                            </div>
                             <DataTable columns={[...columns, { id: 'difal-actions', header: 'Ações DIFAL', cell: ({row}) => (
                                 <div className="flex justify-center gap-1">
                                     <TooltipProvider>
@@ -1270,9 +1325,31 @@ export function CfopValidator(props: CfopValidatorProps) {
                             )}]} data={difalAnalysisData.difalItems} autoResetPageIndex={false} />
                         </TabsContent>
                         <TabsContent value="beneficio-fiscal" className="mt-4">
-                             <DataTable columns={columns} data={difalAnalysisData.beneficioFiscalItems} autoResetPageIndex={false} />
+                            <div className="flex justify-between items-center mb-2">
+                                <div className="text-lg font-bold">Benefício Fiscal</div>
+                                <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
+                                    <Button onClick={() => handleExport(difalAnalysisData.beneficioFiscalItems, 'Beneficio_Fiscal', 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                        <Download className="mr-1 h-3 w-3" /> Excel
+                                    </Button>
+                                    <Button onClick={() => handleExport(difalAnalysisData.beneficioFiscalItems, 'Beneficio_Fiscal', 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                        <Download className="mr-1 h-3 w-3" /> PDF
+                                    </Button>
+                                </div>
+                            </div>
+                            <DataTable columns={columns} data={difalAnalysisData.beneficioFiscalItems} autoResetPageIndex={false} />
                         </TabsContent>
                         <TabsContent value="desconsiderados" className="mt-4">
+                            <div className="flex justify-between items-center mb-2">
+                                <div className="text-lg font-bold">Desconsiderados</div>
+                                <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
+                                    <Button onClick={() => handleExport(difalAnalysisData.desconsideradosItems, 'Desconsiderados', 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                        <Download className="mr-1 h-3 w-3" /> Excel
+                                    </Button>
+                                    <Button onClick={() => handleExport(difalAnalysisData.desconsideradosItems, 'Desconsiderados', 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                        <Download className="mr-1 h-3 w-3" /> PDF
+                                    </Button>
+                                </div>
+                            </div>
                             <DataTable columns={[...columns, { id: 'difal-actions', header: 'Ações DIFAL', cell: ({row}) => (
                                 <div className="flex justify-center gap-1">
                                     <TooltipProvider>
