@@ -372,7 +372,16 @@ export function CfopValidator(props: CfopValidatorProps) {
         return {};
     });
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-    const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() => {
+    const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({
+        'Centro de Custo': true,
+        'Contabilização': true,
+        'Sienge_Esp': true,
+        'CFOP (Sienge)': true,
+        'NCM': true,
+        'CEST': true,
+        'Alíq. ICMS (%)': true,
+        'CST do ICMS': true,
+    }); => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('grantel_cfop_columns');
             if (saved) {
@@ -602,6 +611,11 @@ export function CfopValidator(props: CfopValidatorProps) {
         
         setEnrichedItems(newEnrichedItems);
         toast({ title: 'Dados Enriquecidos!', description: 'As colunas de ICMS e CEST foram carregadas do XML.' });
+        
+        // Recarregar as abas especiais se já estiverem abertas
+        if (itemsEntregaFutura.length > 0 || itemsSimplesFaturamento.length > 0) {
+            handleLoadSpecialCfops();
+        }
     };
 
     const handleValidationChange = (
@@ -782,14 +796,31 @@ export function CfopValidator(props: CfopValidatorProps) {
                  return;
             }
 
-            // Usamos enrichedItems em vez de originalXmlItems para ter acesso aos dados do Sienge
-            const entregaFutura = enrichedItems.filter((item: any) => 
-                ENTREGA_FUTURA_CFOPS.includes(String(item['CFOP']))
-            ).map((item, index) => ({...item, '__itemKey': `entrega-futura-${index}`}));
+            // Usamos enrichedItems que já possuem os dados cruzados com o Sienge
+            const entregaFutura = enrichedItems.filter((item: any) => {
+                const cfop = String(item['CFOP'] || '').trim();
+                return ENTREGA_FUTURA_CFOPS.includes(cfop);
+            }).map((item, index) => ({
+                ...item, 
+                '__itemKey': `entrega-futura-${index}`,
+                // Garantir que as colunas Sienge apareçam mesmo se o cabeçalho for ligeiramente diferente
+                'Sienge_Esp': item['Sienge_Esp'] || item['Esp'] || 'N/A',
+                'CFOP (Sienge)': item['CFOP (Sienge)'] || item['Sienge_CFOP'] || 'N/A',
+                'Centro de Custo': item['Centro de Custo'] || 'N/A',
+                'Contabilização': item['Contabilização'] || 'N/A'
+            }));
             
-            const simplesFaturamento = enrichedItems.filter((item: any) => 
-                SIMPLES_FATURAMENTO_CFOPS.includes(String(item['CFOP']))
-            ).map((item, index) => ({...item, '__itemKey': `simples-faturamento-${index}`}));
+            const simplesFaturamento = enrichedItems.filter((item: any) => {
+                const cfop = String(item['CFOP'] || '').trim();
+                return SIMPLES_FATURAMENTO_CFOPS.includes(cfop);
+            }).map((item, index) => ({
+                ...item, 
+                '__itemKey': `simples-faturamento-${index}`,
+                'Sienge_Esp': item['Sienge_Esp'] || item['Esp'] || 'N/A',
+                'CFOP (Sienge)': item['CFOP (Sienge)'] || item['Sienge_CFOP'] || 'N/A',
+                'Centro de Custo': item['Centro de Custo'] || 'N/A',
+                'Contabilização': item['Contabilização'] || 'N/A'
+            }));
 
             setItemsEntregaFutura(entregaFutura);
             setItemsSimplesFaturamento(simplesFaturamento);
@@ -801,13 +832,27 @@ export function CfopValidator(props: CfopValidatorProps) {
                  toast({ variant: 'destructive', title: 'Nenhum Item Encontrado', description: 'Nenhum item com os CFOPs de saída especificados foi encontrado nos XMLs de entrada.' });
             }
         }, 50);
-    }, [originalXmlItems, toast]);
+    }, [enrichedItems, toast]);
 
 
     const columns = useMemo(() => {
         if (!enrichedItems || enrichedItems.length === 0) return [];
         
-        const allPossibleColumns: (keyof any)[] = ['Fornecedor', 'Número da Nota', 'Descrição', 'Centro de Custo', 'Contabilização', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'CFOP (Sienge)', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'];
+        const allPossibleColumns: (keyof any)[] = [
+            'Fornecedor', 
+            'Número da Nota', 
+            'Descrição', 
+            'Centro de Custo', 
+            'Contabilização', 
+            'NCM', 
+            'CEST', 
+            'Sienge_Esp', 
+            'CFOP', 
+            'CFOP (Sienge)', 
+            'Alíq. ICMS (%)', 
+            'CST do ICMS', 
+            'Valor Total'
+        ];
         
         // Filtrar colunas baseadas na visibilidade
         const columnsToShow = allPossibleColumns.filter(col => columnVisibility[col as string] !== false);
