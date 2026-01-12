@@ -113,12 +113,21 @@ const FilterDialog: React.FC<{
         if (isDialogOpen) {
             const currentGlobalFilters = tabFilters[siengeCfop];
             
+            // Filtramos as seleções salvas para manter apenas o que ainda existe nos itens atuais da aba
+            const sanitizeSet = (savedSet: Set<string> | undefined, available: string[]) => {
+                if (!savedSet) return new Set(available);
+                const filtered = Array.from(savedSet).filter(val => available.includes(val));
+                // Se após filtrar não sobrar nada (ou se o filtro original estava vazio), 
+                // mas existem opções disponíveis, começamos com tudo selecionado para não esconder tudo por erro.
+                return filtered.length > 0 ? new Set(filtered) : new Set(available);
+            };
+
             setLocalFilters({
-                xmlCsts: (!currentGlobalFilters || !currentGlobalFilters.xmlCsts) ? new Set(availableOptions.xmlCsts) : new Set(currentGlobalFilters.xmlCsts),
-                xmlPicms: (!currentGlobalFilters || !currentGlobalFilters.xmlPicms) ? new Set(availableOptions.xmlPicms) : new Set(currentGlobalFilters.xmlPicms),
-                xmlCfops: (!currentGlobalFilters || !currentGlobalFilters.xmlCfops) ? new Set(availableOptions.xmlCfops) : new Set(currentGlobalFilters.xmlCfops),
-                contabilizacao: (!currentGlobalFilters || !currentGlobalFilters.contabilizacao) ? new Set(availableOptions.contabilizacao) : new Set(currentGlobalFilters.contabilizacao),
-                centroCusto: (!currentGlobalFilters || !currentGlobalFilters.centroCusto) ? new Set(availableOptions.centroCusto) : new Set(currentGlobalFilters.centroCusto),
+                xmlCsts: sanitizeSet(currentGlobalFilters?.xmlCsts, availableOptions.xmlCsts),
+                xmlPicms: sanitizeSet(currentGlobalFilters?.xmlPicms, availableOptions.xmlPicms),
+                xmlCfops: sanitizeSet(currentGlobalFilters?.xmlCfops, availableOptions.xmlCfops),
+                contabilizacao: sanitizeSet(currentGlobalFilters?.contabilizacao, availableOptions.contabilizacao),
+                centroCusto: sanitizeSet(currentGlobalFilters?.centroCusto, availableOptions.centroCusto),
             });
         }
     }, [isDialogOpen, tabFilters, siengeCfop, availableOptions]);
