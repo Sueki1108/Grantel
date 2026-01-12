@@ -312,7 +312,21 @@ const FilterDialog: React.FC<{
                             </ScrollArea>
                         </TabsContent>
                     </div>
-                </Tabs>
+                    <TabsContent value="categorized-suppliers" className="mt-4">
+                    <div className="flex justify-between items-center mb-2">
+                        <div className="text-lg font-bold">Itens de Fornecedores Categorizados</div>
+                        <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
+                            <Button onClick={() => handleExport(categorizedSupplierItems, 'Fornecedores_Categorizados', 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                <Download className="mr-1 h-3 w-3" /> Excel
+                            </Button>
+                            <Button onClick={() => handleExport(categorizedSupplierItems, 'Fornecedores_Categorizados', 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                <Download className="mr-1 h-3 w-3" /> PDF
+                            </Button>
+                        </div>
+                    </div>
+                    <DataTable columns={columns} data={categorizedSupplierItems} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
+                </TabsContent>
+            </Tabs>
                  <DialogFooter className="mt-4">
                      <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
                      <Button onClick={handleApplyFilters}>Aplicar e Fechar</Button>
@@ -479,6 +493,14 @@ export function CfopValidator(props: CfopValidatorProps) {
         return { sujeitosAoDifal: finalSujeitos, difalItems, desconsideradosItems, beneficioFiscalItems };
 
     }, [itemsByStatus.correct, allPersistedData, competence]);
+
+    const categorizedSupplierItems = useMemo(() => {
+        const supplierClassifications = (competence && allPersistedData[competence]?.supplierClassifications) || {};
+        return enrichedItems.filter(item => {
+            const supplierCnpj = item['CPF/CNPJ do Emitente'];
+            return !!supplierClassifications[supplierCnpj];
+        });
+    }, [enrichedItems, allPersistedData, competence]);
 
     useEffect(() => {
         setRowSelection({});
@@ -1096,16 +1118,17 @@ export function CfopValidator(props: CfopValidatorProps) {
                 </div>
             )}
             
-            <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as ValidationStatus | 'faturamento-entrega' | 'difal-analysis' | 'contabilizacao-error')} className="w-full">
+            <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as ValidationStatus | 'faturamento-entrega' | 'difal-analysis' | 'contabilizacao-error' | 'categorized-suppliers')} className="w-full">
                  <div className="flex justify-between items-center mb-2">
-                    <TabsList className="grid w-full grid-cols-8">
+                    <TabsList className="grid w-full grid-cols-9">
                         {statusTabs.map(({status, label}) => {
                             const count = Object.values(itemsByStatus[status] || {}).flat().length;
                             return <TabsTrigger key={status} value={status} disabled={count === 0}>{label} ({count})</TabsTrigger>
                         })}
-                        <TabsTrigger value="contabilizacao-error" className="flex gap-2"><AlertTriangle />Erros de Contabilização ({contabilizacaoErroItems.length})</TabsTrigger>
-                        <TabsTrigger value="faturamento-entrega">Faturamento/Entrega</TabsTrigger>
-                        <TabsTrigger value="difal-analysis">Análise DIFAL</TabsTrigger>
+                        <TabsTrigger value="contabilizacao-error" className="flex gap-2"><AlertTriangle />Erros ({contabilizacaoErroItems.length})</TabsTrigger>
+                        <TabsTrigger value="faturamento-entrega">Faturamento</TabsTrigger>
+                        <TabsTrigger value="difal-analysis">DIFAL</TabsTrigger>
+                        <TabsTrigger value="categorized-suppliers" className="flex gap-2"><Tag className="h-4 w-4" /> Fornecedores ({categorizedSupplierItems.length})</TabsTrigger>
                     </TabsList>
                     <div className="flex gap-2 ml-4">
                         <Button onClick={handleEnrichData} variant="outline" size="sm"><RefreshCw className="mr-2 h-4 w-4" />Carregar ICMS/CEST do XML</Button>
