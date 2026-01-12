@@ -898,7 +898,11 @@ export function runReconciliation(
             item['Contabilização'] = 'N/A';
         }
         
-        item['CFOP (Sienge)'] = (h.cfop && item[`Sienge_${h.cfop}`]) || 'N/A';
+        const siengeCfopRaw = (h.cfop && (item[`Sienge_${h.cfop}`] || item[h.cfop])) || item['Sienge_CFOP'] || item['CFOP'];
+        const siengeEspRaw = (h.esp && (item[`Sienge_${h.esp}`] || item[h.esp])) || item['Sienge_Esp'] || item['Esp'] || item['Espécie'];
+        
+        item['CFOP (Sienge)'] = siengeCfopRaw ? String(siengeCfopRaw).trim() : 'N/A';
+        item['Sienge_Esp'] = siengeEspRaw ? String(siengeEspRaw).trim() : 'N/A';
         return item;
     };
     
