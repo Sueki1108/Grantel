@@ -81,7 +81,11 @@ const FilterDialog: React.FC<{
                 xmlCsts.add(`${cstCode}: ${cstDesc}`);
             }
 
-            if (item['Alíq. ICMS (%)'] !== undefined && item['Alíq. ICMS (%)'] !== null) xmlPicms.add(String(item['Alíq. ICMS (%)']));
+            if (item['Alíq. ICMS (%)'] !== undefined && item['Alíq. ICMS (%)'] !== null) {
+                xmlPicms.add(String(item['Alíq. ICMS (%)']));
+            } else {
+                xmlPicms.add('N/A');
+            }
             
             const cfopCode = item['CFOP']; 
             if (cfopCode) {
@@ -179,10 +183,32 @@ const FilterDialog: React.FC<{
     };
     
     const handleApplyFilters = () => {
-        setTabFilters(prev => ({
-            ...prev,
-            [siengeCfop]: localFilters,
-        }));
+        // Verifica se todos os itens estão selecionados em todas as categorias
+        const isAllCsts = localFilters.xmlCsts.size === availableOptions.xmlCsts.length;
+        const isAllPicms = localFilters.xmlPicms.size === availableOptions.xmlPicms.length;
+        const isAllCfops = localFilters.xmlCfops.size === availableOptions.xmlCfops.length;
+        const isAllContabilizacao = localFilters.contabilizacao.size === availableOptions.contabilizacao.length;
+        const isAllCentroCusto = localFilters.centroCusto.size === availableOptions.centroCusto.length;
+
+        // Se tudo estiver selecionado, limpamos o filtro para esse CFOP (mostrar tudo)
+        if (isAllCsts && isAllPicms && isAllCfops && isAllContabilizacao && isAllCentroCusto) {
+            setTabFilters(prev => {
+                const newFilters = { ...prev };
+                delete newFilters[siengeCfop];
+                return newFilters;
+            });
+        } else {
+            setTabFilters(prev => ({
+                ...prev,
+                [siengeCfop]: {
+                    xmlCsts: new Set(localFilters.xmlCsts),
+                    xmlPicms: new Set(localFilters.xmlPicms),
+                    xmlCfops: new Set(localFilters.xmlCfops),
+                    contabilizacao: new Set(localFilters.contabilizacao),
+                    centroCusto: new Set(localFilters.centroCusto),
+                },
+            }));
+        }
         setIsDialogOpen(false);
     };
 
@@ -429,7 +455,7 @@ export function CfopValidator(props: CfopValidatorProps) {
             const siengeCfop = String(item['Sienge_CFOP'] || '').trim();
             const contabilizacao = String(item['Contabilização'] || '').trim();
             
-            const uniqueKey = `${cnpj}-${productCode}-${siengeCfop}-${contabilizacao}`;
+            const uniqueKey = normalizeKey(`${cnpj}-${productCode}-${siengeCfop}-${contabilizacao}`);
             const validation = cfopValidations[uniqueKey];
             const classification = validation?.classification || 'unvalidated';
             const itemWithKey = { ...item };
@@ -537,7 +563,7 @@ export function CfopValidator(props: CfopValidatorProps) {
             const siengeCfop = String(item['Sienge_CFOP'] || '').trim();
             const contabilizacao = String(item['Contabilização'] || '').trim();
             
-            const uniqueKey = `${cnpj}-${productCode}-${siengeCfop}-${contabilizacao}`;
+            const uniqueKey = normalizeKey(`${cnpj}-${productCode}-${siengeCfop}-${contabilizacao}`);
             return {
                 ...item,
                 '__itemKey': `cfop-pending-${uniqueKey}`,
@@ -750,18 +776,19 @@ export function CfopValidator(props: CfopValidatorProps) {
             const ENTREGA_FUTURA_CFOPS = ['5116', '5117', '6116', '6117'];
             const SIMPLES_FATURAMENTO_CFOPS = ['5922', '6922'];
         
-            if (!originalXmlItems || originalXmlItems.length === 0) {
-                 toast({ variant: 'destructive', title: 'Fonte de Dados Vazia', description: 'Não há itens de XML de entrada para analisar.' });
+            if (!enrichedItems || enrichedItems.length === 0) {
+                 toast({ variant: 'destructive', title: 'Fonte de Dados Vazia', description: 'Não há itens processados para analisar.' });
                  setIsLoadingSpecialCfops(false);
                  return;
             }
 
-            const entregaFutura = originalXmlItems.filter((item: any) => 
-                ENTREGA_FUTURA_CFOPS.includes(item['CFOP'])
+            // Usamos enrichedItems em vez de originalXmlItems para ter acesso aos dados do Sienge
+            const entregaFutura = enrichedItems.filter((item: any) => 
+                ENTREGA_FUTURA_CFOPS.includes(String(item['CFOP']))
             ).map((item, index) => ({...item, '__itemKey': `entrega-futura-${index}`}));
             
-            const simplesFaturamento = originalXmlItems.filter((item: any) => 
-                SIMPLES_FATURAMENTO_CFOPS.includes(item['CFOP'])
+            const simplesFaturamento = enrichedItems.filter((item: any) => 
+                SIMPLES_FATURAMENTO_CFOPS.includes(String(item['CFOP']))
             ).map((item, index) => ({...item, '__itemKey': `simples-faturamento-${index}`}));
 
             setItemsEntregaFutura(entregaFutura);
@@ -1078,16 +1105,21 @@ export function CfopValidator(props: CfopValidatorProps) {
                                         const currentFilters = tabFilters[cfop];
                                         
                                         const currentCfopData = allItemsForCfop.filter(item => {
-                                             if (!currentFilters) return true;
+                                            if (!currentFilters) return true;
                                             
                                             const cfopCode = item['CFOP'];
                                             const cstCode = String(item['CST do ICMS'] || '');
-                                            const picmsValue = String(item['Alíq. ICMS (%)'] ?? 'null');
+                                            const picmsValue = (item['Alíq. ICMS (%)'] !== undefined && item['Alíq. ICMS (%)'] !== null) 
+                                                ? String(item['Alíq. ICMS (%)']) 
+                                                : 'N/A';
                                             const contabilizacao = item['Contabilização'] || 'N/A';
                                             const centroCusto = item['Centro de Custo'] || 'N/A';
 
-                                            const cfopMatch = !currentFilters.xmlCfops || currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(`${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}`);
-                                            const cstMatch = !currentFilters.xmlCsts || currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(`${cstCode}: ${getCstDescription(cstCode)}`);
+                                            const cfopFull = cfopCode ? `${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}` : '';
+                                            const cstFull = cstCode ? `${cstCode}: ${getCstDescription(cstCode)}` : '';
+
+                                            const cfopMatch = !currentFilters.xmlCfops || currentFilters.xmlCfops.size === 0 || currentFilters.xmlCfops.has(cfopFull);
+                                            const cstMatch = !currentFilters.xmlCsts || currentFilters.xmlCsts.size === 0 || currentFilters.xmlCsts.has(cstFull);
                                             const picmsMatch = !currentFilters.xmlPicms || currentFilters.xmlPicms.size === 0 || currentFilters.xmlPicms.has(picmsValue);
                                             const contabilizacaoMatch = !currentFilters.contabilizacao || currentFilters.contabilizacao.size === 0 || currentFilters.contabilizacao.has(String(contabilizacao));
                                             const centroCustoMatch = !currentFilters.centroCusto || currentFilters.centroCusto.size === 0 || currentFilters.centroCusto.has(String(centroCusto));
