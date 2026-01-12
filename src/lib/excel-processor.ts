@@ -1060,16 +1060,21 @@ export function processPayableAccountingData(accountingSheetData: any[][]): {
     for (let i = 0; i < accountingSheetData.length; i++) {
         const row = accountingSheetData[i];
         if (Array.isArray(row)) {
-            // Use Array.from to handle sparse arrays and ensure all elements are processed by normalizeKey
             const rowKeys = Array.from(row).map(cell => normalizeKey(cell));
-            const hasCredor = rowKeys.some(k => k === 'credor');
-            const hasDoc = rowKeys.some(k => k && (k === 'documento' || k.includes('documento') || k.includes('numerodanota')));
+            const hasCredor = rowKeys.some(k => k === 'credor' || k === 'fornecedor' || k === 'forn' || k === 'parceiro' || k.includes('nome do credor'));
+            const hasDoc = rowKeys.some(k => k && (
+                k === 'documento' || k.includes('documento') || k.includes('numerodanota') || 
+                k === 'nota' || k === 'nf' || k === 'numnota' || k === 'nrdoc' || k === 'título'
+            ));
             
             if (hasCredor && hasDoc) {
                 headerRowIndex = i;
-                credorIndex = rowKeys.findIndex(k => k === 'credor');
-                codeIndex = rowKeys.findIndex(k => k && (k.includes('cdcred') || k.includes('codcredor')));
-                docIndex = rowKeys.findIndex(k => k && (k === 'documento' || k.includes('documento') || k.includes('numerodanota')));
+                credorIndex = rowKeys.findIndex(k => k === 'credor' || k === 'fornecedor' || k === 'forn' || k === 'parceiro' || k.includes('nome do credor'));
+                codeIndex = rowKeys.findIndex(k => k && (k.includes('cdcred') || k.includes('codcredor') || k.includes('codigo')));
+                docIndex = rowKeys.findIndex(k => k && (
+                    k === 'documento' || k.includes('documento') || k.includes('numerodanota') || 
+                    k === 'nota' || k === 'nf' || k === 'numnota' || k === 'nrdoc' || k === 'título'
+                ));
                 break;
             }
         }
@@ -1225,16 +1230,21 @@ export function processPaidAccountingData(paidSheetData: any[][]): {
     for (let i = 0; i < paidSheetData.length; i++) {
         const row = paidSheetData[i];
         if (Array.isArray(row)) {
-            // Use Array.from to handle sparse arrays and ensure all elements are processed by normalizeKey
             const rowKeys = Array.from(row).map(cell => normalizeKey(cell));
-            const hasCredor = rowKeys.some(k => k === 'credor');
-            const hasDoc = rowKeys.some(k => k && (k === 'documento' || k.includes('documento') || k.includes('numerodanota')));
+            const hasCredor = rowKeys.some(k => k === 'credor' || k === 'fornecedor' || k === 'forn' || k === 'parceiro' || k.includes('nome do credor'));
+            const hasDoc = rowKeys.some(k => k && (
+                k === 'documento' || k.includes('documento') || k.includes('numerodanota') || 
+                k === 'nota' || k === 'nf' || k === 'numnota' || k === 'nrdoc' || k === 'título'
+            ));
             
             if (hasCredor && hasDoc) {
                 headerRowIndex = i;
-                credorIndex = rowKeys.findIndex(k => k === 'credor');
-                codeIndex = rowKeys.findIndex(k => k && (k.includes('cdcred') || k.includes('codcredor')));
-                docIndex = rowKeys.findIndex(k => k && (k === 'documento' || k.includes('documento') || k.includes('numerodanota')));
+                credorIndex = rowKeys.findIndex(k => k === 'credor' || k === 'fornecedor' || k === 'forn' || k === 'parceiro' || k.includes('nome do credor'));
+                codeIndex = rowKeys.findIndex(k => k && (k.includes('cdcred') || k.includes('codcredor') || k.includes('codigo')));
+                docIndex = rowKeys.findIndex(k => k && (
+                    k === 'documento' || k.includes('documento') || k.includes('numerodanota') || 
+                    k === 'nota' || k === 'nf' || k === 'numnota' || k === 'nrdoc' || k === 'título'
+                ));
                 break;
             }
         }

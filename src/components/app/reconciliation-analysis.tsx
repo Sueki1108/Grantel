@@ -171,7 +171,7 @@ export function ReconciliationAnalysis({
                         <TabsTrigger value="cfop_validation">Validação CFOP</TabsTrigger>
                     </TabsList>
                     <TabsContent value="reconciliation" className="mt-4">
-                         {!initialXmlItems || initialXmlItems.length === 0 && (
+                         {(!initialXmlItems || initialXmlItems.length === 0) && (
                              <Alert variant="destructive">
                                 <AlertTriangle className="h-4 w-4" />
                                 <AlertTitle>Dados XML em falta</AlertTitle>
@@ -186,7 +186,7 @@ export function ReconciliationAnalysis({
                                     <TabsTrigger value="reconciled">Conciliados ({reconciliationResults?.reconciled?.length || 0})</TabsTrigger>
                                     <TabsTrigger value="onlyInSienge">Apenas no Sienge ({reconciliationResults?.onlyInSienge?.length || 0})</TabsTrigger>
                                     <TabsTrigger value="onlyInXml">Apenas no XML ({itemsToShowInOnlyXmlTab?.length || 0})</TabsTrigger>
-                                    <TabsTrigger value="otherSiengeItems">Outros Lançamentos Sienge ({reconciliationResults?.otherSiengeItems ? Object.values(reconciliationResults.otherSiengeItems).reduce((acc, items) => acc + (items?.length || 0), 0) : 0})</TabsTrigger>
+                                    <TabsTrigger value="otherSiengeItems">Outros Sienge ({reconciliationResults?.otherSiengeItems ? Object.keys(reconciliationResults.otherSiengeItems).length : 0})</TabsTrigger>
                                 </TabsList>
                                 <div className="mt-4">
                                     <TabsContent value="reconciled">
