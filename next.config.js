@@ -1,13 +1,13 @@
 /** @type {import('next').NextConfig} */
 const isProd = process.env.NODE_ENV === 'production';
-const basePath = isProd ? '/Grantel' : '';
-const assetPrefix = isProd ? '/Grantel/' : '';
+// O GitHub Actions define a variável GITHUB_ACTIONS como true
+const basePath = process.env.NODE_ENV === 'production' ? '/Grantel' : '';
 
 const nextConfig = {
   /* config options here */
-  ...(isProd && { output: 'export' }),
+  output: 'export',
   basePath: basePath,
-  assetPrefix: assetPrefix,
+  assetPrefix: basePath ? `${basePath}/` : '',
   typescript: {
     ignoreBuildErrors: true,
   },

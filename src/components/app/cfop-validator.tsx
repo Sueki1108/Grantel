@@ -420,7 +420,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                 statusResult[classification][cfopGroupKey].push(itemWithKey);
             });
         return statusResult;
-    }, [enrichedItems, competence, allPersistedData]);
+    }, [enrichedItems, competence, allPersistedData, bulkActionState]);
 
     const contabilizacaoErroItems = useMemo(() => {
         const errors = (competence && allPersistedData[competence]?.contabilizacaoErrors) || {};
@@ -477,25 +477,6 @@ export function CfopValidator(props: CfopValidatorProps) {
         return { sujeitosAoDifal: finalSujeitos, difalItems, desconsideradosItems, beneficioFiscalItems };
 
     }, [itemsByStatus.correct, allPersistedData, competence]);
-
-    useEffect(() => {
-        setRowSelection({});
-        setBulkActionState({ classification: null });
-    }, [activeTab]);
-
-    useEffect(() => {
-        const status = activeTab as ValidationStatus;
-        const groups = itemsByStatus[status] || {};
-        const cfops = Object.keys(groups);
-        if (cfops.length > 0) {
-            const current = activeCfopTabs[status];
-            if (!current || !groups[current]) {
-                setActiveCfopTabs(prev => ({ ...prev, [status]: cfops[0] }));
-                setRowSelection({});
-                setBulkActionState({ classification: null });
-            }
-        }
-    }, [activeTab, itemsByStatus]);
 
     useEffect(() => {
         setRowSelection({});
@@ -656,9 +637,26 @@ export function CfopValidator(props: CfopValidatorProps) {
     };
     
     const handleBulkAction = () => {
-        const status = activeTab as ValidationStatus;
-        const cfop = activeCfopTabs[status];
-        const allItemsInCfop = itemsByStatus[status]?.[cfop] || [];
+        const activeStatus = activeTab as ValidationStatus;
+        const cfopGroupsForStatus = itemsByStatus[activeStatus] || {};
+        const allCfopsForStatus = Object.keys(cfopGroupsForStatus).sort((a, b) => {
+            const na = parseInt(a, 10);
+            const nb = parseInt(b, 10);
+            if (Number.isNaN(na) || Number.isNaN(nb)) return a.localeCompare(b);
+            return na - nb;
+        });
+
+        // Tenta pegar do estado, se não houver (início), pega o primeiro disponível (mesma lógica da UI)
+        let cfop = activeCfopTabs[activeStatus];
+        if (!cfop && allCfopsForStatus.length > 0) {
+            cfop = allCfopsForStatus[0];
+        }
+
+        if (!cfop) {
+            return;
+        }
+
+        const allItemsInCfop = itemsByStatus[activeStatus][cfop] || [];
         
         if (allItemsInCfop.length === 0) {
             setBulkActionState({ classification: null });
@@ -928,32 +926,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                     const isMarked = !!contabilizacaoErrors[errorKey];
                     return (
                         <div className="flex items-center gap-2">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm" className="h-8">
-                                <Columns className="mr-2 h-4 w-4" />
-                                Colunas
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56">
-                            <DropdownMenuLabel>Alternar Colunas</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            {['Fornecedor', 'Número da Nota', 'Descrição', 'Centro de Custo', 'Contabilização', 'NCM', 'CEST', 'Sienge_Esp', 'CFOP', 'CFOP (Sienge)', 'Alíq. ICMS (%)', 'CST do ICMS', 'Valor Total'].map((column) => (
-                                <DropdownMenuCheckboxItem
-                                    key={column}
-                                    className="capitalize"
-                                    checked={columnVisibility[column] !== false}
-                                    onCheckedChange={(value) => 
-                                        setColumnVisibility(prev => ({ ...prev, [column]: !!value }))
-                                    }
-                                >
-                                    {column}
-                                </DropdownMenuCheckboxItem>
-                            ))}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-
-                    <Sheet>        <TooltipProvider>
+                            <TooltipProvider>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleToggleContabilizacaoError(errorKey, !isMarked); }}>
@@ -1036,13 +1009,6 @@ export function CfopValidator(props: CfopValidatorProps) {
         ]);
     }, [enrichedItems, allPersistedData, competence, toast]);
     
-    useEffect(() => {
-        setRowSelection({});
-        setBulkActionState({ classification: null });
-    }, [itemsByStatus]);
-
-
-
     const numSelected = Object.keys(rowSelection).length;
     
     if (!initialItems || initialItems.length === 0) {
@@ -1198,10 +1164,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                              <TabsTrigger value="simples-faturamento">Simples Faturamento ({itemsSimplesFaturamento.length})</TabsTrigger>
                         </TabsList>
                         <TabsContent value="entrega-futura" className="mt-4">
-                            <DataTable columns={columns} data={itemsEntregaFutura} rowSelection={rowSelection} setRowSelection={setRowSelection} />
+                            <DataTable columns={columns} data={itemsEntregaFutura} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
                         </TabsContent>
                         <TabsContent value="simples-faturamento" className="mt-4">
-                            <DataTable columns={columns} data={itemsSimplesFaturamento} rowSelection={rowSelection} setRowSelection={setRowSelection} />
+                            <DataTable columns={columns} data={itemsSimplesFaturamento} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
                         </TabsContent>
                     </Tabs>
                 </TabsContent>
@@ -1233,7 +1199,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-gray-500" onClick={() => handleDifalStatusChange([row.original], 'disregard')}><EyeOff className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Desconsiderar</p></TooltipContent></Tooltip>
                                     </TooltipProvider>
                                 </div>
-                            )}]} data={difalAnalysisData.sujeitosAoDifal} />
+                            )}]} data={difalAnalysisData.sujeitosAoDifal} autoResetPageIndex={false} />
                         </TabsContent>
                          <TabsContent value="difal" className="mt-4">
                             <DataTable columns={[...columns, { id: 'difal-actions', header: 'Ações DIFAL', cell: ({row}) => (
@@ -1243,10 +1209,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                                          <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-gray-500" onClick={() => handleDifalStatusChange([row.original], 'disregard')}><EyeOff className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Desconsiderar</p></TooltipContent></Tooltip>
                                     </TooltipProvider>
                                 </div>
-                            )}]} data={difalAnalysisData.difalItems} />
+                            )}]} data={difalAnalysisData.difalItems} autoResetPageIndex={false} />
                         </TabsContent>
                         <TabsContent value="beneficio-fiscal" className="mt-4">
-                             <DataTable columns={columns} data={difalAnalysisData.beneficioFiscalItems} />
+                             <DataTable columns={columns} data={difalAnalysisData.beneficioFiscalItems} autoResetPageIndex={false} />
                         </TabsContent>
                         <TabsContent value="desconsiderados" className="mt-4">
                             <DataTable columns={[...columns, { id: 'difal-actions', header: 'Ações DIFAL', cell: ({row}) => (
@@ -1255,7 +1221,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([row.original], 'difal')}><TicketX className="h-4 w-4" /> Reverter para DIFAL</Button></TooltipTrigger><TooltipContent><p>Reverter e Marcar como DIFAL</p></TooltipContent></Tooltip>
                                     </TooltipProvider>
                                 </div>
-                            )}]} data={difalAnalysisData.desconsideradosItems} />
+                            )}]} data={difalAnalysisData.desconsideradosItems} autoResetPageIndex={false} />
                         </TabsContent>
                     </Tabs>
                 </TabsContent>
