@@ -12,7 +12,6 @@ import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import {
     Tooltip,
-    TooltipProvider,
     TooltipTrigger,
     TooltipContent,
 } from "@/components/ui/tooltip";
@@ -425,7 +424,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         const renderCellWithCopy = (displayValue: React.ReactNode, copyValue: string | number, typeName: string) => (
             <div className="flex items-center justify-between gap-1 group">
                 <span className="truncate">{displayValue}</span>
-                <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(copyValue, typeName); }}><Copy className="h-3 w-3" /></Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); copyToClipboard(copyValue, typeName); }}><LucideIcons.Copy className="h-3 w-3" /></Button>
             </div>
         );
     
@@ -450,14 +449,12 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                             <Popover>
                                 <PopoverTrigger asChild>
                                     <button onClick={(e) => e.stopPropagation()} className="transition-opacity">
-                                        <TooltipProvider>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <LucideIcon className={cn("h-4 w-4", supplierCategory ? "text-primary" : "text-muted-foreground")} />
-                                                </TooltipTrigger>
-                                                <TooltipContent><p>{supplierCategory?.name || "Sem categoria"}</p></TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <LucideIcon className={cn("h-4 w-4", supplierCategory ? "text-primary" : "text-muted-foreground")} />
+                                            </TooltipTrigger>
+                                            <TooltipContent><p>{supplierCategory?.name || "Sem categoria"}</p></TooltipContent>
+                                        </Tooltip>
                                     </button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-56 p-2" onClick={(e) => e.stopPropagation()}>
@@ -465,12 +462,12 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                                         {supplierCategories.map(cat => {
                                             const CatIcon = LucideIcons[cat.icon as keyof typeof LucideIcons] || Tag;
                                             return (
-                                                <TooltipProvider key={cat.id}><Tooltip>
+                                                <Tooltip key={cat.id}>
                                                     <TooltipTrigger asChild>
                                                          <Button variant={supplierClassificationId === cat.id ? "default" : "outline"} size="icon" className="h-9 w-9" onClick={() => handleSupplierCategoryChange(supplierCnpj, cat.id)}><CatIcon className="h-4 w-4" /></Button>
                                                     </TooltipTrigger>
                                                     <TooltipContent><p>{cat.name}</p></TooltipContent>
-                                                </Tooltip></TooltipProvider>
+                                                </Tooltip>
                                             )
                                         })}
                                     </div>
@@ -491,7 +488,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
     
                 if (id === 'Descrição' || id === 'Número da Nota') {
                     return renderCellWithCopy(
-                        <TooltipProvider><Tooltip><TooltipTrigger asChild><span>{summarizedValue}</span></TooltipTrigger><TooltipContent><p>{value}</p></TooltipContent></Tooltip></TooltipProvider>,
+                        <Tooltip><TooltipTrigger asChild><span>{summarizedValue}</span></TooltipTrigger><TooltipContent><p>{value}</p></TooltipContent></Tooltip>,
                         value,
                         id
                     );
@@ -530,31 +527,29 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 const currentClassification = activeTab;
     
                 return (
-                     <TooltipProvider>
                         <div className="flex gap-1 justify-center" onClick={(e) => e.stopPropagation()}>
                             {currentClassification !== 'imobilizado' && (
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'imobilizado')}><Factory className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Imobilizado</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'imobilizado')}><LucideIcons.Factory className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Imobilizado</p></TooltipContent></Tooltip>
                             )}
                             {currentClassification !== 'uso-consumo' && (
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'uso-consumo')}><Wrench className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Uso e Consumo</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'uso-consumo')}><LucideIcons.Wrench className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Uso e Consumo</p></TooltipContent></Tooltip>
                             )}
                             {currentClassification !== 'utilizado-em-obra' && (
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'utilizado-em-obra')}><HardHat className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Utilizado em Obra</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'utilizado-em-obra')}><LucideIcons.HardHat className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Classificar como Utilizado em Obra</p></TooltipContent></Tooltip>
                             )}
                              {currentClassification !== 'verify' && (
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'verify')}><HelpCircle className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificar</p></TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'verify')}><LucideIcons.HelpCircle className="h-5 w-5" /></Button></TooltipTrigger><TooltipContent><p>Marcar para Verificar</p></TooltipContent></Tooltip>
                             )}
                             {currentClassification !== 'unclassified' && (
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleClassificationChange([originalItem], 'unclassified')}>
-                                            <RotateCw className="h-5 w-5 text-destructive" />
+                                            <LucideIcons.RotateCw className="h-5 w-5 text-destructive" />
                                         </Button>
                                     </TooltipTrigger><TooltipContent><p>Reverter para Não Classificado</p></TooltipContent>
                                 </Tooltip>
                             )}
                         </div>
-                    </TooltipProvider>
                 );
             }
         });
@@ -566,9 +561,9 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         return (
             <Card>
                 <CardHeader>
-                    <div className="flex items-center gap-3"><Building className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Análise de Imobilizado</CardTitle><CardDescription>Classifique itens relevantes para imobilizado, despesa ou consumo.</CardDescription></div></div>
+                    <div className="flex items-center gap-3"><LucideIcons.Building className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Análise de Imobilizado</CardTitle><CardDescription>Classifique itens relevantes para imobilizado, despesa ou consumo.</CardDescription></div></div>
                 </CardHeader>
-                <CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Execute a "Validação de Documentos" na primeira aba para carregar os itens para análise.</p></CardContent>
+                <CardContent className="p-8 text-center text-muted-foreground"><LucideIcons.Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando dados</h3><p>Execute a "Validação de Documentos" na primeira aba para carregar os itens para análise.</p></CardContent>
             </Card>
         );
     }
@@ -577,9 +572,9 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
          return (
             <Card>
                 <CardHeader>
-                    <div className="flex items-center gap-3"><Building className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Análise de Imobilizado</CardTitle><CardDescription>Classifique itens relevantes para imobilizado, despesa ou consumo.</CardDescription></div></div>
+                    <div className="flex items-center gap-3"><LucideIcons.Building className="h-8 w-8 text-primary" /><div><CardTitle className="font-headline text-2xl">Análise de Imobilizado</CardTitle><CardDescription>Classifique itens relevantes para imobilizado, despesa ou consumo.</CardDescription></div></div>
                 </CardHeader>
-                <CardContent className="p-8 text-center text-muted-foreground"><Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando Competência</h3><p>Execute a "Validação de Documentos" e selecione um período para iniciar a classificação.</p></CardContent>
+                <CardContent className="p-8 text-center text-muted-foreground"><LucideIcons.Building className="mx-auto h-12 w-12 mb-4" /><h3 className="text-xl font-semibold mb-2">Aguardando Competência</h3><p>Execute a "Validação de Documentos" e selecione um período para iniciar a classificação.</p></CardContent>
             </Card>
         );
     }
@@ -595,11 +590,11 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                         <div className="h-6 border-l" />
                          <span className="text-sm font-medium">Classificar como:</span>
                          <div className="flex gap-2">
-                             <Button size="sm" onClick={() => handleBulkClassification('imobilizado')}><Factory className="mr-2 h-4 w-4" /> Imobilizado</Button>
-                             <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('uso-consumo')}><Wrench className="mr-2 h-4 w-4" /> Uso e Consumo</Button>
-                             <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('utilizado-em-obra')}><HardHat className="mr-2 h-4 w-4" /> Utilizado em Obra</Button>
-                             <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('verify')}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
-                              <Button size="sm" variant="outline" onClick={() => handleBulkClassification('unclassified')}><RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
+                             <Button size="sm" onClick={() => handleBulkClassification('imobilizado')}><LucideIcons.Factory className="mr-2 h-4 w-4" /> Imobilizado</Button>
+                             <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('uso-consumo')}><LucideIcons.Wrench className="mr-2 h-4 w-4" /> Uso e Consumo</Button>
+                             <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('utilizado-em-obra')}><LucideIcons.HardHat className="mr-2 h-4 w-4" /> Utilizado em Obra</Button>
+                             <Button size="sm" variant="secondary" onClick={() => handleBulkClassification('verify')}><LucideIcons.HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
+                              <Button size="sm" variant="outline" onClick={() => handleBulkClassification('unclassified')}><LucideIcons.RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
                          </div>
                     </Card>
                 </div>
@@ -608,7 +603,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 <CardHeader>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div className="flex items-center gap-3">
-                            <Building className="h-8 w-8 text-primary" />
+                            <LucideIcons.Building className="h-8 w-8 text-primary" />
                             <div>
                                 <CardTitle className="font-headline text-2xl">Análise de Imobilizado (Competência: {competence})</CardTitle>
                                 <CardDescription>Classifique os itens. Clique nas linhas para selecionar múltiplos itens e use a barra de ações. Suas escolhas serão guardadas automaticamente.</CardDescription>
@@ -622,7 +617,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                             <Dialog open={isFilterModalOpen} onOpenChange={setIsFilterModalOpen}>
                                 <DialogTrigger asChild>
                                     <Button variant="outline" size="sm">
-                                        <ListFilter className="mr-2 h-4 w-4" />Filtros Avançados
+                                        <LucideIcons.ListFilter className="mr-2 h-4 w-4" />Filtros Avançados
                                     </Button>
                                 </DialogTrigger>
                                 <DialogContent className="max-w-4xl">
@@ -750,15 +745,14 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <TooltipProvider>
-                        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="w-full">
-                            <TabsList className="grid w-full grid-cols-5">
-                                <TabsTrigger value="unclassified" className="flex gap-2"><List />Não Classificados ({filteredItems.unclassified.length})</TabsTrigger>
-                                <TabsTrigger value="imobilizado" className="flex gap-2"><Factory />Imobilizado ({filteredItems.imobilizado.length})</TabsTrigger>
-                                <TabsTrigger value="uso-consumo" className="flex gap-2"><Wrench />Uso e Consumo ({filteredItems['uso-consumo'].length})</TabsTrigger>
-                                <TabsTrigger value="utilizado-em-obra" className="flex gap-2"><HardHat />Utilizado em Obra ({filteredItems['utilizado-em-obra'].length})</TabsTrigger>
-                                <TabsTrigger value="verify" className="flex gap-2"><HelpCircle />A Verificar ({filteredItems.verify.length})</TabsTrigger>
-                            </TabsList>
+                        <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as any)} className="w-full">
+                    <TabsList className="grid w-full grid-cols-5">
+                        <TabsTrigger value="unclassified" className="flex gap-2"><LucideIcons.List className="h-4 w-4" />Não Classificados ({filteredItems.unclassified.length})</TabsTrigger>
+                        <TabsTrigger value="imobilizado" className="flex gap-2"><LucideIcons.Factory className="h-4 w-4" />Imobilizado ({filteredItems.imobilizado.length})</TabsTrigger>
+                        <TabsTrigger value="uso-consumo" className="flex gap-2"><LucideIcons.Wrench className="h-4 w-4" />Uso e Consumo ({filteredItems['uso-consumo'].length})</TabsTrigger>
+                        <TabsTrigger value="utilizado-em-obra" className="flex gap-2"><LucideIcons.HardHat className="h-4 w-4" />Utilizado em Obra ({filteredItems['utilizado-em-obra'].length})</TabsTrigger>
+                        <TabsTrigger value="verify" className="flex gap-2"><LucideIcons.HelpCircle className="h-4 w-4" />A Verificar ({filteredItems.verify.length})</TabsTrigger>
+                    </TabsList>
                             
                              <TabsContent value="unclassified" className="mt-6">
                                 <ClassificationTable data={filteredItems.unclassified} columns={columns} {...{rowSelection, setRowSelection, tableRef}} />
@@ -780,7 +774,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                                 <ClassificationTable data={filteredItems.verify} columns={columns} {...{rowSelection, setRowSelection, tableRef}} />
                             </TabsContent>
                         </Tabs>
-                    </TooltipProvider>
                 </CardContent>
             </Card>
         </div>

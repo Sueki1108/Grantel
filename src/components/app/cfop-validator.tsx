@@ -210,7 +210,7 @@ const FilterDialog: React.FC<{
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
                 <Button variant={isFilterActive ? "secondary" : "outline"} size="sm" className="ml-4">
-                    <ListFilter className="mr-2 h-4 w-4" /> Filtros
+                    <LucideIcons.ListFilter className="mr-2 h-4 w-4" /> Filtros
                 </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl">
@@ -947,7 +947,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                      <div className="flex items-center justify-between gap-1">
                         <span className="truncate">{displayValue}</span>
                         <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={(e) => { e.stopPropagation(); copyToClipboard(copyValue, typeName); }}>
-                            <Copy className="h-3 w-3" />
+                            <LucideIcons.Copy className="h-3 w-3" />
                         </Button>
                     </div>
                 );
@@ -960,13 +960,12 @@ export function CfopValidator(props: CfopValidatorProps) {
                     
                     const LucideIcon = (category && (category as any).icon && LucideIcons[(category as any).icon as keyof typeof LucideIcons])
                         ? (LucideIcons[(category as any).icon as keyof typeof LucideIcons] as React.ElementType)
-                        : Tag;
+                        : LucideIcons.Tag;
                     const isAllowedCfop = !category || !(category as any).allowedCfops || !Array.isArray((category as any).allowedCfops) || (category as any).allowedCfops.length === 0 || (category as any).allowedCfops.includes(String(item['CFOP']));
 
                     return (
                          <div className="flex items-center gap-2 group/row">
-                           <TooltipProvider>
-                            <Popover>
+                           <Popover>
                                 <PopoverTrigger asChild>
                                     <button onClick={(e) => e.stopPropagation()} className="transition-opacity">
                                         <Tooltip><TooltipTrigger asChild>
@@ -984,7 +983,6 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     </div>
                                 </PopoverContent>
                             </Popover>
-                            </TooltipProvider>
                             {renderCellWithCopy(value, value, 'Fornecedor')}
                         </div>
                     );
@@ -997,7 +995,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                  if (id === 'Descrição') {
                     const summarizedDesc = typeof value === 'string' && value.length > 30 ? `${value.substring(0, 30)}...` : value;
                     return renderCellWithCopy(
-                        <TooltipProvider><Tooltip><TooltipTrigger asChild><span>{summarizedDesc}</span></TooltipTrigger><TooltipContent><p>{value}</p></TooltipContent></Tooltip></TooltipProvider>,
+                        <Tooltip><TooltipTrigger asChild><span>{summarizedDesc}</span></TooltipTrigger><TooltipContent><p>{value}</p></TooltipContent></Tooltip>,
                         value,
                         'Descrição'
                     );
@@ -1016,16 +1014,14 @@ export function CfopValidator(props: CfopValidatorProps) {
                     const isMarked = !!contabilizacaoErrors[errorKey];
                     return (
                         <div className="flex items-center gap-2">
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleToggleContabilizacaoError(errorKey, !isMarked); }}>
-                                            <AlertTriangle className={cn("h-4 w-4", isMarked ? "text-destructive" : "text-muted-foreground")} />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent><p>{isMarked ? "Erro de contabilização" : "Marcar erro de contabilização"}</p></TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleToggleContabilizacaoError(errorKey, !isMarked); }}>
+                                        <LucideIcons.AlertTriangle className={cn("h-4 w-4", isMarked ? "text-destructive" : "text-muted-foreground")} />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent><p>{isMarked ? "Erro de contabilização" : "Marcar erro de contabilização"}</p></TooltipContent>
+                            </Tooltip>
                             {renderCellWithCopy(String(value ?? 'N/A'), String(value ?? 'N/A'), 'Contabilização')}
                         </div>
                     );
@@ -1049,7 +1045,6 @@ export function CfopValidator(props: CfopValidatorProps) {
 
                     return (
                         <div className="flex justify-center gap-1" onClick={(e) => e.stopPropagation()}>
-                             <TooltipProvider>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <Button
@@ -1063,22 +1058,21 @@ export function CfopValidator(props: CfopValidatorProps) {
                                             )}
                                             onClick={() => handleValidationChange([row.original], 'correct')}
                                         >
-                                            <Check className="h-4 w-4" />
+                                            <LucideIcons.Check className="h-4 w-4" />
                                         </Button>
                                     </TooltipTrigger>
                                     <TooltipContent><p>Correto</p></TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
-                                    <TooltipTrigger asChild><Button size="icon" variant={classification === 'incorrect' ? 'destructive' : 'ghost'} className={cn("h-7 w-7", classification === 'incorrect' ? 'bg-red-600 text-white hover:bg-red-700' : 'text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50')} onClick={() => handleValidationChange([row.original], 'incorrect')}><X className="h-4 w-4" /></Button></TooltipTrigger>
+                                    <TooltipTrigger asChild><Button size="icon" variant={classification === 'incorrect' ? 'destructive' : 'ghost'} className={cn("h-7 w-7", classification === 'incorrect' ? 'bg-red-600 text-white hover:bg-red-700' : 'text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50')} onClick={() => handleValidationChange([row.original], 'incorrect')}><LucideIcons.X className="h-4 w-4" /></Button></TooltipTrigger>
                                     <TooltipContent><p>Incorreto</p></TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
-                                    <TooltipTrigger asChild><Button size="icon" variant={classification === 'verify' ? 'default' : 'ghost'} className={cn("h-7 w-7", classification === 'verify' ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/50')} onClick={() => handleValidationChange([row.original], 'verify')}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>A Verificar</p></TooltipContent>
+                                    <TooltipTrigger asChild><Button size="icon" variant={classification === 'verify' ? 'default' : 'ghost'} className={cn("h-7 w-7", classification === 'verify' ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/50')} onClick={() => handleValidationChange([row.original], 'verify')}><LucideIcons.HelpCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>A Verificar</p></TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
-                                    <TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange([row.original], 'unvalidated')}><RotateCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Limpar Validação</p></TooltipContent>
+                                    <TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleValidationChange([row.original], 'unvalidated')}><LucideIcons.RotateCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Limpar Validação</p></TooltipContent>
                                 </Tooltip>
-                            </TooltipProvider>
                             {activeTab === 'contabilizacao-error' && (
                                 <Tooltip>
                                     <TooltipTrigger asChild>
@@ -1086,7 +1080,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                                             const key = row.original['Chave de acesso'] && row.original['Item'] ? `${row.original['Chave de acesso']}-${row.original['Item']}` : `${row.original['Chave Unica']}-${row.original['Item']}`;
                                             handleCorrigido(key);
                                         }}>
-                                            <CheckCircle className="h-4 w-4 text-green-600" />
+                                            <LucideIcons.CheckCircle className="h-4 w-4 text-green-600" />
                                         </Button>
                                     </TooltipTrigger>
                                     <TooltipContent><p>Corrigido</p></TooltipContent>
@@ -1129,14 +1123,14 @@ export function CfopValidator(props: CfopValidatorProps) {
                 <div className="sticky top-4 z-20 flex justify-end">
                     <Card className="flex items-center gap-2 p-2 shadow-lg animate-in fade-in-0 slide-in-from-top-5">
                         <span className="text-sm font-medium pl-2">{numSelected} selecionado(s)</span>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setRowSelection({})}><X className="h-4 w-4"/></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setRowSelection({})}><LucideIcons.X className="h-4 w-4"/></Button>
                         <div className="h-6 border-l" />
                         
                         <div className="flex gap-1">
-                            <Button size="sm" className={cn("bg-secondary text-secondary-foreground", bulkActionState.classification === 'correct' && "bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'correct'}))}><Check className="mr-2 h-4 w-4" /> Correto</Button>
-                            <Button size="sm" className={cn("bg-secondary text-secondary-foreground", bulkActionState.classification === 'incorrect' && "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-100")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'incorrect'}))}><X className="mr-2 h-4 w-4" /> Incorreto</Button>
-                            <Button size="sm" className={cn("bg-secondary text-secondary-foreground", bulkActionState.classification === 'verify' && "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
-                            <Button size="sm" variant="outline" onClick={() => setBulkActionState(prev => ({...prev, classification: 'unvalidated'}))}><RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
+                            <Button size="sm" className={cn("bg-secondary text-secondary-foreground", bulkActionState.classification === 'correct' && "bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'correct'}))}><LucideIcons.Check className="mr-2 h-4 w-4" /> Correto</Button>
+                            <Button size="sm" className={cn("bg-secondary text-secondary-foreground", bulkActionState.classification === 'incorrect' && "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-100")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'incorrect'}))}><LucideIcons.X className="mr-2 h-4 w-4" /> Incorreto</Button>
+                            <Button size="sm" className={cn("bg-secondary text-secondary-foreground", bulkActionState.classification === 'verify' && "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><LucideIcons.HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
+                            <Button size="sm" variant="outline" onClick={() => setBulkActionState(prev => ({...prev, classification: 'unvalidated'}))}><LucideIcons.RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
                         </div>
                          <Button onClick={handleBulkAction}>Aplicar</Button>
                     </Card>
@@ -1150,14 +1144,14 @@ export function CfopValidator(props: CfopValidatorProps) {
                             const count = Object.values(itemsByStatus[status] || {}).flat().length;
                             return <TabsTrigger key={status} value={status} disabled={count === 0}>{label} ({count})</TabsTrigger>
                         })}
-                        <TabsTrigger value="contabilizacao-error" className="flex gap-2"><AlertTriangle />Erros ({contabilizacaoErroItems.length})</TabsTrigger>
+                        <TabsTrigger value="contabilizacao-error" className="flex gap-2"><LucideIcons.AlertTriangle className="h-4 w-4" />Erros ({contabilizacaoErroItems.length})</TabsTrigger>
                         <TabsTrigger value="faturamento-entrega">Faturamento</TabsTrigger>
                         <TabsTrigger value="difal-analysis">DIFAL</TabsTrigger>
-                        <TabsTrigger value="categorized-suppliers" className="flex gap-2"><Tag className="h-4 w-4" /> Fornecedores ({categorizedSupplierItems.length})</TabsTrigger>
+                        <TabsTrigger value="categorized-suppliers" className="flex gap-2"><LucideIcons.Tag className="h-4 w-4" /> Fornecedores ({categorizedSupplierItems.length})</TabsTrigger>
                         <TabsTrigger value="contabilizacao-check" className="flex gap-2"><LucideIcons.BookOpen className="h-4 w-4" /> Contabilização</TabsTrigger>
                     </TabsList>
                     <div className="flex gap-2 ml-4">
-                        <Button onClick={handleEnrichData} variant="outline" size="sm"><RefreshCw className="mr-2 h-4 w-4" />Carregar ICMS/CEST do XML</Button>
+                        <Button onClick={handleEnrichData} variant="outline" size="sm"><LucideIcons.RefreshCw className="mr-2 h-4 w-4" />Carregar ICMS/CEST do XML</Button>
                          <SupplierCategoryDialog 
                             categories={Array.isArray(allPersistedData.supplierCategories) ? allPersistedData.supplierCategories : (competence && allPersistedData.supplierCategories?.[competence]) || []}
                             onSave={handleSaveSupplierCategories}
@@ -1190,10 +1184,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                                         </TabsList>
                                         <div className="flex gap-2">
                                             <Button onClick={() => handleExport(Object.values(cfopGroupsForStatus).flat(), `Aba_${status}`, 'excel')} size="sm" variant="outline" className="text-emerald-600 border-emerald-200 hover:bg-emerald-50">
-                                                <Download className="mr-2 h-4 w-4" /> Excel ({Object.values(cfopGroupsForStatus).flat().length})
+                                                <LucideIcons.Download className="mr-2 h-4 w-4" /> Excel ({Object.values(cfopGroupsForStatus).flat().length})
                                             </Button>
                                             <Button onClick={() => handleExport(Object.values(cfopGroupsForStatus).flat(), `Aba_${status}`, 'pdf')} size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
-                                                <Download className="mr-2 h-4 w-4" /> PDF
+                                                <LucideIcons.Download className="mr-2 h-4 w-4" /> PDF
                                             </Button>
                                         </div>
                                     </div>
@@ -1234,10 +1228,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                     <div className="flex items-center gap-2">
                                                         <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
                                                             <Button onClick={() => handleExport(currentCfopData, `CFOP_${cfop}_${status}`, 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
-                                                                <Download className="mr-1 h-3 w-3" /> Excel
+                                                                <LucideIcons.Download className="mr-1 h-3 w-3" /> Excel
                                                             </Button>
                                                             <Button onClick={() => handleExport(currentCfopData, `CFOP_${cfop}_${status}`, 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
-                                                                <Download className="mr-1 h-3 w-3" /> PDF
+                                                                <LucideIcons.Download className="mr-1 h-3 w-3" /> PDF
                                                             </Button>
                                                         </div>
                                                         <FilterDialog siengeCfop={cfop} items={allItemsForCfop} tabFilters={tabFilters} setTabFilters={setTabFilters} />
@@ -1256,13 +1250,23 @@ export function CfopValidator(props: CfopValidatorProps) {
                 })}
                 <TabsContent value="contabilizacao-error" className="mt-4">
                     <div className="flex justify-between items-center mb-2">
-                        <div className="text-lg font-bold">Erros de Contabilização</div>
+                        <div className="flex items-center gap-2">
+                            <div className="text-lg font-bold">Erros de Contabilização</div>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <LucideIcons.Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Itens que possuem inconsistência entre o CFOP e a Contabilização/Centro de Custo</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </div>
                         <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
                             <Button onClick={() => handleExport(contabilizacaoErroItems, 'Erros_Contabilizacao', 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
-                                <Download className="mr-1 h-3 w-3" /> Excel
+                                <LucideIcons.Download className="mr-1 h-3 w-3" /> Excel
                             </Button>
                             <Button onClick={() => handleExport(contabilizacaoErroItems, 'Erros_Contabilizacao', 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
-                                <Download className="mr-1 h-3 w-3" /> PDF
+                                <LucideIcons.Download className="mr-1 h-3 w-3" /> PDF
                             </Button>
                         </div>
                     </div>
@@ -1272,7 +1276,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                      <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-lg mb-6">
                         <p className="text-muted-foreground mb-4">Clique no botão para analisar as notas de Entrega Futura e Simples Faturamento dos itens de entrada (CFOPs do fornecedor).</p>
                         <Button onClick={handleLoadSpecialCfops} disabled={isLoadingSpecialCfops}>
-                            {isLoadingSpecialCfops ? <><Cpu className="mr-2 h-4 w-4 animate-spin" />Analisando...</> : <><Cpu className="mr-2 h-4 w-4" />Analisar Faturamento/Entrega</>}
+                            {isLoadingSpecialCfops ? <><LucideIcons.Cpu className="mr-2 h-4 w-4 animate-spin" />Analisando...</> : <><LucideIcons.Cpu className="mr-2 h-4 w-4" />Analisar Faturamento/Entrega</>}
                         </Button>
                     </div>
 
@@ -1286,10 +1290,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 <div className="text-lg font-bold">Entrega Futura</div>
                                 <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
                                     <Button onClick={() => handleExport(itemsEntregaFutura, 'Entrega_Futura', 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
-                                        <Download className="mr-1 h-3 w-3" /> Excel
+                                        <LucideIcons.Download className="mr-1 h-3 w-3" /> Excel
                                     </Button>
                                     <Button onClick={() => handleExport(itemsEntregaFutura, 'Entrega_Futura', 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
-                                        <Download className="mr-1 h-3 w-3" /> PDF
+                                        <LucideIcons.Download className="mr-1 h-3 w-3" /> PDF
                                     </Button>
                                 </div>
                             </div>
@@ -1300,10 +1304,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 <div className="text-lg font-bold">Simples Faturamento</div>
                                 <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
                                     <Button onClick={() => handleExport(itemsSimplesFaturamento, 'Simples_Faturamento', 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
-                                        <Download className="mr-1 h-3 w-3" /> Excel
+                                        <LucideIcons.Download className="mr-1 h-3 w-3" /> Excel
                                     </Button>
                                     <Button onClick={() => handleExport(itemsSimplesFaturamento, 'Simples_Faturamento', 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
-                                        <Download className="mr-1 h-3 w-3" /> PDF
+                                        <LucideIcons.Download className="mr-1 h-3 w-3" /> PDF
                                     </Button>
                                 </div>
                             </div>
@@ -1333,10 +1337,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                                             <div className="text-lg font-bold">Fornecedor: {supplier}</div>
                                             <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
                                                 <Button onClick={() => handleExport(items, `Fornecedor_${supplier.replace(/\s+/g, '_')}`, 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
-                                                    <Download className="mr-1 h-3 w-3" /> Excel
+                                                    <LucideIcons.Download className="mr-1 h-3 w-3" /> Excel
                                                 </Button>
                                                 <Button onClick={() => handleExport(items, `Fornecedor_${supplier.replace(/\s+/g, '_')}`, 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
-                                                    <Download className="mr-1 h-3 w-3" /> PDF
+                                                    <LucideIcons.Download className="mr-1 h-3 w-3" /> PDF
                                                 </Button>
                                             </div>
                                         </div>
