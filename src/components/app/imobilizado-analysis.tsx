@@ -81,6 +81,17 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
     const [enrichedItems, setEnrichedItems] = useState<any[]>([]);
 
     useEffect(() => {
+        console.log("DEBUG: ImobilizadoAnalysis - initialAllItems length:", initialAllItems?.length);
+        console.log("DEBUG: ImobilizadoAnalysis - reconciliationResults keys:", reconciliationResults ? Object.keys(reconciliationResults) : "null");
+        if (reconciliationResults?.reconciled) {
+            console.log("DEBUG: ImobilizadoAnalysis - first 3 reconciled items samples:", reconciliationResults.reconciled.slice(0, 3).map((r: any) => ({
+                chave: r['Chave Unica'],
+                item: r['Item'],
+                contab: r['Contabilização'],
+                cc: r['Centro de Custo']
+            })));
+        }
+
         if (!initialAllItems) {
             setEnrichedItems([]);
             return;
@@ -140,14 +151,15 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             
             // Se ainda for N/A, tenta buscar nos resultados da conciliação por Chave Única
             if ((contabilizacao === 'N/A' || centroCusto === 'N/A') && reconciliationResults?.reconciled) {
+                const itemChaveUnica = String(item['Chave Unica'] || '').trim();
+                const itemItem = String(item['Item'] || '').trim();
+                
                 const reconciledItem = reconciliationResults.reconciled.find((ri: any) => {
-                    const itemChaveUnica = item['Chave Unica'] || '';
-                    const itemItem = item['Item'] || '';
-                    const riChaveUnica = ri['Chave Unica'] || '';
-                    const riItem = ri['Item'] || '';
+                    const riChaveUnica = String(ri['Chave Unica'] || '').trim();
+                    const riItem = String(ri['Item'] || '').trim();
                     
                     if (itemChaveUnica && riChaveUnica && itemChaveUnica === riChaveUnica) {
-                        return itemItem && riItem ? String(itemItem) === String(riItem) : true;
+                        return itemItem && riItem ? itemItem === riItem : true;
                     }
                     return false;
                 });
@@ -486,15 +498,15 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
 
                 const summarizedValue = typeof value === 'string' && value.length > 35 ? `${value.substring(0, 35)}...` : value;
     
-                if (id === 'Descrição' || id === 'Número da Nota') {
+                if (id === 'Descrição' || id === 'Número da Nota' || id === 'Contabilização' || id === 'Centro de Custo') {
                     return renderCellWithCopy(
-                        <Tooltip><TooltipTrigger asChild><span>{summarizedValue}</span></TooltipTrigger><TooltipContent><p>{value}</p></TooltipContent></Tooltip>,
+                        <Tooltip><TooltipTrigger asChild><span className="cursor-default">{summarizedValue}</span></TooltipTrigger><TooltipContent><p className="max-w-xs">{value}</p></TooltipContent></Tooltip>,
                         value,
                         id
                     );
                 }
                 
-                return <div className={cn("truncate max-w-xs", isIncorrectCfop && "text-red-500", value === null || value === undefined ? 'text-muted-foreground' : '')}>{String(value ?? 'N/A')}</div>;
+                return <div className={cn("truncate max-w-[200px]", isIncorrectCfop && "text-red-500", (value === null || value === undefined || value === 'N/A') ? 'text-muted-foreground italic' : '')}>{String(value ?? 'N/A')}</div>;
             }
         );
     
