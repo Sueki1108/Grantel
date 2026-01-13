@@ -524,10 +524,24 @@ export function CfopValidator(props: CfopValidatorProps) {
         return groups;
     }, [enrichedItems]);
 
+    const [selectedSupplier, setSelectedSupplier] = useState<string>('');
+    const [selectedContabilizacao, setSelectedContabilizacao] = useState<string>('');
+
+    // Efeito para resetar seleções ao mudar de aba principal
     useEffect(() => {
         setRowSelection({});
         setBulkActionState({ classification: null });
-    }, [activeTab]);
+        
+        // Inicializar seletores se vazios
+        if (activeTab === 'categorized-suppliers' && !selectedSupplier) {
+            const suppliers = Object.keys(itemsBySupplier).sort();
+            if (suppliers.length > 0) setSelectedSupplier(suppliers[0]);
+        }
+        if (activeTab === 'contabilizacao-check' && !selectedContabilizacao) {
+            const contabs = Object.keys(itemsByContabilizacao).sort();
+            if (contabs.length > 0) setSelectedContabilizacao(contabs[0]);
+        }
+    }, [activeTab, itemsBySupplier, itemsByContabilizacao]);
 
     useEffect(() => {
         if (!initialItems) {
@@ -683,60 +697,62 @@ export function CfopValidator(props: CfopValidatorProps) {
     };
     
     const handleBulkAction = () => {
-        const activeStatus = activeTab as ValidationStatus;
-        const cfopGroupsForStatus = itemsByStatus[activeStatus] || {};
-        const allCfopsForStatus = Object.keys(cfopGroupsForStatus).sort((a, b) => {
-            const na = parseInt(a, 10);
-            const nb = parseInt(b, 10);
-            if (Number.isNaN(na) || Number.isNaN(nb)) return a.localeCompare(b);
-            return na - nb;
-        });
-
-        // Tenta pegar do estado, se não houver (início), pega o primeiro disponível (mesma lógica da UI)
-        let cfop = activeCfopTabs[activeStatus];
-        if (!cfop && allCfopsForStatus.length > 0) {
-            cfop = allCfopsForStatus[0];
-        }
-
-        if (!cfop) {
-            return;
-        }
-
-        const allItemsInCfop = itemsByStatus[activeStatus][cfop] || [];
+        let itemsToProcess: any[] = [];
         
-        if (allItemsInCfop.length === 0) {
-            setBulkActionState({ classification: null });
-            setRowSelection({});
-            return;
-        }
+        if (activeTab === 'contabilizacao-error') {
+            itemsToProcess = contabilizacaoErroItems;
+        } else if (activeTab === 'categorized-suppliers') {
+            // No caso de fornecedores, precisamos pegar os itens do fornecedor ativo
+            // mas o rowSelection é global para a tabela visível.
+            // Para simplificar e garantir precisão, pegamos os itens que estão na tela.
+            // O DataTable de fornecedores usa itemsBySupplier[activeSupplier]
+            // Como handleBulkAction não sabe qual o activeSupplier dos Tabs, 
+            // vamos tentar inferir ou usar uma abordagem mais genérica.
+            itemsToProcess = Object.values(itemsBySupplier).flat();
+        } else if (activeTab === 'contabilizacao-check') {
+            itemsToProcess = Object.values(itemsByContabilizacao).flat();
+        } else if (activeTab === 'difal-analysis') {
+            itemsToProcess = difalAnalysisData.sujeitosAoDifal;
+        } else {
+            const activeStatus = activeTab as ValidationStatus;
+            const cfopGroupsForStatus = itemsByStatus[activeStatus] || {};
+            const allCfopsForStatus = Object.keys(cfopGroupsForStatus).sort((a, b) => {
+                const na = parseInt(a, 10);
+                const nb = parseInt(b, 10);
+                if (Number.isNaN(na) || Number.isNaN(nb)) return a.localeCompare(b);
+                return na - nb;
+            });
 
-        // Aplicar os mesmos filtros que a DataTable usa para garantir que os índices batam
-        const currentFilters = tabFilters[cfop];
-        const filteredItems = allItemsInCfop.filter(item => {
-            if (!currentFilters) return true;
+            let cfop = activeCfopTabs[activeStatus];
+            if (!cfop && allCfopsForStatus.length > 0) {
+                cfop = allCfopsForStatus[0];
+            }
+
+            if (!cfop) return;
             
-            const cfopCode = item['CFOP'];
-            const cstCode = String(item['CST do ICMS'] || '');
-            const picmsValue = (item['Alíq. ICMS (%)'] !== undefined && item['Alíq. ICMS (%)'] !== null) 
-                ? String(item['Alíq. ICMS (%)']) 
-                : 'N/A';
-            const contabilizacao = item['Contabilização'] || 'N/A';
-            const centroCusto = item['Centro de Custo'] || 'N/A';
-
-            const cfopFull = cfopCode ? `${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}` : '';
-            const cstFull = cstCode ? `${cstCode}: ${getCstDescription(cstCode)}` : '';
-
-            const cfopMatch = !currentFilters.xmlCfops || currentFilters.xmlCfops.has(cfopFull);
-            const cstMatch = !currentFilters.xmlCsts || currentFilters.xmlCsts.has(cstFull);
-            const picmsMatch = !currentFilters.xmlPicms || currentFilters.xmlPicms.has(picmsValue);
-            const contabilizacaoMatch = !currentFilters.contabilizacao || currentFilters.contabilizacao.has(String(contabilizacao));
-            const centroCustoMatch = !currentFilters.centroCusto || currentFilters.centroCusto.has(String(centroCusto));
-
-            return cfopMatch && cstMatch && picmsMatch && contabilizacaoMatch && centroCustoMatch;
-        });
+            const allItemsInCfop = itemsByStatus[activeStatus][cfop] || [];
+            const currentFilters = tabFilters[cfop];
+            
+            itemsToProcess = allItemsInCfop.filter(item => {
+                if (!currentFilters) return true;
+                const cfopCode = item['CFOP'];
+                const cstCode = String(item['CST do ICMS'] || '');
+                const picmsValue = (item['Alíq. ICMS (%)'] !== undefined && item['Alíq. ICMS (%)'] !== null) ? String(item['Alíq. ICMS (%)']) : 'N/A';
+                const contabilizacao = item['Contabilização'] || 'N/A';
+                const centroCusto = item['Centro de Custo'] || 'N/A';
+                const cfopFull = cfopCode ? `${cfopCode}: ${cfopDescriptions[parseInt(cfopCode, 10) as keyof typeof cfopDescriptions] || "N/A"}` : '';
+                const cstFull = cstCode ? `${cstCode}: ${getCstDescription(cstCode)}` : '';
+                const cfopMatch = !currentFilters.xmlCfops || currentFilters.xmlCfops.has(cfopFull);
+                const cstMatch = !currentFilters.xmlCsts || currentFilters.xmlCsts.has(cstFull);
+                const picmsMatch = !currentFilters.xmlPicms || currentFilters.xmlPicms.has(picmsValue);
+                const contabilizacaoMatch = !currentFilters.contabilizacao || currentFilters.contabilizacao.has(String(contabilizacao));
+                const centroCustoMatch = !currentFilters.centroCusto || currentFilters.centroCusto.has(String(centroCusto));
+                return cfopMatch && cstMatch && picmsMatch && contabilizacaoMatch && centroCustoMatch;
+            });
+        }
 
         const selectedItems = Object.keys(rowSelection).map(index => {
-            return filteredItems[parseInt(index)];
+            return itemsToProcess[parseInt(index)];
         }).filter(Boolean);
 
         if (selectedItems.length === 0) return;
@@ -1127,12 +1143,11 @@ export function CfopValidator(props: CfopValidatorProps) {
                         <div className="h-6 border-l" />
                         
                         <div className="flex gap-1">
-                            <Button size="sm" className={cn("bg-secondary text-secondary-foreground", bulkActionState.classification === 'correct' && "bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'correct'}))}><LucideIcons.Check className="mr-2 h-4 w-4" /> Correto</Button>
-                            <Button size="sm" className={cn("bg-secondary text-secondary-foreground", bulkActionState.classification === 'incorrect' && "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-100")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'incorrect'}))}><LucideIcons.X className="mr-2 h-4 w-4" /> Incorreto</Button>
-                            <Button size="sm" className={cn("bg-secondary text-secondary-foreground", bulkActionState.classification === 'verify' && "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100")} onClick={() => setBulkActionState(prev => ({...prev, classification: 'verify'}))}><LucideIcons.HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
-                            <Button size="sm" variant="outline" onClick={() => setBulkActionState(prev => ({...prev, classification: 'unvalidated'}))}><LucideIcons.RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
+                            <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => handleBulkAction('correct')}><LucideIcons.Check className="mr-2 h-4 w-4" /> Correto</Button>
+                            <Button size="sm" className="bg-red-600 text-white hover:bg-red-700" onClick={() => handleBulkAction('incorrect')}><LucideIcons.X className="mr-2 h-4 w-4" /> Incorreto</Button>
+                            <Button size="sm" className="bg-amber-500 text-white hover:bg-amber-600" onClick={() => handleBulkAction('verify')}><LucideIcons.HelpCircle className="mr-2 h-4 w-4" /> Verificar</Button>
+                            <Button size="sm" variant="outline" onClick={() => handleBulkAction('unvalidated')}><LucideIcons.RotateCw className="mr-2 h-4 w-4" /> Reverter</Button>
                         </div>
-                         <Button onClick={handleBulkAction}>Aplicar</Button>
                     </Card>
                 </div>
             )}
@@ -1317,76 +1332,110 @@ export function CfopValidator(props: CfopValidatorProps) {
                 </TabsContent>
                 <TabsContent value="categorized-suppliers" className="mt-4">
                     {Object.keys(itemsBySupplier).length > 0 ? (
-                        <Tabs defaultValue={Object.keys(itemsBySupplier).sort()[0]}>
-                            <div className="flex flex-col gap-4">
-                                <TabsList className="flex flex-wrap h-auto gap-1 bg-transparent p-0">
-                                    {Object.keys(itemsBySupplier).sort().map(supplier => (
-                                        <TabsTrigger 
-                                            key={supplier} 
-                                            value={supplier}
-                                            className="border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-4 bg-muted/30 p-4 rounded-lg border">
+                                <div className="flex-1 max-w-md">
+                                    <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Selecionar Fornecedor</Label>
+                                    <select 
+                                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                                        value={selectedSupplier}
+                                        onChange={(e) => {
+                                            setSelectedSupplier(e.target.value);
+                                            setRowSelection({});
+                                        }}
+                                    >
+                                        {Object.keys(itemsBySupplier).sort().map(supplier => (
+                                            <option key={supplier} value={supplier}>
+                                                {supplier} ({itemsBySupplier[supplier].length} itens)
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex flex-col justify-end h-full">
+                                    <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block invisible">Exportar</Label>
+                                    <div className="flex gap-1 border rounded-md p-1 bg-background">
+                                        <Button 
+                                            onClick={() => handleExport(itemsBySupplier[selectedSupplier] || [], `Fornecedor_${selectedSupplier.replace(/\s+/g, '_')}`, 'excel')} 
+                                            size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                            disabled={!selectedSupplier}
                                         >
-                                            {supplier} ({itemsBySupplier[supplier].length})
-                                        </TabsTrigger>
-                                    ))}
-                                </TabsList>
-                                
-                                {Object.entries(itemsBySupplier).map(([supplier, items]) => (
-                                    <TabsContent key={supplier} value={supplier} className="mt-0">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <div className="text-lg font-bold">Fornecedor: {supplier}</div>
-                                            <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
-                                                <Button onClick={() => handleExport(items, `Fornecedor_${supplier.replace(/\s+/g, '_')}`, 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
-                                                    <LucideIcons.Download className="mr-1 h-3 w-3" /> Excel
-                                                </Button>
-                                                <Button onClick={() => handleExport(items, `Fornecedor_${supplier.replace(/\s+/g, '_')}`, 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
-                                                    <LucideIcons.Download className="mr-1 h-3 w-3" /> PDF
-                                                </Button>
-                                            </div>
-                                        </div>
-                                        <DataTable columns={columns} data={items} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
-                                    </TabsContent>
-                                ))}
+                                            <LucideIcons.Download className="mr-1 h-3 w-3" /> Excel
+                                        </Button>
+                                        <Button 
+                                            onClick={() => handleExport(itemsBySupplier[selectedSupplier] || [], `Fornecedor_${selectedSupplier.replace(/\s+/g, '_')}`, 'pdf')} 
+                                            size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                            disabled={!selectedSupplier}
+                                        >
+                                            <LucideIcons.Download className="mr-1 h-3 w-3" /> PDF
+                                        </Button>
+                                    </div>
+                                </div>
                             </div>
-                        </Tabs>
+                            
+                            {selectedSupplier && (
+                                <div className="animate-in fade-in-0 slide-in-from-top-2 duration-300">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <div className="text-lg font-bold">Fornecedor: {selectedSupplier}</div>
+                                    </div>
+                                    <DataTable columns={columns} data={itemsBySupplier[selectedSupplier] || []} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
+                                </div>
+                            )}
+                        </div>
                     ) : (
                         <div className="text-center text-muted-foreground p-8">Nenhum fornecedor categorizado encontrado.</div>
                     )}
                 </TabsContent>
                 <TabsContent value="contabilizacao-check" className="mt-4">
                     {Object.keys(itemsByContabilizacao).length > 0 ? (
-                        <Tabs defaultValue={Object.keys(itemsByContabilizacao).sort()[0]}>
-                            <div className="flex flex-col gap-4">
-                                <TabsList className="flex flex-wrap h-auto gap-1 bg-transparent p-0">
-                                    {Object.keys(itemsByContabilizacao).sort().map(contab => (
-                                        <TabsTrigger 
-                                            key={contab} 
-                                            value={contab}
-                                            className="border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-4 bg-muted/30 p-4 rounded-lg border">
+                                <div className="flex-1 max-w-md">
+                                    <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Selecionar Contabilização</Label>
+                                    <select 
+                                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                                        value={selectedContabilizacao}
+                                        onChange={(e) => {
+                                            setSelectedContabilizacao(e.target.value);
+                                            setRowSelection({});
+                                        }}
+                                    >
+                                        {Object.keys(itemsByContabilizacao).sort().map(contab => (
+                                            <option key={contab} value={contab}>
+                                                {contab} ({itemsByContabilizacao[contab].length} itens)
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex flex-col justify-end h-full">
+                                    <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block invisible">Exportar</Label>
+                                    <div className="flex gap-1 border rounded-md p-1 bg-background">
+                                        <Button 
+                                            onClick={() => handleExport(itemsByContabilizacao[selectedContabilizacao] || [], `Contab_${selectedContabilizacao.replace(/\s+/g, '_')}`, 'excel')} 
+                                            size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                            disabled={!selectedContabilizacao}
                                         >
-                                            {contab} ({itemsByContabilizacao[contab].length})
-                                        </TabsTrigger>
-                                    ))}
-                                </TabsList>
-                                
-                                {Object.entries(itemsByContabilizacao).map(([contab, items]) => (
-                                    <TabsContent key={contab} value={contab} className="mt-0">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <div className="text-lg font-bold">Contabilização: {contab}</div>
-                                            <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
-                                                <Button onClick={() => handleExport(items, `Contab_${contab.replace(/\s+/g, '_')}`, 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
-                                                    <Download className="mr-1 h-3 w-3" /> Excel
-                                                </Button>
-                                                <Button onClick={() => handleExport(items, `Contab_${contab.replace(/\s+/g, '_')}`, 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
-                                                    <Download className="mr-1 h-3 w-3" /> PDF
-                                                </Button>
-                                            </div>
-                                        </div>
-                                        <DataTable columns={columns} data={items} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
-                                    </TabsContent>
-                                ))}
+                                            <LucideIcons.Download className="mr-1 h-3 w-3" /> Excel
+                                        </Button>
+                                        <Button 
+                                            onClick={() => handleExport(itemsByContabilizacao[selectedContabilizacao] || [], `Contab_${selectedContabilizacao.replace(/\s+/g, '_')}`, 'pdf')} 
+                                            size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                            disabled={!selectedContabilizacao}
+                                        >
+                                            <LucideIcons.Download className="mr-1 h-3 w-3" /> PDF
+                                        </Button>
+                                    </div>
+                                </div>
                             </div>
-                        </Tabs>
+                            
+                            {selectedContabilizacao && (
+                                <div className="animate-in fade-in-0 slide-in-from-top-2 duration-300">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <div className="text-lg font-bold">Contabilização: {selectedContabilizacao}</div>
+                                    </div>
+                                    <DataTable columns={columns} data={itemsByContabilizacao[selectedContabilizacao] || []} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
+                                </div>
+                            )}
+                        </div>
                     ) : (
                         <div className="text-center text-muted-foreground p-8">Nenhum dado de contabilização disponível.</div>
                     )}
