@@ -41,9 +41,7 @@ export type SupplierCategory = {
 export type DifalStatus = 'difal' | 'beneficio-fiscal' | 'disregard';
 
 export interface AllClassifications {
-supplierCategories?: {
-    [competence: string]: SupplierCategory[]
-} & {
+    supplierCategories?: SupplierCategory[];
     [competence: string]: {
         classifications: {
             [uniqueItemId: string]: { classification: Classification };
@@ -69,36 +67,7 @@ supplierCategories?: {
         supplierClassifications?: {
             [supplierCnpj: string]: string | null;
         };
-    };
-};
-    [competence: string]: SupplierCategory[]
-};
-    [competence: string]: {
-        classifications: {
-            [uniqueItemId: string]: { classification: Classification };
-        };
-        accountCodes: {
-            [itemLineId: string]: { accountCode: string };
-        };
-        cfopValidations: {
-            classifications: {
-                [uniqueKey: string]: {
-                    classification: 'correct' | 'incorrect' | 'verify' | 'unvalidated';
-                    isDifal?: boolean;
-                }
-            }
-        },
-        difalValidations?: {
-            classifications: {
-                [uniqueKey: string]: {
-                    status: DifalStatus;
-                }
-            }
-        },
-        supplierClassifications?: {
-            [supplierCnpj: string]: string | null; // categoryId or null
-        }
-    }
+    } | any;
 }
 
 

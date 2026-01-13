@@ -62,7 +62,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
         return <div className="text-center text-muted-foreground p-8">Nenhum item nesta categoria.</div>;
     }
 
-    return <DataTable columns={columns} data={data} rowSelection={rowSelection} setRowSelection={setRowSelection} tableRef={tableRef} onSelectionChange={() => {}} />;
+    return <DataTable columns={columns} data={data} rowSelection={rowSelection} setRowSelection={setRowSelection} tableRef={tableRef} onSelectionChange={() => {}} getRowId={(row) => row.uniqueItemId} />;
 }
 
 
@@ -134,6 +134,8 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             const comparisonKey = `${cleanAndToStr(numeroNota)}-${cleanAndToStr(emitenteCnpj)}`;
             const siengeMatches = siengeItemMap.get(comparisonKey) || [];
 
+            const uniqueItemId = `${item['Chave Unica']}-${item['Item']}`;
+
             let siengeCfopValue = 'N/A';
             if (siengeMatches.length > 0 && hSienge.cfop && hSienge.produtoFiscal) {
                 const siengeMatch = siengeMatches.find(si => {
@@ -173,6 +175,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             
             return {
                 ...item,
+                uniqueItemId,
                 'CFOP (Sienge)': siengeCfopValue,
                 'Contabilização': contabilizacao,
                 'Centro de Custo': centroCusto,
@@ -454,7 +457,10 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 const isIncorrectCfop = supplierCategory && supplierCategory.allowedCfops.length > 0 && !supplierCategory.allowedCfops.includes(String(item['CFOP (Sienge)']));
 
                 if (id === 'Fornecedor') {
-                    const LucideIcon = supplierCategory?.icon ? (LucideIcons[supplierCategory.icon as keyof typeof LucideIcons] as React.ElementType) : Tag;
+                    const iconName = supplierCategory?.icon as keyof typeof LucideIcons;
+                    const LucideIcon = (supplierCategory?.icon && LucideIcons[iconName]) 
+                        ? (LucideIcons[iconName] as React.ElementType) 
+                        : Tag;
                     return (
                         <div className={cn("flex items-center gap-2 group/row", isIncorrectCfop && "text-red-500")}>
                             <Popover>

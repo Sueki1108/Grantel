@@ -40,6 +40,7 @@ interface DataTableProps<TData, TValue> {
   setRowSelection?: React.Dispatch<React.SetStateAction<RowSelectionState>>;
   pageSize?: number;
   autoResetPageIndex?: boolean;
+  getRowId?: (row: TData, index: number, parent?: any) => string;
 }
 
 export function DataTable<TData, TValue>({
@@ -52,6 +53,7 @@ export function DataTable<TData, TValue>({
   setRowSelection: externalSetRowSelection,
   pageSize = 10,
   autoResetPageIndex = true,
+  getRowId,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -72,6 +74,7 @@ export function DataTable<TData, TValue>({
     data,
     columns,
     autoResetPageIndex,
+    getRowId,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
