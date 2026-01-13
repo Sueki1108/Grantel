@@ -111,7 +111,7 @@ const FilterDialog: React.FC<{
 
     useEffect(() => {
         if (isDialogOpen) {
-            const currentGlobalFilters = tabFilters[siengeCfop];
+            const currentGlobalFilters = tabFilters ? tabFilters[siengeCfop] : null;
             
             // Se não houver filtros salvos para este CFOP, começa com tudo selecionado
             setLocalFilters({
@@ -124,12 +124,14 @@ const FilterDialog: React.FC<{
         }
     }, [isDialogOpen, tabFilters, siengeCfop, availableOptions]);
     
-    const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set(), contabilizacao: new Set(), centroCusto: new Set() };
-    const isFilterActive = (filters.xmlCsts?.size ?? availableOptions.xmlCsts.length) < availableOptions.xmlCsts.length ||
+    const filters = (tabFilters && tabFilters[siengeCfop]) || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set(), contabilizacao: new Set(), centroCusto: new Set() };
+    const isFilterActive = filters && (
+                           (filters.xmlCsts?.size ?? availableOptions.xmlCsts.length) < availableOptions.xmlCsts.length ||
                            (filters.xmlPicms?.size ?? availableOptions.xmlPicms.length) < availableOptions.xmlPicms.length ||
                            (filters.xmlCfops?.size ?? availableOptions.xmlCfops.length) < availableOptions.xmlCfops.length ||
                            (filters.contabilizacao?.size ?? availableOptions.contabilizacao.length) < availableOptions.contabilizacao.length ||
-                           (filters.centroCusto?.size ?? availableOptions.centroCusto.length) < availableOptions.centroCusto.length;
+                           (filters.centroCusto?.size ?? availableOptions.centroCusto.length) < availableOptions.centroCusto.length
+    );
 
 
     const handleFilterChange = (type: keyof TabFilters, value: string, checked: boolean) => {
@@ -1236,7 +1238,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     </div>
                                     {allCfopsForStatus.map(cfop => {
                                         const allItemsForCfop = cfopGroupsForStatus[cfop] || [];
-                                        const currentFilters = tabFilters[cfop];
+                                        const currentFilters = tabFilters ? tabFilters[cfop] : null;
                                         
                                         const currentCfopData = allItemsForCfop.filter(item => {
                                             if (!currentFilters) return true;
