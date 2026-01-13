@@ -500,13 +500,20 @@ export function CfopValidator(props: CfopValidatorProps) {
         });
     }, [enrichedItems, allPersistedData, competence]);
 
+    const itemsBySupplier = useMemo(() => {
+        const groups: Record<string, any[]> = {};
+        categorizedSupplierItems.forEach(item => {
+            const supplier = item['Fornecedor'] || 'N/A';
+            if (!groups[supplier]) groups[supplier] = [];
+            groups[supplier].push(item);
+        });
+        return groups;
+    }, [categorizedSupplierItems]);
+
     const itemsByContabilizacao = useMemo(() => {
         const groups: Record<string, any[]> = {};
         enrichedItems.forEach(item => {
             const rawContab = String(item['Contabilização'] || 'N/A').trim();
-            
-            // Normaliza a string tratando-a como uma lista de contas
-            // Aceita tanto '/' quanto ',' como separadores
             const normalizedContab = rawContab
                 .split(/[\/,]/)
                 .map(part => part.trim())
@@ -1309,18 +1316,42 @@ export function CfopValidator(props: CfopValidatorProps) {
                     </Tabs>
                 </TabsContent>
                 <TabsContent value="categorized-suppliers" className="mt-4">
-                    <div className="flex justify-between items-center mb-2">
-                        <div className="text-lg font-bold">Itens de Fornecedores Categorizados</div>
-                        <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
-                            <Button onClick={() => handleExport(categorizedSupplierItems, 'Fornecedores_Categorizados', 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
-                                <Download className="mr-1 h-3 w-3" /> Excel
-                            </Button>
-                            <Button onClick={() => handleExport(categorizedSupplierItems, 'Fornecedores_Categorizados', 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
-                                <Download className="mr-1 h-3 w-3" /> PDF
-                            </Button>
-                        </div>
-                    </div>
-                    <DataTable columns={columns} data={categorizedSupplierItems} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
+                    {Object.keys(itemsBySupplier).length > 0 ? (
+                        <Tabs defaultValue={Object.keys(itemsBySupplier).sort()[0]}>
+                            <div className="flex flex-col gap-4">
+                                <TabsList className="flex flex-wrap h-auto gap-1 bg-transparent p-0">
+                                    {Object.keys(itemsBySupplier).sort().map(supplier => (
+                                        <TabsTrigger 
+                                            key={supplier} 
+                                            value={supplier}
+                                            className="border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                                        >
+                                            {supplier} ({itemsBySupplier[supplier].length})
+                                        </TabsTrigger>
+                                    ))}
+                                </TabsList>
+                                
+                                {Object.entries(itemsBySupplier).map(([supplier, items]) => (
+                                    <TabsContent key={supplier} value={supplier} className="mt-0">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <div className="text-lg font-bold">Fornecedor: {supplier}</div>
+                                            <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
+                                                <Button onClick={() => handleExport(items, `Fornecedor_${supplier.replace(/\s+/g, '_')}`, 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                                    <Download className="mr-1 h-3 w-3" /> Excel
+                                                </Button>
+                                                <Button onClick={() => handleExport(items, `Fornecedor_${supplier.replace(/\s+/g, '_')}`, 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                                    <Download className="mr-1 h-3 w-3" /> PDF
+                                                </Button>
+                                            </div>
+                                        </div>
+                                        <DataTable columns={columns} data={items} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
+                                    </TabsContent>
+                                ))}
+                            </div>
+                        </Tabs>
+                    ) : (
+                        <div className="text-center text-muted-foreground p-8">Nenhum fornecedor categorizado encontrado.</div>
+                    )}
                 </TabsContent>
                 <TabsContent value="contabilizacao-check" className="mt-4">
                     {Object.keys(itemsByContabilizacao).length > 0 ? (
