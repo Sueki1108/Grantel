@@ -799,11 +799,6 @@ export function CfopValidator(props: CfopValidatorProps) {
 
         if (changedCount > 0 || (effectiveClassification && effectiveClassification !== 'all' && effectiveClassification !== 'unvalidated')) {
             onPersistData(updatedPersistedData);
-            
-            // Mudar para a aba de destino se uma classificação específica foi aplicada
-            if (effectiveClassification && effectiveClassification !== 'all' && effectiveClassification !== 'unvalidated') {
-                setActiveTab(effectiveClassification);
-            }
         }
         
         setBulkActionState({ classification: null });
