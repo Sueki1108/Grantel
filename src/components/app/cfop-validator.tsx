@@ -702,15 +702,9 @@ export function CfopValidator(props: CfopValidatorProps) {
         if (activeTab === 'contabilizacao-error') {
             itemsToProcess = contabilizacaoErroItems;
         } else if (activeTab === 'categorized-suppliers') {
-            // No caso de fornecedores, precisamos pegar os itens do fornecedor ativo
-            // mas o rowSelection é global para a tabela visível.
-            // Para simplificar e garantir precisão, pegamos os itens que estão na tela.
-            // O DataTable de fornecedores usa itemsBySupplier[activeSupplier]
-            // Como handleBulkAction não sabe qual o activeSupplier dos Tabs, 
-            // vamos tentar inferir ou usar uma abordagem mais genérica.
-            itemsToProcess = Object.values(itemsBySupplier).flat();
+            itemsToProcess = itemsBySupplier[selectedSupplier] || [];
         } else if (activeTab === 'contabilizacao-check') {
-            itemsToProcess = Object.values(itemsByContabilizacao).flat();
+            itemsToProcess = itemsByContabilizacao[selectedContabilizacao] || [];
         } else if (activeTab === 'difal-analysis') {
             itemsToProcess = difalAnalysisData.sujeitosAoDifal;
         } else {
