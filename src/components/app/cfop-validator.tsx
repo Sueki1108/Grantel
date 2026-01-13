@@ -5,17 +5,11 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { 
-  Check, X, HelpCircle, RotateCw, ListFilter, Copy, Download, Factory, Wrench, 
-  HardHat, Settings, Ticket, Tag, RefreshCw, ChevronDown, ChevronRight, 
-  MinusCircle, Cpu, EyeOff, ShieldCheck, TicketX, AlertTriangle, CheckCircle, BookOpen 
-} from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import type { AllClassifications, SupplierCategory, Classification, DifalStatus } from '@/lib/types';
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cfopDescriptions } from '@/lib/cfop';
@@ -682,22 +676,40 @@ export function CfopValidator(props: CfopValidatorProps) {
         onPersistData(updatedPersistedData);
     };
 
-    const handleToggleContabilizacaoError = (key: string, marked: boolean) => {
+    const handleToggleContabilizacaoError = (item: any, marked: boolean) => {
         if (!competence) return;
         const updatedData = JSON.parse(JSON.stringify(allPersistedData));
         if (!updatedData[competence]) updatedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {}}, supplierClassifications: {}, contabilizacaoErrors: {} } as any;
         if (!updatedData[competence].contabilizacaoErrors) updatedData[competence].contabilizacaoErrors = {} as any;
-        updatedData[competence].contabilizacaoErrors[key] = marked;
+        
+        const accessKey = item['Chave de acesso'] || item['Chave Unica'];
+        
+        if (accessKey) {
+            // Se tiver chave de acesso, marcar todos os itens desta nota
+            enrichedItems.forEach((i: any) => {
+                const iAccessKey = i['Chave de acesso'] || i['Chave Unica'];
+                if (iAccessKey === accessKey) {
+                    const iErrorKey = i['Chave de acesso'] && i['Item'] ? `${i['Chave de acesso']}-${i['Item']}` : `${i['Chave Unica']}-${i['Item']}`;
+                    updatedData[competence].contabilizacaoErrors[iErrorKey] = marked;
+                }
+            });
+        } else {
+            const errorKey = item['Chave de acesso'] && item['Item'] ? `${item['Chave de acesso']}-${item['Item']}` : `${item['Chave Unica']}-${item['Item']}`;
+            updatedData[competence].contabilizacaoErrors[errorKey] = marked;
+        }
+        
         onPersistData(updatedData);
     };
 
-    const handleCorrigido = (key: string) => {
-        handleToggleContabilizacaoError(key, false);
+    const handleCorrigido = (item: any) => {
+        handleToggleContabilizacaoError(item, false);
         toast({ title: 'Erro de contabilização corrigido' });
     };
     
-    const handleBulkAction = () => {
+    const handleBulkAction = (forcedClassification?: ValidationStatus) => {
         let itemsToProcess: any[] = [];
+        
+        const effectiveClassification = forcedClassification || bulkActionState.classification;
         
         if (activeTab === 'contabilizacao-error') {
             itemsToProcess = contabilizacaoErroItems;
@@ -768,22 +780,27 @@ export function CfopValidator(props: CfopValidatorProps) {
             
             const uniqueKey = normalizeKey(`${cnpj}-${productCode}-${siengeCfopValue}-${contabilizacaoValue}`);
             
-            if (bulkActionState.classification === 'unvalidated') {
+            if (effectiveClassification === 'unvalidated') {
                 if (newValidations[uniqueKey]) {
                     delete newValidations[uniqueKey];
                     changedCount++;
                 }
-            } else if (bulkActionState.classification) {
+            } else if (effectiveClassification) {
                 const current = newValidations[uniqueKey] || { isDifal: false };
-                if (current.classification !== bulkActionState.classification) {
-                    newValidations[uniqueKey] = { ...current, classification: bulkActionState.classification };
+                if (current.classification !== effectiveClassification) {
+                    newValidations[uniqueKey] = { ...current, classification: effectiveClassification };
                     changedCount++;
                 }
             }
         });
 
-        if (changedCount > 0) {
+        if (changedCount > 0 || effectiveClassification) {
             onPersistData(updatedPersistedData);
+            
+            // Mudar para a aba de destino se uma classificação específica foi aplicada
+            if (effectiveClassification && effectiveClassification !== 'all') {
+                setActiveTab(effectiveClassification);
+            }
         }
         
         setBulkActionState({ classification: null });
@@ -985,11 +1002,31 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 </PopoverTrigger>
                                 <PopoverContent className="w-56 p-2" onClick={(e) => e.stopPropagation()}>
                                      <div className="space-y-1">
-                                        {Array.isArray(supplierCategories) && supplierCategories.map((cat: SupplierCategory) => (
-                                            <Button key={cat.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleSupplierCategoryChange(supplierCnpj, cat.id)}>{cat.name}</Button>
-                                        ))}
+                                        {Array.isArray(supplierCategories) && supplierCategories.length > 0 ? (
+                                            supplierCategories.map((cat: SupplierCategory) => {
+                                                const CatIcon = (cat.icon && LucideIcons[cat.icon as keyof typeof LucideIcons])
+                                                    ? (LucideIcons[cat.icon as keyof typeof LucideIcons] as React.ElementType)
+                                                    : LucideIcons.Tag;
+                                                return (
+                                                    <Button 
+                                                        key={cat.id} 
+                                                        variant={supplierClassificationId === cat.id ? "default" : "ghost"} 
+                                                        size="sm" 
+                                                        className="w-full justify-start gap-2" 
+                                                        onClick={() => handleSupplierCategoryChange(supplierCnpj, cat.id)}
+                                                    >
+                                                        <CatIcon className="h-4 w-4" />
+                                                        <span className="truncate">{cat.name}</span>
+                                                    </Button>
+                                                );
+                                            })
+                                        ) : (
+                                            <div className="text-xs text-center p-2 text-muted-foreground italic">Nenhuma categoria criada</div>
+                                        )}
                                         <hr className="my-1"/>
-                                        <Button variant="destructive" size="sm" className="w-full justify-start" onClick={() => handleSupplierCategoryChange(supplierCnpj, null)}>Remover Classificação</Button>
+                                        <Button variant="ghost" size="sm" className="w-full justify-start text-red-500 hover:text-red-500 hover:bg-red-50" onClick={() => handleSupplierCategoryChange(supplierCnpj, null)}>
+                                            <LucideIcons.Trash2 className="mr-2 h-4 w-4" /> Remover Classificação
+                                        </Button>
                                     </div>
                                 </PopoverContent>
                             </Popover>
@@ -1026,7 +1063,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                         <div className="flex items-center gap-2">
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleToggleContabilizacaoError(errorKey, !isMarked); }}>
+                                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleToggleContabilizacaoError(item, !isMarked); }}>
                                         <LucideIcons.AlertTriangle className={cn("h-4 w-4", isMarked ? "text-destructive" : "text-muted-foreground")} />
                                     </Button>
                                 </TooltipTrigger>
@@ -1087,8 +1124,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
-                                            const key = row.original['Chave de acesso'] && row.original['Item'] ? `${row.original['Chave de acesso']}-${row.original['Item']}` : `${row.original['Chave Unica']}-${row.original['Item']}`;
-                                            handleCorrigido(key);
+                                            handleCorrigido(row.original);
                                         }}>
                                             <LucideIcons.CheckCircle className="h-4 w-4 text-green-600" />
                                         </Button>
@@ -1448,10 +1484,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 <div className="flex gap-2">
                                     <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
                                         <Button onClick={() => handleExport(difalAnalysisData.sujeitosAoDifal, 'Sujeitos_DIFAL', 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
-                                            <Download className="mr-1 h-3 w-3" /> Excel
+                                            <LucideIcons.Download className="mr-1 h-3 w-3" /> Excel
                                         </Button>
                                         <Button onClick={() => handleExport(difalAnalysisData.sujeitosAoDifal, 'Sujeitos_DIFAL', 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
-                                            <Download className="mr-1 h-3 w-3" /> PDF
+                                            <LucideIcons.Download className="mr-1 h-3 w-3" /> PDF
                                         </Button>
                                     </div>
                                     <Button 
@@ -1461,17 +1497,15 @@ export function CfopValidator(props: CfopValidatorProps) {
                                             toast({ title: "Lista atualizada", description: `${difalAnalysisData.sujeitosAoDifal.length} itens sujeitos a DIFAL encontrados.` });
                                         }}
                                     >
-                                        <RefreshCw className="mr-2 h-4 w-4" /> Atualizar Lista
+                                        <LucideIcons.RefreshCw className="mr-2 h-4 w-4" /> Atualizar Lista
                                     </Button>
                                 </div>
                             </div>
                             <DataTable columns={[...columns, { id: 'difal-actions', header: 'Ações DIFAL', cell: ({row}) => (
                                 <div className="flex justify-center gap-1">
-                                    <TooltipProvider>
-                                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([row.original], 'difal')}><Ticket className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar como DIFAL</p></TooltipContent></Tooltip>
-                                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" onClick={() => handleDifalStatusChange([row.original], 'beneficio-fiscal')}><ShieldCheck className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Benefício Fiscal</p></TooltipContent></Tooltip>
-                                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-gray-500" onClick={() => handleDifalStatusChange([row.original], 'disregard')}><EyeOff className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Desconsiderar</p></TooltipContent></Tooltip>
-                                    </TooltipProvider>
+                                    <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([row.original], 'difal')}><LucideIcons.Ticket className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar como DIFAL</p></TooltipContent></Tooltip>
+                                    <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" onClick={() => handleDifalStatusChange([row.original], 'beneficio-fiscal')}><LucideIcons.ShieldCheck className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Benefício Fiscal</p></TooltipContent></Tooltip>
+                                    <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-gray-500" onClick={() => handleDifalStatusChange([row.original], 'disregard')}><LucideIcons.EyeOff className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Desconsiderar</p></TooltipContent></Tooltip>
                                 </div>
                             )}]} data={difalAnalysisData.sujeitosAoDifal} autoResetPageIndex={false} />
                         </TabsContent>
@@ -1480,19 +1514,17 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 <div className="text-lg font-bold">Itens DIFAL</div>
                                 <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
                                     <Button onClick={() => handleExport(difalAnalysisData.difalItems, 'Itens_DIFAL', 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
-                                        <Download className="mr-1 h-3 w-3" /> Excel
+                                        <LucideIcons.Download className="mr-1 h-3 w-3" /> Excel
                                     </Button>
                                     <Button onClick={() => handleExport(difalAnalysisData.difalItems, 'Itens_DIFAL', 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
-                                        <Download className="mr-1 h-3 w-3" /> PDF
+                                        <LucideIcons.Download className="mr-1 h-3 w-3" /> PDF
                                     </Button>
                                 </div>
                             </div>
                             <DataTable columns={[...columns, { id: 'difal-actions', header: 'Ações DIFAL', cell: ({row}) => (
                                 <div className="flex justify-center gap-1">
-                                    <TooltipProvider>
-                                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" onClick={() => handleDifalStatusChange([row.original], 'beneficio-fiscal')}><ShieldCheck className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Benefício Fiscal</p></TooltipContent></Tooltip>
-                                         <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-gray-500" onClick={() => handleDifalStatusChange([row.original], 'disregard')}><EyeOff className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Desconsiderar</p></TooltipContent></Tooltip>
-                                    </TooltipProvider>
+                                     <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" onClick={() => handleDifalStatusChange([row.original], 'beneficio-fiscal')}><LucideIcons.ShieldCheck className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Marcar como Benefício Fiscal</p></TooltipContent></Tooltip>
+                                     <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-gray-500" onClick={() => handleDifalStatusChange([row.original], 'disregard')}><LucideIcons.EyeOff className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Desconsiderar</p></TooltipContent></Tooltip>
                                 </div>
                             )}]} data={difalAnalysisData.difalItems} autoResetPageIndex={false} />
                         </TabsContent>
@@ -1501,10 +1533,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 <div className="text-lg font-bold">Benefício Fiscal</div>
                                 <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
                                     <Button onClick={() => handleExport(difalAnalysisData.beneficioFiscalItems, 'Beneficio_Fiscal', 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
-                                        <Download className="mr-1 h-3 w-3" /> Excel
+                                        <LucideIcons.Download className="mr-1 h-3 w-3" /> Excel
                                     </Button>
                                     <Button onClick={() => handleExport(difalAnalysisData.beneficioFiscalItems, 'Beneficio_Fiscal', 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
-                                        <Download className="mr-1 h-3 w-3" /> PDF
+                                        <LucideIcons.Download className="mr-1 h-3 w-3" /> PDF
                                     </Button>
                                 </div>
                             </div>
@@ -1515,18 +1547,16 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 <div className="text-lg font-bold">Desconsiderados</div>
                                 <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
                                     <Button onClick={() => handleExport(difalAnalysisData.desconsideradosItems, 'Desconsiderados', 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
-                                        <Download className="mr-1 h-3 w-3" /> Excel
+                                        <LucideIcons.Download className="mr-1 h-3 w-3" /> Excel
                                     </Button>
                                     <Button onClick={() => handleExport(difalAnalysisData.desconsideradosItems, 'Desconsiderados', 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
-                                        <Download className="mr-1 h-3 w-3" /> PDF
+                                        <LucideIcons.Download className="mr-1 h-3 w-3" /> PDF
                                     </Button>
                                 </div>
                             </div>
                             <DataTable columns={[...columns, { id: 'difal-actions', header: 'Ações DIFAL', cell: ({row}) => (
                                 <div className="flex justify-center gap-1">
-                                    <TooltipProvider>
-                                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([row.original], 'difal')}><TicketX className="h-4 w-4" /> Reverter para DIFAL</Button></TooltipTrigger><TooltipContent><p>Reverter e Marcar como DIFAL</p></TooltipContent></Tooltip>
-                                    </TooltipProvider>
+                                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" onClick={() => handleDifalStatusChange([row.original], 'difal')}><LucideIcons.TicketX className="h-4 w-4" /> Reverter para DIFAL</Button></TooltipTrigger><TooltipContent><p>Reverter e Marcar como DIFAL</p></TooltipContent></Tooltip>
                                 </div>
                             )}]} data={difalAnalysisData.desconsideradosItems} autoResetPageIndex={false} />
                         </TabsContent>

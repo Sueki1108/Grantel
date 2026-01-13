@@ -470,21 +470,31 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                                     </button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-56 p-2" onClick={(e) => e.stopPropagation()}>
-                                     <div className="grid grid-cols-5 gap-1">
-                                        {supplierCategories.map(cat => {
-                                            const CatIcon = LucideIcons[cat.icon as keyof typeof LucideIcons] || Tag;
-                                            return (
-                                                <Tooltip key={cat.id}>
-                                                    <TooltipTrigger asChild>
-                                                         <Button variant={supplierClassificationId === cat.id ? "default" : "outline"} size="icon" className="h-9 w-9" onClick={() => handleSupplierCategoryChange(supplierCnpj, cat.id)}><CatIcon className="h-4 w-4" /></Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent><p>{cat.name}</p></TooltipContent>
-                                                </Tooltip>
-                                            )
-                                        })}
-                                    </div>
+                                     <div className="space-y-1">
+                                        {Array.isArray(supplierCategories) && supplierCategories.length > 0 ? (
+                                            supplierCategories.map(cat => {
+                                                const CatIcon = LucideIcons[cat.icon as keyof typeof LucideIcons] || LucideIcons.Tag;
+                                                return (
+                                                    <Button 
+                                                        key={cat.id} 
+                                                        variant={supplierClassificationId === cat.id ? "default" : "ghost"} 
+                                                        size="sm" 
+                                                        className="w-full justify-start gap-2" 
+                                                        onClick={() => handleSupplierCategoryChange(supplierCnpj, cat.id)}
+                                                    >
+                                                        <CatIcon className="h-4 w-4" />
+                                                        <span className="truncate">{cat.name}</span>
+                                                    </Button>
+                                                )
+                                            })
+                                        ) : (
+                                            <div className="text-xs text-center p-2 text-muted-foreground italic">Nenhuma categoria criada</div>
+                                        )}
+                                     </div>
                                     <hr className="my-2"/>
-                                    <Button variant="ghost" size="sm" className="w-full justify-start text-red-500 hover:text-red-500 hover:bg-red-50" onClick={() => handleSupplierCategoryChange(supplierCnpj, null)}>Remover Classificação</Button>
+                                    <Button variant="ghost" size="sm" className="w-full justify-start text-red-500 hover:text-red-500 hover:bg-red-50" onClick={() => handleSupplierCategoryChange(supplierCnpj, null)}>
+                                        <LucideIcons.Trash2 className="mr-2 h-4 w-4" /> Remover Classificação
+                                    </Button>
                                 </PopoverContent>
                             </Popover>
                             {renderCellWithCopy(value, value, 'Fornecedor')}
@@ -770,19 +780,19 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                                 <ClassificationTable data={filteredItems.unclassified} columns={columns} {...{rowSelection, setRowSelection, tableRef}} />
                             </TabsContent>
                             <TabsContent value="imobilizado" className="mt-6">
-                                <Button onClick={() => handleDownload(filteredItems.imobilizado, 'imobilizado')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
+                                <Button onClick={() => handleDownload(filteredItems.imobilizado, 'imobilizado')} className="mb-4"><LucideIcons.Download className="mr-2 h-4 w-4" /> Baixar</Button>
                                 <ClassificationTable data={filteredItems.imobilizado} columns={columns} {...{rowSelection, setRowSelection, tableRef}} />
                             </TabsContent>
                             <TabsContent value="uso-consumo" className="mt-6">
-                                <Button onClick={() => handleDownload(filteredItems['uso-consumo'], 'uso-consumo')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
+                                <Button onClick={() => handleDownload(filteredItems['uso-consumo'], 'uso-consumo')} className="mb-4"><LucideIcons.Download className="mr-2 h-4 w-4" /> Baixar</Button>
                                 <ClassificationTable data={filteredItems['uso-consumo']} columns={columns} {...{rowSelection, setRowSelection, tableRef}} />
                             </TabsContent>
                             <TabsContent value="utilizado-em-obra" className="mt-6">
-                                <Button onClick={() => handleDownload(filteredItems['utilizado-em-obra'], 'utilizado-em-obra')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
+                                <Button onClick={() => handleDownload(filteredItems['utilizado-em-obra'], 'utilizado-em-obra')} className="mb-4"><LucideIcons.Download className="mr-2 h-4 w-4" /> Baixar</Button>
                                 <ClassificationTable data={filteredItems['utilizado-em-obra']} columns={columns} {...{rowSelection, setRowSelection, tableRef}} />
                             </TabsContent>
                              <TabsContent value="verify" className="mt-6">
-                                <Button onClick={() => handleDownload(filteredItems.verify, 'a-verificar')} className="mb-4"><Download className="mr-2 h-4 w-4" /> Baixar</Button>
+                                <Button onClick={() => handleDownload(filteredItems.verify, 'a-verificar')} className="mb-4"><LucideIcons.Download className="mr-2 h-4 w-4" /> Baixar</Button>
                                 <ClassificationTable data={filteredItems.verify} columns={columns} {...{rowSelection, setRowSelection, tableRef}} />
                             </TabsContent>
                         </Tabs>
