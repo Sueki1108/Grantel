@@ -682,15 +682,18 @@ export function CfopValidator(props: CfopValidatorProps) {
         if (!updatedData[competence]) updatedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {}}, supplierClassifications: {}, contabilizacaoErrors: {} } as any;
         if (!updatedData[competence].contabilizacaoErrors) updatedData[competence].contabilizacaoErrors = {} as any;
         
-        const accessKey = item['Chave de acesso'] || item['Chave Unica'];
+        // Se um item foi fornecido, marcar todos os itens da mesma nota
+        const noteNumber = item['Número da Nota'];
+        const cnpj = (item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
         
-        if (accessKey) {
-            // Se tiver chave de acesso, marcar todos os itens desta nota
-            enrichedItems.forEach((i: any) => {
-                const iAccessKey = i['Chave de acesso'] || i['Chave Unica'];
-                if (iAccessKey === accessKey) {
-                    const iErrorKey = i['Chave de acesso'] && i['Item'] ? `${i['Chave de acesso']}-${i['Item']}` : `${i['Chave Unica']}-${i['Item']}`;
-                    updatedData[competence].contabilizacaoErrors[iErrorKey] = marked;
+        if (noteNumber && cnpj) {
+            enrichedItems.forEach(enrichedItem => {
+                const itemNoteNumber = enrichedItem['Número da Nota'];
+                const itemCnpj = (enrichedItem['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
+                
+                if (itemNoteNumber === noteNumber && itemCnpj === cnpj) {
+                    const itemKey = enrichedItem['Chave de acesso'] && enrichedItem['Item'] ? `${enrichedItem['Chave de acesso']}-${enrichedItem['Item']}` : `${enrichedItem['Chave Unica']}-${enrichedItem['Item']}`;
+                    updatedData[competence].contabilizacaoErrors[itemKey] = marked;
                 }
             });
         } else {
@@ -794,11 +797,11 @@ export function CfopValidator(props: CfopValidatorProps) {
             }
         });
 
-        if (changedCount > 0 || effectiveClassification) {
+        if (changedCount > 0) {
             onPersistData(updatedPersistedData);
             
             // Mudar para a aba de destino se uma classificação específica foi aplicada
-            if (effectiveClassification && effectiveClassification !== 'all') {
+            if (effectiveClassification && effectiveClassification !== 'all' && effectiveClassification !== 'unvalidated') {
                 setActiveTab(effectiveClassification);
             }
         }
@@ -1057,8 +1060,8 @@ export function CfopValidator(props: CfopValidatorProps) {
                 }
 
                 if (id === 'Contabilização') {
-                    const errorKey = item['Chave de acesso'] && item['Item'] ? `${item['Chave de acesso']}-${item['Item']}` : `${item['Chave Unica']}-${item['Item']}`;
-                    const isMarked = !!contabilizacaoErrors[errorKey];
+                    const itemKey = item['Chave de acesso'] && item['Item'] ? `${item['Chave de acesso']}-${item['Item']}` : `${item['Chave Unica']}-${item['Item']}`;
+                    const isMarked = !!contabilizacaoErrors[itemKey];
                     return (
                         <div className="flex items-center gap-2">
                             <Tooltip>
@@ -1067,7 +1070,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                                         <LucideIcons.AlertTriangle className={cn("h-4 w-4", isMarked ? "text-destructive" : "text-muted-foreground")} />
                                     </Button>
                                 </TooltipTrigger>
-                                <TooltipContent><p>{isMarked ? "Erro de contabilização" : "Marcar erro de contabilização"}</p></TooltipContent>
+                                <TooltipContent><p>{isMarked ? "Erro de contabilização (marcar toda nota)" : "Marcar erro de contabilização (toda nota)"}</p></TooltipContent>
                             </Tooltip>
                             {renderCellWithCopy(String(value ?? 'N/A'), String(value ?? 'N/A'), 'Contabilização')}
                         </div>
@@ -1126,10 +1129,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
                                             handleCorrigido(row.original);
                                         }}>
-                                            <LucideIcons.CheckCircle className="h-4 w-4 text-green-600" />
+                                            <LucideIcons.CheckCircle className="h-4 w-4 text-emerald-600" />
                                         </Button>
                                     </TooltipTrigger>
-                                    <TooltipContent><p>Corrigido</p></TooltipContent>
+                                    <TooltipContent><p>Corrigido (marcar toda nota)</p></TooltipContent>
                                 </Tooltip>
                             )}
                         </div>
