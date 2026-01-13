@@ -682,7 +682,7 @@ export function CfopValidator(props: CfopValidatorProps) {
         if (!updatedData[competence]) updatedData[competence] = { classifications: {}, accountCodes: {}, cfopValidations: { classifications: {} }, difalValidations: { classifications: {}}, supplierClassifications: {}, contabilizacaoErrors: {} } as any;
         if (!updatedData[competence].contabilizacaoErrors) updatedData[competence].contabilizacaoErrors = {} as any;
         
-        // Se um item foi fornecido, marcar todos os itens da mesma nota
+        // Marcar todos os itens da mesma nota
         const noteNumber = item['Número da Nota'];
         const cnpj = (item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
         
@@ -797,7 +797,7 @@ export function CfopValidator(props: CfopValidatorProps) {
             }
         });
 
-        if (changedCount > 0) {
+        if (changedCount > 0 || (effectiveClassification && effectiveClassification !== 'all' && effectiveClassification !== 'unvalidated')) {
             onPersistData(updatedPersistedData);
             
             // Mudar para a aba de destino se uma classificação específica foi aplicada
@@ -999,7 +999,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 <PopoverTrigger asChild>
                                     <button onClick={(e) => e.stopPropagation()} className="transition-opacity">
                                         <Tooltip><TooltipTrigger asChild>
-                                            <LucideIcon className={cn("h-4 w-4", !isAllowedCfop && "text-red-500", category && isAllowedCfop ? "text-primary" : "text-muted-foreground")} />
+                                            <LucideIcons.Tag className={cn("h-4 w-4", !isAllowedCfop && "text-red-500", category && isAllowedCfop ? "text-primary" : "text-muted-foreground")} />
                                         </TooltipTrigger><TooltipContent><p>{(category as unknown as SupplierCategory)?.name || "Sem categoria"}</p></TooltipContent></Tooltip>
                                     </button>
                                 </PopoverTrigger>
