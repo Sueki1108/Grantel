@@ -192,18 +192,14 @@ const FilterDialog: React.FC<{
             });
         } else {
             setTabFilters(prev => {
-                const newFilters = { ...prev };
-                if (isAllCsts && isAllPicms && isAllCfops && isAllContabilizacao && isAllCentroCusto) {
-                    delete newFilters[siengeCfop];
-                } else {
-                    newFilters[siengeCfop] = {
-                        xmlCsts: new Set(localFilters.xmlCsts),
-                        xmlPicms: new Set(localFilters.xmlPicms),
-                        xmlCfops: new Set(localFilters.xmlCfops),
-                        contabilizacao: new Set(localFilters.contabilizacao),
-                        centroCusto: new Set(localFilters.centroCusto),
-                    };
-                }
+                const newFilters: Record<string, TabFilters> = { ...prev };
+                newFilters[siengeCfop] = {
+                    xmlCsts: new Set(localFilters.xmlCsts),
+                    xmlPicms: new Set(localFilters.xmlPicms),
+                    xmlCfops: new Set(localFilters.xmlCfops),
+                    contabilizacao: new Set(localFilters.contabilizacao),
+                    centroCusto: new Set(localFilters.centroCusto),
+                };
                 return newFilters;
             });
         }
@@ -1158,7 +1154,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                         <TabsTrigger value="faturamento-entrega">Faturamento</TabsTrigger>
                         <TabsTrigger value="difal-analysis">DIFAL</TabsTrigger>
                         <TabsTrigger value="categorized-suppliers" className="flex gap-2"><Tag className="h-4 w-4" /> Fornecedores ({categorizedSupplierItems.length})</TabsTrigger>
-                        <TabsTrigger value="contabilizacao-check" className="flex gap-2"><BookOpen className="h-4 w-4" /> Contabilização</TabsTrigger>
+                        <TabsTrigger value="contabilizacao-check" className="flex gap-2"><LucideIcons.BookOpen className="h-4 w-4" /> Contabilização</TabsTrigger>
                     </TabsList>
                     <div className="flex gap-2 ml-4">
                         <Button onClick={handleEnrichData} variant="outline" size="sm"><RefreshCw className="mr-2 h-4 w-4" />Carregar ICMS/CEST do XML</Button>
