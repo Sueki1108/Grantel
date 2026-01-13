@@ -564,17 +564,39 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             let key: string | undefined, docData: any;
             let docKeyForDuplicates: string | undefined;
 
-            if (reg === 'C100' && parts.length > 9 && parts[9]?.length === 44) {
-                key = parts[9];
-                const participant = participantData.get(parts[4]);
-                docKeyForDuplicates = `${parts[2]}-${parts[6]}-${participant?.cnpj || parts[4]}`; // ind_oper, num_doc, cnpj
-                docData = { key, reg, indOper: parts[2], codPart: parts[4], serie: parts[6], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12], vlDesc: parts[14], lineNumber: i + 1 };
-            } else if (reg === 'D100' && parts.length > 10 && parts[10]?.length === 44) {
-                key = parts[10];
-                const participant = participantData.get(parts[4]);
-                docKeyForDuplicates = `${parts[2]}-${parts[6]}-${participant?.cnpj || parts[4]}`; // ind_oper, num_doc, cnpj
-                const vlDoc = parts.length > 16 ? parts[16] : '0';
-                docData = { key, reg, indOper: parts[2], codPart: parts[4], serie: parts[7], dtDoc: parts[8], dtES: parts[9], vlDoc: vlDoc, lineNumber: i + 1 };
+            if (reg === 'C100' && parts.length > 8) {
+                // Tenta encontrar a chave de 44 dígitos em qualquer posição a partir do campo 8
+                // Normalmente está em parts[9], mas pode variar dependendo da versão do SPED ou software emissor
+                key = undefined;
+                for (let j = 8; j < Math.min(parts.length, 12); j++) {
+                    const potentialKey = (parts[j] || '').trim();
+                    if (potentialKey.length === 44 && /^\d+$/.test(potentialKey)) {
+                        key = potentialKey;
+                        break;
+                    }
+                }
+
+                if (key) {
+                    const participant = participantData.get(parts[4]);
+                    docKeyForDuplicates = `${parts[2]}-${parts[6]}-${participant?.cnpj || parts[4]}`; // ind_oper, num_doc, cnpj
+                    docData = { key, reg, indOper: parts[2], codPart: parts[4], serie: parts[6], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12], vlDesc: parts[14], lineNumber: i + 1 };
+                }
+            } else if (reg === 'D100' && parts.length > 9) {
+                key = undefined;
+                for (let j = 9; j < Math.min(parts.length, 13); j++) {
+                    const potentialKey = (parts[j] || '').trim();
+                    if (potentialKey.length === 44 && /^\d+$/.test(potentialKey)) {
+                        key = potentialKey;
+                        break;
+                    }
+                }
+
+                if (key) {
+                    const participant = participantData.get(parts[4]);
+                    docKeyForDuplicates = `${parts[2]}-${parts[6]}-${participant?.cnpj || parts[4]}`; // ind_oper, num_doc, cnpj
+                    const vlDoc = parts.length > 16 ? parts[16] : '0';
+                    docData = { key, reg, indOper: parts[2], codPart: parts[4], serie: parts[7], dtDoc: parts[8], dtES: parts[9], vlDoc: vlDoc, lineNumber: i + 1 };
+                }
             }
             
 
