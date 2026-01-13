@@ -69,6 +69,7 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
 export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, competence, onPersistData, allPersistedData, reconciliationResults }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
+    const tableRef = React.useRef<ReactTable<any> | null>(null);
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
     const containerRef = React.useRef<HTMLDivElement>(null);
     const [activeTab, setActiveTab] = useState<Classification>('unclassified');
@@ -418,8 +419,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         toast({ title: 'Download Iniciado' });
     };
 
-    const tableRef = React.useRef<ReactTable<any> | null>(null);
-    
     const columns = useMemo(() => {
         const copyToClipboard = (text: string | number, type: string) => {
             const textToCopy = String(text);
