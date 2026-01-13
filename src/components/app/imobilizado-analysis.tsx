@@ -751,7 +751,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 </CardHeader>
                 <CardContent>
                     <TooltipProvider>
-                        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value)} className="w-full">
+                        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Classification)} className="w-full">
                             <TabsList className="grid w-full grid-cols-5">
                                 <TabsTrigger value="unclassified" className="flex gap-2"><List />Não Classificados ({filteredItems.unclassified.length})</TabsTrigger>
                                 <TabsTrigger value="imobilizado" className="flex gap-2"><Factory />Imobilizado ({filteredItems.imobilizado.length})</TabsTrigger>

@@ -5,7 +5,11 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
-import { Check, X, HelpCircle, RotateCw, ListFilter, Copy, Download, Factory, Wrench, HardHat, Settings, Ticket, Tag, RefreshCw, ChevronDown, ChevronRight, MinusCircle, Cpu, EyeOff, ShieldCheck, TicketX, AlertTriangle, CheckCircle } from "lucide-react";
+import { 
+  Check, X, HelpCircle, RotateCw, ListFilter, Copy, Download, Factory, Wrench, 
+  HardHat, Settings, Ticket, Tag, RefreshCw, ChevronDown, ChevronRight, 
+  MinusCircle, Cpu, EyeOff, ShieldCheck, TicketX, AlertTriangle, CheckCircle, BookOpen 
+} from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import type { AllClassifications, SupplierCategory, Classification, DifalStatus } from '@/lib/types';
 import {
@@ -110,29 +114,6 @@ const FilterDialog: React.FC<{
             centroCusto: Array.from(centrosCusto).sort(),
         };
     }, [items]);
-    
-    const itemsByContabilizacao = useMemo(() => {
-        const groups: Record<string, any[]> = {};
-        enrichedItems.forEach(item => {
-            const rawContab = String(item['Contabilização'] || 'N/A').trim();
-            
-            // Normaliza a string tratando-a como uma lista de contas separadas por '/'
-            // 1. Divide pela barra
-            // 2. Remove espaços extras de cada conta
-            // 3. Ordena as contas alfabeticamente
-            // 4. Junta novamente com a barra padrão
-            const normalizedContab = rawContab
-                .split('/')
-                .map(part => part.trim())
-                .filter(Boolean)
-                .sort((a, b) => a.localeCompare(b))
-                .join(' / ');
-            
-            if (!groups[normalizedContab]) groups[normalizedContab] = [];
-            groups[normalizedContab].push(item);
-        });
-        return groups;
-    }, [enrichedItems]);
 
     useEffect(() => {
         if (isDialogOpen) {
@@ -150,11 +131,11 @@ const FilterDialog: React.FC<{
     }, [isDialogOpen, tabFilters, siengeCfop, availableOptions]);
     
     const filters = tabFilters[siengeCfop] || { xmlCsts: new Set(), xmlPicms: new Set(), xmlCfops: new Set(), contabilizacao: new Set(), centroCusto: new Set() };
-    const isFilterActive = filters.xmlCsts?.size < availableOptions.xmlCsts.length ||
-                           filters.xmlPicms?.size < availableOptions.xmlPicms.length ||
-                           filters.xmlCfops?.size < availableOptions.xmlCfops.length ||
-                           filters.contabilizacao?.size < availableOptions.contabilizacao.length ||
-                           filters.centroCusto?.size < availableOptions.centroCusto.length;
+    const isFilterActive = (filters.xmlCsts?.size ?? availableOptions.xmlCsts.length) < availableOptions.xmlCsts.length ||
+                           (filters.xmlPicms?.size ?? availableOptions.xmlPicms.length) < availableOptions.xmlPicms.length ||
+                           (filters.xmlCfops?.size ?? availableOptions.xmlCfops.length) < availableOptions.xmlCfops.length ||
+                           (filters.contabilizacao?.size ?? availableOptions.contabilizacao.length) < availableOptions.contabilizacao.length ||
+                           (filters.centroCusto?.size ?? availableOptions.centroCusto.length) < availableOptions.centroCusto.length;
 
 
     const handleFilterChange = (type: keyof TabFilters, value: string, checked: boolean) => {
@@ -210,16 +191,21 @@ const FilterDialog: React.FC<{
                 return newFilters;
             });
         } else {
-            setTabFilters(prev => ({
-                ...prev,
-                [siengeCfop]: {
-                    xmlCsts: isAllCsts ? undefined : new Set(localFilters.xmlCsts),
-                    xmlPicms: isAllPicms ? undefined : new Set(localFilters.xmlPicms),
-                    xmlCfops: isAllCfops ? undefined : new Set(localFilters.xmlCfops),
-                    contabilizacao: isAllContabilizacao ? undefined : new Set(localFilters.contabilizacao),
-                    centroCusto: isAllCentroCusto ? undefined : new Set(localFilters.centroCusto),
-                },
-            }));
+            setTabFilters(prev => {
+                const newFilters = { ...prev };
+                if (isAllCsts && isAllPicms && isAllCfops && isAllContabilizacao && isAllCentroCusto) {
+                    delete newFilters[siengeCfop];
+                } else {
+                    newFilters[siengeCfop] = {
+                        xmlCsts: new Set(localFilters.xmlCsts),
+                        xmlPicms: new Set(localFilters.xmlPicms),
+                        xmlCfops: new Set(localFilters.xmlCfops),
+                        contabilizacao: new Set(localFilters.contabilizacao),
+                        centroCusto: new Set(localFilters.centroCusto),
+                    };
+                }
+                return newFilters;
+            });
         }
         setIsDialogOpen(false);
     };
@@ -335,55 +321,7 @@ const FilterDialog: React.FC<{
                             </ScrollArea>
                         </TabsContent>
                     </div>
-                    <TabsContent value="categorized-suppliers" className="mt-4">
-                    <div className="flex justify-between items-center mb-2">
-                        <div className="text-lg font-bold">Itens de Fornecedores Categorizados</div>
-                        <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
-                            <Button onClick={() => handleExport(categorizedSupplierItems, 'Fornecedores_Categorizados', 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
-                                <Download className="mr-1 h-3 w-3" /> Excel
-                            </Button>
-                            <Button onClick={() => handleExport(categorizedSupplierItems, 'Fornecedores_Categorizados', 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
-                                <Download className="mr-1 h-3 w-3" /> PDF
-                            </Button>
-                        </div>
-                    </div>
-                    <DataTable columns={columns} data={categorizedSupplierItems} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
-                </TabsContent>
-                <TabsContent value="contabilizacao-check" className="mt-4">
-                    <Tabs defaultValue={Object.keys(itemsByContabilizacao).sort()[0]}>
-                        <div className="flex flex-col gap-4">
-                            <TabsList className="flex flex-wrap h-auto gap-1 bg-transparent p-0">
-                                {Object.keys(itemsByContabilizacao).sort().map(contab => (
-                                    <TabsTrigger 
-                                        key={contab} 
-                                        value={contab}
-                                        className="border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                                    >
-                                        {contab} ({itemsByContabilizacao[contab].length})
-                                    </TabsTrigger>
-                                ))}
-                            </TabsList>
-                            
-                            {Object.entries(itemsByContabilizacao).map(([contab, items]) => (
-                                <TabsContent key={contab} value={contab} className="mt-0">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <div className="text-lg font-bold">Contabilização: {contab}</div>
-                                        <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
-                                            <Button onClick={() => handleExport(items, `Contab_${contab.replace(/\s+/g, '_')}`, 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
-                                                <Download className="mr-1 h-3 w-3" /> Excel
-                                            </Button>
-                                            <Button onClick={() => handleExport(items, `Contab_${contab.replace(/\s+/g, '_')}`, 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
-                                                <Download className="mr-1 h-3 w-3" /> PDF
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    <DataTable columns={columns} data={items} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
-                                </TabsContent>
-                            ))}
-                        </div>
-                    </Tabs>
-                </TabsContent>
-            </Tabs>
+                </Tabs>
                  <DialogFooter className="mt-4">
                      <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
                      <Button onClick={handleApplyFilters}>Aplicar e Fechar</Button>
@@ -404,7 +342,7 @@ export function CfopValidator(props: CfopValidatorProps) {
     const { toast } = useToast();
     
     const [enrichedItems, setEnrichedItems] = useState<any[]>([]);
-    const [activeTab, setActiveTab] = useState<ValidationStatus | 'faturamento-entrega' | 'difal-analysis' | 'contabilizacao-error'>('unvalidated');
+    const [activeTab, setActiveTab] = useState<ValidationStatus | 'faturamento-entrega' | 'difal-analysis' | 'contabilizacao-error' | 'categorized-suppliers' | 'contabilizacao-check'>('unvalidated');
     const [activeCfopTabs, setActiveCfopTabs] = useState<Record<string, string>>({});
     const [tabFilters, setTabFilters] = useState<Record<string, TabFilters>>({});
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -496,7 +434,7 @@ export function CfopValidator(props: CfopValidatorProps) {
     }, [enrichedItems, competence, allPersistedData, bulkActionState]);
 
     const contabilizacaoErroItems = useMemo(() => {
-        const errors = (competence && allPersistedData[competence]?.contabilizacaoErrors) || {};
+        const errors: Record<string, boolean> = (competence && (allPersistedData[competence] as any)?.contabilizacaoErrors) || {};
         return enrichedItems.filter(item => {
             const key = item['Chave de acesso'] && item['Item'] ? `${item['Chave de acesso']}-${item['Item']}` : `${item['Chave Unica']}-${item['Item']}`;
             return !!errors[key];
@@ -516,14 +454,17 @@ export function CfopValidator(props: CfopValidatorProps) {
                                cfopXml.startsWith('2551') || cfopXml.startsWith('2556') ||
                                cfopSienge.startsWith('2551') || cfopSienge.startsWith('2556');
             return isDifalCfop;
-        }).map(item => ({...item, __itemKey: `${item['Chave de acesso']}-${item['Item']}`}));
+        }).map(item => {
+            const itemKey = item['Chave de acesso'] && item['Item'] ? `${item['Chave de acesso']}-${item['Item']}` : `${item['Chave Unica']}-${item['Item']}`;
+            return {...item, __itemKey: itemKey};
+        });
 
-        const difalItems = [];
-        const desconsideradosItems = [];
-        const beneficioFiscalItems = [];
+        const difalItems: typeof sujeitosAoDifal = [];
+        const desconsideradosItems: typeof sujeitosAoDifal = [];
+        const beneficioFiscalItems: typeof sujeitosAoDifal = [];
         
         sujeitosAoDifal.forEach(item => {
-            const itemKey = `${item['Chave de acesso']}-${item['Item']}`;
+            const itemKey = item.__itemKey;
             const status = difalValidations[itemKey]?.status;
             switch(status) {
                 case 'difal':
@@ -543,7 +484,7 @@ export function CfopValidator(props: CfopValidatorProps) {
 
         // Filter out items that have been moved to other tabs
         const finalSujeitos = sujeitosAoDifal.filter(item => {
-             const itemKey = `${item['Chave de acesso']}-${item['Item']}`;
+             const itemKey = item.__itemKey;
              return !difalValidations[itemKey];
         });
 
@@ -558,6 +499,27 @@ export function CfopValidator(props: CfopValidatorProps) {
             return !!supplierClassifications[supplierCnpj];
         });
     }, [enrichedItems, allPersistedData, competence]);
+
+    const itemsByContabilizacao = useMemo(() => {
+        const groups: Record<string, any[]> = {};
+        enrichedItems.forEach(item => {
+            const rawContab = String(item['Contabilização'] || 'N/A').trim();
+            
+            // Normaliza a string tratando-a como uma lista de contas
+            // Aceita tanto '/' quanto ',' como separadores
+            const normalizedContab = rawContab
+                .split(/[\/,]/)
+                .map(part => part.trim())
+                .filter(Boolean)
+                .sort((a, b) => a.localeCompare(b))
+                .join(' / ');
+            
+            const groupKey = normalizedContab || 'N/A';
+            if (!groups[groupKey]) groups[groupKey] = [];
+            groups[groupKey].push(item);
+        });
+        return groups;
+    }, [enrichedItems]);
 
     useEffect(() => {
         setRowSelection({});
@@ -696,7 +658,7 @@ export function CfopValidator(props: CfopValidatorProps) {
         }
 
         itemsToUpdate.forEach(item => {
-            const itemKey = `${item['Chave de acesso']}-${item['Item']}`;
+            const itemKey = item['Chave de acesso'] && item['Item'] ? `${item['Chave de acesso']}-${item['Item']}` : `${item['Chave Unica']}-${item['Item']}`;
             updatedPersistedData[competence].difalValidations!.classifications[itemKey] = { status };
         });
 
@@ -898,7 +860,7 @@ export function CfopValidator(props: CfopValidatorProps) {
 
     const handleSaveSupplierCategories = (categories: SupplierCategory[]) => {
          const updatedData = { ...allPersistedData };
-         updatedData.supplierCategories = categories;
+         updatedData.supplierCategories = { [competence as string]: categories };
          onPersistData(updatedData);
     };
 
@@ -969,7 +931,7 @@ export function CfopValidator(props: CfopValidatorProps) {
         const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
         const supplierCategories = allPersistedData.supplierCategories || [];
         const supplierClassifications = (competence && allPersistedData[competence]?.supplierClassifications) || {};
-        const contabilizacaoErrors = (competence && allPersistedData[competence]?.contabilizacaoErrors) || {};
+        const contabilizacaoErrors = (competence && (allPersistedData[competence] as any)?.contabilizacaoErrors) || {};
         
         return getColumnsWithCustomRender(
             enrichedItems,
@@ -990,10 +952,13 @@ export function CfopValidator(props: CfopValidatorProps) {
                 if (id === 'Fornecedor') {
                     const supplierCnpj = item['CPF/CNPJ do Emitente'];
                     const supplierClassificationId = supplierClassifications[supplierCnpj];
-                    const category = supplierCategories.find(c => c.id === supplierClassificationId);
+                    const supplierCategoriesArray = Array.isArray(supplierCategories) ? supplierCategories : [];
+                    const category = supplierCategoriesArray.find((c: SupplierCategory) => c.id === supplierClassificationId);
                     
-                    const LucideIcon = category?.icon ? (LucideIcons[category.icon as keyof typeof LucideIcons] as React.ElementType) : Tag;
-                    const isAllowedCfop = !category || !category.allowedCfops || !Array.isArray(category.allowedCfops) || category.allowedCfops.length === 0 || category.allowedCfops.includes(String(item['CFOP']));
+                    const LucideIcon = (category && (category as any).icon && LucideIcons[(category as any).icon as keyof typeof LucideIcons])
+                        ? (LucideIcons[(category as any).icon as keyof typeof LucideIcons] as React.ElementType)
+                        : Tag;
+                    const isAllowedCfop = !category || !(category as any).allowedCfops || !Array.isArray((category as any).allowedCfops) || (category as any).allowedCfops.length === 0 || (category as any).allowedCfops.includes(String(item['CFOP']));
 
                     return (
                          <div className="flex items-center gap-2 group/row">
@@ -1003,12 +968,12 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     <button onClick={(e) => e.stopPropagation()} className="transition-opacity">
                                         <Tooltip><TooltipTrigger asChild>
                                             <LucideIcon className={cn("h-4 w-4", !isAllowedCfop && "text-red-500", category && isAllowedCfop ? "text-primary" : "text-muted-foreground")} />
-                                        </TooltipTrigger><TooltipContent><p>{category?.name || "Sem categoria"}</p></TooltipContent></Tooltip>
+                                        </TooltipTrigger><TooltipContent><p>{(category as unknown as SupplierCategory)?.name || "Sem categoria"}</p></TooltipContent></Tooltip>
                                     </button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-56 p-2" onClick={(e) => e.stopPropagation()}>
                                      <div className="space-y-1">
-                                        {(supplierCategories || []).map(cat => (
+                                        {Array.isArray(supplierCategories) && supplierCategories.map((cat: SupplierCategory) => (
                                             <Button key={cat.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleSupplierCategoryChange(supplierCnpj, cat.id)}>{cat.name}</Button>
                                         ))}
                                         <hr className="my-1"/>
@@ -1129,7 +1094,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                 }
             },
         ]);
-    }, [enrichedItems, allPersistedData, competence, toast]);
+    }, [enrichedItems, allPersistedData, competence, toast, activeTab]);
     
     const numSelected = Object.keys(rowSelection).length;
     
@@ -1191,7 +1156,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                     <div className="flex gap-2 ml-4">
                         <Button onClick={handleEnrichData} variant="outline" size="sm"><RefreshCw className="mr-2 h-4 w-4" />Carregar ICMS/CEST do XML</Button>
                          <SupplierCategoryDialog 
-                            categories={allPersistedData.supplierCategories || []} 
+                            categories={Array.isArray(allPersistedData.supplierCategories) ? allPersistedData.supplierCategories : (competence && allPersistedData.supplierCategories?.[competence]) || []}
                             onSave={handleSaveSupplierCategories}
                          />
                     </div>
@@ -1265,10 +1230,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
-                                                            <Button onClick={() => handleExport(currentCfopData, `CFOP_${cfop}_${status}`, 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                                            <Button onClick={() => handleExport(currentCfopData, `CFOP_${cfop}_${status}`, 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
                                                                 <Download className="mr-1 h-3 w-3" /> Excel
                                                             </Button>
-                                                            <Button onClick={() => handleExport(currentCfopData, `CFOP_${cfop}_${status}`, 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                                            <Button onClick={() => handleExport(currentCfopData, `CFOP_${cfop}_${status}`, 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
                                                                 <Download className="mr-1 h-3 w-3" /> PDF
                                                             </Button>
                                                         </div>
@@ -1290,10 +1255,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                     <div className="flex justify-between items-center mb-2">
                         <div className="text-lg font-bold">Erros de Contabilização</div>
                         <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
-                            <Button onClick={() => handleExport(contabilizacaoErroItems, 'Erros_Contabilizacao', 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                            <Button onClick={() => handleExport(contabilizacaoErroItems, 'Erros_Contabilizacao', 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
                                 <Download className="mr-1 h-3 w-3" /> Excel
                             </Button>
-                            <Button onClick={() => handleExport(contabilizacaoErroItems, 'Erros_Contabilizacao', 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                            <Button onClick={() => handleExport(contabilizacaoErroItems, 'Erros_Contabilizacao', 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
                                 <Download className="mr-1 h-3 w-3" /> PDF
                             </Button>
                         </div>
@@ -1317,10 +1282,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                             <div className="flex justify-between items-center mb-2">
                                 <div className="text-lg font-bold">Entrega Futura</div>
                                 <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
-                                    <Button onClick={() => handleExport(itemsEntregaFutura, 'Entrega_Futura', 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                    <Button onClick={() => handleExport(itemsEntregaFutura, 'Entrega_Futura', 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
                                         <Download className="mr-1 h-3 w-3" /> Excel
                                     </Button>
-                                    <Button onClick={() => handleExport(itemsEntregaFutura, 'Entrega_Futura', 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                    <Button onClick={() => handleExport(itemsEntregaFutura, 'Entrega_Futura', 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
                                         <Download className="mr-1 h-3 w-3" /> PDF
                                     </Button>
                                 </div>
@@ -1331,10 +1296,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                             <div className="flex justify-between items-center mb-2">
                                 <div className="text-lg font-bold">Simples Faturamento</div>
                                 <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
-                                    <Button onClick={() => handleExport(itemsSimplesFaturamento, 'Simples_Faturamento', 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                    <Button onClick={() => handleExport(itemsSimplesFaturamento, 'Simples_Faturamento', 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
                                         <Download className="mr-1 h-3 w-3" /> Excel
                                     </Button>
-                                    <Button onClick={() => handleExport(itemsSimplesFaturamento, 'Simples_Faturamento', 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                    <Button onClick={() => handleExport(itemsSimplesFaturamento, 'Simples_Faturamento', 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
                                         <Download className="mr-1 h-3 w-3" /> PDF
                                     </Button>
                                 </div>
@@ -1342,6 +1307,58 @@ export function CfopValidator(props: CfopValidatorProps) {
                             <DataTable columns={columns} data={itemsSimplesFaturamento} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
                         </TabsContent>
                     </Tabs>
+                </TabsContent>
+                <TabsContent value="categorized-suppliers" className="mt-4">
+                    <div className="flex justify-between items-center mb-2">
+                        <div className="text-lg font-bold">Itens de Fornecedores Categorizados</div>
+                        <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
+                            <Button onClick={() => handleExport(categorizedSupplierItems, 'Fornecedores_Categorizados', 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                <Download className="mr-1 h-3 w-3" /> Excel
+                            </Button>
+                            <Button onClick={() => handleExport(categorizedSupplierItems, 'Fornecedores_Categorizados', 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                <Download className="mr-1 h-3 w-3" /> PDF
+                            </Button>
+                        </div>
+                    </div>
+                    <DataTable columns={columns} data={categorizedSupplierItems} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
+                </TabsContent>
+                <TabsContent value="contabilizacao-check" className="mt-4">
+                    {Object.keys(itemsByContabilizacao).length > 0 ? (
+                        <Tabs defaultValue={Object.keys(itemsByContabilizacao).sort()[0]}>
+                            <div className="flex flex-col gap-4">
+                                <TabsList className="flex flex-wrap h-auto gap-1 bg-transparent p-0">
+                                    {Object.keys(itemsByContabilizacao).sort().map(contab => (
+                                        <TabsTrigger 
+                                            key={contab} 
+                                            value={contab}
+                                            className="border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                                        >
+                                            {contab} ({itemsByContabilizacao[contab].length})
+                                        </TabsTrigger>
+                                    ))}
+                                </TabsList>
+                                
+                                {Object.entries(itemsByContabilizacao).map(([contab, items]) => (
+                                    <TabsContent key={contab} value={contab} className="mt-0">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <div className="text-lg font-bold">Contabilização: {contab}</div>
+                                            <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
+                                                <Button onClick={() => handleExport(items, `Contab_${contab.replace(/\s+/g, '_')}`, 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                                    <Download className="mr-1 h-3 w-3" /> Excel
+                                                </Button>
+                                                <Button onClick={() => handleExport(items, `Contab_${contab.replace(/\s+/g, '_')}`, 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                                    <Download className="mr-1 h-3 w-3" /> PDF
+                                                </Button>
+                                            </div>
+                                        </div>
+                                        <DataTable columns={columns} data={items} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
+                                    </TabsContent>
+                                ))}
+                            </div>
+                        </Tabs>
+                    ) : (
+                        <div className="text-center text-muted-foreground p-8">Nenhum dado de contabilização disponível.</div>
+                    )}
                 </TabsContent>
                 <TabsContent value="difal-analysis" className="mt-4">
                     <Tabs defaultValue="sujeitos">
@@ -1356,10 +1373,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 <div className="text-lg font-bold">Sujeitos ao DIFAL</div>
                                 <div className="flex gap-2">
                                     <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
-                                        <Button onClick={() => handleExport(difalAnalysisData.sujeitosAoDifal, 'Sujeitos_DIFAL', 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                        <Button onClick={() => handleExport(difalAnalysisData.sujeitosAoDifal, 'Sujeitos_DIFAL', 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
                                             <Download className="mr-1 h-3 w-3" /> Excel
                                         </Button>
-                                        <Button onClick={() => handleExport(difalAnalysisData.sujeitosAoDifal, 'Sujeitos_DIFAL', 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                        <Button onClick={() => handleExport(difalAnalysisData.sujeitosAoDifal, 'Sujeitos_DIFAL', 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
                                             <Download className="mr-1 h-3 w-3" /> PDF
                                         </Button>
                                     </div>
@@ -1388,10 +1405,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                             <div className="flex justify-between items-center mb-2">
                                 <div className="text-lg font-bold">Itens DIFAL</div>
                                 <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
-                                    <Button onClick={() => handleExport(difalAnalysisData.difalItems, 'Itens_DIFAL', 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                    <Button onClick={() => handleExport(difalAnalysisData.difalItems, 'Itens_DIFAL', 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
                                         <Download className="mr-1 h-3 w-3" /> Excel
                                     </Button>
-                                    <Button onClick={() => handleExport(difalAnalysisData.difalItems, 'Itens_DIFAL', 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                    <Button onClick={() => handleExport(difalAnalysisData.difalItems, 'Itens_DIFAL', 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
                                         <Download className="mr-1 h-3 w-3" /> PDF
                                     </Button>
                                 </div>
@@ -1409,10 +1426,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                             <div className="flex justify-between items-center mb-2">
                                 <div className="text-lg font-bold">Benefício Fiscal</div>
                                 <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
-                                    <Button onClick={() => handleExport(difalAnalysisData.beneficioFiscalItems, 'Beneficio_Fiscal', 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                    <Button onClick={() => handleExport(difalAnalysisData.beneficioFiscalItems, 'Beneficio_Fiscal', 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
                                         <Download className="mr-1 h-3 w-3" /> Excel
                                     </Button>
-                                    <Button onClick={() => handleExport(difalAnalysisData.beneficioFiscalItems, 'Beneficio_Fiscal', 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                    <Button onClick={() => handleExport(difalAnalysisData.beneficioFiscalItems, 'Beneficio_Fiscal', 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
                                         <Download className="mr-1 h-3 w-3" /> PDF
                                     </Button>
                                 </div>
@@ -1423,10 +1440,10 @@ export function CfopValidator(props: CfopValidatorProps) {
                             <div className="flex justify-between items-center mb-2">
                                 <div className="text-lg font-bold">Desconsiderados</div>
                                 <div className="flex gap-1 border rounded-md p-1 bg-muted/30">
-                                    <Button onClick={() => handleExport(difalAnalysisData.desconsideradosItems, 'Desconsiderados', 'excel')} size="xs" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                    <Button onClick={() => handleExport(difalAnalysisData.desconsideradosItems, 'Desconsiderados', 'excel')} size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
                                         <Download className="mr-1 h-3 w-3" /> Excel
                                     </Button>
-                                    <Button onClick={() => handleExport(difalAnalysisData.desconsideradosItems, 'Desconsiderados', 'pdf')} size="xs" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                    <Button onClick={() => handleExport(difalAnalysisData.desconsideradosItems, 'Desconsiderados', 'pdf')} size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
                                         <Download className="mr-1 h-3 w-3" /> PDF
                                     </Button>
                                 </div>

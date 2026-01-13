@@ -38,10 +38,41 @@ export type SupplierCategory = {
     allowedCfops: string[];
 };
 
-export type DifalStatus = 'subject-to-difal' | 'disregard';
+export type DifalStatus = 'difal' | 'beneficio-fiscal' | 'disregard';
 
 export interface AllClassifications {
-    supplierCategories?: SupplierCategory[];
+supplierCategories?: {
+    [competence: string]: SupplierCategory[]
+} & {
+    [competence: string]: {
+        classifications: {
+            [uniqueItemId: string]: { classification: Classification };
+        };
+        accountCodes: {
+            [itemLineId: string]: { accountCode: string };
+        };
+        cfopValidations: {
+            classifications: {
+                [uniqueKey: string]: {
+                    classification: 'correct' | 'incorrect' | 'verify' | 'unvalidated';
+                    isDifal?: boolean;
+                }
+            }
+        };
+        difalValidations?: {
+            classifications: {
+                [uniqueKey: string]: {
+                    status: DifalStatus;
+                }
+            }
+        };
+        supplierClassifications?: {
+            [supplierCnpj: string]: string | null;
+        };
+    };
+};
+    [competence: string]: SupplierCategory[]
+};
     [competence: string]: {
         classifications: {
             [uniqueItemId: string]: { classification: Classification };
@@ -69,6 +100,7 @@ export interface AllClassifications {
         }
     }
 }
+
 
 export interface DevolucaoClienteItem {
     'Número da Nota de Devolução': string;

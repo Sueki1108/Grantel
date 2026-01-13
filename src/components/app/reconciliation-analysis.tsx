@@ -241,7 +241,7 @@ export function ReconciliationAnalysis({
                     </TabsContent>
                     
                     <TabsContent value="tax_check" className="mt-4">
-                        <SiengeTaxCheck siengeData={siengeDataForTaxCheck} />
+<SiengeTaxCheck siengeData={siengeDataForTaxCheck || null} />
                     </TabsContent>
                     
                     <TabsContent value="cfop_validation" className="mt-4">
