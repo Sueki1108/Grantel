@@ -402,7 +402,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         const persistedAccountCodes = (competence && allPersistedData[competence]?.accountCodes) || {};
 
         const dataToExport = data.map(item => {
-             const accountCode = persistedAccountCodes[item.id]?.accountCode || '';
+             const accountCode = persistedAccountCodes[item.uniqueItemId]?.accountCode || '';
             return {
                 'Número da Nota': item['Número da Nota'],
                 'Descrição': item['Descrição'],
@@ -535,8 +535,8 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                             <Input
                                 placeholder="Ex: 1.2.3.01.0001"
-                                defaultValue={persistedAccountCodes[item.id]?.accountCode || ''}
-                                onBlur={(e) => handleAccountCodeChange(item.id, e.target.value)}
+                                defaultValue={persistedAccountCodes[item.uniqueItemId]?.accountCode || ''}
+                                onBlur={(e) => handleAccountCodeChange(item.uniqueItemId, e.target.value)}
                                 onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                                 className="h-8"
                             />

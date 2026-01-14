@@ -12,6 +12,17 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { cfopDescriptions } from '@/lib/cfop';
 import { getCstDescription } from '@/lib/cst';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -936,6 +947,28 @@ export function CfopValidator(props: CfopValidatorProps) {
     }, [enrichedItems, toast]);
 
 
+    const handleResetClassifications = () => {
+        if (!competence) return;
+        
+        const updatedPersistedData = JSON.parse(JSON.stringify(allPersistedData));
+        if (updatedPersistedData[competence]) {
+            // Limpa as validações de CFOP
+            if (updatedPersistedData[competence].cfopValidations) {
+                updatedPersistedData[competence].cfopValidations.classifications = {};
+            }
+            // Limpa os erros de contabilização
+            if (updatedPersistedData[competence].contabilizacaoErrors) {
+                updatedPersistedData[competence].contabilizacaoErrors = {};
+            }
+            
+            onPersistData(updatedPersistedData);
+            toast({
+                title: "Classificações Reiniciadas",
+                description: "Todas as validações de CFOP e erros de contabilização foram limpos para esta competência."
+            });
+        }
+    };
+
     const columns = useMemo(() => {
         if (!enrichedItems || enrichedItems.length === 0) return [];
         
@@ -1196,6 +1229,29 @@ export function CfopValidator(props: CfopValidatorProps) {
                         <TabsTrigger value="contabilizacao-check" className="flex gap-2"><LucideIcons.BookOpen className="h-4 w-4" /> Contabilização</TabsTrigger>
                     </TabsList>
                     <div className="flex gap-2 ml-4">
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">
+                                    <LucideIcons.RotateCcw className="mr-2 h-4 w-4" /> Reiniciar Tudo
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Reiniciar Classificações?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Esta ação irá limpar **todas** as validações de CFOP e erros de contabilização marcados para a competência {competence}. 
+                                        Todos os itens voltarão para a aba "Não Validado". Esta ação não pode ser desfeita.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleResetClassifications} className="bg-red-600 hover:bg-red-700">
+                                        Confirmar Reinicialização
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+
                         <Button onClick={handleEnrichData} variant="outline" size="sm"><LucideIcons.RefreshCw className="mr-2 h-4 w-4" />Carregar ICMS/CEST do XML</Button>
                          <SupplierCategoryDialog 
                             categories={Array.isArray(allPersistedData.supplierCategories) ? allPersistedData.supplierCategories : (competence && allPersistedData.supplierCategories?.[competence]) || []}
