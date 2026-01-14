@@ -38,10 +38,18 @@ export type SupplierCategory = {
     allowedCfops: string[];
 };
 
+export type ItemCategory = {
+    id: string;
+    name: string;
+    icon: string;
+    keywords: string[];
+};
+
 export type DifalStatus = 'difal' | 'beneficio-fiscal' | 'disregard';
 
 export interface AllClassifications {
     supplierCategories?: SupplierCategory[];
+    itemCategories?: ItemCategory[];
     [competence: string]: {
         classifications: {
             [uniqueItemId: string]: { classification: Classification };

@@ -234,7 +234,7 @@ export function DataTable<TData, TValue>({
             Página {table.getState().pagination.pageIndex + 1} de{" "}
             {table.getPageCount()}
           </div>
-          <div className="space-x-2">
+          <div className="flex items-center space-x-2">
             <Button
               variant="outline"
               size="sm"
@@ -243,6 +243,38 @@ export function DataTable<TData, TValue>({
             >
               Anterior
             </Button>
+            
+            <div className="flex items-center gap-1">
+              {(() => {
+                const pageCount = table.getPageCount();
+                const currentPage = table.getState().pagination.pageIndex;
+                const pages = [];
+                
+                // Determinar o intervalo de páginas a serem exibidas (máximo 5)
+                let startPage = Math.max(0, currentPage - 2);
+                let endPage = Math.min(pageCount - 1, startPage + 4);
+                
+                if (endPage - startPage < 4) {
+                  startPage = Math.max(0, endPage - 4);
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(
+                    <Button
+                      key={i}
+                      variant={currentPage === i ? "default" : "outline"}
+                      size="sm"
+                      className="w-9 h-9 p-0"
+                      onClick={() => table.setPageIndex(i)}
+                    >
+                      {i + 1}
+                    </Button>
+                  );
+                }
+                return pages;
+              })()}
+            </div>
+
             <Button
               variant="outline"
               size="sm"

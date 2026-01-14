@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from "@/components/ui/toast";
+import { ToastAction } from "@/components/ui/toast";
 import type { AllClassifications, SupplierCategory, Classification, DifalStatus } from '@/lib/types';
 import {
   Tooltip,
@@ -39,6 +41,7 @@ import { cn, cleanAndToStr, normalizeKey } from '@/lib/utils';
 import * as LucideIcons from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { SupplierCategoryDialog } from './supplier-category-dialog';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
 
 interface CfopValidatorProps {
@@ -439,7 +442,7 @@ export function CfopValidator(props: CfopValidatorProps) {
             });
         }
         return statusResult;
-    }, [enrichedItems, competence, allPersistedData, bulkActionState]);
+    }, [enrichedItems, competence, allPersistedData]);
 
     const contabilizacaoErroItems = useMemo(() => {
         const errors: Record<string, boolean> = (competence && (allPersistedData?.[competence] as any)?.contabilizacaoErrors) || {};
@@ -545,7 +548,7 @@ export function CfopValidator(props: CfopValidatorProps) {
     const [selectedSupplier, setSelectedSupplier] = useState<string>('');
     const [selectedContabilizacao, setSelectedContabilizacao] = useState<string>('');
 
-    // Efeito para resetar seleções ao mudar de aba principal
+    // Efeito para resetar seleções apenas ao mudar de aba principal
     useEffect(() => {
         setRowSelection({});
         setBulkActionState({ classification: null });
@@ -559,7 +562,7 @@ export function CfopValidator(props: CfopValidatorProps) {
             const contabs = Object.keys(itemsByContabilizacao).sort();
             if (contabs.length > 0) setSelectedContabilizacao(contabs[0]);
         }
-    }, [activeTab, itemsBySupplier, itemsByContabilizacao]);
+    }, [activeTab]); // Removido itemsBySupplier e itemsByContabilizacao para evitar reset ao categorizar
 
     useEffect(() => {
         if (!initialItems) {
@@ -671,6 +674,7 @@ export function CfopValidator(props: CfopValidatorProps) {
         });
         
         if (changedCount > 0) {
+            const previousData = JSON.parse(JSON.stringify(allPersistedData));
             onPersistData(updatedPersistedData);
             toast({
                 title: "Sucesso",
@@ -678,7 +682,13 @@ export function CfopValidator(props: CfopValidatorProps) {
                     newClassification === 'correct' ? 'Correto' : 
                     newClassification === 'incorrect' ? 'Incorreto' : 
                     newClassification === 'verify' ? 'A Verificar' : 'Não Validado'
-                }.`
+                }.`,
+                action: (
+                    <ToastAction altText="Reverter" onClick={() => onPersistData(previousData)}>
+                        <LucideIcons.RotateCcw className="h-4 w-4 mr-1" />
+                        Reverter
+                    </ToastAction>
+                )
             });
         }
     };
@@ -730,8 +740,17 @@ export function CfopValidator(props: CfopValidatorProps) {
     };
 
     const handleCorrigido = (item: any) => {
+        const previousData = JSON.parse(JSON.stringify(allPersistedData));
         handleToggleContabilizacaoError(item, false);
-        toast({ title: 'Erro de contabilização corrigido' });
+        toast({ 
+            title: 'Erro de contabilização corrigido',
+            action: (
+                <ToastAction altText="Reverter" onClick={() => onPersistData(previousData)}>
+                    <LucideIcons.RotateCcw className="h-4 w-4 mr-1" />
+                    Reverter
+                </ToastAction>
+            )
+        });
     };
     
     const handleBulkAction = (forcedClassification?: ValidationStatus) => {
@@ -823,15 +842,25 @@ export function CfopValidator(props: CfopValidatorProps) {
         });
 
         if (changedCount > 0 || (effectiveClassification && effectiveClassification !== 'all' && effectiveClassification !== 'unvalidated')) {
+            const previousData = JSON.parse(JSON.stringify(allPersistedData));
             onPersistData(updatedPersistedData);
+            
+            setBulkActionState({ classification: null });
+            setRowSelection({});
+            toast({
+                title: "Ações em Massa Aplicadas",
+                description: `${changedCount} itens foram atualizados.`,
+                action: (
+                    <ToastAction altText="Reverter" onClick={() => onPersistData(previousData)}>
+                        <LucideIcons.RotateCcw className="h-4 w-4 mr-1" />
+                        Reverter
+                    </ToastAction>
+                )
+            });
+        } else {
+            setBulkActionState({ classification: null });
+            setRowSelection({});
         }
-        
-        setBulkActionState({ classification: null });
-        setRowSelection({});
-        toast({
-            title: "Ações em Massa Aplicadas",
-            description: `${changedCount} itens foram atualizados.`
-        });
     };
 
     const handleExport = (data: any[], title: string, format: 'excel' | 'pdf') => {
@@ -906,9 +935,18 @@ export function CfopValidator(props: CfopValidatorProps) {
              updatedData[competence].supplierClassifications = {};
         }
 
+        const previousData = JSON.parse(JSON.stringify(allPersistedData));
         updatedData[competence].supplierClassifications![supplierCnpj] = categoryId;
         onPersistData(updatedData);
-        toast({ title: 'Fornecedor classificado!' });
+        toast({ 
+            title: 'Fornecedor classificado!',
+            action: (
+                <ToastAction altText="Reverter" onClick={() => onPersistData(previousData)}>
+                    <LucideIcons.RotateCcw className="h-4 w-4 mr-1" />
+                    Reverter
+                </ToastAction>
+            )
+        });
     };
 
     const handleSaveSupplierCategories = (categories: SupplierCategory[]) => {
@@ -973,10 +1011,17 @@ export function CfopValidator(props: CfopValidatorProps) {
                 updatedPersistedData[competence].contabilizacaoErrors = {};
             }
             
+            const previousData = JSON.parse(JSON.stringify(allPersistedData));
             onPersistData(updatedPersistedData);
             toast({
                 title: "Classificações Reiniciadas",
-                description: "Todas as validações de CFOP e erros de contabilização foram limpos para esta competência."
+                description: "Todas as validações de CFOP e erros de contabilização foram limpos para esta competência.",
+                action: (
+                    <ToastAction altText="Reverter" onClick={() => onPersistData(previousData)}>
+                        <LucideIcons.RotateCcw className="h-4 w-4 mr-1" />
+                        Reverter
+                    </ToastAction>
+                )
             });
         }
     };
@@ -1511,21 +1556,52 @@ export function CfopValidator(props: CfopValidatorProps) {
                         <div className="space-y-4">
                             <div className="flex items-center gap-4 bg-muted/30 p-4 rounded-lg border">
                                 <div className="flex-1 max-w-md">
-                                    <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Selecionar Contabilização</Label>
-                                    <select 
-                                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
-                                        value={selectedContabilizacao}
-                                        onChange={(e) => {
-                                            setSelectedContabilizacao(e.target.value);
-                                            setRowSelection({});
-                                        }}
-                                    >
-                                        {Object.keys(itemsByContabilizacao).sort().map(contab => (
-                                            <option key={contab} value={contab}>
-                                                {contab} ({itemsByContabilizacao[contab].length} itens)
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Pesquisar Contabilização</Label>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                className="w-full justify-between font-normal"
+                                            >
+                                                <span className="truncate">
+                                                    {selectedContabilizacao ? selectedContabilizacao : "Selecione uma contabilização..."}
+                                                </span>
+                                                <LucideIcons.ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[450px] p-0" align="start">
+                                            <Command>
+                                                <CommandInput placeholder="Digite para buscar..." />
+                                                <CommandList>
+                                                    <CommandEmpty>Nenhuma contabilização encontrada.</CommandEmpty>
+                                                    <CommandGroup>
+                                                        {Object.keys(itemsByContabilizacao).sort().map((contab) => (
+                                                            <CommandItem
+                                                                key={contab}
+                                                                value={contab}
+                                                                onSelect={() => {
+                                                                    setSelectedContabilizacao(contab);
+                                                                    setRowSelection({});
+                                                                }}
+                                                            >
+                                                                <LucideIcons.Check
+                                                                    className={cn(
+                                                                        "mr-2 h-4 w-4",
+                                                                        selectedContabilizacao === contab ? "opacity-100" : "opacity-0"
+                                                                    )}
+                                                                />
+                                                                <span className="flex-1 truncate">{contab}</span>
+                                                                <span className="ml-2 text-xs text-muted-foreground shrink-0">
+                                                                    ({itemsByContabilizacao[contab].length})
+                                                                </span>
+                                                            </CommandItem>
+                                                        ))}
+                                                    </CommandGroup>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                                 <div className="flex flex-col justify-end h-full">
                                     <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block invisible">Exportar</Label>
