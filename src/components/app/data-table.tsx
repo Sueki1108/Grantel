@@ -41,6 +41,7 @@ interface DataTableProps<TData, TValue> {
   pageSize?: number;
   autoResetPageIndex?: boolean;
   getRowId?: (row: TData, index: number, parent?: any) => string;
+  getRowClassName?: (row: TData) => string;
 }
 
 export function DataTable<TData, TValue>({
@@ -54,6 +55,7 @@ export function DataTable<TData, TValue>({
   pageSize = 10,
   autoResetPageIndex = true,
   getRowId,
+  getRowClassName,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -171,7 +173,10 @@ export function DataTable<TData, TValue>({
                   <TableRow
                     key={row.id}
                     data-state={row.getIsSelected() ? "selected" : undefined}
-                    className={isControllingSelection ? "cursor-pointer" : ""}
+                    className={cn(
+                        isControllingSelection ? "cursor-pointer" : "",
+                        getRowClassName?.(row.original)
+                    )}
                     onClick={() => {
                         if (isControllingSelection) {
                             row.toggleSelected();

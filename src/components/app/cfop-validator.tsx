@@ -505,13 +505,13 @@ export function CfopValidator(props: CfopValidatorProps) {
 
     const itemsBySupplier = useMemo(() => {
         const groups: Record<string, any[]> = {};
-        categorizedSupplierItems.forEach(item => {
+        enrichedItems.forEach(item => {
             const supplier = item['Fornecedor'] || 'N/A';
             if (!groups[supplier]) groups[supplier] = [];
             groups[supplier].push(item);
         });
         return groups;
-    }, [categorizedSupplierItems]);
+    }, [enrichedItems]);
 
     const itemsByContabilizacao = useMemo(() => {
         const groups: Record<string, any[]> = {};
@@ -1015,7 +1015,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                 if (id === 'Fornecedor') {
                     const supplierCnpj = item['CPF/CNPJ do Emitente'];
                     const supplierClassificationId = supplierClassifications[supplierCnpj];
-                    const supplierCategoriesArray = Array.isArray(supplierCategories) ? supplierCategories : [];
+                    const supplierCategoriesArray = Array.isArray(supplierCategories) ? supplierCategories : (competence && (supplierCategories as any)[competence]) ? (supplierCategories as any)[competence] : [];
                     const category = supplierCategoriesArray.find((c: SupplierCategory) => c.id === supplierClassificationId);
                     
                     const LucideIcon = (category && (category as any).icon && LucideIcons[(category as any).icon as keyof typeof LucideIcons])
@@ -1029,14 +1029,14 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 <PopoverTrigger asChild>
                                     <button onClick={(e) => e.stopPropagation()} className="transition-opacity">
                                         <Tooltip><TooltipTrigger asChild>
-                                            <LucideIcons.Tag className={cn("h-4 w-4", !isAllowedCfop && "text-red-500", category && isAllowedCfop ? "text-primary" : "text-muted-foreground")} />
+                                            <LucideIcon className={cn("h-4 w-4", !isAllowedCfop && "text-red-500", category && isAllowedCfop ? "text-primary" : "text-muted-foreground")} />
                                         </TooltipTrigger><TooltipContent><p>{(category as unknown as SupplierCategory)?.name || "Sem categoria"}</p></TooltipContent></Tooltip>
                                     </button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-56 p-2" onClick={(e) => e.stopPropagation()}>
                                      <div className="space-y-1">
-                                        {Array.isArray(supplierCategories) && supplierCategories.length > 0 ? (
-                                            supplierCategories.map((cat: SupplierCategory) => {
+                                        {supplierCategoriesArray.length > 0 ? (
+                                            supplierCategoriesArray.map((cat: SupplierCategory) => {
                                                 const CatIcon = (cat.icon && LucideIcons[cat.icon as keyof typeof LucideIcons])
                                                     ? (LucideIcons[cat.icon as keyof typeof LucideIcons] as React.ElementType)
                                                     : LucideIcons.Tag;
@@ -1338,7 +1338,21 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                         <FilterDialog siengeCfop={cfop} items={allItemsForCfop} tabFilters={tabFilters} setTabFilters={setTabFilters} />
                                                     </div>
                                                 </div>
-                                                <DataTable columns={columns} data={currentCfopData} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
+                                                <DataTable 
+                                                    columns={columns} 
+                                                    data={currentCfopData} 
+                                                    rowSelection={rowSelection} 
+                                                    setRowSelection={setRowSelection} 
+                                                    autoResetPageIndex={false}
+                                                    getRowClassName={(item: any) => {
+                                                        const supplierCnpj = item['CPF/CNPJ do Emitente'];
+                                                        const supplierClassificationId = (competence && allPersistedData[competence]?.supplierClassifications?.[supplierCnpj]);
+                                                        const supplierCategoriesArray = Array.isArray(allPersistedData.supplierCategories) ? allPersistedData.supplierCategories : (competence && (allPersistedData.supplierCategories as any)[competence]) ? (allPersistedData.supplierCategories as any)[competence] : [];
+                                                        const category = supplierCategoriesArray.find((c: SupplierCategory) => c.id === supplierClassificationId);
+                                                        const isAllowedCfop = !category || !category.allowedCfops || category.allowedCfops.length === 0 || category.allowedCfops.includes(String(item['CFOP']));
+                                                        return !isAllowedCfop ? "bg-red-50 hover:bg-red-100 text-red-900" : "";
+                                                    }}
+                                                />
                                             </TabsContent>
                                         )
                                     })}
