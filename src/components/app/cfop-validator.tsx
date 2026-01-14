@@ -409,12 +409,13 @@ export function CfopValidator(props: CfopValidatorProps) {
     const [isLoadingSpecialCfops, setIsLoadingSpecialCfops] = useState(false);
 
     const itemsByStatus = useMemo(() => {
-        const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
+        const cfopValidations = (competence && allPersistedData?.[competence]?.cfopValidations?.classifications) || {};
         
         const statusResult: Record<ValidationStatus, Record<string, any[]>> = {
             all: {}, unvalidated: {}, correct: {}, incorrect: {}, verify: {}
         };
         
+        if (Array.isArray(enrichedItems)) {
             enrichedItems.forEach(item => {
                 const cnpj = (item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
                 const productCode = String(item['Código'] || '').trim();
@@ -430,14 +431,18 @@ export function CfopValidator(props: CfopValidatorProps) {
                 if (!statusResult.all[cfopGroupKey]) statusResult.all[cfopGroupKey] = [];
                 statusResult.all[cfopGroupKey].push(itemWithKey);
 
-                if (!statusResult[classification][cfopGroupKey]) statusResult[classification][cfopGroupKey] = [];
-                statusResult[classification][cfopGroupKey].push(itemWithKey);
+                if (statusResult[classification]) {
+                    if (!statusResult[classification][cfopGroupKey]) statusResult[classification][cfopGroupKey] = [];
+                    statusResult[classification][cfopGroupKey].push(itemWithKey);
+                }
             });
+        }
         return statusResult;
     }, [enrichedItems, competence, allPersistedData, bulkActionState]);
 
     const contabilizacaoErroItems = useMemo(() => {
-        const errors: Record<string, boolean> = (competence && (allPersistedData[competence] as any)?.contabilizacaoErrors) || {};
+        const errors: Record<string, boolean> = (competence && (allPersistedData?.[competence] as any)?.contabilizacaoErrors) || {};
+        if (!Array.isArray(enrichedItems)) return [];
         return enrichedItems.filter(item => {
             const key = item['Chave de acesso'] && item['Item'] ? `${item['Chave de acesso']}-${item['Item']}` : `${item['Chave Unica']}-${item['Item']}`;
             return !!errors[key];
@@ -445,8 +450,8 @@ export function CfopValidator(props: CfopValidatorProps) {
     }, [enrichedItems, competence, allPersistedData]);
 
     const difalAnalysisData = useMemo(() => {
-        const difalValidations = (competence && allPersistedData[competence]?.difalValidations?.classifications) || {};
-        const correctItems = Object.values(itemsByStatus.correct).flat();
+        const difalValidations = (competence && allPersistedData?.[competence]?.difalValidations?.classifications) || {};
+        const correctItems = itemsByStatus.correct ? Object.values(itemsByStatus.correct).flat() : [];
         
         const sujeitosAoDifal = correctItems.filter(item => {
             const cfopXml = String(item['CFOP'] || '').trim();
@@ -496,7 +501,8 @@ export function CfopValidator(props: CfopValidatorProps) {
     }, [itemsByStatus.correct, allPersistedData, competence]);
 
     const categorizedSupplierItems = useMemo(() => {
-        const supplierClassifications = (competence && allPersistedData[competence]?.supplierClassifications) || {};
+        const supplierClassifications = (competence && allPersistedData?.[competence]?.supplierClassifications) || {};
+        if (!Array.isArray(enrichedItems)) return [];
         return enrichedItems.filter(item => {
             const supplierCnpj = item['CPF/CNPJ do Emitente'];
             return !!supplierClassifications[supplierCnpj];
@@ -505,29 +511,33 @@ export function CfopValidator(props: CfopValidatorProps) {
 
     const itemsBySupplier = useMemo(() => {
         const groups: Record<string, any[]> = {};
-        enrichedItems.forEach(item => {
-            const supplier = item['Fornecedor'] || 'N/A';
-            if (!groups[supplier]) groups[supplier] = [];
-            groups[supplier].push(item);
-        });
+        if (Array.isArray(enrichedItems)) {
+            enrichedItems.forEach(item => {
+                const supplier = item['Fornecedor'] || 'N/A';
+                if (!groups[supplier]) groups[supplier] = [];
+                groups[supplier].push(item);
+            });
+        }
         return groups;
     }, [enrichedItems]);
 
     const itemsByContabilizacao = useMemo(() => {
         const groups: Record<string, any[]> = {};
-        enrichedItems.forEach(item => {
-            const rawContab = String(item['Contabilização'] || 'N/A').trim();
-            const normalizedContab = rawContab
-                .split(/[\/,]/)
-                .map(part => part.trim())
-                .filter(Boolean)
-                .sort((a, b) => a.localeCompare(b))
-                .join(' / ');
-            
-            const groupKey = normalizedContab || 'N/A';
-            if (!groups[groupKey]) groups[groupKey] = [];
-            groups[groupKey].push(item);
-        });
+        if (Array.isArray(enrichedItems)) {
+            enrichedItems.forEach(item => {
+                const rawContab = String(item['Contabilização'] || 'N/A').trim();
+                const normalizedContab = rawContab
+                    .split(/[\/,]/)
+                    .map(part => part.trim())
+                    .filter(Boolean)
+                    .sort((a, b) => a.localeCompare(b))
+                    .join(' / ');
+                
+                const groupKey = normalizedContab || 'N/A';
+                if (!groups[groupKey]) groups[groupKey] = [];
+                groups[groupKey].push(item);
+            });
+        }
         return groups;
     }, [enrichedItems]);
 
@@ -991,10 +1001,10 @@ export function CfopValidator(props: CfopValidatorProps) {
         // Filtrar colunas baseadas na visibilidade
         const columnsToShow = allPossibleColumns.filter(col => columnVisibility[col as string] !== false);
         
-        const cfopValidations = (competence && allPersistedData[competence]?.cfopValidations?.classifications) || {};
-        const supplierCategories = allPersistedData.supplierCategories || [];
-        const supplierClassifications = (competence && allPersistedData[competence]?.supplierClassifications) || {};
-        const contabilizacaoErrors = (competence && (allPersistedData[competence] as any)?.contabilizacaoErrors) || {};
+        const cfopValidations = (competence && allPersistedData?.[competence]?.cfopValidations?.classifications) || {};
+        const supplierCategories = allPersistedData?.supplierCategories || [];
+        const supplierClassifications = (competence && allPersistedData?.[competence]?.supplierClassifications) || {};
+        const contabilizacaoErrors = (competence && (allPersistedData?.[competence] as any)?.contabilizacaoErrors) || {};
         
         return getColumnsWithCustomRender(
             enrichedItems,
@@ -1015,8 +1025,8 @@ export function CfopValidator(props: CfopValidatorProps) {
                 if (id === 'Fornecedor') {
                     const supplierCnpj = item['CPF/CNPJ do Emitente'];
                     const supplierClassificationId = supplierClassifications[supplierCnpj];
-                    const supplierCategoriesArray = Array.isArray(supplierCategories) ? supplierCategories : (competence && (supplierCategories as any)[competence]) ? (supplierCategories as any)[competence] : [];
-                    const category = supplierCategoriesArray.find((c: SupplierCategory) => c.id === supplierClassificationId);
+                    const supplierCategoriesArray = Array.isArray(supplierCategories) ? supplierCategories : (competence && (supplierCategories as any)?.[competence]) ? (supplierCategories as any)[competence] : [];
+                    const category = Array.isArray(supplierCategoriesArray) ? supplierCategoriesArray.find((c: SupplierCategory) => c.id === supplierClassificationId) : undefined;
                     
                     const LucideIcon = (category && (category as any).icon && LucideIcons[(category as any).icon as keyof typeof LucideIcons])
                         ? (LucideIcons[(category as any).icon as keyof typeof LucideIcons] as React.ElementType)
@@ -1035,7 +1045,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 </PopoverTrigger>
                                 <PopoverContent className="w-56 p-2" onClick={(e) => e.stopPropagation()}>
                                      <div className="space-y-1">
-                                        {supplierCategoriesArray.length > 0 ? (
+                                        {Array.isArray(supplierCategoriesArray) && supplierCategoriesArray.length > 0 ? (
                                             supplierCategoriesArray.map((cat: SupplierCategory) => {
                                                 const CatIcon = (cat.icon && LucideIcons[cat.icon as keyof typeof LucideIcons])
                                                     ? (LucideIcons[cat.icon as keyof typeof LucideIcons] as React.ElementType)
@@ -1346,8 +1356,8 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                     autoResetPageIndex={false}
                                                     getRowClassName={(item: any) => {
                                                         const supplierCnpj = item['CPF/CNPJ do Emitente'];
-                                                        const supplierClassificationId = (competence && allPersistedData[competence]?.supplierClassifications?.[supplierCnpj]);
-                                                        const supplierCategoriesArray = Array.isArray(allPersistedData.supplierCategories) ? allPersistedData.supplierCategories : (competence && (allPersistedData.supplierCategories as any)[competence]) ? (allPersistedData.supplierCategories as any)[competence] : [];
+                                                        const supplierClassificationId = (competence && allPersistedData?.[competence]?.supplierClassifications?.[supplierCnpj]);
+                                                        const supplierCategoriesArray = Array.isArray(allPersistedData?.supplierCategories) ? allPersistedData?.supplierCategories : (competence && (allPersistedData?.supplierCategories as any)?.[competence]) ? (allPersistedData?.supplierCategories as any)[competence] : [];
                                                         const category = supplierCategoriesArray.find((c: SupplierCategory) => c.id === supplierClassificationId);
                                                         const isAllowedCfop = !category || !category.allowedCfops || category.allowedCfops.length === 0 || category.allowedCfops.includes(String(item['CFOP']));
                                                         return !isAllowedCfop ? "bg-red-50 hover:bg-red-100 text-red-900" : "";
