@@ -417,6 +417,7 @@ export function CfopValidator(props: CfopValidatorProps) {
         
         if (Array.isArray(enrichedItems)) {
             enrichedItems.forEach(item => {
+                if (!item) return;
                 const cnpj = (item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
                 const productCode = String(item['Código'] || '').trim();
                 const siengeCfopValue = String(item['Sienge_CFOP'] || item['CFOP (Sienge)'] || '').trim();
@@ -426,7 +427,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                 const validation = cfopValidations[uniqueKey];
                 const classification = validation?.classification || 'unvalidated';
                 const itemWithKey = { ...item };
-                const cfopGroupKey = String(item['CFOP (Sienge)']) || 'N/A';
+                const cfopGroupKey = String(item['CFOP (Sienge)'] || item['CFOP'] || 'N/A');
 
                 if (!statusResult.all[cfopGroupKey]) statusResult.all[cfopGroupKey] = [];
                 statusResult.all[cfopGroupKey].push(itemWithKey);
@@ -567,19 +568,20 @@ export function CfopValidator(props: CfopValidatorProps) {
         }
 
         const newItems = initialItems.map(item => {
-            const header = (nfeValidasData || []).find(n => n['Chave Unica'] === item['Chave Unica']);
-                const cnpj = (item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
-                const productCode = String(item['Código'] || '').trim();
-                const siengeCfopValue = String(item['Sienge_CFOP'] || item['CFOP (Sienge)'] || '').trim();
-                const contabilizacaoValue = String(item['Contabilização'] || '').trim();
-                
-                const uniqueKey = normalizeKey(`${cnpj}-${productCode}-${siengeCfopValue}-${contabilizacaoValue}`);
-                return {
-                    ...item,
-                    '__itemKey': `cfop-pending-${uniqueKey}`,
-                    Fornecedor: header?.Fornecedor || item.Fornecedor || 'N/A',
-                };
-        });
+            if (!item) return null;
+            const header = (nfeValidasData || []).find(n => n && n['Chave Unica'] === item['Chave Unica']);
+            const cnpj = (item['CPF/CNPJ do Emitente'] || '').replace(/\D/g, '');
+            const productCode = String(item['Código'] || '').trim();
+            const siengeCfopValue = String(item['Sienge_CFOP'] || item['CFOP (Sienge)'] || '').trim();
+            const contabilizacaoValue = String(item['Contabilização'] || '').trim();
+            
+            const uniqueKey = normalizeKey(`${cnpj}-${productCode}-${siengeCfopValue}-${contabilizacaoValue}`);
+            return {
+                ...item,
+                '__itemKey': `cfop-pending-${uniqueKey}`,
+                Fornecedor: header?.Fornecedor || item.Fornecedor || 'N/A',
+            };
+        }).filter(Boolean);
         setEnrichedItems(newItems);
 
     }, [initialItems, nfeValidasData]);
@@ -1355,11 +1357,20 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                     setRowSelection={setRowSelection} 
                                                     autoResetPageIndex={false}
                                                     getRowClassName={(item: any) => {
+                                                        if (!item) return "";
                                                         const supplierCnpj = item['CPF/CNPJ do Emitente'];
                                                         const supplierClassificationId = (competence && allPersistedData?.[competence]?.supplierClassifications?.[supplierCnpj]);
-                                                        const supplierCategoriesArray = Array.isArray(allPersistedData?.supplierCategories) ? allPersistedData?.supplierCategories : (competence && (allPersistedData?.supplierCategories as any)?.[competence]) ? (allPersistedData?.supplierCategories as any)[competence] : [];
+                                                        
+                                                        let supplierCategoriesArray: SupplierCategory[] = [];
+                                                        const rawCategories = allPersistedData?.supplierCategories;
+                                                        if (Array.isArray(rawCategories)) {
+                                                            supplierCategoriesArray = rawCategories;
+                                                        } else if (rawCategories && competence && Array.isArray((rawCategories as any)[competence])) {
+                                                            supplierCategoriesArray = (rawCategories as any)[competence];
+                                                        }
+
                                                         const category = supplierCategoriesArray.find((c: SupplierCategory) => c.id === supplierClassificationId);
-                                                        const isAllowedCfop = !category || !category.allowedCfops || category.allowedCfops.length === 0 || category.allowedCfops.includes(String(item['CFOP']));
+                                                        const isAllowedCfop = !category || !Array.isArray(category.allowedCfops) || category.allowedCfops.length === 0 || category.allowedCfops.includes(String(item['CFOP']));
                                                         return !isAllowedCfop ? "bg-red-50 hover:bg-red-100 text-red-900" : "";
                                                     }}
                                                 />
