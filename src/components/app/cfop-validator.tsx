@@ -118,7 +118,12 @@ const FilterDialog: React.FC<{
             xmlCsts: Array.from(xmlCsts).sort(),
             xmlPicms: Array.from(xmlPicms).sort((a,b) => parseFloat(a) - parseFloat(b)),
             xmlCfops: Array.from(xmlCfops).sort(),
-            contabilizacao: Array.from(contabilizacoes).sort(),
+            contabilizacao: Array.from(contabilizacoes).sort((a, b) => {
+                const partsA = a.split(/[\/,]/).filter(p => p.trim()).length;
+                const partsB = b.split(/[\/,]/).filter(p => p.trim()).length;
+                if (partsA !== partsB) return partsA - partsB;
+                return a.localeCompare(b);
+            }),
             centroCusto: Array.from(centrosCusto).sort(),
         };
     }, [items]);
@@ -559,7 +564,12 @@ export function CfopValidator(props: CfopValidatorProps) {
             if (suppliers.length > 0) setSelectedSupplier(suppliers[0]);
         }
         if (activeTab === 'contabilizacao-check' && !selectedContabilizacao) {
-            const contabs = Object.keys(itemsByContabilizacao).sort();
+            const contabs = Object.keys(itemsByContabilizacao).sort((a, b) => {
+                const partsA = a.split('/').length;
+                const partsB = b.split('/').length;
+                if (partsA !== partsB) return partsA - partsB;
+                return a.localeCompare(b);
+            });
             if (contabs.length > 0) setSelectedContabilizacao(contabs[0]);
         }
     }, [activeTab]); // Removido itemsBySupplier e itemsByContabilizacao para evitar reset ao categorizar
@@ -1179,9 +1189,23 @@ export function CfopValidator(props: CfopValidatorProps) {
                     const uniqueKey = normalizeKey(`${cnpj}-${productCode}-${siengeCfop}-${contabilizacao}`);
                     const validation = cfopValidations[uniqueKey];
                     const classification = validation?.classification || 'unvalidated';
+                    const itemKeyForCopy = row.original['Chave de acesso'] && row.original['Item'] ? `${row.original['Chave de acesso']}-${row.original['Item']}` : `${row.original['Chave Unica']}-${row.original['Item']}`;
 
                     return (
                         <div className="flex justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className="h-7 w-7 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                                            onClick={() => copyToClipboard(itemKeyForCopy, 'Chave do Item')}
+                                        >
+                                            <LucideIcons.Key className="h-4 w-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>Copiar Chave do Item</p></TooltipContent>
+                                </Tooltip>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <Button
@@ -1576,7 +1600,14 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                 <CommandList>
                                                     <CommandEmpty>Nenhuma contabilização encontrada.</CommandEmpty>
                                                     <CommandGroup>
-                                                        {Object.keys(itemsByContabilizacao).sort().map((contab) => (
+                                                        {Object.keys(itemsByContabilizacao)
+                                                            .sort((a, b) => {
+                                                                const partsA = a.split('/').length;
+                                                                const partsB = b.split('/').length;
+                                                                if (partsA !== partsB) return partsA - partsB;
+                                                                return a.localeCompare(b);
+                                                            })
+                                                            .map((contab) => (
                                                             <CommandItem
                                                                 key={contab}
                                                                 value={contab}
