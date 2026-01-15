@@ -599,7 +599,7 @@ export function CfopValidator(props: CfopValidatorProps) {
             }
         }
         if (activeTab === 'contabilizacao-check' && selectedContabilizacao.size === 0) {
-            const contabs = Object.keys(itemsByIndividualContabilizacao).sort();
+            const contabs = Object.keys(itemsByGroupedContabilizacao).sort();
             if (contabs.length > 0) {
                 setSelectedContabilizacao(new Set([contabs[0]]));
             }

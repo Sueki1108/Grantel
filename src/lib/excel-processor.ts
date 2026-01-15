@@ -41,6 +41,7 @@ export interface SpedCorrectionResult {
         blockCount: any[];
         totalLineCount: any[];
         divergenceRemoval: any;
+        removedGroups: { group: string; count: number; lines: any[] }[];
     };
     log: string[];
 }
@@ -411,14 +412,22 @@ export function processDataFrames(
         return chavesExcecao.has(cleanAndToStr(row["Chave de acesso"]));
     });
     
-    const chavesValidasEntrada = notasValidas.filter(n => n['destUF']).map(row => ({ // Apenas NF-e
+    const chavesValidasEntrada = notasValidas.filter(n => {
+        const key = cleanAndToStr(n["Chave de acesso"]);
+        const model = key.substring(20, 22);
+        return model === '55' || (n['destUF'] && model !== '57');
+    }).map(row => ({ // Apenas NF-e
         "Chave de acesso": cleanAndToStr(row["Chave de acesso"]), "Tipo": "NFE", "Fornecedor": row["Fornecedor"],
         "Emissão": String(row["Emissão"]).substring(0, 10), "Total": row['Total'] || 0,
         "destCNPJ": row.destCNPJ, "destIE": row.destIE, "destUF": row.destUF,
         "emitCNPJ": row.emitCNPJ, "emitName": row.emitName, "emitIE": row.emitIE,
     }));
 
-    const chavesValidasCte = notasValidas.filter(n => !n['destUF']).map(row => ({ // Apenas CT-e
+    const chavesValidasCte = notasValidas.filter(n => {
+        const key = cleanAndToStr(n["Chave de acesso"]);
+        const model = key.substring(20, 22);
+        return model === '57' || (!n['destUF'] && model !== '55');
+    }).map(row => ({ // Apenas CT-e
         "Chave de acesso": cleanAndToStr(row["Chave de acesso"]), "Tipo": "CTE", "Fornecedor": row["Fornecedor"],
         "Emissão": String(row["Emissão"]).substring(0, 10), "Total": row['Valor da Prestação'] || 0,
         "tomadorCNPJ": cleanAndToStr(row['tomadorCNPJ']),
@@ -533,6 +542,7 @@ export function runReconciliation(
         desconto: findHeader(siengeSheetData, ['desconto']),
         frete: findHeader(siengeSheetData, ['frete']),
         ipi: findHeader(siengeSheetData, ['ipi']),
+        emissao: findHeader(siengeSheetData, ['emissão', 'data emissão', 'data', 'dt emissao', 'data emissao']),
     };
 
     if (!h.documento || !h.cnpj || !h.valor) {
@@ -788,10 +798,14 @@ export function runReconciliation(
     const enrichItem = (item: any) => {
         if (!item || typeof item !== 'object') return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
         
-        const siengeDocNumberRaw = item[`Sienge_${h.documento!}`] || item['Número da Nota'] || item['Número'] || '';
-        const siengeCredorRaw = item[`Sienge_${h.credor!}`] || item['Fornecedor'] || item['Emitente'] || '';
-        const emitenteCnpj = item['CPF/CNPJ do Emitente'] || item['emitCNPJ'] || '';
+        const siengeDocNumberRaw = item[`Sienge_${h.documento!}`] || item[h.documento!] || item['Número da Nota'] || item['Número'] || '';
+        const siengeCredorRaw = item[`Sienge_${h.credor!}`] || item[h.credor!] || item['Fornecedor'] || item['Emitente'] || '';
+        const siengeValorRaw = item[`Sienge_${h.valor!}`] || item[h.valor!] || item['Valor Total'] || item['Valor'] || item['Total'] || '';
+        const emitenteCnpj = item['CPF/CNPJ do Emitente'] || item['emitCNPJ'] || item[h.cnpj!] || '';
 
+        item['Número da Nota'] = item['Número da Nota'] || siengeDocNumberRaw;
+        item['Valor Total'] = item['Valor Total'] || siengeValorRaw;
+        
         const docNumberClean = cleanAndToStr(siengeDocNumberRaw || item['Número da Nota'] || item['Número']).replace(/^0+/, '');
         const credorRaw = String(siengeCredorRaw).trim();
         const credorCnpjClean = cleanAndToStr(emitenteCnpj);
