@@ -529,21 +529,19 @@ export function CfopValidator(props: CfopValidatorProps) {
         return groups;
     }, [categorizedSupplierItems]);
 
-    const itemsByContabilizacao = useMemo(() => {
+    const itemsByIndividualContabilizacao = useMemo(() => {
         const groups: Record<string, any[]> = {};
         if (Array.isArray(enrichedItems)) {
             enrichedItems.forEach(item => {
                 const rawContab = String(item['Contabilização'] || 'N/A').trim();
-                const normalizedContab = rawContab
-                    .split(/[\/,]/)
-                    .map(part => part.trim())
-                    .filter(Boolean)
-                    .sort((a, b) => a.localeCompare(b))
-                    .join(' / ');
+                const itemAccounts = rawContab.split(/[\/,]/).map(p => p.trim()).filter(Boolean);
                 
-                const groupKey = normalizedContab || 'N/A';
-                if (!groups[groupKey]) groups[groupKey] = [];
-                groups[groupKey].push(item);
+                const accountsToProcess = itemAccounts.length > 0 ? itemAccounts : ['N/A'];
+                
+                accountsToProcess.forEach(acc => {
+                    if (!groups[acc]) groups[acc] = [];
+                    groups[acc].push(item);
+                });
             });
         }
         return groups;
@@ -576,14 +574,14 @@ export function CfopValidator(props: CfopValidatorProps) {
 
     const itemsForSelectedContabilizacao = useMemo(() => {
         if (selectedContabilizacao.size === 0) return [];
-        const allItems: any[] = [];
-        selectedContabilizacao.forEach(contab => {
-            if (itemsByContabilizacao[contab]) {
-                allItems.push(...itemsByContabilizacao[contab]);
+        const matchedItems = new Set<any>();
+        selectedContabilizacao.forEach(acc => {
+            if (itemsByIndividualContabilizacao[acc]) {
+                itemsByIndividualContabilizacao[acc].forEach(item => matchedItems.add(item));
             }
         });
-        return allItems;
-    }, [itemsByContabilizacao, selectedContabilizacao]);
+        return Array.from(matchedItems);
+    }, [itemsByIndividualContabilizacao, selectedContabilizacao]);
 
     // Efeito para resetar seleções apenas ao mudar de aba principal
     useEffect(() => {
@@ -600,17 +598,12 @@ export function CfopValidator(props: CfopValidatorProps) {
             }
         }
         if (activeTab === 'contabilizacao-check' && selectedContabilizacao.size === 0) {
-            const contabs = Object.keys(itemsByContabilizacao).sort((a, b) => {
-                const partsA = a.split(/[/,]/).filter(p => p.trim()).length;
-                const partsB = b.split(/[/,]/).filter(p => p.trim()).length;
-                if (partsA !== partsB) return partsA - partsB;
-                return a.localeCompare(b);
-            });
+            const contabs = Object.keys(itemsByIndividualContabilizacao).sort();
             if (contabs.length > 0) {
                 setSelectedContabilizacao(new Set([contabs[0]]));
             }
         }
-    }, [activeTab, filteredItemsBySupplier, itemsByContabilizacao]);
+    }, [activeTab, filteredItemsBySupplier, itemsByIndividualContabilizacao]);
 
     useEffect(() => {
         if (!initialItems) {
@@ -1717,6 +1710,14 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block invisible">Exportar</Label>
                                     <div className="flex gap-1 border rounded-md p-1 bg-background">
                                         <Button 
+                                            onClick={() => handleValidationChange(filteredItemsBySupplier[selectedSupplier] || [], 'verify')}
+                                            size="sm" variant="ghost" className="h-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                            disabled={!selectedSupplier || (filteredItemsBySupplier[selectedSupplier]?.length === 0)}
+                                        >
+                                            <LucideIcons.CheckCircle2 className="mr-1 h-3 w-3" /> Verificar
+                                        </Button>
+                                        <div className="w-px bg-border mx-1" />
+                                        <Button 
                                             onClick={() => handleExport(filteredItemsBySupplier[selectedSupplier] || [], `Fornecedor_${selectedSupplier.replace(/\s+/g, '_')}`, 'excel')} 
                                             size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                                             disabled={!selectedSupplier}
@@ -1748,11 +1749,11 @@ export function CfopValidator(props: CfopValidatorProps) {
                     )}
                 </TabsContent>
                 <TabsContent value="contabilizacao-check" className="mt-4">
-                    {Object.keys(itemsByContabilizacao).length > 0 ? (
+                    {Object.keys(itemsByIndividualContabilizacao).length > 0 ? (
                         <div className="space-y-4">
                             <div className="flex items-center gap-4 bg-muted/30 p-4 rounded-lg border">
                                 <div className="flex-1">
-                                    <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Selecionar Contabilização</Label>
+                                    <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Selecionar Contas Contábeis</Label>
                                     <Popover open={contabilizacaoSearchOpen} onOpenChange={setContabilizacaoSearchOpen}>
                                         <PopoverTrigger asChild>
                                             <Button
@@ -1763,8 +1764,8 @@ export function CfopValidator(props: CfopValidatorProps) {
                                             >
                                                 <span className="text-left whitespace-normal break-words">
                                                     {selectedContabilizacao.size > 0 
-                                                        ? `${selectedContabilizacao.size} selecionada(s): ${Array.from(selectedContabilizacao).slice(0, 2).join(', ')}${selectedContabilizacao.size > 2 ? '...' : ''}` 
-                                                        : "Selecione uma contabilização..."}
+                                                        ? `${selectedContabilizacao.size} conta(s) selecionada(s)` 
+                                                        : "Selecione uma ou mais contas..."}
                                                 </span>
                                                 <LucideIcons.ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
@@ -1777,18 +1778,13 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                     return 0;
                                                 }}
                                             >
-                                                <CommandInput placeholder="Digite para buscar..." />
+                                                <CommandInput placeholder="Digite para buscar conta..." />
                                                 <CommandList>
-                                                    <CommandEmpty>Nenhuma contabilização encontrada.</CommandEmpty>
+                                                    <CommandEmpty>Nenhuma conta encontrada.</CommandEmpty>
                                                     <CommandGroup>
                                                         <ScrollArea className="h-96">
-                                                            {Object.keys(itemsByContabilizacao)
-                                                                .sort((a, b) => {
-                                                                    const partsA = a.split('/').length;
-                                                                    const partsB = b.split('/').length;
-                                                                    if (partsA !== partsB) return partsA - partsB;
-                                                                    return a.localeCompare(b);
-                                                                })
+                                                            {Object.keys(itemsByIndividualContabilizacao)
+                                                                .sort()
                                                                 .map((contab) => (
                                                                 <CommandItem
                                                                     key={contab}
@@ -1813,7 +1809,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                                     />
                                                                     <span className="flex-1 whitespace-normal break-words">{contab}</span>
                                                                     <span className="ml-2 text-xs text-muted-foreground shrink-0">
-                                                                        ({itemsByContabilizacao[contab].length})
+                                                                        ({itemsByIndividualContabilizacao[contab].length})
                                                                     </span>
                                                                 </CommandItem>
                                                             ))}
@@ -1828,14 +1824,22 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block invisible">Exportar</Label>
                                     <div className="flex gap-1 border rounded-md p-1 bg-background">
                                         <Button 
-                                            onClick={() => handleExport(itemsForSelectedContabilizacao, `Contab_Multipla`, 'excel')} 
+                                            onClick={() => handleValidationChange(itemsForSelectedContabilizacao, 'verify')}
+                                            size="sm" variant="ghost" className="h-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                            disabled={selectedContabilizacao.size === 0 || itemsForSelectedContabilizacao.length === 0}
+                                        >
+                                            <LucideIcons.CheckCircle2 className="mr-1 h-3 w-3" /> Verificar
+                                        </Button>
+                                        <div className="w-px bg-border mx-1" />
+                                        <Button 
+                                            onClick={() => handleExport(itemsForSelectedContabilizacao, `Contas_Contabeis`, 'excel')} 
                                             size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                                             disabled={selectedContabilizacao.size === 0}
                                         >
                                             <LucideIcons.Download className="mr-1 h-3 w-3" /> Excel
                                         </Button>
                                         <Button 
-                                            onClick={() => handleExport(itemsForSelectedContabilizacao, `Contab_Multipla`, 'pdf')} 
+                                            onClick={() => handleExport(itemsForSelectedContabilizacao, `Contas_Contabeis`, 'pdf')} 
                                             size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50"
                                             disabled={selectedContabilizacao.size === 0}
                                         >
@@ -1849,9 +1853,9 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 <div className="animate-in fade-in-0 slide-in-from-top-2 duration-300">
                                     <div className="flex justify-between items-center mb-2">
                                         <div className="text-lg font-bold">
-                                            Contabilização: {selectedContabilizacao.size === 1 
+                                            Contas Selecionadas: {selectedContabilizacao.size === 1 
                                                 ? Array.from(selectedContabilizacao)[0] 
-                                                : `${selectedContabilizacao.size} selecionadas`}
+                                                : `${selectedContabilizacao.size} contas`}
                                         </div>
                                     </div>
                                     <DataTable columns={columns} data={itemsForSelectedContabilizacao} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
