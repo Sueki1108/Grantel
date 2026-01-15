@@ -550,13 +550,13 @@ export function CfopValidator(props: CfopValidatorProps) {
     }, [enrichedItems]);
 
     const [selectedSupplier, setSelectedSupplier] = useState<string>('');
-    const [selectedContabilizacao, setSelectedContabilizacao] = useState<string>('');
+    const [selectedContabilizacao, setSelectedContabilizacao] = useState<Set<string>>(new Set());
     const [supplierSearchOpen, setSupplierSearchOpen] = useState(false);
     const [contabilizacaoSearchOpen, setContabilizacaoSearchOpen] = useState(false);
-    const [supplierCategoryFilter, setSupplierCategoryFilter] = useState<string>('all');
+    const [supplierCategoryFilter, setSupplierCategoryFilter] = useState<Set<string>>(new Set(['all']));
 
     const filteredItemsBySupplier = useMemo(() => {
-        if (supplierCategoryFilter === 'all') return categorizedItemsBySupplier;
+        if (supplierCategoryFilter.has('all')) return categorizedItemsBySupplier;
         
         const filteredGroups: Record<string, any[]> = {};
         const supplierClassifications = (competence && allPersistedData?.[competence]?.supplierClassifications) || {};
@@ -566,13 +566,24 @@ export function CfopValidator(props: CfopValidatorProps) {
             const cnpj = firstItem['CPF/CNPJ do Emitente'];
             const catId = supplierClassifications[cnpj];
             
-            if (catId === supplierCategoryFilter) {
+            if (supplierCategoryFilter.has(catId)) {
                 filteredGroups[supplierName] = items;
             }
         });
         
         return filteredGroups;
     }, [categorizedItemsBySupplier, supplierCategoryFilter, allPersistedData, competence]);
+
+    const itemsForSelectedContabilizacao = useMemo(() => {
+        if (selectedContabilizacao.size === 0) return [];
+        const allItems: any[] = [];
+        selectedContabilizacao.forEach(contab => {
+            if (itemsByContabilizacao[contab]) {
+                allItems.push(...itemsByContabilizacao[contab]);
+            }
+        });
+        return allItems;
+    }, [itemsByContabilizacao, selectedContabilizacao]);
 
     // Efeito para resetar seleções apenas ao mudar de aba principal
     useEffect(() => {
@@ -588,16 +599,18 @@ export function CfopValidator(props: CfopValidatorProps) {
                 setSelectedSupplier('');
             }
         }
-        if (activeTab === 'contabilizacao-check' && !selectedContabilizacao) {
+        if (activeTab === 'contabilizacao-check' && selectedContabilizacao.size === 0) {
             const contabs = Object.keys(itemsByContabilizacao).sort((a, b) => {
-                const partsA = a.split('/').length;
-                const partsB = b.split('/').length;
+                const partsA = a.split(/[/,]/).filter(p => p.trim()).length;
+                const partsB = b.split(/[/,]/).filter(p => p.trim()).length;
                 if (partsA !== partsB) return partsA - partsB;
                 return a.localeCompare(b);
             });
-            if (contabs.length > 0) setSelectedContabilizacao(contabs[0]);
+            if (contabs.length > 0) {
+                setSelectedContabilizacao(new Set([contabs[0]]));
+            }
         }
-    }, [activeTab, filteredItemsBySupplier]);
+    }, [activeTab, filteredItemsBySupplier, itemsByContabilizacao]);
 
     useEffect(() => {
         if (!initialItems) {
@@ -798,7 +811,7 @@ export function CfopValidator(props: CfopValidatorProps) {
         } else if (activeTab === 'categorized-suppliers') {
             itemsToProcess = itemsBySupplier[selectedSupplier] || [];
         } else if (activeTab === 'contabilizacao-check') {
-            itemsToProcess = itemsByContabilizacao[selectedContabilizacao] || [];
+            itemsToProcess = itemsForSelectedContabilizacao;
         } else if (activeTab === 'difal-analysis') {
             itemsToProcess = difalAnalysisData.sujeitosAoDifal;
         } else {
@@ -1595,18 +1608,51 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     </Popover>
                                 </div>
 
-                                <div className="w-64">
-                                    <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Filtrar por Categoria</Label>
-                                    <select 
-                                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
-                                        value={supplierCategoryFilter}
-                                        onChange={(e) => setSupplierCategoryFilter(e.target.value)}
-                                    >
-                                        <option value="all">Todas as categorias</option>
-                                        {(Array.isArray(allPersistedData.supplierCategories) ? allPersistedData.supplierCategories : (competence && allPersistedData.supplierCategories?.[competence]) || []).map((cat: SupplierCategory) => (
-                                            <option key={cat.id} value={cat.id}>{cat.name}</option>
-                                        ))}
-                                    </select>
+                                <div className="w-72">
+                                    <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Filtrar Categoria</Label>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="outline" className="w-full justify-between font-normal">
+                                                <span className="truncate">
+                                                    {supplierCategoryFilter.has('all') 
+                                                        ? "Todas as categorias" 
+                                                        : `${supplierCategoryFilter.size} categorias selecionadas`}
+                                                </span>
+                                                <LucideIcons.ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-72 p-2" align="start">
+                                            <div className="space-y-2">
+                                                <div className="flex items-center space-x-2 p-1 hover:bg-muted rounded-md cursor-pointer" onClick={() => {
+                                                    setSupplierCategoryFilter(new Set(['all']));
+                                                }}>
+                                                    <Checkbox checked={supplierCategoryFilter.has('all')} />
+                                                    <span className="text-sm">Todas as categorias</span>
+                                                </div>
+                                                <div className="h-px bg-muted my-1" />
+                                                <ScrollArea className="h-60">
+                                                    {(Array.isArray(allPersistedData.supplierCategories) ? allPersistedData.supplierCategories : (competence && allPersistedData.supplierCategories?.[competence]) || []).map((cat: SupplierCategory) => (
+                                                        <div key={cat.id} className="flex items-center space-x-2 p-1 hover:bg-muted rounded-md cursor-pointer" onClick={() => {
+                                                            setSupplierCategoryFilter(prev => {
+                                                                const next = new Set(prev);
+                                                                if (next.has('all')) next.delete('all');
+                                                                if (next.has(cat.id)) {
+                                                                    next.delete(cat.id);
+                                                                    if (next.size === 0) next.add('all');
+                                                                } else {
+                                                                    next.add(cat.id);
+                                                                }
+                                                                return next;
+                                                            });
+                                                        }}>
+                                                            <Checkbox checked={supplierCategoryFilter.has(cat.id)} />
+                                                            <span className="text-sm">{cat.name}</span>
+                                                        </div>
+                                                    ))}
+                                                </ScrollArea>
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
 
                                 <div className="flex flex-col justify-end h-full">
@@ -1647,7 +1693,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                     {Object.keys(itemsByContabilizacao).length > 0 ? (
                         <div className="space-y-4">
                             <div className="flex items-center gap-4 bg-muted/30 p-4 rounded-lg border">
-                                <div className="flex-1 max-w-md">
+                                <div className="flex-1">
                                     <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Selecionar Contabilização</Label>
                                     <Popover open={contabilizacaoSearchOpen} onOpenChange={setContabilizacaoSearchOpen}>
                                         <PopoverTrigger asChild>
@@ -1655,10 +1701,12 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                 variant="outline"
                                                 role="combobox"
                                                 aria-expanded={contabilizacaoSearchOpen}
-                                                className="w-full justify-between font-normal"
+                                                className="w-full justify-between font-normal min-h-[40px] h-auto py-2"
                                             >
-                                                <span className="truncate">
-                                                    {selectedContabilizacao ? selectedContabilizacao : "Selecione uma contabilização..."}
+                                                <span className="text-left whitespace-normal break-words">
+                                                    {selectedContabilizacao.size > 0 
+                                                        ? `${selectedContabilizacao.size} selecionada(s): ${Array.from(selectedContabilizacao).slice(0, 2).join(', ')}${selectedContabilizacao.size > 2 ? '...' : ''}` 
+                                                        : "Selecione uma contabilização..."}
                                                 </span>
                                                 <LucideIcons.ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
@@ -1669,7 +1717,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                 <CommandList>
                                                     <CommandEmpty>Nenhuma contabilização encontrada.</CommandEmpty>
                                                     <CommandGroup>
-                                                        <ScrollArea className="h-72">
+                                                        <ScrollArea className="h-96">
                                                             {Object.keys(itemsByContabilizacao)
                                                                 .sort((a, b) => {
                                                                     const partsA = a.split('/').length;
@@ -1681,19 +1729,25 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                                 <CommandItem
                                                                     key={contab}
                                                                     value={contab}
-                                                                    onSelect={(currentValue) => {
-                                                                        setSelectedContabilizacao(currentValue);
-                                                                        setContabilizacaoSearchOpen(false);
+                                                                    onSelect={() => {
+                                                                        setSelectedContabilizacao(prev => {
+                                                                            const next = new Set(prev);
+                                                                            if (next.has(contab)) {
+                                                                                next.delete(contab);
+                                                                            } else {
+                                                                                next.add(contab);
+                                                                            }
+                                                                            return next;
+                                                                        });
                                                                         setRowSelection({});
                                                                     }}
+                                                                    className="py-3"
                                                                 >
-                                                                    <LucideIcons.Check
-                                                                        className={cn(
-                                                                            "mr-2 h-4 w-4",
-                                                                            selectedContabilizacao === contab ? "opacity-100" : "opacity-0"
-                                                                        )}
+                                                                    <Checkbox 
+                                                                        checked={selectedContabilizacao.has(contab)} 
+                                                                        className="mr-2"
                                                                     />
-                                                                    <span className="flex-1 truncate">{contab}</span>
+                                                                    <span className="flex-1 whitespace-normal break-words">{contab}</span>
                                                                     <span className="ml-2 text-xs text-muted-foreground shrink-0">
                                                                         ({itemsByContabilizacao[contab].length})
                                                                     </span>
@@ -1710,16 +1764,16 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block invisible">Exportar</Label>
                                     <div className="flex gap-1 border rounded-md p-1 bg-background">
                                         <Button 
-                                            onClick={() => handleExport(itemsByContabilizacao[selectedContabilizacao] || [], `Contab_${selectedContabilizacao.replace(/\s+/g, '_')}`, 'excel')} 
+                                            onClick={() => handleExport(itemsForSelectedContabilizacao, `Contab_Multipla`, 'excel')} 
                                             size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                            disabled={!selectedContabilizacao}
+                                            disabled={selectedContabilizacao.size === 0}
                                         >
                                             <LucideIcons.Download className="mr-1 h-3 w-3" /> Excel
                                         </Button>
                                         <Button 
-                                            onClick={() => handleExport(itemsByContabilizacao[selectedContabilizacao] || [], `Contab_${selectedContabilizacao.replace(/\s+/g, '_')}`, 'pdf')} 
+                                            onClick={() => handleExport(itemsForSelectedContabilizacao, `Contab_Multipla`, 'pdf')} 
                                             size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                            disabled={!selectedContabilizacao}
+                                            disabled={selectedContabilizacao.size === 0}
                                         >
                                             <LucideIcons.Download className="mr-1 h-3 w-3" /> PDF
                                         </Button>
@@ -1727,12 +1781,16 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 </div>
                             </div>
                             
-                            {selectedContabilizacao && (
+                            {selectedContabilizacao.size > 0 && (
                                 <div className="animate-in fade-in-0 slide-in-from-top-2 duration-300">
                                     <div className="flex justify-between items-center mb-2">
-                                        <div className="text-lg font-bold">Contabilização: {selectedContabilizacao}</div>
+                                        <div className="text-lg font-bold">
+                                            Contabilização: {selectedContabilizacao.size === 1 
+                                                ? Array.from(selectedContabilizacao)[0] 
+                                                : `${selectedContabilizacao.size} selecionadas`}
+                                        </div>
                                     </div>
-                                    <DataTable columns={columns} data={itemsByContabilizacao[selectedContabilizacao] || []} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
+                                    <DataTable columns={columns} data={itemsForSelectedContabilizacao} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
                                 </div>
                             )}
                         </div>
