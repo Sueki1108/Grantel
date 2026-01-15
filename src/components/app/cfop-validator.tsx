@@ -1167,6 +1167,25 @@ export function CfopValidator(props: CfopValidatorProps) {
                 }
 
 
+                if (id === 'Contabilização') {
+                    const fullText = String(value || 'N/A');
+                    const firstPart = fullText.split(/[\\/,]/)[0]?.trim();
+                    const hasMore = fullText.split(/[\\/,]/).length > 1;
+                    
+                    return (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="max-w-[150px] truncate cursor-help">
+                                    {firstPart}{hasMore ? '...' : ''}
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[300px] whitespace-normal">
+                                <p>{fullText}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    );
+                }
+                
                 if (id === 'Número da Nota') {
                     return renderCellWithCopy(value, value, 'Número da Nota');
                 }
@@ -1710,14 +1729,6 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block invisible">Exportar</Label>
                                     <div className="flex gap-1 border rounded-md p-1 bg-background">
                                         <Button 
-                                            onClick={() => handleValidationChange(filteredItemsBySupplier[selectedSupplier] || [], 'verify')}
-                                            size="sm" variant="ghost" className="h-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                            disabled={!selectedSupplier || (filteredItemsBySupplier[selectedSupplier]?.length === 0)}
-                                        >
-                                            <LucideIcons.CheckCircle2 className="mr-1 h-3 w-3" /> Verificar
-                                        </Button>
-                                        <div className="w-px bg-border mx-1" />
-                                        <Button 
                                             onClick={() => handleExport(filteredItemsBySupplier[selectedSupplier] || [], `Fornecedor_${selectedSupplier.replace(/\s+/g, '_')}`, 'excel')} 
                                             size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                                             disabled={!selectedSupplier}
@@ -1823,14 +1834,6 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 <div className="flex flex-col justify-end h-full">
                                     <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block invisible">Exportar</Label>
                                     <div className="flex gap-1 border rounded-md p-1 bg-background">
-                                        <Button 
-                                            onClick={() => handleValidationChange(itemsForSelectedContabilizacao, 'verify')}
-                                            size="sm" variant="ghost" className="h-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                            disabled={selectedContabilizacao.size === 0 || itemsForSelectedContabilizacao.length === 0}
-                                        >
-                                            <LucideIcons.CheckCircle2 className="mr-1 h-3 w-3" /> Verificar
-                                        </Button>
-                                        <div className="w-px bg-border mx-1" />
                                         <Button 
                                             onClick={() => handleExport(itemsForSelectedContabilizacao, `Contas_Contabeis`, 'excel')} 
                                             size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
