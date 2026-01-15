@@ -1335,19 +1335,48 @@ export function CfopValidator(props: CfopValidatorProps) {
             )}
             
             <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as ValidationStatus | 'faturamento-entrega' | 'difal-analysis' | 'contabilizacao-error' | 'categorized-suppliers' | 'contabilizacao-check')} className="w-full">
-                 <div className="flex justify-between items-center mb-2">
-                    <TabsList className="grid w-full grid-cols-10">
-                        {statusTabs.map(({status, label}) => {
-                            const count = Object.values(itemsByStatus[status] || {}).flat().length;
-                            return <TabsTrigger key={status} value={status} disabled={count === 0}>{label} ({count})</TabsTrigger>
-                        })}
-                        <TabsTrigger value="contabilizacao-error" className="flex gap-2"><LucideIcons.AlertTriangle className="h-4 w-4" />Erros ({contabilizacaoErroItems.length})</TabsTrigger>
-                        <TabsTrigger value="faturamento-entrega">Faturamento</TabsTrigger>
-                        <TabsTrigger value="difal-analysis">DIFAL</TabsTrigger>
-                        <TabsTrigger value="categorized-suppliers" className="flex gap-2"><LucideIcons.Tag className="h-4 w-4" /> Fornecedores ({categorizedSupplierItems.length})</TabsTrigger>
-                        <TabsTrigger value="contabilizacao-check" className="flex gap-2"><LucideIcons.BookOpen className="h-4 w-4" /> Contabilização</TabsTrigger>
-                    </TabsList>
-                    <div className="flex gap-2 ml-4">
+                 <div className="flex flex-col gap-4 mb-2">
+                    <div className="flex items-center gap-2">
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="shrink-0 h-8 w-8" 
+                            onClick={() => {
+                                const el = document.getElementById('main-tabs-list');
+                                if (el) el.scrollBy({ left: -200, behavior: 'smooth' });
+                            }}
+                        >
+                            <LucideIcons.ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        
+                        <div id="main-tabs-list" className="flex-1 overflow-x-auto no-scrollbar">
+                            <TabsList className="flex w-max min-w-full">
+                                {statusTabs.map(({status, label}) => {
+                                    const count = Object.values(itemsByStatus[status] || {}).flat().length;
+                                    return <TabsTrigger key={status} value={status} disabled={count === 0} className="px-4 whitespace-nowrap">{label} ({count})</TabsTrigger>
+                                })}
+                                <TabsTrigger value="contabilizacao-error" className="flex gap-2 px-4 whitespace-nowrap"><LucideIcons.AlertTriangle className="h-4 w-4" />Erros ({contabilizacaoErroItems.length})</TabsTrigger>
+                                <TabsTrigger value="faturamento-entrega" className="px-4 whitespace-nowrap">Faturamento</TabsTrigger>
+                                <TabsTrigger value="difal-analysis" className="px-4 whitespace-nowrap">DIFAL</TabsTrigger>
+                                <TabsTrigger value="categorized-suppliers" className="flex gap-2 px-4 whitespace-nowrap"><LucideIcons.Tag className="h-4 w-4" /> Fornecedores ({categorizedSupplierItems.length})</TabsTrigger>
+                                <TabsTrigger value="contabilizacao-check" className="flex gap-2 px-4 whitespace-nowrap"><LucideIcons.BookOpen className="h-4 w-4" /> Contabilização</TabsTrigger>
+                            </TabsList>
+                        </div>
+
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="shrink-0 h-8 w-8" 
+                            onClick={() => {
+                                const el = document.getElementById('main-tabs-list');
+                                if (el) el.scrollBy({ left: 200, behavior: 'smooth' });
+                            }}
+                        >
+                            <LucideIcons.ChevronRight className="h-4 w-4" />
+                        </Button>
+                    </div>
+
+                    <div className="flex justify-end gap-2">
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
                                 <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">
@@ -1395,14 +1424,43 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     onValueChange={(val) => { setActiveCfopTabs(prev => ({...prev, [status]: val})); setRowSelection({}); setBulkActionState({ classification: null }); }}
                                     className="w-full"
                                 >
-                                    <div className='flex justify-between items-center mb-2'>
-                                        <TabsList className="h-auto flex-wrap justify-start">
-                                            {allCfopsForStatus.map(cfop => {
-                                                const totalItemsInCfop = (itemsByStatus[status]?.[cfop] || []).length;
-                                                return <TabsTrigger key={`${status}-${cfop}`} value={cfop} disabled={totalItemsInCfop === 0}>{cfop} ({totalItemsInCfop})</TabsTrigger>
-                                            })}
-                                        </TabsList>
-                                        <div className="flex gap-2">
+                                    <div className='flex justify-between items-center mb-2 gap-4'>
+                                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="shrink-0 h-7 w-7" 
+                                                onClick={() => {
+                                                    const el = document.getElementById(`subtabs-${status}`);
+                                                    if (el) el.scrollBy({ left: -150, behavior: 'smooth' });
+                                                }}
+                                            >
+                                                <LucideIcons.ChevronLeft className="h-4 w-4" />
+                                            </Button>
+                                            
+                                            <div id={`subtabs-${status}`} className="flex-1 overflow-x-auto no-scrollbar">
+                                                <TabsList className="flex w-max min-w-full h-9 p-1">
+                                                    {allCfopsForStatus.map(cfop => {
+                                                        const totalItemsInCfop = (itemsByStatus[status]?.[cfop] || []).length;
+                                                        return <TabsTrigger key={`${status}-${cfop}`} value={cfop} disabled={totalItemsInCfop === 0} className="whitespace-nowrap px-3">{cfop} ({totalItemsInCfop})</TabsTrigger>
+                                                    })}
+                                                </TabsList>
+                                            </div>
+
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="shrink-0 h-7 w-7" 
+                                                onClick={() => {
+                                                    const el = document.getElementById(`subtabs-${status}`);
+                                                    if (el) el.scrollBy({ left: 150, behavior: 'smooth' });
+                                                }}
+                                            >
+                                                <LucideIcons.ChevronRight className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+
+                                        <div className="flex gap-2 shrink-0">
                                             <Button onClick={() => handleExport(Object.values(cfopGroupsForStatus).flat(), `Aba_${status}`, 'excel')} size="sm" variant="outline" className="text-emerald-600 border-emerald-200 hover:bg-emerald-50">
                                                 <LucideIcons.Download className="mr-2 h-4 w-4" /> Excel ({Object.values(cfopGroupsForStatus).flat().length})
                                             </Button>
