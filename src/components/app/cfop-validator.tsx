@@ -551,16 +551,42 @@ export function CfopValidator(props: CfopValidatorProps) {
 
     const [selectedSupplier, setSelectedSupplier] = useState<string>('');
     const [selectedContabilizacao, setSelectedContabilizacao] = useState<string>('');
+    const [supplierSearchOpen, setSupplierSearchOpen] = useState(false);
+    const [contabilizacaoSearchOpen, setContabilizacaoSearchOpen] = useState(false);
+    const [supplierCategoryFilter, setSupplierCategoryFilter] = useState<string>('all');
+
+    const filteredItemsBySupplier = useMemo(() => {
+        if (supplierCategoryFilter === 'all') return categorizedItemsBySupplier;
+        
+        const filteredGroups: Record<string, any[]> = {};
+        const supplierClassifications = (competence && allPersistedData?.[competence]?.supplierClassifications) || {};
+        
+        Object.entries(categorizedItemsBySupplier).forEach(([supplierName, items]) => {
+            const firstItem = items[0];
+            const cnpj = firstItem['CPF/CNPJ do Emitente'];
+            const catId = supplierClassifications[cnpj];
+            
+            if (catId === supplierCategoryFilter) {
+                filteredGroups[supplierName] = items;
+            }
+        });
+        
+        return filteredGroups;
+    }, [categorizedItemsBySupplier, supplierCategoryFilter, allPersistedData, competence]);
 
     // Efeito para resetar seleções apenas ao mudar de aba principal
     useEffect(() => {
         setRowSelection({});
         setBulkActionState({ classification: null });
         
-        // Inicializar seletores se vazios
-        if (activeTab === 'categorized-suppliers' && !selectedSupplier) {
-            const suppliers = Object.keys(categorizedItemsBySupplier).sort();
-            if (suppliers.length > 0) setSelectedSupplier(suppliers[0]);
+        // Inicializar seletores se vazios ou se o filtro mudar
+        if (activeTab === 'categorized-suppliers') {
+            const suppliers = Object.keys(filteredItemsBySupplier).sort();
+            if (suppliers.length > 0 && (!selectedSupplier || !filteredItemsBySupplier[selectedSupplier])) {
+                setSelectedSupplier(suppliers[0]);
+            } else if (suppliers.length === 0) {
+                setSelectedSupplier('');
+            }
         }
         if (activeTab === 'contabilizacao-check' && !selectedContabilizacao) {
             const contabs = Object.keys(itemsByContabilizacao).sort((a, b) => {
@@ -571,7 +597,7 @@ export function CfopValidator(props: CfopValidatorProps) {
             });
             if (contabs.length > 0) setSelectedContabilizacao(contabs[0]);
         }
-    }, [activeTab]); // Removido itemsBySupplier e itemsByContabilizacao para evitar reset ao categorizar
+    }, [activeTab, filteredItemsBySupplier]);
 
     useEffect(() => {
         if (!initialItems) {
@@ -1522,36 +1548,79 @@ export function CfopValidator(props: CfopValidatorProps) {
                 <TabsContent value="categorized-suppliers" className="mt-4">
                     {Object.keys(categorizedItemsBySupplier).length > 0 ? (
                         <div className="space-y-4">
-                            <div className="flex items-center gap-4 bg-muted/30 p-4 rounded-lg border">
-                                <div className="flex-1 max-w-md">
+                            <div className="flex flex-wrap items-end gap-4 bg-muted/30 p-4 rounded-lg border">
+                                <div className="flex-1 min-w-[300px]">
                                     <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Selecionar Fornecedor</Label>
+                                    <Popover open={supplierSearchOpen} onOpenChange={setSupplierSearchOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={supplierSearchOpen}
+                                                className="w-full justify-between"
+                                            >
+                                                <span className="truncate">{selectedSupplier || "Selecionar fornecedor..."}</span>
+                                                <LucideIcons.ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                            <Command className="w-full">
+                                                <CommandInput placeholder="Pesquisar fornecedor..." />
+                                                <CommandEmpty>Nenhum fornecedor encontrado.</CommandEmpty>
+                                                <CommandGroup>
+                                                    <ScrollArea className="h-72">
+                                                        {Object.keys(filteredItemsBySupplier).sort().map((supplier) => (
+                                                            <CommandItem
+                                                                key={supplier}
+                                                                value={supplier}
+                                                                onSelect={(currentValue) => {
+                                                                    setSelectedSupplier(currentValue);
+                                                                    setSupplierSearchOpen(false);
+                                                                    setRowSelection({});
+                                                                }}
+                                                            >
+                                                                <LucideIcons.Check
+                                                                    className={cn(
+                                                                        "mr-2 h-4 w-4",
+                                                                        selectedSupplier === supplier ? "opacity-100" : "opacity-0"
+                                                                    )}
+                                                                />
+                                                                {supplier} ({filteredItemsBySupplier[supplier].length} itens)
+                                                            </CommandItem>
+                                                        ))}
+                                                    </ScrollArea>
+                                                </CommandGroup>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+
+                                <div className="w-64">
+                                    <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Filtrar por Categoria</Label>
                                     <select 
                                         className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
-                                        value={selectedSupplier}
-                                        onChange={(e) => {
-                                            setSelectedSupplier(e.target.value);
-                                            setRowSelection({});
-                                        }}
+                                        value={supplierCategoryFilter}
+                                        onChange={(e) => setSupplierCategoryFilter(e.target.value)}
                                     >
-                                        {Object.keys(categorizedItemsBySupplier).sort().map(supplier => (
-                                            <option key={supplier} value={supplier}>
-                                                {supplier} ({categorizedItemsBySupplier[supplier].length} itens)
-                                            </option>
+                                        <option value="all">Todas as categorias</option>
+                                        {(Array.isArray(allPersistedData.supplierCategories) ? allPersistedData.supplierCategories : (competence && allPersistedData.supplierCategories?.[competence]) || []).map((cat: SupplierCategory) => (
+                                            <option key={cat.id} value={cat.id}>{cat.name}</option>
                                         ))}
                                     </select>
                                 </div>
+
                                 <div className="flex flex-col justify-end h-full">
                                     <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block invisible">Exportar</Label>
                                     <div className="flex gap-1 border rounded-md p-1 bg-background">
                                         <Button 
-                                            onClick={() => handleExport(categorizedItemsBySupplier[selectedSupplier] || [], `Fornecedor_${selectedSupplier.replace(/\s+/g, '_')}`, 'excel')} 
+                                            onClick={() => handleExport(filteredItemsBySupplier[selectedSupplier] || [], `Fornecedor_${selectedSupplier.replace(/\s+/g, '_')}`, 'excel')} 
                                             size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                                             disabled={!selectedSupplier}
                                         >
                                             <LucideIcons.Download className="mr-1 h-3 w-3" /> Excel
                                         </Button>
                                         <Button 
-                                            onClick={() => handleExport(categorizedItemsBySupplier[selectedSupplier] || [], `Fornecedor_${selectedSupplier.replace(/\s+/g, '_')}`, 'pdf')} 
+                                            onClick={() => handleExport(filteredItemsBySupplier[selectedSupplier] || [], `Fornecedor_${selectedSupplier.replace(/\s+/g, '_')}`, 'pdf')} 
                                             size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50"
                                             disabled={!selectedSupplier}
                                         >
@@ -1561,12 +1630,12 @@ export function CfopValidator(props: CfopValidatorProps) {
                                 </div>
                             </div>
                             
-                            {selectedSupplier && (
+                            {selectedSupplier && filteredItemsBySupplier[selectedSupplier] && (
                                 <div className="animate-in fade-in-0 slide-in-from-top-2 duration-300">
                                     <div className="flex justify-between items-center mb-2">
                                         <div className="text-lg font-bold">Fornecedor: {selectedSupplier}</div>
                                     </div>
-                                    <DataTable columns={columns} data={categorizedItemsBySupplier[selectedSupplier] || []} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
+                                    <DataTable columns={columns} data={filteredItemsBySupplier[selectedSupplier] || []} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
                                 </div>
                             )}
                         </div>
@@ -1579,12 +1648,13 @@ export function CfopValidator(props: CfopValidatorProps) {
                         <div className="space-y-4">
                             <div className="flex items-center gap-4 bg-muted/30 p-4 rounded-lg border">
                                 <div className="flex-1 max-w-md">
-                                    <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Pesquisar Contabilização</Label>
-                                    <Popover>
+                                    <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Selecionar Contabilização</Label>
+                                    <Popover open={contabilizacaoSearchOpen} onOpenChange={setContabilizacaoSearchOpen}>
                                         <PopoverTrigger asChild>
                                             <Button
                                                 variant="outline"
                                                 role="combobox"
+                                                aria-expanded={contabilizacaoSearchOpen}
                                                 className="w-full justify-between font-normal"
                                             >
                                                 <span className="truncate">
@@ -1593,40 +1663,43 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                 <LucideIcons.ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent className="w-[450px] p-0" align="start">
-                                            <Command>
+                                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                            <Command className="w-full">
                                                 <CommandInput placeholder="Digite para buscar..." />
                                                 <CommandList>
                                                     <CommandEmpty>Nenhuma contabilização encontrada.</CommandEmpty>
                                                     <CommandGroup>
-                                                        {Object.keys(itemsByContabilizacao)
-                                                            .sort((a, b) => {
-                                                                const partsA = a.split('/').length;
-                                                                const partsB = b.split('/').length;
-                                                                if (partsA !== partsB) return partsA - partsB;
-                                                                return a.localeCompare(b);
-                                                            })
-                                                            .map((contab) => (
-                                                            <CommandItem
-                                                                key={contab}
-                                                                value={contab}
-                                                                onSelect={() => {
-                                                                    setSelectedContabilizacao(contab);
-                                                                    setRowSelection({});
-                                                                }}
-                                                            >
-                                                                <LucideIcons.Check
-                                                                    className={cn(
-                                                                        "mr-2 h-4 w-4",
-                                                                        selectedContabilizacao === contab ? "opacity-100" : "opacity-0"
-                                                                    )}
-                                                                />
-                                                                <span className="flex-1 truncate">{contab}</span>
-                                                                <span className="ml-2 text-xs text-muted-foreground shrink-0">
-                                                                    ({itemsByContabilizacao[contab].length})
-                                                                </span>
-                                                            </CommandItem>
-                                                        ))}
+                                                        <ScrollArea className="h-72">
+                                                            {Object.keys(itemsByContabilizacao)
+                                                                .sort((a, b) => {
+                                                                    const partsA = a.split('/').length;
+                                                                    const partsB = b.split('/').length;
+                                                                    if (partsA !== partsB) return partsA - partsB;
+                                                                    return a.localeCompare(b);
+                                                                })
+                                                                .map((contab) => (
+                                                                <CommandItem
+                                                                    key={contab}
+                                                                    value={contab}
+                                                                    onSelect={(currentValue) => {
+                                                                        setSelectedContabilizacao(currentValue);
+                                                                        setContabilizacaoSearchOpen(false);
+                                                                        setRowSelection({});
+                                                                    }}
+                                                                >
+                                                                    <LucideIcons.Check
+                                                                        className={cn(
+                                                                            "mr-2 h-4 w-4",
+                                                                            selectedContabilizacao === contab ? "opacity-100" : "opacity-0"
+                                                                        )}
+                                                                    />
+                                                                    <span className="flex-1 truncate">{contab}</span>
+                                                                    <span className="ml-2 text-xs text-muted-foreground shrink-0">
+                                                                        ({itemsByContabilizacao[contab].length})
+                                                                    </span>
+                                                                </CommandItem>
+                                                            ))}
+                                                        </ScrollArea>
                                                     </CommandGroup>
                                                 </CommandList>
                                             </Command>
