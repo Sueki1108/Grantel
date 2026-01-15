@@ -7,7 +7,6 @@ import { DataTable } from "@/components/app/data-table";
 import { getColumnsWithCustomRender } from "@/components/app/columns-helper";
 import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from "@/components/ui/toast";
-import { ToastAction } from "@/components/ui/toast";
 import type { AllClassifications, SupplierCategory, Classification, DifalStatus } from '@/lib/types';
 import {
   Tooltip,
@@ -518,17 +517,17 @@ export function CfopValidator(props: CfopValidatorProps) {
         });
     }, [enrichedItems, allPersistedData, competence]);
 
-    const itemsBySupplier = useMemo(() => {
+    const categorizedItemsBySupplier = useMemo(() => {
         const groups: Record<string, any[]> = {};
-        if (Array.isArray(enrichedItems)) {
-            enrichedItems.forEach(item => {
+        if (Array.isArray(categorizedSupplierItems)) {
+            categorizedSupplierItems.forEach(item => {
                 const supplier = item['Fornecedor'] || 'N/A';
                 if (!groups[supplier]) groups[supplier] = [];
                 groups[supplier].push(item);
             });
         }
         return groups;
-    }, [enrichedItems]);
+    }, [categorizedSupplierItems]);
 
     const itemsByContabilizacao = useMemo(() => {
         const groups: Record<string, any[]> = {};
@@ -560,7 +559,7 @@ export function CfopValidator(props: CfopValidatorProps) {
         
         // Inicializar seletores se vazios
         if (activeTab === 'categorized-suppliers' && !selectedSupplier) {
-            const suppliers = Object.keys(itemsBySupplier).sort();
+            const suppliers = Object.keys(categorizedItemsBySupplier).sort();
             if (suppliers.length > 0) setSelectedSupplier(suppliers[0]);
         }
         if (activeTab === 'contabilizacao-check' && !selectedContabilizacao) {
@@ -1521,7 +1520,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                     </Tabs>
                 </TabsContent>
                 <TabsContent value="categorized-suppliers" className="mt-4">
-                    {Object.keys(itemsBySupplier).length > 0 ? (
+                    {Object.keys(categorizedItemsBySupplier).length > 0 ? (
                         <div className="space-y-4">
                             <div className="flex items-center gap-4 bg-muted/30 p-4 rounded-lg border">
                                 <div className="flex-1 max-w-md">
@@ -1534,9 +1533,9 @@ export function CfopValidator(props: CfopValidatorProps) {
                                             setRowSelection({});
                                         }}
                                     >
-                                        {Object.keys(itemsBySupplier).sort().map(supplier => (
+                                        {Object.keys(categorizedItemsBySupplier).sort().map(supplier => (
                                             <option key={supplier} value={supplier}>
-                                                {supplier} ({itemsBySupplier[supplier].length} itens)
+                                                {supplier} ({categorizedItemsBySupplier[supplier].length} itens)
                                             </option>
                                         ))}
                                     </select>
@@ -1545,14 +1544,14 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block invisible">Exportar</Label>
                                     <div className="flex gap-1 border rounded-md p-1 bg-background">
                                         <Button 
-                                            onClick={() => handleExport(itemsBySupplier[selectedSupplier] || [], `Fornecedor_${selectedSupplier.replace(/\s+/g, '_')}`, 'excel')} 
+                                            onClick={() => handleExport(categorizedItemsBySupplier[selectedSupplier] || [], `Fornecedor_${selectedSupplier.replace(/\s+/g, '_')}`, 'excel')} 
                                             size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                                             disabled={!selectedSupplier}
                                         >
                                             <LucideIcons.Download className="mr-1 h-3 w-3" /> Excel
                                         </Button>
                                         <Button 
-                                            onClick={() => handleExport(itemsBySupplier[selectedSupplier] || [], `Fornecedor_${selectedSupplier.replace(/\s+/g, '_')}`, 'pdf')} 
+                                            onClick={() => handleExport(categorizedItemsBySupplier[selectedSupplier] || [], `Fornecedor_${selectedSupplier.replace(/\s+/g, '_')}`, 'pdf')} 
                                             size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50"
                                             disabled={!selectedSupplier}
                                         >
@@ -1567,7 +1566,7 @@ export function CfopValidator(props: CfopValidatorProps) {
                                     <div className="flex justify-between items-center mb-2">
                                         <div className="text-lg font-bold">Fornecedor: {selectedSupplier}</div>
                                     </div>
-                                    <DataTable columns={columns} data={itemsBySupplier[selectedSupplier] || []} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
+                                    <DataTable columns={columns} data={categorizedItemsBySupplier[selectedSupplier] || []} rowSelection={rowSelection} setRowSelection={setRowSelection} autoResetPageIndex={false} />
                                 </div>
                             )}
                         </div>
