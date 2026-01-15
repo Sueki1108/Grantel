@@ -549,6 +549,7 @@ export function CfopValidator(props: CfopValidatorProps) {
 
     const [selectedSupplier, setSelectedSupplier] = useState<string>('');
     const [selectedContabilizacao, setSelectedContabilizacao] = useState<Set<string>>(new Set());
+    const [verifiedEntities, setVerifiedEntities] = useState<Set<string>>(new Set());
     const [supplierSearchOpen, setSupplierSearchOpen] = useState(false);
     const [contabilizacaoSearchOpen, setContabilizacaoSearchOpen] = useState(false);
     const [supplierCategoryFilter, setSupplierCategoryFilter] = useState<Set<string>>(new Set(['all']));
@@ -629,6 +630,39 @@ export function CfopValidator(props: CfopValidatorProps) {
         setEnrichedItems(newItems);
 
     }, [initialItems, nfeValidasData]);
+
+    // Efeito para carregar entidades verificadas do localStorage
+    useEffect(() => {
+        if (competence) {
+            const saved = localStorage.getItem(`verified_entities_${competence}`);
+            if (saved) {
+                try {
+                    setVerifiedEntities(new Set(JSON.parse(saved)));
+                } catch (e) {
+                    console.error("Erro ao carregar entidades verificadas", e);
+                }
+            } else {
+                setVerifiedEntities(new Set());
+            }
+        }
+    }, [competence]);
+
+    // Efeito para salvar entidades verificadas no localStorage
+    useEffect(() => {
+        if (competence && verifiedEntities) {
+            localStorage.setItem(`verified_entities_${competence}`, JSON.stringify(Array.from(verifiedEntities)));
+        }
+    }, [verifiedEntities, competence]);
+
+    const toggleVerified = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setVerifiedEntities(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
 
     const handleEnrichData = () => {
         if (!originalXmlItems || originalXmlItems.length === 0) {
@@ -1652,25 +1686,40 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                 <CommandEmpty>Nenhum fornecedor encontrado.</CommandEmpty>
                                                 <CommandGroup>
                                                     <ScrollArea className="h-72">
-                                                        {Object.keys(filteredItemsBySupplier).sort().map((supplier) => (
-                                                            <CommandItem
-                                                                key={supplier}
-                                                                value={supplier}
-                                                                onSelect={(currentValue) => {
-                                                                    setSelectedSupplier(currentValue);
-                                                                    setSupplierSearchOpen(false);
-                                                                    setRowSelection({});
-                                                                }}
-                                                            >
-                                                                <LucideIcons.Check
-                                                                    className={cn(
-                                                                        "mr-2 h-4 w-4",
-                                                                        selectedSupplier === supplier ? "opacity-100" : "opacity-0"
-                                                                    )}
-                                                                />
-                                                                {supplier} ({filteredItemsBySupplier[supplier].length} itens)
-                                                            </CommandItem>
-                                                        ))}
+                                                        {Object.keys(filteredItemsBySupplier).sort().map((supplier) => {
+                                                            const isVerified = verifiedEntities.has(`supplier-${supplier}`);
+                                                            return (
+                                                                <CommandItem
+                                                                    key={supplier}
+                                                                    value={supplier}
+                                                                    onSelect={(currentValue) => {
+                                                                        setSelectedSupplier(currentValue);
+                                                                        setSupplierSearchOpen(false);
+                                                                        setRowSelection({});
+                                                                    }}
+                                                                    className={cn(isVerified && "bg-emerald-50 dark:bg-emerald-950/20")}
+                                                                >
+                                                                    <LucideIcons.Check
+                                                                        className={cn(
+                                                                            "mr-2 h-4 w-4",
+                                                                            selectedSupplier === supplier ? "opacity-100" : "opacity-0"
+                                                                        )}
+                                                                    />
+                                                                    <span className="flex-1">{supplier} ({filteredItemsBySupplier[supplier].length} itens)</span>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className={cn(
+                                                                            "h-6 w-6 ml-2 rounded-full",
+                                                                            isVerified ? "text-emerald-600 bg-emerald-100 hover:bg-emerald-200" : "text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50"
+                                                                        )}
+                                                                        onClick={(e) => toggleVerified(`supplier-${supplier}`, e)}
+                                                                    >
+                                                                        <LucideIcons.CheckCircle2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </CommandItem>
+                                                            );
+                                                        })}
                                                     </ScrollArea>
                                                 </CommandGroup>
                                             </Command>
@@ -1796,34 +1845,48 @@ export function CfopValidator(props: CfopValidatorProps) {
                                                         <ScrollArea className="h-96">
                                                             {Object.keys(itemsByIndividualContabilizacao)
                                                                 .sort()
-                                                                .map((contab) => (
-                                                                <CommandItem
-                                                                    key={contab}
-                                                                    value={contab}
-                                                                    onSelect={() => {
-                                                                        setSelectedContabilizacao(prev => {
-                                                                            const next = new Set(prev);
-                                                                            if (next.has(contab)) {
-                                                                                next.delete(contab);
-                                                                            } else {
-                                                                                next.add(contab);
-                                                                            }
-                                                                            return next;
-                                                                        });
-                                                                        setRowSelection({});
-                                                                    }}
-                                                                    className="py-3"
-                                                                >
-                                                                    <Checkbox 
-                                                                        checked={selectedContabilizacao.has(contab)} 
-                                                                        className="mr-2"
-                                                                    />
-                                                                    <span className="flex-1 whitespace-normal break-words">{contab}</span>
-                                                                    <span className="ml-2 text-xs text-muted-foreground shrink-0">
-                                                                        ({itemsByIndividualContabilizacao[contab].length})
-                                                                    </span>
-                                                                </CommandItem>
-                                                            ))}
+                                                                .map((contab) => {
+                                                                    const isVerified = verifiedEntities.has(`contab-${contab}`);
+                                                                    return (
+                                                                        <CommandItem
+                                                                            key={contab}
+                                                                            value={contab}
+                                                                            onSelect={() => {
+                                                                                setSelectedContabilizacao(prev => {
+                                                                                    const next = new Set(prev);
+                                                                                    if (next.has(contab)) {
+                                                                                        next.delete(contab);
+                                                                                    } else {
+                                                                                        next.add(contab);
+                                                                                    }
+                                                                                    return next;
+                                                                                });
+                                                                                setRowSelection({});
+                                                                            }}
+                                                                            className={cn("py-3", isVerified && "bg-emerald-50 dark:bg-emerald-950/20")}
+                                                                        >
+                                                                            <Checkbox 
+                                                                                checked={selectedContabilizacao.has(contab)} 
+                                                                                className="mr-2"
+                                                                            />
+                                                                            <span className="flex-1 whitespace-normal break-words">{contab}</span>
+                                                                            <span className="ml-2 text-xs text-muted-foreground shrink-0 mr-2">
+                                                                                ({itemsByIndividualContabilizacao[contab].length})
+                                                                            </span>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className={cn(
+                                                                                    "h-8 w-8 rounded-full shrink-0",
+                                                                                    isVerified ? "text-emerald-600 bg-emerald-100 hover:bg-emerald-200" : "text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50"
+                                                                                )}
+                                                                                onClick={(e) => toggleVerified(`contab-${contab}`, e)}
+                                                                            >
+                                                                                <LucideIcons.CheckCircle2 className="h-5 w-5" />
+                                                                            </Button>
+                                                                        </CommandItem>
+                                                                    );
+                                                                })}
                                                         </ScrollArea>
                                                     </CommandGroup>
                                                 </CommandList>
