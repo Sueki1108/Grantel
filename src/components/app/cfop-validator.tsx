@@ -1712,7 +1712,13 @@ export function CfopValidator(props: CfopValidatorProps) {
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                                            <Command className="w-full">
+                                            <Command 
+                                                className="w-full"
+                                                filter={(value, search) => {
+                                                    if (value.toLocaleLowerCase().includes(search.toLocaleLowerCase())) return 1;
+                                                    return 0;
+                                                }}
+                                            >
                                                 <CommandInput placeholder="Digite para buscar..." />
                                                 <CommandList>
                                                     <CommandEmpty>Nenhuma contabilização encontrada.</CommandEmpty>
