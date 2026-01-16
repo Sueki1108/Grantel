@@ -238,14 +238,11 @@ export function KeyResultsDisplay({ results }: KeyResultsDisplayProps) {
             keys.forEach(k => {
                 if (!k || !k.key) return; 
                 const model = identifyInvoiceModel(k.key);
-                const type = k.type?.toUpperCase() || '';
-                
-                if (model === 'CTE' || type === 'CTE') {
-                    cte.push(k);
-                } else if (model === 'NFE' || type === 'NFE' || type === 'SAÍDA') {
+                if (model === 'NFE' || k.type?.toUpperCase() === 'NFE' || k.type?.toUpperCase() === 'SAÍDA') {
                     nfe.push(k);
+                } else if (model === 'CTE' || k.type?.toUpperCase() === 'CTE') {
+                    cte.push(k);
                 } else {
-                    // Fallback para NFE se não for possível identificar
                     nfe.push(k);
                 }
             });

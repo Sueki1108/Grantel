@@ -62,14 +62,13 @@ const ClassificationTable: React.FC<ClassificationTableProps> = ({
         return <div className="text-center text-muted-foreground p-8">Nenhum item nesta categoria.</div>;
     }
 
-    return <DataTable columns={columns} data={data} rowSelection={rowSelection} setRowSelection={setRowSelection} tableRef={tableRef} onSelectionChange={() => {}} getRowId={(row) => row.uniqueItemId} />;
+    return <DataTable columns={columns} data={data} rowSelection={rowSelection} setRowSelection={setRowSelection} tableRef={tableRef} onSelectionChange={() => {}} />;
 }
 
 
 export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, competence, onPersistData, allPersistedData, reconciliationResults }: ImobilizadoAnalysisProps) {
     const { toast } = useToast();
     
-    const tableRef = React.useRef<ReactTable<any> | null>(null);
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
     const containerRef = React.useRef<HTMLDivElement>(null);
     const [activeTab, setActiveTab] = useState<Classification>('unclassified');
@@ -134,8 +133,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             const comparisonKey = `${cleanAndToStr(numeroNota)}-${cleanAndToStr(emitenteCnpj)}`;
             const siengeMatches = siengeItemMap.get(comparisonKey) || [];
 
-            const uniqueItemId = `${item['Chave Unica']}-${item['Item']}`;
-
             let siengeCfopValue = 'N/A';
             if (siengeMatches.length > 0 && hSienge.cfop && hSienge.produtoFiscal) {
                 const siengeMatch = siengeMatches.find(si => {
@@ -175,7 +172,6 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
             
             return {
                 ...item,
-                uniqueItemId,
                 'CFOP (Sienge)': siengeCfopValue,
                 'Contabilização': contabilizacao,
                 'Centro de Custo': centroCusto,
@@ -402,7 +398,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         const persistedAccountCodes = (competence && allPersistedData[competence]?.accountCodes) || {};
 
         const dataToExport = data.map(item => {
-             const accountCode = persistedAccountCodes[item.uniqueItemId]?.accountCode || '';
+             const accountCode = persistedAccountCodes[item.id]?.accountCode || '';
             return {
                 'Número da Nota': item['Número da Nota'],
                 'Descrição': item['Descrição'],
@@ -422,6 +418,8 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
         toast({ title: 'Download Iniciado' });
     };
 
+    const tableRef = React.useRef<ReactTable<any> | null>(null);
+    
     const columns = useMemo(() => {
         const copyToClipboard = (text: string | number, type: string) => {
             const textToCopy = String(text);
@@ -457,10 +455,7 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                 const isIncorrectCfop = supplierCategory && supplierCategory.allowedCfops.length > 0 && !supplierCategory.allowedCfops.includes(String(item['CFOP (Sienge)']));
 
                 if (id === 'Fornecedor') {
-                    const iconName = supplierCategory?.icon as keyof typeof LucideIcons;
-                    const LucideIcon = (supplierCategory?.icon && LucideIcons[iconName]) 
-                        ? (LucideIcons[iconName] as React.ElementType) 
-                        : Tag;
+                    const LucideIcon = supplierCategory?.icon ? (LucideIcons[supplierCategory.icon as keyof typeof LucideIcons] as React.ElementType) : Tag;
                     return (
                         <div className={cn("flex items-center gap-2 group/row", isIncorrectCfop && "text-red-500")}>
                             <Popover>
@@ -535,8 +530,8 @@ export function ImobilizadoAnalysis({ items: initialAllItems, siengeData, compet
                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                             <Input
                                 placeholder="Ex: 1.2.3.01.0001"
-                                defaultValue={persistedAccountCodes[item.uniqueItemId]?.accountCode || ''}
-                                onBlur={(e) => handleAccountCodeChange(item.uniqueItemId, e.target.value)}
+                                defaultValue={persistedAccountCodes[item.id]?.accountCode || ''}
+                                onBlur={(e) => handleAccountCodeChange(item.id, e.target.value)}
                                 onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                                 className="h-8"
                             />

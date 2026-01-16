@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Input } from "@/components/ui/input";
-import { KeyRound, FileText, Loader2, Download, FileWarning, UploadCloud, Terminal, Search, Trash2, Copy, ShieldCheck, HelpCircle, X, FileUp, Upload, Settings, Info } from "lucide-react";
+import { KeyRound, FileText, Loader2, Download, FileWarning, UploadCloud, Terminal, Search, Trash2, Copy, ShieldCheck, HelpCircle, X, FileUp, Upload, Settings } from "lucide-react";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
 import { formatCnpj, cleanAndToStr, parseSpedDate } from "@/lib/utils";
 import type { SpedKeyObject, SpedInfo, SpedCorrectionResult } from "@/lib/excel-processor";
@@ -127,7 +126,6 @@ export type SpedCorrectionConfig = {
     remove0190: boolean;
     removeUnusedProducts: boolean;
     removeUnusedParticipants: boolean;
-    removeGroups: string[];
 };
 
 const correctionConfigLabels: Record<keyof SpedCorrectionConfig, string> = {
@@ -193,7 +191,6 @@ const processSpedFileInBrowser = (
         blockCount: [],
         totalLineCount: [],
         divergenceRemoval: {},
-        removedGroups: [],
     };
     const _log = (message: string) => log.push(`[${new Date().toLocaleTimeString()}] ${message}`);
 
@@ -232,43 +229,6 @@ const processSpedFileInBrowser = (
     let linesModifiedCount = 0;
     
     let intermediateLines: string[] = lines;
-
-    if (config.removeGroups && config.removeGroups.length > 0) {
-        const groupsToRemove = new Set(config.removeGroups.map(g => g.trim().toUpperCase()));
-        _log(`Iniciando remoção de grupos específicos: ${Array.from(groupsToRemove).join(', ')}`);
-        
-        const filteredLines: string[] = [];
-        const removedCounts: Record<string, { count: number; lines: any[] }> = {};
-        
-        groupsToRemove.forEach(g => {
-            removedCounts[g] = { count: 0, lines: [] };
-        });
-
-        for (let i = 0; i < intermediateLines.length; i++) {
-            const line = intermediateLines[i];
-            if (!line) continue;
-            
-            const parts = line.split('|');
-            const regType = parts[1];
-            
-            if (regType && groupsToRemove.has(regType)) {
-                removedCounts[regType].count++;
-                removedCounts[regType].lines.push({ lineNumber: i + 1, line });
-                linesModifiedCount++;
-                continue;
-            }
-            filteredLines.push(line);
-        }
-        
-        Object.entries(removedCounts).forEach(([group, data]) => {
-            if (data.count > 0) {
-                modifications.removedGroups.push({ group, ...data });
-                _log(`Removidos ${data.count} registros do grupo ${group}.`);
-            }
-        });
-        
-        intermediateLines = filteredLines;
-    }
 
     if (config.removeDivergent && divergentKeys.size > 0) {
         const filteredLines: string[] = [];
@@ -604,39 +564,17 @@ const checkSpedKeysInBrowser = async (chavesValidas: any[], spedFileContents: st
             let key: string | undefined, docData: any;
             let docKeyForDuplicates: string | undefined;
 
-            if (reg === 'C100' && parts.length > 8) {
-                // Tenta encontrar a chave de 44 dígitos em qualquer posição a partir do campo 8
-                // Normalmente está em parts[9], mas pode variar dependendo da versão do SPED ou software emissor
-                key = undefined;
-                for (let j = 8; j < Math.min(parts.length, 12); j++) {
-                    const potentialKey = (parts[j] || '').trim();
-                    if (potentialKey.length === 44 && /^\d+$/.test(potentialKey)) {
-                        key = potentialKey;
-                        break;
-                    }
-                }
-
-                if (key) {
-                    const participant = participantData.get(parts[4]);
-                    docKeyForDuplicates = `${parts[2]}-${parts[6]}-${participant?.cnpj || parts[4]}`; // ind_oper, num_doc, cnpj
-                    docData = { key, reg, indOper: parts[2], codPart: parts[4], serie: parts[6], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12], vlDesc: parts[14], lineNumber: i + 1 };
-                }
-            } else if (reg === 'D100' && parts.length > 9) {
-                key = undefined;
-                for (let j = 9; j < Math.min(parts.length, 13); j++) {
-                    const potentialKey = (parts[j] || '').trim();
-                    if (potentialKey.length === 44 && /^\d+$/.test(potentialKey)) {
-                        key = potentialKey;
-                        break;
-                    }
-                }
-
-                if (key) {
-                    const participant = participantData.get(parts[4]);
-                    docKeyForDuplicates = `${parts[2]}-${parts[6]}-${participant?.cnpj || parts[4]}`; // ind_oper, num_doc, cnpj
-                    const vlDoc = parts.length > 16 ? parts[16] : '0';
-                    docData = { key, reg, indOper: parts[2], codPart: parts[4], serie: parts[7], dtDoc: parts[8], dtES: parts[9], vlDoc: vlDoc, lineNumber: i + 1 };
-                }
+            if (reg === 'C100' && parts.length > 9 && parts[9]?.length === 44) {
+                key = parts[9];
+                const participant = participantData.get(parts[4]);
+                docKeyForDuplicates = `${parts[2]}-${parts[6]}-${participant?.cnpj || parts[4]}`; // ind_oper, num_doc, cnpj
+                docData = { key, reg, indOper: parts[2], codPart: parts[4], serie: parts[6], dtDoc: parts[10], dtES: parts[11], vlDoc: parts[12], vlDesc: parts[14], lineNumber: i + 1 };
+            } else if (reg === 'D100' && parts.length > 10 && parts[10]?.length === 44) {
+                key = parts[10];
+                const participant = participantData.get(parts[4]);
+                docKeyForDuplicates = `${parts[2]}-${parts[6]}-${participant?.cnpj || parts[4]}`; // ind_oper, num_doc, cnpj
+                const vlDoc = parts.length > 16 ? parts[16] : '0';
+                docData = { key, reg, indOper: parts[2], codPart: parts[4], serie: parts[7], dtDoc: parts[8], dtES: parts[9], vlDoc: vlDoc, lineNumber: i + 1 };
             }
             
 
@@ -804,8 +742,7 @@ export function KeyChecker({
     const [correctionConfig, setCorrectionConfig] = useState<SpedCorrectionConfig>({
         removeDivergent: true, fixCounters: true, fixIE: true, fixCteSeries: true,
         fixAddressSpaces: true, fixTruncation: true, fixUnits: true, remove0190: true,
-        removeUnusedProducts: true, removeUnusedParticipants: true,
-        removeGroups: []
+        removeUnusedProducts: true, removeUnusedParticipants: true
     });
     
     useEffect(() => {
@@ -923,7 +860,7 @@ export function KeyChecker({
                     error: err.message,
                     linesRead: 0,
                     linesModified: 0,
-                    modifications: { truncation: [], unitStandardization: [], removed0190: [], removed0200: [], removed0150: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [], divergenceRemoval: {}, removedGroups: [] },
+                    modifications: { truncation: [], unitStandardization: [], removed0190: [], removed0200: [], removed0150: [], addressSpaces: [], ieCorrection: [], cteSeriesCorrection: [], count9900: [], blockCount: [], totalLineCount: [], divergenceRemoval: {} },
                     log: [`ERRO FATAL: ${err.message}`]
                 });
                 toast({ variant: "destructive", title: "Erro na correção", description: err.message });
@@ -1094,56 +1031,21 @@ export function KeyChecker({
                                     </DialogDescription>
                                 </DialogHeader>
                                 <ScrollArea className="h-96 pr-6">
-                                <div className="space-y-6 py-4">
-                                    <div className="space-y-4">
-                                        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Correções Gerais</h4>
-                                        {Object.entries(correctionConfigLabels).map(([key, label]) => (
-                                            <div key={key} className="flex items-center space-x-2">
-                                                <Checkbox
-                                                    id={key}
-                                                    checked={correctionConfig[key as keyof SpedCorrectionConfig] as boolean}
-                                                    onCheckedChange={(checked) => {
-                                                        setCorrectionConfig(prev => ({...prev, [key]: !!checked}))
-                                                    }}
-                                                />
-                                                <Label htmlFor={key} className="text-sm font-medium leading-none cursor-pointer">
-                                                    {label}
-                                                </Label>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    <div className="space-y-4 pt-4 border-t">
-                                        <div className="flex items-center justify-between">
-                                            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Remoção de Grupos (Bulk)</h4>
-                                            <TooltipProvider>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                                                    </TooltipTrigger>
-                                                    <TooltipContent className="max-w-xs">
-                                                        <p>Insira os códigos dos registros que deseja remover completamente (ex: C500, D500). Separe por vírgula.</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            </TooltipProvider>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="remove-groups" className="text-xs">Códigos dos Registros (ex: C500, C800)</Label>
-                                            <Input 
-                                                id="remove-groups"
-                                                placeholder="C500, D500..."
-                                                value={correctionConfig.removeGroups.join(', ')}
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    const groups = val.split(',').map(g => g.trim().toUpperCase()).filter(g => g.length > 0);
-                                                    setCorrectionConfig(prev => ({...prev, removeGroups: groups}));
+                                <div className="space-y-4 py-4">
+                                    {Object.entries(correctionConfigLabels).map(([key, label]) => (
+                                        <div key={key} className="flex items-center space-x-2">
+                                            <Checkbox
+                                                id={key}
+                                                checked={correctionConfig[key as keyof SpedCorrectionConfig]}
+                                                onCheckedChange={(checked) => {
+                                                    setCorrectionConfig(prev => ({...prev, [key]: !!checked}))
                                                 }}
                                             />
-                                            <p className="text-[10px] text-muted-foreground">
-                                                Atenção: Isso removerá TODAS as linhas que iniciam com estes códigos.
-                                            </p>
+                                            <Label htmlFor={key} className="text-sm font-medium leading-none cursor-pointer">
+                                                {label}
+                                            </Label>
                                         </div>
-                                    </div>
+                                    ))}
                                 </div>
                                 </ScrollArea>
                             </DialogContent>
@@ -1188,9 +1090,6 @@ export function KeyChecker({
                                                 <p><strong className="text-primary">Truncamento de Campos:</strong> {correctionResult.modifications.truncation.length} linhas corrigidas.</p>
                                                 <p><strong className="text-primary">Padronização de Unidades:</strong> {correctionResult.modifications.unitStandardization.length} linhas corrigidas.</p>
                                                 <p><strong className="text-primary">Registros 0190 Removidos:</strong> {correctionResult.modifications.removed0190.length} linhas removidas.</p>
-                                                {correctionResult.modifications.removedGroups.length > 0 && (
-                                                    <p><strong className="text-primary">Grupos Removidos:</strong> {correctionResult.modifications.removedGroups.reduce((acc, g) => acc + g.count, 0)} linhas removidas ({correctionResult.modifications.removedGroups.map(g => g.group).join(', ')}).</p>
-                                                )}
                                             </div>
                                         </TabsContent>
 
@@ -1201,9 +1100,6 @@ export function KeyChecker({
                                                     <TabsTrigger value="removed0150">Part. (0150) Removidos ({correctionResult.modifications.removed0150.length})</TabsTrigger>
                                                     <TabsTrigger value="removed0200">Prod. (0200) Removidos ({correctionResult.modifications.removed0200.length})</TabsTrigger>
                                                     <TabsTrigger value="removed0190">0190 Removidos ({correctionResult.modifications.removed0190.length})</TabsTrigger>
-                                                    {correctionResult.modifications.removedGroups.length > 0 && (
-                                                        <TabsTrigger value="removedGroups">Grupos ({correctionResult.modifications.removedGroups.reduce((acc, g) => acc + g.count, 0)})</TabsTrigger>
-                                                    )}
                                                     <TabsTrigger value="counters">Contadores</TabsTrigger>
                                                     <TabsTrigger value="ie">IE (NF-e)</TabsTrigger>
                                                     <TabsTrigger value="cte_series">Série (CT-e)</TabsTrigger>
@@ -1242,35 +1138,6 @@ export function KeyChecker({
                                                         </div>
                                                         <RemovedLinesDisplay logs={correctionResult.modifications.removed0190} logType="0190" />
                                                     </TabsContent>
-                                                    {correctionResult.modifications.removedGroups.length > 0 && (
-                                                        <TabsContent value="removedGroups" className="h-full">
-                                                            <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-md mb-2 flex items-center gap-2">
-                                                                <TooltipProvider><Tooltip><TooltipTrigger><HelpCircle className="h-4 w-4"/></TooltipTrigger><TooltipContent><p>Registros dos grupos selecionados pelo utilizador foram removidos completamente do arquivo.</p></TooltipContent></Tooltip></TooltipProvider>
-                                                                <span>Grupos de registros removidos por solicitação.</span>
-                                                            </div>
-                                                            <ScrollArea className="h-[calc(80vh-280px)] pr-4">
-                                                                <Accordion type="single" collapsible className="w-full">
-                                                                    {correctionResult.modifications.removedGroups.map((groupData, idx) => (
-                                                                        <AccordionItem value={`group-${idx}`} key={idx}>
-                                                                            <AccordionTrigger>
-                                                                                <div className="flex flex-col text-left">
-                                                                                    <span className="font-semibold text-red-600">Grupo: {groupData.group}</span>
-                                                                                    <span className="text-sm text-muted-foreground">{groupData.count} registros removidos</span>
-                                                                                </div>
-                                                                            </AccordionTrigger>
-                                                                            <AccordionContent>
-                                                                                <div className="p-2 border rounded-md font-mono text-[10px] space-y-1">
-                                                                                    {groupData.lines.map((log, lIdx) => (
-                                                                                        <p key={lIdx} className="text-red-600/80 truncate">L{log.lineNumber}: {log.line}</p>
-                                                                                    ))}
-                                                                                </div>
-                                                                            </AccordionContent>
-                                                                        </AccordionItem>
-                                                                    ))}
-                                                                </Accordion>
-                                                            </ScrollArea>
-                                                        </TabsContent>
-                                                    )}
                                                     <TabsContent value="counters" className="h-full"><ModificationDisplay logs={[...correctionResult.modifications.blockCount, ...correctionResult.modifications.totalLineCount, ...correctionResult.modifications.count9900]} /></TabsContent>
                                                     <TabsContent value="ie" className="h-full"><ModificationDisplay logs={correctionResult.modifications.ieCorrection} /></TabsContent>
                                                     <TabsContent value="cte_series" className="h-full"><ModificationDisplay logs={correctionResult.modifications.cteSeriesCorrection} /></TabsContent>

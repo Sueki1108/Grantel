@@ -369,6 +369,11 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
         onDisregardedNotesChange(newNotes);
         toast({ title: 'Nota revertida', description: `A nota ${noteNumber} foi incluída novamente na análise.` });
     };
+
+    const handleClearAllDisregarded = () => {
+        onDisregardedNotesChange(new Set());
+        toast({ title: 'Todas as notas revertidas', description: 'Todas as notas desconsideradas foram incluídas novamente na análise.' });
+    };
     
     const handleSuspensionPhraseToggle = (phrase: string, checked: boolean) => {
         const newSet = new Set(selectedSuspensionPhrases);
@@ -615,7 +620,17 @@ export function NfseAnalysis({ nfseFiles, disregardedNotes, onDisregardedNotesCh
                                 </div>
                                 {disregardedNotes.size > 0 && (
                                     <div className="mt-4">
-                                        <h4 className="text-sm font-medium mb-2">Notas desconsideradas:</h4>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <h4 className="text-sm font-medium">Notas desconsideradas:</h4>
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                onClick={handleClearAllDisregarded}
+                                            >
+                                                <X className="h-3 w-3 mr-1" /> Remover Todas
+                                            </Button>
+                                        </div>
                                         <div className="flex flex-wrap gap-2">
                                             {Array.from(disregardedNotes).map(note => (
                                                 <div key={note} className="flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-sm">

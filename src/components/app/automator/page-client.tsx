@@ -697,7 +697,10 @@ export function AutomatorClientPage() {
                 processedData.sheets['Itens Válidos'] || [],
                 processedData.sheets['Notas Válidas'] || [],
                 processedData.sheets['CTEs Válidos'] || [],
-                processedData.costCenterMap
+                processedData.costCenterMap,
+                null,
+                processedData.sheets['Devoluções de Compra (Fornecedor)'] || [],
+                processedData.sheets['Devoluções de Clientes'] || [],
             );
             
             setProcessedData(prev => ({

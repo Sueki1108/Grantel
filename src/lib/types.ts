@@ -38,18 +38,12 @@ export type SupplierCategory = {
     allowedCfops: string[];
 };
 
-export type ItemCategory = {
-    id: string;
-    name: string;
-    icon: string;
-    keywords: string[];
-};
-
 export type DifalStatus = 'difal' | 'beneficio-fiscal' | 'disregard';
 
 export interface AllClassifications {
-    supplierCategories?: SupplierCategory[];
-    itemCategories?: ItemCategory[];
+supplierCategories?: {
+    [competence: string]: SupplierCategory[]
+} & {
     [competence: string]: {
         classifications: {
             [uniqueItemId: string]: { classification: Classification };
@@ -75,7 +69,36 @@ export interface AllClassifications {
         supplierClassifications?: {
             [supplierCnpj: string]: string | null;
         };
-    } | any;
+    };
+};
+    [competence: string]: SupplierCategory[]
+};
+    [competence: string]: {
+        classifications: {
+            [uniqueItemId: string]: { classification: Classification };
+        };
+        accountCodes: {
+            [itemLineId: string]: { accountCode: string };
+        };
+        cfopValidations: {
+            classifications: {
+                [uniqueKey: string]: {
+                    classification: 'correct' | 'incorrect' | 'verify' | 'unvalidated';
+                    isDifal?: boolean;
+                }
+            }
+        },
+        difalValidations?: {
+            classifications: {
+                [uniqueKey: string]: {
+                    status: DifalStatus;
+                }
+            }
+        },
+        supplierClassifications?: {
+            [supplierCnpj: string]: string | null; // categoryId or null
+        }
+    }
 }
 
 

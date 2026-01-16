@@ -41,7 +41,6 @@ export interface SpedCorrectionResult {
         blockCount: any[];
         totalLineCount: any[];
         divergenceRemoval: any;
-        removedGroups: { group: string; count: number; lines: any[] }[];
     };
     log: string[];
 }
@@ -265,7 +264,9 @@ export function processDataFrames(
             notasValidas,
             cte,
             costCenterMap,
-            accountingMap
+            accountingMap,
+            devolucoesDeCompra,
+            devolucoesDeClientes
         );
 
         // Mapeia os resultados da conciliação para busca rápida por Chave Única e Item
@@ -412,22 +413,14 @@ export function processDataFrames(
         return chavesExcecao.has(cleanAndToStr(row["Chave de acesso"]));
     });
     
-    const chavesValidasEntrada = notasValidas.filter(n => {
-        const key = cleanAndToStr(n["Chave de acesso"]);
-        const model = key.substring(20, 22);
-        return model === '55' || (n['destUF'] && model !== '57');
-    }).map(row => ({ // Apenas NF-e
+    const chavesValidasEntrada = notasValidas.filter(n => n['destUF']).map(row => ({ // Apenas NF-e
         "Chave de acesso": cleanAndToStr(row["Chave de acesso"]), "Tipo": "NFE", "Fornecedor": row["Fornecedor"],
         "Emissão": String(row["Emissão"]).substring(0, 10), "Total": row['Total'] || 0,
         "destCNPJ": row.destCNPJ, "destIE": row.destIE, "destUF": row.destUF,
         "emitCNPJ": row.emitCNPJ, "emitName": row.emitName, "emitIE": row.emitIE,
     }));
 
-    const chavesValidasCte = notasValidas.filter(n => {
-        const key = cleanAndToStr(n["Chave de acesso"]);
-        const model = key.substring(20, 22);
-        return model === '57' || (!n['destUF'] && model !== '55');
-    }).map(row => ({ // Apenas CT-e
+    const chavesValidasCte = notasValidas.filter(n => !n['destUF']).map(row => ({ // Apenas CT-e
         "Chave de acesso": cleanAndToStr(row["Chave de acesso"]), "Tipo": "CTE", "Fornecedor": row["Fornecedor"],
         "Emissão": String(row["Emissão"]).substring(0, 10), "Total": row['Valor da Prestação'] || 0,
         "tomadorCNPJ": cleanAndToStr(row['tomadorCNPJ']),
@@ -523,6 +516,8 @@ export function runReconciliation(
     cteData: any[],
     costCenterMap?: Map<string, string> | null,
     accountingMap?: Map<string, { account: string; description: string }> | null,
+    devolucoesCompra: any[] = [],
+    devolucoesClientes: any[] = [],
 ): ReconciliationResults {
     
     const findHeader = (data: any[], possibleNames: string[]): string | undefined => {
@@ -542,7 +537,6 @@ export function runReconciliation(
         desconto: findHeader(siengeSheetData, ['desconto']),
         frete: findHeader(siengeSheetData, ['frete']),
         ipi: findHeader(siengeSheetData, ['ipi']),
-        emissao: findHeader(siengeSheetData, ['emissão', 'data emissão', 'data', 'dt emissao', 'data emissao']),
     };
 
     if (!h.documento || !h.cnpj || !h.valor) {
@@ -798,14 +792,10 @@ export function runReconciliation(
     const enrichItem = (item: any) => {
         if (!item || typeof item !== 'object') return { ...item, 'Centro de Custo': 'N/A', 'Contabilização': 'N/A' };
         
-        const siengeDocNumberRaw = item[`Sienge_${h.documento!}`] || item[h.documento!] || item['Número da Nota'] || item['Número'] || '';
-        const siengeCredorRaw = item[`Sienge_${h.credor!}`] || item[h.credor!] || item['Fornecedor'] || item['Emitente'] || '';
-        const siengeValorRaw = item[`Sienge_${h.valor!}`] || item[h.valor!] || item['Valor Total'] || item['Valor'] || item['Total'] || '';
-        const emitenteCnpj = item['CPF/CNPJ do Emitente'] || item['emitCNPJ'] || item[h.cnpj!] || '';
+        const siengeDocNumberRaw = item[`Sienge_${h.documento!}`] || item['Número da Nota'] || item['Número'] || '';
+        const siengeCredorRaw = item[`Sienge_${h.credor!}`] || item['Fornecedor'] || item['Emitente'] || '';
+        const emitenteCnpj = item['CPF/CNPJ do Emitente'] || item['emitCNPJ'] || '';
 
-        item['Número da Nota'] = item['Número da Nota'] || siengeDocNumberRaw;
-        item['Valor Total'] = item['Valor Total'] || siengeValorRaw;
-        
         const docNumberClean = cleanAndToStr(siengeDocNumberRaw || item['Número da Nota'] || item['Número']).replace(/^0+/, '');
         const credorRaw = String(siengeCredorRaw).trim();
         const credorCnpjClean = cleanAndToStr(emitenteCnpj);
@@ -920,15 +910,34 @@ export function runReconciliation(
         return item;
     };
     
-    // Devoluções EP: Itens de Saída cuja natureza da operação é devolução
-    const devolucoesEP = (nfeEntradas || []).filter(item => {
-        const natOp = (item['Natureza da Operação'] || '').toUpperCase();
+    // Devoluções EP: Notas de Emissão Própria ou notas de entrada com natureza de devolução
+    const allPossibleDevolucoes = [
+        ...(devolucoesCompra || []), 
+        ...(devolucoesClientes || []),
+        ...(nfeEntradas || [])
+    ];
+    
+    const devolucoesEP = allPossibleDevolucoes.filter(item => {
+        if (!item) return false;
+        
+        // 1. Verificar por Finalidade (finNFe = 4 é Devolução)
+        if (String(item.finNFe) === '4') return true;
+        
+        // 2. Verificar por Natureza da Operação (com flexibilidade de nomes)
+        const natOpKey = Object.keys(item).find(k => 
+            normalizeKey(k).includes('natureza') && (normalizeKey(k).includes('operacao') || normalizeKey(k).includes('op'))
+        );
+        
+        const natOp = String(item[natOpKey || 'Natureza da Operação'] || '').toUpperCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Remove acentos
+            
         return natOp.includes('DEVOLUCAO');
     }).map(item => ({
-        'Número da Nota de Devolução': item['Número'],
-        'Fornecedor': item.Fornecedor,
-        'Valor': item['Total'],
-        'Data Emissão': item.Emissão,
+        'Número da Nota de Devolução': item['Número'] || item['Número da Nota'],
+        'Fornecedor': item.Fornecedor || item.Emitente || item.Destinatário,
+        'Valor': item['Total'] || item['Valor Total'],
+        'Data Emissão': item.Emissão || item['Data Emissão'],
+        'Natureza': item['Natureza da Operação'] || 'Devolução',
         'Chave da Nota Original': cleanAndToStr(item['refNFe']) || 'Não encontrada no XML',
     }));
         

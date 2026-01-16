@@ -236,15 +236,8 @@ export function PendingIssuesReport({ processedData, allPersistedClassifications
             };
         };
 
-        const notFoundNfe = notFoundInSped.filter(item => {
-            const type = item.type?.toUpperCase() || '';
-            return type === 'NFE' || type === 'SAÍDA' || type === 'SAIDA';
-        }).map(formatNotFoundData);
-        
-        const notFoundCte = notFoundInSped.filter(item => {
-            const type = item.type?.toUpperCase() || '';
-            return type === 'CTE';
-        }).map(formatNotFoundData);
+        const notFoundNfe = notFoundInSped.filter(item => (item.type === 'NFE' || item.type === 'Saída')).map(formatNotFoundData);
+        const notFoundCte = notFoundInSped.filter(item => item.type === 'CTE').map(formatNotFoundData);
         
         const notFoundColumns = ['Chave de acesso', 'Tipo', 'Número', 'Fornecedor', 'Emissão', 'Total'];
 

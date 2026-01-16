@@ -809,6 +809,8 @@ export function AutomatorClientPage() {
                 processedData.sheets['CTEs Válidos'] || [],
                 processedData.costCenterMap,
                 processedData.accountingMap,
+                processedData.sheets['Devoluções de Compra (Fornecedor)'] || [],
+                processedData.sheets['Devoluções de Clientes'] || [],
             );
             
             setProcessedData(prev => ({
